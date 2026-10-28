@@ -84,10 +84,10 @@ extension BlueBox {
             #expect(cpu.pointee.d.7 != 0 && tb_GetPtrSize(cpu.pointee.d.7) == 100)
         }
 
-        /// In a PowerPC program, 68k code asking Gestalt for Open Transport
-        /// is told it is missing (its client glue needs the Shared Library
-        /// Manager); the PowerPC side and native callers still see it.
-        @Test func openTransportHiddenFrom68kCode() {
+        /// 68k code asking Gestalt for Open Transport (in a PowerPC program or
+        /// not) is told it is there, and finds the Shared Library Manager its
+        /// client glue needs: the Expand Memory record with the manager's global.
+        @Test func openTransportIsThereFor68kCode() {
             gestalt_powerpc()
             let otan = fourCC("otan")
             let reason = run([
@@ -97,7 +97,9 @@ extension BlueBox {
                 0xA9F4,
             ])
             #expect(reason == "ExitToShell")
-            #expect(Int16(truncatingIfNeeded: cpu.pointee.d.7) != 0)
+            #expect(Int16(truncatingIfNeeded: cpu.pointee.d.7) == 0)
+            let em = rd32(0x2B6)
+            #expect(em != 0 && rd32(em + 0x10C) != 0 && rd32(rd32(em + 0x10C) + 0x10) != 0)
             var answer: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: otan), &answer) == 0 && answer & 1 != 0)
         }
@@ -345,6 +347,46 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
             #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2 ran
             #expect(g_cpu!.pointee.d.2 == 1)  // through the patch, once
+        }
+
+        /// A segment the application's file lacks is found in a resource file
+        /// the program opened itself (FrameMaker keeps most of its code in
+        /// "Module A" and "Module B").
+        @Test func loadSegFindsASegmentInAnotherOpenResourceFile() throws {
+            bootMachine()
+            let jt = cat(
+                be16(0), be16(0x3F3C), be16(1), be16(0xA9F0),     // entry 0: seg 1, offset 0
+                be16(0), be16(0x3F3C), be16(2), be16(0xA9F0))     // entry 1: seg 2, offset 0
+            let code0 = cat(be32(48), be32(256), be32(16), be32(32), jt)
+            let code1 = cat(
+                be16(0), be16(1),
+                be16(0x554F),                                     // SUBQ.W #2,SP
+                be16(0x487A), be16(12),                           // PEA name(PC)
+                be16(0xA997),                                     // _OpenResFile
+                be16(0x544F),                                     // ADDQ.W #2,SP
+                be16(0x4EAD), be16(42),                           // JSR 42(A5): entry 1, CODE 2
+                be16(0xA9F4),                                     // _ExitToShell
+                [6] + Array("Module".utf8) + [0])
+            let code2 = cat(be16(8), be16(1), be16(0x7209), be16(0x4E75)) // MOVEQ #9,D1; RTS
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            func write(_ name: String, _ resources: [TestResource]) {
+                var fork = buildFork(resources)
+                var f = mac_file()
+                var empty: [UInt8] = []
+                empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+                fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+                var err = [CChar](repeating: 0, count: 256)
+                #expect(appledouble_write(dir.appendingPathComponent(name).path, &f, &err, err.count))
+            }
+            write("Module", [TestResource(type: "CODE", id: 2, data: code2)])
+            write("Main", [TestResource(type: "CODE", id: 0, data: code0), TestResource(type: "CODE", id: 1, data: code1)])
+
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(dir.appendingPathComponent("Main").path, &err, err.count))
+            #expect(machine_run(10_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2, from the other file, ran
         }
 
         /// A program in a 24-bit partition that sets a segment's master

@@ -447,3 +447,202 @@ bool qt_sprite_draw(const qt_sprite *s, uint8_t *rgba)
     free(order);
     return true;
 }
+
+/* ---- At run time: the sprite media handler's calls ---- */
+
+int qt_sprite_count(const qt_sprite *s) { return s->cur ? s->nspr : 0; }
+
+uint32_t qt_sprite_id(const qt_sprite *s, int index)
+{
+    return s->cur && index >= 1 && index <= s->nspr ? s->cur[index - 1].id : 0;
+}
+
+int qt_sprite_index(const qt_sprite *s, uint32_t id)
+{
+    for (int i = 0; s->cur && i < s->nspr; i++)
+        if (s->cur[i].id == id)
+            return i + 1;
+    return 0;
+}
+
+static sprite *find_sprite(const qt_sprite *s, uint32_t id)
+{
+    int i = qt_sprite_index(s, id);
+    return i ? &s->cur[i - 1] : NULL;
+}
+
+static void put32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)(v >> 24);
+    p[1] = (uint8_t)(v >> 16);
+    p[2] = (uint8_t)(v >> 8);
+    p[3] = (uint8_t)v;
+}
+
+static uint32_t to_fixed(double v) { return (uint32_t)(int32_t)lround(v * 65536.0); }
+
+/* A property's value as the atoms hold it (big-endian): the matrix 36
+ * bytes, visible and layer and image index 2, the graphics mode 10. */
+bool qt_sprite_get(const qt_sprite *s, uint32_t id, uint32_t prop, uint8_t *out, uint32_t *len)
+{
+    const sprite *sp = find_sprite(s, id);
+    if (!sp)
+        return false;
+    switch (prop) {
+    case P_MATRIX:
+        memset(out, 0, 36);
+        put32(out, to_fixed(sp->a));
+        put32(out + 4, to_fixed(sp->b));
+        put32(out + 12, to_fixed(sp->c));
+        put32(out + 16, to_fixed(sp->d));
+        put32(out + 24, to_fixed(sp->tx));
+        put32(out + 28, to_fixed(sp->ty));
+        put32(out + 32, 0x40000000);
+        *len = 36;
+        return true;
+    case P_VISIBLE:
+        out[0] = 0;
+        out[1] = sp->visible;
+        *len = 2;
+        return true;
+    case P_LAYER:
+        out[0] = (uint8_t)((uint16_t)sp->layer >> 8);
+        out[1] = (uint8_t)sp->layer;
+        *len = 2;
+        return true;
+    case P_MODE:
+        put32(out, (uint32_t)sp->mode);
+        for (int k = 0; k < 3; k++) {
+            out[4 + k * 2] = (uint8_t)(sp->op[k] >> 8);
+            out[5 + k * 2] = (uint8_t)sp->op[k];
+        }
+        *len = 10;
+        return true;
+    case P_IMAGE:
+        out[0] = (uint8_t)(sp->image >> 8);
+        out[1] = (uint8_t)sp->image;
+        *len = 2;
+        return true;
+    }
+    return false;
+}
+
+bool qt_sprite_set(qt_sprite *s, uint32_t id, uint32_t prop, const uint8_t *val, uint32_t len)
+{
+    sprite *sp = find_sprite(s, id);
+    if (!sp)
+        return false;
+    /* as an override sample would: one property atom */
+    uint8_t atom[20 + 40];
+    if (len > 40)
+        return false;
+    memset(atom, 0, 20);
+    put32(atom, 20 + len);
+    put32(atom + 4, prop);
+    put32(atom + 8, 1);
+    memcpy(atom + 20, val, len);
+    qtatom parent = { four("sprt"), id, 1, atom, atom + 20 + len };
+    if (prop != P_MATRIX && prop != P_VISIBLE && prop != P_LAYER && prop != P_MODE && prop != P_IMAGE)
+        return false;
+    set_properties(sp, &parent);
+    return true;
+}
+
+/* A sprite made at run time (SpriteMediaNewSprite): it lasts as the key
+ * frame's do. */
+bool qt_sprite_add(qt_sprite *s, uint32_t id, uint32_t image, const double m[6], bool visible, int16_t layer,
+                   int32_t mode, const uint16_t op[3])
+{
+    if (!s->cur || find_sprite(s, id))
+        return false;
+    sprite sp = { id, m[0], m[1], m[2], m[3], m[4], m[5], visible, layer, image, mode, { op[0], op[1], op[2] } };
+    sprite *k = realloc(s->key, (size_t)(s->nspr + 1) * sizeof *k), *c;
+    if (!k)
+        return false;
+    s->key = k;
+    c = realloc(s->cur, (size_t)(s->nspr + 1) * sizeof *c);
+    if (!c)
+        return false;
+    s->cur = c;
+    s->key[s->nspr] = s->cur[s->nspr] = sp;
+    s->nspr++;
+    return true;
+}
+
+bool qt_sprite_remove(qt_sprite *s, uint32_t id)
+{
+    int i = qt_sprite_index(s, id);
+    if (!i)
+        return false;
+    memmove(&s->cur[i - 1], &s->cur[i], (size_t)(s->nspr - i) * sizeof *s->cur);
+    int k = -1;
+    for (int j = 0; j < s->nspr; j++)
+        if (s->key[j].id == id)
+            k = j;
+    if (k >= 0)
+        memmove(&s->key[k], &s->key[k + 1], (size_t)(s->nspr - k - 1) * sizeof *s->key);
+    s->nspr--;
+    return true;
+}
+
+int qt_sprite_image_count(const qt_sprite *s) { return s->nimg; }
+
+bool qt_sprite_image_info(const qt_sprite *s, int index, int *w, int *h, double *rx, double *ry)
+{
+    if (index < 1 || index > s->nimg)
+        return false;
+    const image *im = &s->img[index - 1];
+    *w = im->w;
+    *h = im->h;
+    *rx = im->rx;
+    *ry = im->ry;
+    return true;
+}
+
+/* Whether a sprite covers a point of the track: its image's bounds there,
+ * or (with image set) an opaque pixel of it. */
+bool qt_sprite_hits(const qt_sprite *s, uint32_t id, double x, double y, bool image_test, bool invisible_too)
+{
+    const sprite *sp = find_sprite(s, id);
+    if (!sp || (!sp->visible && !invisible_too))
+        return false;
+    const image *im = image_of(s, sp->image);
+    double det = sp->a * sp->d - sp->b * sp->c;
+    if (!im || fabs(det) < 1e-9)
+        return false;
+    double X = x - sp->tx, Y = y - sp->ty;
+    double ix = (sp->d * X - sp->c * Y) / det + im->rx, iy = (-sp->b * X + sp->a * Y) / det + im->ry;
+    if (ix < 0 || iy < 0 || ix >= im->w || iy >= im->h)
+        return false;
+    if (!image_test)
+        return true;
+    const uint8_t *px = im->rgba + ((size_t)(int)iy * (size_t)im->w + (size_t)(int)ix) * 4;
+    if (sp->mode == transparent) {
+        uint8_t key[3] = { (uint8_t)(sp->op[0] >> 8), (uint8_t)(sp->op[1] >> 8), (uint8_t)(sp->op[2] >> 8) };
+        return memcmp(px, key, 3) != 0;
+    }
+    return px[3] != 0;
+}
+
+/* The front-most sprite at a point (the lowest layer, then the highest ID). */
+uint32_t qt_sprite_hit(const qt_sprite *s, double x, double y, bool image_test, bool invisible_too)
+{
+    uint32_t best = 0;
+    int16_t best_layer = 0;
+    for (int i = 0; s->cur && i < s->nspr; i++) {
+        const sprite *sp = &s->cur[i];
+        if (!qt_sprite_hits(s, sp->id, x, y, image_test, invisible_too))
+            continue;
+        if (!best || sp->layer < best_layer || (sp->layer == best_layer && sp->id > best)) {
+            best = sp->id;
+            best_layer = sp->layer;
+        }
+    }
+    return best;
+}
+
+bool qt_sprite_track_visible(const qt_sprite *s) { return s->visible; }
+void qt_sprite_set_track_visible(qt_sprite *s, bool visible) { s->visible = visible; }
+
+void qt_sprite_background(const qt_sprite *s, uint8_t rgb[3]) { memcpy(rgb, s->bg, 3); }
+void qt_sprite_set_background(qt_sprite *s, const uint8_t rgb[3]) { memcpy(s->bg, rgb, 3); }

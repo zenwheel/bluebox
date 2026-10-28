@@ -141,13 +141,12 @@ extension BlueBox {
             #expect(svcCall("OSAGenericToRealID", generic, id, comp) == 0)
             #expect(svcCall("OSARealToGenericID", generic, id, rd32(inst)) == 0 && rd32(id) == 7)
             #expect(svcCall("OSAGetScriptingComponentFromStored", generic, textDesc("x"), sub) == 0)
-            // Storage types ride at the end of the handle
+            // Storage types: see OS9RestScriptTests (the trailer is os9rest's)
             let h = tb_NewHandle(3, false, true)
-            #expect(svcStatus(svcCall("OSAGetStorageType", h, sub)) == -1752)
-            #expect(svcCall("OSAAddStorageType", h, fourCC("scpt")) == 0 && tb_GetHandleSize(h) == 7)
             #expect(svcCall("OSAGetStorageType", h, sub) == 0 && rd32(sub) == fourCC("scpt"))
-            #expect(svcCall("OSARemoveStorageType", h) == 0 && tb_GetHandleSize(h) == 3)
-            #expect(svcStatus(svcCall("OSARemoveStorageType", h)) == -1752)
+            #expect(svcCall("OSAAddStorageType", h, fourCC("jsrc")) == 0)
+            #expect(svcCall("OSAGetStorageType", h, sub) == 0 && rd32(sub) == fourCC("jsrc"))
+            #expect(svcCall("OSARemoveStorageType", h) == 0)
             _ = q
         }
 

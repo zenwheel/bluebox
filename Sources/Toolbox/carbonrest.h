@@ -50,7 +50,6 @@ REST_AREA(rest_ic);
 REST_AREA(rest_ica);
 REST_AREA(rest_nsl);
 REST_AREA(rest_dcm);
-REST_AREA(rest_loc);
 REST_AREA(rest_uc);
 REST_AREA(rest_la);
 REST_AREA(rest_fbc);

@@ -15,7 +15,7 @@
 #include <string.h>
 
 #include "carbonrest.h"
-#include "carbonrest_loc.h"
+#include "os9rest.h"
 #include "hostuc.h"
 
 enum { kUCOutputBufferTooSmall = -25340, kUCTextBreakLocatorMissingType = -25341, kTextMalformedInputErr = -8739 };

@@ -1,0 +1,1200 @@
+# Mac OS 9's remaining library routines that have a 68k trap or a dispatch
+# selector (os9rest*.c), for the 68k programs that call them and the
+# PowerPC libraries that export them.  Same schema as ilutil.yaml.
+
+# DebugLib (Debugging.h): _DebugLibDispatch ($AA7E), the selector in D0
+# (MOVEQ #n,D0), Pascal arguments.
+- dispatcher:
+    name: DebugLibDispatch
+    trap: 0xAA7E
+    selector-location: D0W
+
+- function:
+    name: DebugAssert
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: options
+        type: uint32_t
+      - name: assertionString
+        type: const char*
+      - name: exceptionString
+        type: const char*
+      - name: errorString
+        type: const char*
+      - name: fileName
+        type: const char*
+      - name: lineNumber
+        type: int32_t
+      - name: value
+        type: void*
+    dispatcher: DebugLibDispatch
+    selector: 0x0000
+
+- function:
+    name: TaskLevel
+    return: uint32_t
+    dispatcher: DebugLibDispatch
+    selector: 0x0001
+
+- function:
+    name: NewDebugComponent
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: componentName
+        type: ConstStr255Param
+      - name: componentCallback
+        type: ProcPtr
+    dispatcher: DebugLibDispatch
+    selector: 0x0002
+
+- function:
+    name: NewDebugOption
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: optionSelectorNum
+        type: int32_t
+      - name: optionName
+        type: ConstStr255Param
+    dispatcher: DebugLibDispatch
+    selector: 0x0003
+
+- function:
+    name: DisposeDebugComponent
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+    dispatcher: DebugLibDispatch
+    selector: 0x0004
+
+- function:
+    name: GetDebugComponentInfo
+    return: OSStatus
+    args:
+      - name: index
+        type: uint32_t
+      - name: componentSignature
+        type: uint32_t*
+      - name: componentName
+        type: StringPtr
+    dispatcher: DebugLibDispatch
+    selector: 0x0005
+
+- function:
+    name: GetDebugOptionInfo
+    return: OSStatus
+    args:
+      - name: index
+        type: uint32_t
+      - name: componentSignature
+        type: OSType
+      - name: optionSelectorNum
+        type: int32_t*
+      - name: optionName
+        type: StringPtr
+      - name: optionSetting
+        type: Boolean*
+    dispatcher: DebugLibDispatch
+    selector: 0x0006
+
+- function:
+    name: SetDebugOptionValue
+    return: OSStatus
+    args:
+      - name: componentSignature
+        type: OSType
+      - name: optionSelectorNum
+        type: int32_t
+      - name: newOptionSetting
+        type: Boolean
+    dispatcher: DebugLibDispatch
+    selector: 0x0007
+
+- function:
+    name: InstallDebugAssertOutputHandler
+    args:
+      - name: handler
+        type: ProcPtr
+    dispatcher: DebugLibDispatch
+    selector: 0x0008
+
+# The Expansion Manager (PCI.h): _ExpansionMgr ($AAF3), the selector in D0
+# with the arguments' size in words in its high byte, Pascal arguments.
+- dispatcher:
+    name: ExpansionMgrDispatch
+    trap: 0xAAF3
+    selector-location: D0W
+
+- function:
+    name: ExpMgrConfigReadByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint8_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0620
+
+- function:
+    name: ExpMgrConfigReadWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint16_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0621
+
+- function:
+    name: ExpMgrConfigReadLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint32_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0622
+
+- function:
+    name: ExpMgrIOReadByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint8_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0626
+
+- function:
+    name: ExpMgrIOReadWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint16_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0627
+
+- function:
+    name: ExpMgrIOReadLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: valuePtr
+        type: uint32_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0628
+
+- function:
+    name: ExpMgrConfigWriteByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: value
+        type: uint8_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0523
+
+- function:
+    name: ExpMgrConfigWriteWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: value
+        type: uint16_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0524
+
+- function:
+    name: ExpMgrConfigWriteLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: configAddr
+        type: LogicalAddress
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0625
+
+- function:
+    name: ExpMgrIOWriteByte
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: value
+        type: uint8_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0529
+
+- function:
+    name: ExpMgrIOWriteWord
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: value
+        type: uint16_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x052A
+
+- function:
+    name: ExpMgrIOWriteLong
+    return: OSErr
+    args:
+      - name: node
+        type: RegEntryIDPtr
+      - name: ioAddr
+        type: LogicalAddress
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x062B
+
+- function:
+    name: ExpMgrInterruptAcknowledgeReadByte
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: valuePtr
+        type: uint8_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0411
+
+- function:
+    name: ExpMgrInterruptAcknowledgeReadWord
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: valuePtr
+        type: uint16_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0412
+
+- function:
+    name: ExpMgrInterruptAcknowledgeReadLong
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: valuePtr
+        type: uint32_t*
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0413
+
+- function:
+    name: ExpMgrSpecialCycleWriteLong
+    return: OSErr
+    args:
+      - name: entry
+        type: RegEntryIDPtr
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x0419
+
+- function:
+    name: ExpMgrSpecialCycleBroadcastLong
+    return: OSErr
+    args:
+      - name: value
+        type: uint32_t
+    dispatcher: ExpansionMgrDispatch
+    selector: 0x021A
+
+# The rest of the Control Strip's module services (ControlStrip.h), same
+# dispatcher: _ControlStripDispatch's selector in D0's low byte, the size of
+# the arguments in words above it.
+- function:
+    name: SBGetDetachIconSuite
+    return: OSErr
+    args:
+      - name: theIconSuite
+        type: Handle*
+      - name: theResID
+        type: INTEGER
+      - name: selector
+        type: uint32_t
+    dispatcher: ControlStripDispatch
+    selector: 0x0507
+
+- function:
+    name: SBTrackPopupMenu
+    return: INTEGER
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: theMenu
+        type: MenuHandle
+    dispatcher: ControlStripDispatch
+    selector: 0x0408
+
+- function:
+    name: SBTrackSlider
+    return: INTEGER
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: ticksOnSlider
+        type: INTEGER
+      - name: initialValue
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x0409
+
+- function:
+    name: SBShowHelpString
+    return: OSErr
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: helpString
+        type: StringPtr
+    dispatcher: ControlStripDispatch
+    selector: 0x040A
+
+- function:
+    name: SBGetBarGraphWidth
+    return: INTEGER
+    args:
+      - name: barCount
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x010B
+
+- function:
+    name: SBDrawBarGraph
+    args:
+      - name: level
+        type: INTEGER
+      - name: barCount
+        type: INTEGER
+      - name: direction
+        type: INTEGER
+      - name: barGraphTopLeft
+        type: Point
+    dispatcher: ControlStripDispatch
+    selector: 0x050C
+
+- function:
+    name: SBModalDialogInContext
+    args:
+      - name: filterProc
+        type: ProcPtr
+      - name: itemHit
+        type: INTEGER*
+    dispatcher: ControlStripDispatch
+    selector: 0x040D
+
+- function:
+    name: SBGetControlStripFontID
+    return: OSErr
+    args:
+      - name: fontID
+        type: INTEGER*
+    dispatcher: ControlStripDispatch
+    selector: 0x020E
+
+- function:
+    name: SBSetControlStripFontID
+    return: OSErr
+    args:
+      - name: fontID
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x010F
+
+- function:
+    name: SBGetControlStripFontSize
+    return: OSErr
+    args:
+      - name: fontSize
+        type: INTEGER*
+    dispatcher: ControlStripDispatch
+    selector: 0x0210
+
+- function:
+    name: SBSetControlStripFontSize
+    return: OSErr
+    args:
+      - name: fontSize
+        type: INTEGER
+    dispatcher: ControlStripDispatch
+    selector: 0x0111
+
+- function:
+    name: SBGetShowHideHotKey
+    return: OSErr
+    args:
+      - name: modifiers
+        type: INTEGER*
+      - name: keyCode
+        type: uint8_t*
+    dispatcher: ControlStripDispatch
+    selector: 0x0412
+
+- function:
+    name: SBSetShowHideHotKey
+    return: OSErr
+    args:
+      - name: modifiers
+        type: INTEGER
+      - name: keyCode
+        type: uint8_t
+    dispatcher: ControlStripDispatch
+    selector: 0x0213
+
+- function:
+    name: SBIsShowHideHotKeyEnabled
+    return: OSErr
+    args:
+      - name: enabled
+        type: Boolean*
+    dispatcher: ControlStripDispatch
+    selector: 0x0214
+
+- function:
+    name: SBEnableShowHideHotKey
+    return: OSErr
+    args:
+      - name: enabled
+        type: Boolean
+    dispatcher: ControlStripDispatch
+    selector: 0x0115
+
+- function:
+    name: SBHitTrackSlider
+    return: INTEGER
+    args:
+      - name: moduleRect
+        type: Rect*
+      - name: ticksOnSlider
+        type: INTEGER
+      - name: initialValue
+        type: INTEGER
+      - name: hit
+        type: Boolean*
+    dispatcher: ControlStripDispatch
+    selector: 0x0616
+
+# Icon Services' start-up and shut-down for 68k programs (Icons.h), and its
+# switch for deep (colour) icons; IconServicesDispatch is iconservices.yaml's.
+- function:
+    name: IconServicesInit
+    return: OSErr
+    args:
+      - name: initBlockPtr
+        type: Ptr
+    dispatcher: IconServicesDispatch
+    selector: 0x0015
+
+- function:
+    name: IconServicesTerminate
+    dispatcher: IconServicesDispatch
+    selector: 0x0016
+
+- function:
+    name: GetDeepIconsEnabled
+    return: OSErr
+    args:
+      - name: deepIconsEnabled
+        type: Boolean*
+    dispatcher: IconServicesDispatch
+    selector: 0x002C
+
+- function:
+    name: SetDeepIconsEnabled
+    return: OSErr
+    args:
+      - name: enableDeepIcons
+        type: Boolean
+    dispatcher: IconServicesDispatch
+    selector: 0x002D
+
+# The File System Manager's HFS utilities (FSM.h): _HFSUtilDispatch
+# ($A824), the selector MOVEQ'd into D0, Pascal arguments.  os9rest_fsm.c
+# keeps them on the File Manager's FCB table, volume queue, drive queue and
+# working directories.
+- dispatcher:
+    name: HFSUtilDispatch
+    trap: 0xA824
+    selector-location: D0W
+
+- function:
+    name: UTAllocateFCB
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0000
+
+- function:
+    name: UTReleaseFCB
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0001
+
+- function:
+    name: UTLocateFCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: namePtr
+        type: StringPtr
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0002
+
+- function:
+    name: UTLocateNextFCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: namePtr
+        type: StringPtr
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0003
+
+- function:
+    name: UTIndexFCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0004
+
+- function:
+    name: UTResolveFCB
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0005
+
+- function:
+    name: UTAllocateVCB
+    return: OSErr
+    args:
+      - name: sysVCBLength
+        type: uint16_t*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+      - name: addSize
+        type: uint16_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x0006
+
+- function:
+    name: UTAddNewVCB
+    return: OSErr
+    args:
+      - name: driveNum
+        type: INTEGER
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0007
+
+- function:
+    name: UTDisposeVCB
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0008
+
+- function:
+    name: UTLocateVCBByRefNum
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0009
+
+- function:
+    name: UTLocateVCBByName
+    return: OSErr
+    args:
+      - name: namePtr
+        type: StringPtr
+      - name: moreMatches
+        type: INTEGER*
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000A
+
+- function:
+    name: UTLocateNextVCB
+    return: OSErr
+    args:
+      - name: namePtr
+        type: StringPtr
+      - name: moreMatches
+        type: INTEGER*
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000B
+
+- function:
+    name: UTAllocateWDCB
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x000C
+
+- function:
+    name: UTReleaseWDCB
+    return: OSErr
+    args:
+      - name: wdRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x000D
+
+- function:
+    name: UTResolveWDCB
+    return: OSErr
+    args:
+      - name: procID
+        type: int32_t
+      - name: wdIndex
+        type: INTEGER
+      - name: wdRefNum
+        type: INTEGER
+      - name: wdCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000E
+
+- function:
+    name: UTFindDrive
+    return: OSErr
+    args:
+      - name: driveNum
+        type: INTEGER
+      - name: driveQElementPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x000F
+
+- function:
+    name: UTAdjustEOF
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0010
+
+- function:
+    name: UTSetDefaultVol
+    return: OSErr
+    args:
+      - name: nodeHint
+        type: int32_t
+      - name: dirID
+        type: uint32_t
+      - name: refNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0011
+
+- function:
+    name: UTGetDefaultVol
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0012
+
+- function:
+    name: UTCheckWDRefNum
+    return: OSErr
+    args:
+      - name: wdRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0013
+
+- function:
+    name: UTCheckFileRefNum
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0014
+
+- function:
+    name: UTCheckVolRefNum
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0015
+
+- function:
+    name: UTCheckPermission
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: modByte
+        type: INTEGER*
+      - name: fileNum
+        type: uint32_t
+      - name: paramBlock
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0016
+
+- function:
+    name: UTCheckVolOffline
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0017
+
+- function:
+    name: UTCheckVolModifiable
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0018
+
+- function:
+    name: UTCheckFileModifiable
+    return: OSErr
+    args:
+      - name: fileRefNum
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0019
+
+- function:
+    name: UTCheckDirBusy
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: dirID
+        type: uint32_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x001A
+
+- function:
+    name: UTParsePathname
+    return: OSErr
+    args:
+      - name: volNamelength
+        type: INTEGER*
+      - name: namePtr
+        type: StringPtr
+    dispatcher: HFSUtilDispatch
+    selector: 0x001B
+
+- function:
+    name: UTGetPathComponentName
+    return: OSErr
+    args:
+      - name: parseRec
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x001C
+
+- function:
+    name: UTDetermineVol
+    return: OSErr
+    args:
+      - name: paramBlock
+        type: Ptr
+      - name: status
+        type: INTEGER*
+      - name: moreMatches
+        type: INTEGER*
+      - name: vRefNum
+        type: INTEGER*
+      - name: volCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x001D
+
+- function:
+    name: UTGetBlock
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: log2PhyProc
+        type: Ptr
+      - name: blockNum
+        type: uint32_t
+      - name: gbOption
+        type: INTEGER
+      - name: buffer
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x001F
+
+- function:
+    name: UTReleaseBlock
+    return: OSErr
+    args:
+      - name: buffer
+        type: Ptr
+      - name: rbOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0020
+
+- function:
+    name: UTFlushCache
+    return: OSErr
+    args:
+      - name: refNum
+        type: INTEGER
+      - name: fcOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0021
+
+- function:
+    name: UTMarkDirty
+    return: OSErr
+    args:
+      - name: buffer
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0023
+
+- function:
+    name: UTTrashVolBlocks
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0024
+
+- function:
+    name: UTTrashFileBlocks
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x0025
+
+- function:
+    name: UTTrashBlocks
+    return: OSErr
+    args:
+      - name: beginPosition
+        type: uint32_t
+      - name: byteCount
+        type: uint32_t
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER
+      - name: tbOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0026
+
+- function:
+    name: UTCacheReadIP
+    return: OSErr
+    args:
+      - name: log2PhyProc
+        type: Ptr
+      - name: filePosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0027
+
+- function:
+    name: UTCacheWriteIP
+    return: OSErr
+    args:
+      - name: log2PhyProc
+        type: Ptr
+      - name: filePosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0028
+
+- function:
+    name: UTEjectVol
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x002B
+
+- function:
+    name: UTBlockInFQHashP
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: diskBlock
+        type: uint32_t
+    dispatcher: HFSUtilDispatch
+    selector: 0x002C
+
+- function:
+    name: UTVolCacheReadIP
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: blockPosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0034
+
+- function:
+    name: UTVolCacheWriteIP
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: blockPosition
+        type: uint32_t
+      - name: ioBuffer
+        type: Ptr
+      - name: reqCount
+        type: uint32_t
+      - name: actCount
+        type: uint32_t*
+      - name: cacheOption
+        type: INTEGER
+    dispatcher: HFSUtilDispatch
+    selector: 0x0035
+
+- function:
+    name: UTResolveFileRefNum
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+      - name: fileRefNum
+        type: INTEGER*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0036
+
+- function:
+    name: UTCheckFCB
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0037
+
+- function:
+    name: UTCheckForkPermissions
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: forkID
+        type: uint32_t
+      - name: fileLocked
+        type: Boolean
+      - name: permissions
+        type: int8_t
+      - name: useSearchList
+        type: Boolean
+      - name: fcbFlags
+        type: int8_t*
+      - name: openForkRefNum
+        type: INTEGER*
+    dispatcher: HFSUtilDispatch
+    selector: 0x0038
+
+- function:
+    name: UTAddFCBToSearchList
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x0039
+
+- function:
+    name: UTRemoveFCBFromSearchList
+    return: OSErr
+    args:
+      - name: fileCtrlBlockPtr
+        type: Ptr
+    dispatcher: HFSUtilDispatch
+    selector: 0x003A
+
+- function:
+    name: UTLocateFCBInSearchList
+    return: OSErr
+    args:
+      - name: volCtrlBlockPtr
+        type: Ptr
+      - name: fileNum
+        type: uint32_t
+      - name: fileRefNum
+        type: INTEGER*
+      - name: fileCtrlBlockPtr
+        type: Ptr*
+    dispatcher: HFSUtilDispatch
+    selector: 0x003B
+
+- function:
+    name: UTGetForkControlBlockSize
+    return: OSErr
+    args:
+      - name: fcbSize
+        type: uint32_t*
+    dispatcher: HFSUtilDispatch
+    selector: 0x003C
+
+# The Display Manager's obsolete tablecloth (kDMNoDeviceTableclothErr): the
+# picture a display's desktop was laid with, per graphics device.
+- function:
+    name: DMGetGDeviceTablecloth
+    return: OSErr
+    args:
+      - name: displayDevice
+        type: GDHandle
+      - name: tablecloth
+        type: Handle*
+    dispatcher: DisplayDispatch
+    selector: 0x0404
+
+- function:
+    name: DMSetGDeviceTablecloth
+    return: OSErr
+    args:
+      - name: displayDevice
+        type: GDHandle
+      - name: tablecloth
+        type: Handle
+    dispatcher: DisplayDispatch
+    selector: 0x0405

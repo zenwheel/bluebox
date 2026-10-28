@@ -399,203 +399,6 @@ int16_t tb_SoundManagerGetInfo(int32_t selector, gaddr infoPtr) { return infoPtr
 int16_t tb_SoundManagerSetInfo(int32_t selector, gaddr infoPtr) { return infoPtr ? siUnknownInfoType : paramErr; }
 
 /* ---------------------------------------------------------------------- */
-/* Debugging.h: debug components with options, and DebugAssert's output.
- * (A real Mac kept these for the debuggers and the Debug Utilities.) */
-
-enum {
-    debuggingNoMatchErr = -13880,
-    debuggingNoCallbackErr = -13881,
-    debuggingInvalidNameErr = -13882,
-    debuggingInvalidOptionErr = -13883,
-    debuggingInvalidSignatureErr = -13884,
-    debuggingDuplicateOptionErr = -13885,
-    debuggingDuplicateSignatureErr = -13886,
-    debuggingExecutionContextErr = -13887,
-};
-enum { kGetDebugOption = 1, kSetDebugOption = 2 };
-enum { uppDebugComponentCallbackProcInfo = 0x00000FC0, uppDebugAssertOutputHandlerProcInfo = 0x00FFFFC0 };
-enum { MAX_DBG_COMPONENTS = 32, MAX_DBG_OPTIONS = 32 };
-
-typedef struct {
-    bool used;
-    uint32_t signature;
-    uint8_t name[256];
-    gaddr callback;
-    int noptions;
-    struct {
-        int32_t selector;
-        uint8_t name[256];
-        bool setting;
-    } options[MAX_DBG_OPTIONS];
-} dbg_component;
-static dbg_component dbg[MAX_DBG_COMPONENTS];
-static gaddr assert_handler;
-
-static dbg_component *dbg_find(uint32_t sig)
-{
-    for (int i = 0; i < MAX_DBG_COMPONENTS; i++)
-        if (dbg[i].used && dbg[i].signature == sig)
-            return &dbg[i];
-    return NULL;
-}
-
-/* NewDebugComponent(signature, name, callback) */
-static void dbg_NewDebugComponent(ppc_cpu *c)
-{
-    uint32_t sig = A(0);
-    gaddr name = A(1);
-    if (sig == 0 || sig == 0x20202020)
-        RETERR(debuggingInvalidSignatureErr);
-    if (!name || !rd8(name))
-        RETERR(debuggingInvalidNameErr);
-    if (!A(2))
-        RETERR(debuggingNoCallbackErr);
-    if (dbg_find(sig))
-        RETERR(debuggingDuplicateSignatureErr);
-    for (int i = 0; i < MAX_DBG_COMPONENTS; i++)
-        if (!dbg[i].used) {
-            memset(&dbg[i], 0, sizeof dbg[i]);
-            dbg[i].used = true;
-            dbg[i].signature = sig;
-            gget(dbg[i].name, name, (uint32_t)rd8(name) + 1);
-            dbg[i].callback = A(2);
-            RETERR(noErr);
-        }
-    RETERR(memFullErr);
-}
-
-static void dbg_DisposeDebugComponent(ppc_cpu *c)
-{
-    dbg_component *d = dbg_find(A(0));
-    if (!d)
-        RETERR(debuggingNoMatchErr);
-    d->used = false;
-    RETERR(noErr);
-}
-
-/* GetDebugComponentInfo(index, *signature, name): components by index from 1. */
-static void dbg_GetDebugComponentInfo(ppc_cpu *c)
-{
-    uint32_t want = A(0);
-    for (int i = 0, k = 0; i < MAX_DBG_COMPONENTS; i++)
-        if (dbg[i].used && ++k == (int)want) {
-            if (A(1))
-                wr32(A(1), dbg[i].signature);
-            if (A(2))
-                gput(A(2), dbg[i].name, (uint32_t)dbg[i].name[0] + 1);
-            RETERR(noErr);
-        }
-    RETERR(debuggingNoMatchErr);
-}
-
-/* NewDebugOption(signature, selector, name) */
-static void dbg_NewDebugOption(ppc_cpu *c)
-{
-    dbg_component *d = dbg_find(A(0));
-    if (!d)
-        RETERR(debuggingNoMatchErr);
-    gaddr name = A(2);
-    if (!name || !rd8(name))
-        RETERR(debuggingInvalidNameErr);
-    for (int i = 0; i < d->noptions; i++)
-        if (d->options[i].selector == (int32_t)A(1))
-            RETERR(debuggingDuplicateOptionErr);
-    if (d->noptions >= MAX_DBG_OPTIONS)
-        RETERR(memFullErr);
-    int n = d->noptions++;
-    d->options[n].selector = (int32_t)A(1);
-    gget(d->options[n].name, name, (uint32_t)rd8(name) + 1);
-    d->options[n].setting = false;
-    /* The component's callback is asked for the starting value. */
-    gaddr slot = tb_NewPtr(2, true, true);
-    if (slot) {
-        uint32_t args[3] = { A(1), kGetDebugOption, slot };
-        aem_call_proc(d->callback, uppDebugComponentCallbackProcInfo, args, 3);
-        d->options[n].setting = rd8(slot) != 0;
-        tb_DisposePtr(slot);
-    }
-    RETERR(noErr);
-}
-
-/* GetDebugOptionInfo(index, signature, *selector, name, *setting) */
-static void dbg_GetDebugOptionInfo(ppc_cpu *c)
-{
-    dbg_component *d = dbg_find(A(1));
-    if (!d)
-        RETERR(debuggingNoMatchErr);
-    uint32_t i = A(0);
-    if (i < 1 || (int)i > d->noptions)
-        RETERR(debuggingNoMatchErr);
-    if (A(2))
-        wr32(A(2), (uint32_t)d->options[i - 1].selector);
-    if (A(3))
-        gput(A(3), d->options[i - 1].name, (uint32_t)d->options[i - 1].name[0] + 1);
-    if (A(4))
-        wr8(A(4), d->options[i - 1].setting);
-    RETERR(noErr);
-}
-
-/* SetDebugOptionValue(signature, selector, newSetting): the callback told. */
-static void dbg_SetDebugOptionValue(ppc_cpu *c)
-{
-    dbg_component *d = dbg_find(A(0));
-    if (!d)
-        RETERR(debuggingNoMatchErr);
-    for (int i = 0; i < d->noptions; i++)
-        if (d->options[i].selector == (int32_t)A(1)) {
-            d->options[i].setting = BOOL(2);
-            gaddr slot = tb_NewPtr(2, true, true);
-            if (slot) {
-                wr8(slot, d->options[i].setting);
-                uint32_t args[3] = { A(1), kSetDebugOption, slot };
-                aem_call_proc(d->callback, uppDebugComponentCallbackProcInfo, args, 3);
-                tb_DisposePtr(slot);
-            }
-            RETERR(noErr);
-        }
-    RETERR(debuggingInvalidOptionErr);
-}
-
-static void dbg_InstallDebugAssertOutputHandler(ppc_cpu *c)
-{
-    assert_handler = A(0);
-    DONE();
-}
-
-/* DebugAssert(signature, options, assertion, exception, error, file, line,
- * value): the message to the installed handler (a Pascal string of it
- * last), else to the debugger's output (our log). */
-static void dbg_DebugAssert(ppc_cpu *c)
-{
-    char text[600], a[200] = "", e[200] = "", er[200] = "", f[200] = "";
-    uint32_t sig = A(0);
-    rest_cstr(A(2), a, sizeof a);
-    rest_cstr(A(3), e, sizeof e);
-    rest_cstr(A(4), er, sizeof er);
-    rest_cstr(A(5), f, sizeof f);
-    char tag[5] = { (char)(sig >> 24), (char)(sig >> 16), (char)(sig >> 8), (char)sig, 0 };
-    int n = snprintf(text, sizeof text, "%s: %s%s%s%s%s%s%s file: %s, line: %d", sig ? tag : "Debug", a[0] ? "\"" : "",
-                     a, a[0] ? "\" " : "", e[0] ? "(" : "", e, e[0] ? ") " : "", er[0] ? er : "", f, (int)A(6));
-    if (n < 0)
-        n = 0;
-    if (assert_handler) {
-        gaddr msg = tb_NewPtr(256, false, true);
-        if (msg) {
-            rest_pstr_put(msg, text, 255);
-            uint32_t args[9] = { A(0), A(1), A(2), A(3), A(4), A(5), A(6), A(7), msg };
-            aem_call_proc(assert_handler, uppDebugAssertOutputHandlerProcInfo, args, 9);
-            tb_DisposePtr(msg);
-        }
-    } else {
-        log_printf("DebugAssert %s\n", text);
-    }
-    DONE();
-}
-
-/* TaskLevel(): 0, the program's own level (not an interrupt). */
-static void dbg_TaskLevel(ppc_cpu *c) { RET(0); }
-
-/* ---------------------------------------------------------------------- */
 /* AppleHelp.h: no Help Viewer, no help books. */
 
 enum { kAHInternalErr = -10790 };
@@ -640,8 +443,6 @@ static void ib_FromNib2(ppc_cpu *c)
 void rest_misc_reset(void)
 {
     memset(tsmte, 0, sizeof tsmte);
-    memset(dbg, 0, sizeof dbg);
-    assert_handler = 0;
 }
 
 const ppc_export rest_misc_exports[] = {
@@ -657,10 +458,8 @@ const ppc_export rest_misc_exports[] = {
     { "CreateNibReference", ib_CreateNibReference },
     { "CreateNibReferenceWithCFBundle", ib_CreateNibReferenceWithCFBundle },
     { "CreateWindowFromNib", ib_FromNib2 },
-    { "DebugAssert", dbg_DebugAssert },
     { "DetachResourceFile", r_DetachResourceFile },
     { "DeviceControlDoAVCTransaction", dc_DeviceControlDoAVCTransaction },
-    { "DisposeDebugComponent", dbg_DisposeDebugComponent },
     { "DisposeNibReference", ib_DisposeNibReference },
     { "FSCreateResourceFile", r_FSCreateResourceFile },
     { "FSOpenResourceFile", r_FSOpenResourceFile },
@@ -668,8 +467,6 @@ const ppc_export rest_misc_exports[] = {
     { "FSRefMakePath", fs_FSRefMakePath },
     { "FSpOpenOrphanResFile", r_FSpOpenOrphanResFile },
     { "GetCollectionRetainCount", co_GetCollectionRetainCount },
-    { "GetDebugComponentInfo", dbg_GetDebugComponentInfo },
-    { "GetDebugOptionInfo", dbg_GetDebugOptionInfo },
     { "GetGrowZone", mem_GetGrowZone },
     { "GetNextResourceFile", r_GetNextResourceFile },
     { "GetTSMTEDialogDocumentID", te_GetTSMTEDialogDocumentID },
@@ -677,17 +474,13 @@ const ppc_export rest_misc_exports[] = {
     { "GetTextServiceProperty", ts_GetTextServiceProperty },
     { "GetTopResourceFile", r_GetTopResourceFile },
     { "IdenticalText", sc_IdenticalText },
-    { "InstallDebugAssertOutputHandler", dbg_InstallDebugAssertOutputHandler },
     { "InsertResourceFile", r_InsertResourceFile },
     { "IsTSMTEDialog", te_IsTSMTEDialog },
     { "LanguageOrder", sc_LanguageOrder },
     { "MatchAliasNoUI", al_MatchAliasNoUI },
-    { "NewDebugComponent", dbg_NewDebugComponent },
-    { "NewDebugOption", dbg_NewDebugOption },
     { "ReleaseCollection", co_ReleaseCollection },
     { "ResolveAliasFileWithMountFlagsNoUI", al_ResolveAliasFileWithMountFlagsNoUI },
     { "RetainCollection", co_RetainCollection },
-    { "SetDebugOptionValue", dbg_SetDebugOptionValue },
     { "SetMenuBarFromNib", ib_FromNib1 },
     { "SetTSMTEDialogDocumentID", te_SetTSMTEDialogDocumentID },
     { "SetTSMTEDialogTSMTERecHandle", te_SetTSMTEDialogTSMTERecHandle },
@@ -695,7 +488,6 @@ const ppc_export rest_misc_exports[] = {
     { "StringOrder", sc_StringOrder },
     { "TSMGetActiveDocument", ts_TSMGetActiveDocument },
     { "TSMSetInlineInputRegion", ts_TSMSetInlineInputRegion },
-    { "TaskLevel", dbg_TaskLevel },
     { "TextOrder", sc_TextOrder },
     { "TextServiceEventRef", ts_TextServiceEventRef },
 };

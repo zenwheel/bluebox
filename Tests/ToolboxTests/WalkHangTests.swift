@@ -29,15 +29,18 @@ extension BlueBox {
             return p
         }
 
-        /// Open Transport lists no ports: OTGetIndexedPort says false
-        /// (IPNetMonitor lists them until it does), as does OTFindPort.
-        @Test func openTransportListsNoPorts() {
+        /// Open Transport lists its ports and then says there are no more:
+        /// OTGetIndexedPort says false at the end of them (IPNetMonitor lists
+        /// them until it does), and OTFindPort false for a name that isn't one.
+        @Test func openTransportPortListEnds() {
             bootMachine()
             _ = cfm_ppc_cpu()
             let record = tb_NewPtr(400, false, true)
-            #expect(call("OTGetIndexedPort", [record, 0]) & 0xFF == 0)
-            let name = tb_NewPtr(8, false, true)
-            #expect(call("OTFindPort", [record, name]) & 0xFF == 0)
+            var n = 0
+            while call("OTGetIndexedPort", [record, UInt32(n)]) & 0xFF != 0 && n < 100 { n += 1 }
+            #expect(n >= 1 && n < 100)
+            let name = pname("nosuchport")
+            #expect(call("OTFindPort", [record, name + 1]) & 0xFF == 0)
         }
 
         /// The walker dismisses dialogs by windowKind: a document window

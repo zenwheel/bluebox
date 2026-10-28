@@ -23,10 +23,13 @@
 #include "forks.h"
 #include "hostgl.h"
 #include "machine.h"
+#include "os9rest.h"
 #include "os9svc.h"
 #include "carbon_hi.h"
 #include "os9_toolbox.h"
 #include "ppc_bridge.h"
+#include "qt_calls.h"
+#include "qd3d.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -214,6 +217,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     void (*os9)(ppc_cpu *) = os9svc_export_fn(name); /* Mac OS 9's service libraries */
     if (os9)
         return os9;
+    void (*orest)(ppc_cpu *) = os9rest_export_fn(name); /* and their remaining exports */
+    if (orest)
+        return orest;
     void (*cf)(ppc_cpu *) = carbon_cf_export_fn(name);
     if (cf)
         return cf;
@@ -232,6 +238,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < ots_export_count; i++)
         if (!strcmp(ots_exports[i].name, name))
             return ots_exports[i].fn;
+    void (*ot2)(ppc_cpu *) = ot2_export_fn(name); /* Open Transport's utilities, ports, options, XTI ... */
+    if (ot2)
+        return ot2;
     for (unsigned i = 0; i < ctb_export_count; i++)
         if (!strcmp(ctb_exports[i].name, name))
             return ctb_exports[i].fn;
@@ -267,8 +276,13 @@ static void (*export_fn(const char *name))(ppc_cpu *)
         for (unsigned i = 0; i < gl_export_count; i++)
             if (!strcmp(gl_exports[i].name, name))
                 return gl_exports[i].fn;
+    void (*q3)(ppc_cpu *) = qd3d_export_fn(name); /* QuickDraw 3D, its Viewer and RAVE */
+    if (q3)
+        return q3;
     if (os9tbx_export_fn(name)) /* WindowsLib, ControlsLib, MenusLib and AppearanceLib's own */
         return os9tbx_export_fn(name);
+    if (qt_export_fn(name)) /* QuickTime's component calls, QuickTime VR and streaming */
+        return qt_export_fn(name);
     unsigned lo = 0, hi = ppc_export_count;
     while (lo < hi) {
         unsigned mid = (lo + hi) / 2;
@@ -380,6 +394,7 @@ typedef struct {
     const section *sections;
     int nsections;
     const gaddr *imports;
+    const gaddr *is_routine; /* [index]: 1 if the import is a routine (its slot is set, not added to) */
     const char *const *absent; /* each missing weak import's "symbol from library" */
     uint32_t nimports;
     gaddr target_base, reloc, sect_c, sect_d;
@@ -459,6 +474,13 @@ static gaddr section_base(reloc_state *s, uint32_t index)
 static bool reloc_run(reloc_state *s, uint32_t from, uint32_t to)
 {
 #define ADD(v) do { wr32(s->reloc, rd32(s->reloc) + (v)); s->reloc += 4; } while (0)
+    /* A routine's slot is set to its vector: whatever the container had
+     * there is not an addend (an XCMD saved after it was prepared on the
+     * author's machine has its old addresses in every slot, and added to
+     * the new ones they made garbage). */
+#define ADD_IMPORT(idx) do { uint32_t ix_ = (idx); gaddr v_ = import_at(s, ix_); \
+        if (ix_ < s->nimports && s->is_routine[ix_]) wr32(s->reloc, 0); \
+        ADD(v_); } while (0)
     uint32_t i = from;
     while (i < to) {
         uint32_t here = i;
@@ -477,7 +499,7 @@ static bool reloc_run(reloc_state *s, uint32_t from, uint32_t to)
                 case 2: ADD(s->sect_c); ADD(s->sect_d); s->reloc += 4; break; /* RelocTVector12 */
                 case 3: ADD(s->sect_c); ADD(s->sect_d); break;             /* RelocTVector8 */
                 case 4: ADD(s->sect_d); s->reloc += 4; break;              /* RelocVTable8 */
-                case 5: ADD(import_at(s, s->import_index)); s->import_index++; break; /* RelocImportRun */
+                case 5: ADD_IMPORT(s->import_index); s->import_index++; break; /* RelocImportRun */
                 default:
                     snprintf(s->err, s->errlen, "relocation run subopcode %u", sub);
                     return false;
@@ -486,7 +508,7 @@ static bool reloc_run(reloc_state *s, uint32_t from, uint32_t to)
         } else if ((w & 0xE000) == 0x6000) { /* the small index group */
             uint32_t sub = (w >> 9) & 0xF, index = w & 0x1FF;
             switch (sub) {
-            case 0: ADD(import_at(s, index)); s->import_index = index + 1; break; /* RelocSmByImport */
+            case 0: ADD_IMPORT(index); s->import_index = index + 1; break; /* RelocSmByImport */
             case 1: s->sect_c = section_base(s, index); break;                  /* RelocSmSetSectC */
             case 2: s->sect_d = section_base(s, index); break;                  /* RelocSmSetSectD */
             case 3: ADD(section_base(s, index)); break;                         /* RelocSmBySection */
@@ -524,7 +546,7 @@ static bool reloc_run(reloc_state *s, uint32_t from, uint32_t to)
         } else if ((w & 0xFC00) == 0xA400) { /* RelocLgByImport */
             uint32_t index = ((uint32_t)(w & 0x3FF) << 16) | be16(s->instr + i * 2);
             i++;
-            ADD(import_at(s, index));
+            ADD_IMPORT(index);
             s->import_index = index + 1;
         } else if ((w & 0xFC00) == 0xB400) { /* RelocLgSetOrBySection */
             uint32_t sub = (w >> 6) & 0xF;
@@ -542,6 +564,7 @@ static bool reloc_run(reloc_state *s, uint32_t from, uint32_t to)
             return false;
         }
     }
+#undef ADD_IMPORT
 #undef ADD
     return true;
 }
@@ -643,6 +666,8 @@ static bool is_native_library(const char *name)
     /* Apple's OpenGL, where the host has one to draw with (opengl.c). */
     if (!strcmp(name, "OpenGLLibrary") || !strcmp(name, "OpenGLUtility"))
         return hostgl_available();
+    if (qd3d_library(name)) /* QuickDraw 3D, where the host can render it */
+        return true;
     for (unsigned i = 0; i < sizeof native_libraries / sizeof native_libraries[0]; i++)
         if (!strcmp(native_libraries[i], name))
             return true;
@@ -1027,7 +1052,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
 
     /* Imports: an address each (a transition vector or data), or 0 for
      * missing weak ones. */
-    gaddr *imports = calloc(nsyms ? nsyms : 1, sizeof *imports);
+    gaddr *imports = calloc(nsyms ? 2 * (size_t)nsyms : 1, sizeof *imports);
     char **absent = calloc(nsyms ? nsyms : 1, sizeof *absent);
     const uint8_t *libs = loader + 56, *syms = libs + nlibs * 24;
     uint32_t next = 0; /* where the libraries so far end */
@@ -1052,6 +1077,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
             uint32_t w = be32(syms + k * 4);
             const char *sname = (const char *)loader + strings + (w & 0xFFFFFF);
             imports[k] = bind_import(lname, li, sname, (w >> 24) & 0x0F, (w >> 24) & 0x80, weak_lib);
+            imports[nsyms + k] = ((w >> 24) & 0x0F) != kDataCFragSymbol && ((w >> 24) & 0x0F) != 3 /* TOC */;
             if (!imports[k] && absent) { /* a weak import not there: named if it's called */
                 char both[256];
                 snprintf(both, sizeof both, "%s from %s", sname, lname);
@@ -1072,6 +1098,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
             .sections = sections,
             .nsections = ninst,
             .imports = imports,
+            .is_routine = imports + nsyms,
             .absent = (const char *const *)absent,
             .nimports = nsyms,
             .target_base = sections[target].base,

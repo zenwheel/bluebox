@@ -231,6 +231,18 @@ void osa_register(void);
 uint32_t components_open(uint32_t component);
 void components_set_storage(uint32_t ci, gaddr storage);
 void components_close(uint32_t ci);
+/* Components of ours in C (QuickTime's): fn gets the instance and the
+ * ComponentParameters record; the result is the call's. */
+typedef int32_t (*component_c_fn)(uint32_t ci, gaddr params, void *cookie);
+uint32_t components_register_c(uint32_t type, uint32_t subtype, uint32_t manufacturer, uint32_t flags,
+                               const char *name, const char *info, component_c_fn fn, void *cookie);
+int32_t components_call(uint32_t ci, gaddr params);
+uint32_t components_component_of(uint32_t ci);
+bool components_describe(uint32_t cid, uint32_t *type, uint32_t *subtype, uint32_t *manufacturer);
+uint32_t components_find_next(uint32_t after, uint32_t type, uint32_t subtype, uint32_t manufacturer);
+uint32_t components_open_component(uint32_t cid, int16_t *err);
+void qt_components_reset(void);
+void qt_callbacks_periodic(void); /* QuickTime's interrupt-time callbacks (qt_callbacks.c) */
 void components_reset(void);
 void quicktime_reset(void);
 /* Mouse button and location into low memory (events.c). */
@@ -844,6 +856,16 @@ void ppc_trap_ctx_save(ppc_trap_ctx *t);
 void ppc_trap_ctx_load(const ppc_trap_ctx *t);
 /* Open Transport (opentransport.c). */
 void opentransport_reset(void);
+/* Open Transport for 68k code (ot_68k.c): the Shared Library Manager the glue finds, made
+ * ready when 68k code asks Gestalt for Open Transport. */
+void ot_68k_prepare(void);
+void ot_68k_reset(void);
+/* A routine 68k code gave Open Transport to call later is 68k code, whichever ISA the program runs. */
+bool ot_is_68k_proc(gaddr p);
+bool ot_68k_find(const char *name, char lib[64], int *index, char *conv, char sig[24], char *ret);
+/* Open Transport's DNS queries ask this name server (an address and port) instead of the
+ * host's; 0 undoes it (the tests', and a program's environment). */
+void ot_inet_set_dns(uint32_t ip, uint16_t port);
 void opentransport_poll(void);
 bool mm_ctx_returned(void);
 void mm_ctx_set_returned(bool r);

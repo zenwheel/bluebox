@@ -9852,6 +9852,60 @@ static void ppcglue_HWPriv(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ExpMgrConfigReadByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigReadByte(a_node, a_configAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigReadWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigReadWord(a_node, a_configAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigReadLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigReadLong(a_node, a_configAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigWriteByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    uint8_t a_value = (uint8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigWriteByte(a_node, a_configAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigWriteWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    uint16_t a_value = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigWriteWord(a_node, a_configAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrConfigWriteLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_configAddr = (gaddr)c->gpr[4];
+    uint32_t a_value = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrConfigWriteLong(a_node, a_configAddr, a_value);
+    c->pc = c->lr;
+}
+
 static void ppcpatched_InitPack(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -15445,6 +15499,32 @@ static void ppcglue_SndPlayDoubleBuffer(ppc_cpu *c)
     gaddr a_chanp = (gaddr)c->gpr[3];
     gaddr a_paramp = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SndPlayDoubleBuffer(a_chanp, a_paramp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_Comp3to1(ppc_cpu *c)
+{
+    gaddr a_inp = (gaddr)c->gpr[3];
+    gaddr a_outp = (gaddr)c->gpr[4];
+    int32_t a_cnt = (int32_t)c->gpr[5];
+    gaddr a_instatep = (gaddr)c->gpr[6];
+    gaddr a_outstatep = (gaddr)c->gpr[7];
+    int32_t a_numchannels = (int32_t)c->gpr[8];
+    int32_t a_whichchannel = (int32_t)c->gpr[9];
+    tb_Comp3to1(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_Comp6to1(ppc_cpu *c)
+{
+    gaddr a_inp = (gaddr)c->gpr[3];
+    gaddr a_outp = (gaddr)c->gpr[4];
+    int32_t a_cnt = (int32_t)c->gpr[5];
+    gaddr a_instatep = (gaddr)c->gpr[6];
+    gaddr a_outstatep = (gaddr)c->gpr[7];
+    int32_t a_numchannels = (int32_t)c->gpr[8];
+    int32_t a_whichchannel = (int32_t)c->gpr[9];
+    tb_Comp6to1(a_inp, a_outp, a_cnt, a_instatep, a_outstatep, a_numchannels, a_whichchannel);
     c->pc = c->lr;
 }
 
@@ -29925,6 +30005,784 @@ static void ppcglue_SetDimSuspendState(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DebugAssert(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    uint32_t a_options = (uint32_t)c->gpr[4];
+    gaddr a_assertionString = (gaddr)c->gpr[5];
+    gaddr a_exceptionString = (gaddr)c->gpr[6];
+    gaddr a_errorString = (gaddr)c->gpr[7];
+    gaddr a_fileName = (gaddr)c->gpr[8];
+    int32_t a_lineNumber = (int32_t)c->gpr[9];
+    gaddr a_value = (gaddr)c->gpr[10];
+    tb_DebugAssert(a_componentSignature, a_options, a_assertionString, a_exceptionString, a_errorString, a_fileName, a_lineNumber, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TaskLevel(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_TaskLevel();
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewDebugComponent(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    gaddr a_componentName = (gaddr)c->gpr[4];
+    gaddr a_componentCallback = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_NewDebugComponent(a_componentSignature, a_componentName, a_componentCallback);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewDebugOption(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    int32_t a_optionSelectorNum = (int32_t)c->gpr[4];
+    gaddr a_optionName = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_NewDebugOption(a_componentSignature, a_optionSelectorNum, a_optionName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeDebugComponent(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_DisposeDebugComponent(a_componentSignature);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDebugComponentInfo(ppc_cpu *c)
+{
+    uint32_t a_index = (uint32_t)c->gpr[3];
+    gaddr a_componentSignature = (gaddr)c->gpr[4];
+    gaddr a_componentName = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDebugComponentInfo(a_index, a_componentSignature, a_componentName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDebugOptionInfo(ppc_cpu *c)
+{
+    uint32_t a_index = (uint32_t)c->gpr[3];
+    int32_t a_componentSignature = (int32_t)c->gpr[4];
+    gaddr a_optionSelectorNum = (gaddr)c->gpr[5];
+    gaddr a_optionName = (gaddr)c->gpr[6];
+    gaddr a_optionSetting = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_GetDebugOptionInfo(a_index, a_componentSignature, a_optionSelectorNum, a_optionName, a_optionSetting);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDebugOptionValue(ppc_cpu *c)
+{
+    int32_t a_componentSignature = (int32_t)c->gpr[3];
+    int32_t a_optionSelectorNum = (int32_t)c->gpr[4];
+    int8_t a_newOptionSetting = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_SetDebugOptionValue(a_componentSignature, a_optionSelectorNum, a_newOptionSetting);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InstallDebugAssertOutputHandler(ppc_cpu *c)
+{
+    gaddr a_handler = (gaddr)c->gpr[3];
+    tb_InstallDebugAssertOutputHandler(a_handler);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOReadByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOReadByte(a_node, a_ioAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOReadWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOReadWord(a_node, a_ioAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOReadLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    gaddr a_valuePtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOReadLong(a_node, a_ioAddr, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOWriteByte(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    uint8_t a_value = (uint8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOWriteByte(a_node, a_ioAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOWriteWord(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    uint16_t a_value = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOWriteWord(a_node, a_ioAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrIOWriteLong(ppc_cpu *c)
+{
+    gaddr a_node = (gaddr)c->gpr[3];
+    gaddr a_ioAddr = (gaddr)c->gpr[4];
+    uint32_t a_value = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrIOWriteLong(a_node, a_ioAddr, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrInterruptAcknowledgeReadByte(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    gaddr a_valuePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrInterruptAcknowledgeReadByte(a_entry, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrInterruptAcknowledgeReadWord(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    gaddr a_valuePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrInterruptAcknowledgeReadWord(a_entry, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrInterruptAcknowledgeReadLong(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    gaddr a_valuePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrInterruptAcknowledgeReadLong(a_entry, a_valuePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrSpecialCycleWriteLong(ppc_cpu *c)
+{
+    gaddr a_entry = (gaddr)c->gpr[3];
+    uint32_t a_value = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrSpecialCycleWriteLong(a_entry, a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExpMgrSpecialCycleBroadcastLong(ppc_cpu *c)
+{
+    uint32_t a_value = (uint32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ExpMgrSpecialCycleBroadcastLong(a_value);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetDetachIconSuite(ppc_cpu *c)
+{
+    gaddr a_theIconSuite = (gaddr)c->gpr[3];
+    int16_t a_theResID = (int16_t)c->gpr[4];
+    uint32_t a_selector = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetDetachIconSuite(a_theIconSuite, a_theResID, a_selector);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBTrackPopupMenu(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    gaddr a_theMenu = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBTrackPopupMenu(a_moduleRect, a_theMenu);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBTrackSlider(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    int16_t a_ticksOnSlider = (int16_t)c->gpr[4];
+    int16_t a_initialValue = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBTrackSlider(a_moduleRect, a_ticksOnSlider, a_initialValue);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBShowHelpString(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    gaddr a_helpString = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBShowHelpString(a_moduleRect, a_helpString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetBarGraphWidth(ppc_cpu *c)
+{
+    int16_t a_barCount = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetBarGraphWidth(a_barCount);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBDrawBarGraph(ppc_cpu *c)
+{
+    int16_t a_level = (int16_t)c->gpr[3];
+    int16_t a_barCount = (int16_t)c->gpr[4];
+    int16_t a_direction = (int16_t)c->gpr[5];
+    uint32_t a_barGraphTopLeft = (uint32_t)c->gpr[6];
+    tb_SBDrawBarGraph(a_level, a_barCount, a_direction, a_barGraphTopLeft);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBModalDialogInContext(ppc_cpu *c)
+{
+    gaddr a_filterProc = (gaddr)c->gpr[3];
+    gaddr a_itemHit = (gaddr)c->gpr[4];
+    tb_SBModalDialogInContext(a_filterProc, a_itemHit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetControlStripFontID(ppc_cpu *c)
+{
+    gaddr a_fontID = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetControlStripFontID(a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSetControlStripFontID(ppc_cpu *c)
+{
+    int16_t a_fontID = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSetControlStripFontID(a_fontID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetControlStripFontSize(ppc_cpu *c)
+{
+    gaddr a_fontSize = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetControlStripFontSize(a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSetControlStripFontSize(ppc_cpu *c)
+{
+    int16_t a_fontSize = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSetControlStripFontSize(a_fontSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBGetShowHideHotKey(ppc_cpu *c)
+{
+    gaddr a_modifiers = (gaddr)c->gpr[3];
+    gaddr a_keyCode = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBGetShowHideHotKey(a_modifiers, a_keyCode);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBSetShowHideHotKey(ppc_cpu *c)
+{
+    int16_t a_modifiers = (int16_t)c->gpr[3];
+    uint8_t a_keyCode = (uint8_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBSetShowHideHotKey(a_modifiers, a_keyCode);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBIsShowHideHotKeyEnabled(ppc_cpu *c)
+{
+    gaddr a_enabled = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBIsShowHideHotKeyEnabled(a_enabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBEnableShowHideHotKey(ppc_cpu *c)
+{
+    int8_t a_enabled = (int8_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBEnableShowHideHotKey(a_enabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SBHitTrackSlider(ppc_cpu *c)
+{
+    gaddr a_moduleRect = (gaddr)c->gpr[3];
+    int16_t a_ticksOnSlider = (int16_t)c->gpr[4];
+    int16_t a_initialValue = (int16_t)c->gpr[5];
+    gaddr a_hit = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SBHitTrackSlider(a_moduleRect, a_ticksOnSlider, a_initialValue, a_hit);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IconServicesInit(ppc_cpu *c)
+{
+    gaddr a_initBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_IconServicesInit(a_initBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IconServicesTerminate(ppc_cpu *c)
+{
+    tb_IconServicesTerminate();
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDeepIconsEnabled(ppc_cpu *c)
+{
+    gaddr a_deepIconsEnabled = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetDeepIconsEnabled(a_deepIconsEnabled);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetDeepIconsEnabled(ppc_cpu *c)
+{
+    int8_t a_enableDeepIcons = (int8_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetDeepIconsEnabled(a_enableDeepIcons);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAllocateFCB(ppc_cpu *c)
+{
+    gaddr a_fileRefNum = (gaddr)c->gpr[3];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAllocateFCB(a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTReleaseFCB(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTReleaseFCB(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateFCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    gaddr a_namePtr = (gaddr)c->gpr[5];
+    gaddr a_fileRefNum = (gaddr)c->gpr[6];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateFCB(a_volCtrlBlockPtr, a_fileNum, a_namePtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateNextFCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    gaddr a_namePtr = (gaddr)c->gpr[5];
+    gaddr a_fileRefNum = (gaddr)c->gpr[6];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateNextFCB(a_volCtrlBlockPtr, a_fileNum, a_namePtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTIndexFCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    gaddr a_fileRefNum = (gaddr)c->gpr[4];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTIndexFCB(a_volCtrlBlockPtr, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTResolveFCB(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTResolveFCB(a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAllocateVCB(ppc_cpu *c)
+{
+    gaddr a_sysVCBLength = (gaddr)c->gpr[3];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[4];
+    uint16_t a_addSize = (uint16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAllocateVCB(a_sysVCBLength, a_volCtrlBlockPtr, a_addSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAddNewVCB(ppc_cpu *c)
+{
+    int16_t a_driveNum = (int16_t)c->gpr[3];
+    gaddr a_vRefNum = (gaddr)c->gpr[4];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAddNewVCB(a_driveNum, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTDisposeVCB(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTDisposeVCB(a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateVCBByRefNum(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    gaddr a_vRefNum = (gaddr)c->gpr[4];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateVCBByRefNum(a_refNum, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateVCBByName(ppc_cpu *c)
+{
+    gaddr a_namePtr = (gaddr)c->gpr[3];
+    gaddr a_moreMatches = (gaddr)c->gpr[4];
+    gaddr a_vRefNum = (gaddr)c->gpr[5];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateVCBByName(a_namePtr, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateNextVCB(ppc_cpu *c)
+{
+    gaddr a_namePtr = (gaddr)c->gpr[3];
+    gaddr a_moreMatches = (gaddr)c->gpr[4];
+    gaddr a_vRefNum = (gaddr)c->gpr[5];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateNextVCB(a_namePtr, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAllocateWDCB(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAllocateWDCB(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTReleaseWDCB(ppc_cpu *c)
+{
+    int16_t a_wdRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTReleaseWDCB(a_wdRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTResolveWDCB(ppc_cpu *c)
+{
+    int32_t a_procID = (int32_t)c->gpr[3];
+    int16_t a_wdIndex = (int16_t)c->gpr[4];
+    int16_t a_wdRefNum = (int16_t)c->gpr[5];
+    gaddr a_wdCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTResolveWDCB(a_procID, a_wdIndex, a_wdRefNum, a_wdCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTFindDrive(ppc_cpu *c)
+{
+    int16_t a_driveNum = (int16_t)c->gpr[3];
+    gaddr a_driveQElementPtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTFindDrive(a_driveNum, a_driveQElementPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAdjustEOF(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAdjustEOF(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTSetDefaultVol(ppc_cpu *c)
+{
+    int32_t a_nodeHint = (int32_t)c->gpr[3];
+    uint32_t a_dirID = (uint32_t)c->gpr[4];
+    int16_t a_refNum = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTSetDefaultVol(a_nodeHint, a_dirID, a_refNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetDefaultVol(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetDefaultVol(a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckWDRefNum(ppc_cpu *c)
+{
+    int16_t a_wdRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckWDRefNum(a_wdRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckFileRefNum(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckFileRefNum(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckVolRefNum(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckVolRefNum(a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckPermission(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    gaddr a_modByte = (gaddr)c->gpr[4];
+    uint32_t a_fileNum = (uint32_t)c->gpr[5];
+    gaddr a_paramBlock = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckPermission(a_volCtrlBlockPtr, a_modByte, a_fileNum, a_paramBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckVolOffline(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckVolOffline(a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckVolModifiable(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckVolModifiable(a_vRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckFileModifiable(ppc_cpu *c)
+{
+    int16_t a_fileRefNum = (int16_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckFileModifiable(a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckDirBusy(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_dirID = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckDirBusy(a_volCtrlBlockPtr, a_dirID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTParsePathname(ppc_cpu *c)
+{
+    gaddr a_volNamelength = (gaddr)c->gpr[3];
+    gaddr a_namePtr = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTParsePathname(a_volNamelength, a_namePtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetPathComponentName(ppc_cpu *c)
+{
+    gaddr a_parseRec = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetPathComponentName(a_parseRec);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTDetermineVol(ppc_cpu *c)
+{
+    gaddr a_paramBlock = (gaddr)c->gpr[3];
+    gaddr a_status = (gaddr)c->gpr[4];
+    gaddr a_moreMatches = (gaddr)c->gpr[5];
+    gaddr a_vRefNum = (gaddr)c->gpr[6];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTDetermineVol(a_paramBlock, a_status, a_moreMatches, a_vRefNum, a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetBlock(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    gaddr a_log2PhyProc = (gaddr)c->gpr[4];
+    uint32_t a_blockNum = (uint32_t)c->gpr[5];
+    int16_t a_gbOption = (int16_t)c->gpr[6];
+    gaddr a_buffer = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetBlock(a_refNum, a_log2PhyProc, a_blockNum, a_gbOption, a_buffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTReleaseBlock(ppc_cpu *c)
+{
+    gaddr a_buffer = (gaddr)c->gpr[3];
+    int16_t a_rbOption = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTReleaseBlock(a_buffer, a_rbOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTFlushCache(ppc_cpu *c)
+{
+    int16_t a_refNum = (int16_t)c->gpr[3];
+    int16_t a_fcOption = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTFlushCache(a_refNum, a_fcOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTMarkDirty(ppc_cpu *c)
+{
+    gaddr a_buffer = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTMarkDirty(a_buffer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTTrashVolBlocks(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTTrashVolBlocks(a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTTrashFileBlocks(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTTrashFileBlocks(a_volCtrlBlockPtr, a_fileNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTTrashBlocks(ppc_cpu *c)
+{
+    uint32_t a_beginPosition = (uint32_t)c->gpr[3];
+    uint32_t a_byteCount = (uint32_t)c->gpr[4];
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[5];
+    int16_t a_fileRefNum = (int16_t)c->gpr[6];
+    int16_t a_tbOption = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTTrashBlocks(a_beginPosition, a_byteCount, a_volCtrlBlockPtr, a_fileRefNum, a_tbOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCacheReadIP(ppc_cpu *c)
+{
+    gaddr a_log2PhyProc = (gaddr)c->gpr[3];
+    uint32_t a_filePosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    int16_t a_fileRefNum = (int16_t)c->gpr[6];
+    uint32_t a_reqCount = (uint32_t)c->gpr[7];
+    gaddr a_actCount = (gaddr)c->gpr[8];
+    int16_t a_cacheOption = (int16_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCacheReadIP(a_log2PhyProc, a_filePosition, a_ioBuffer, a_fileRefNum, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCacheWriteIP(ppc_cpu *c)
+{
+    gaddr a_log2PhyProc = (gaddr)c->gpr[3];
+    uint32_t a_filePosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    int16_t a_fileRefNum = (int16_t)c->gpr[6];
+    uint32_t a_reqCount = (uint32_t)c->gpr[7];
+    gaddr a_actCount = (gaddr)c->gpr[8];
+    int16_t a_cacheOption = (int16_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCacheWriteIP(a_log2PhyProc, a_filePosition, a_ioBuffer, a_fileRefNum, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTEjectVol(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTEjectVol(a_volCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTBlockInFQHashP(ppc_cpu *c)
+{
+    int16_t a_vRefNum = (int16_t)c->gpr[3];
+    uint32_t a_diskBlock = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTBlockInFQHashP(a_vRefNum, a_diskBlock);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTVolCacheReadIP(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_blockPosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    uint32_t a_reqCount = (uint32_t)c->gpr[6];
+    gaddr a_actCount = (gaddr)c->gpr[7];
+    int16_t a_cacheOption = (int16_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTVolCacheReadIP(a_volCtrlBlockPtr, a_blockPosition, a_ioBuffer, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTVolCacheWriteIP(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_blockPosition = (uint32_t)c->gpr[4];
+    gaddr a_ioBuffer = (gaddr)c->gpr[5];
+    uint32_t a_reqCount = (uint32_t)c->gpr[6];
+    gaddr a_actCount = (gaddr)c->gpr[7];
+    int16_t a_cacheOption = (int16_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTVolCacheWriteIP(a_volCtrlBlockPtr, a_blockPosition, a_ioBuffer, a_reqCount, a_actCount, a_cacheOption);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTResolveFileRefNum(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    gaddr a_fileRefNum = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTResolveFileRefNum(a_fileCtrlBlockPtr, a_fileRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckFCB(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckFCB(a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTCheckForkPermissions(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    uint32_t a_forkID = (uint32_t)c->gpr[5];
+    int8_t a_fileLocked = (int8_t)c->gpr[6];
+    int8_t a_permissions = (int8_t)c->gpr[7];
+    int8_t a_useSearchList = (int8_t)c->gpr[8];
+    gaddr a_fcbFlags = (gaddr)c->gpr[9];
+    gaddr a_openForkRefNum = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTCheckForkPermissions(a_volCtrlBlockPtr, a_fileNum, a_forkID, a_fileLocked, a_permissions, a_useSearchList, a_fcbFlags, a_openForkRefNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTAddFCBToSearchList(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTAddFCBToSearchList(a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTRemoveFCBFromSearchList(ppc_cpu *c)
+{
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTRemoveFCBFromSearchList(a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTLocateFCBInSearchList(ppc_cpu *c)
+{
+    gaddr a_volCtrlBlockPtr = (gaddr)c->gpr[3];
+    uint32_t a_fileNum = (uint32_t)c->gpr[4];
+    gaddr a_fileRefNum = (gaddr)c->gpr[5];
+    gaddr a_fileCtrlBlockPtr = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTLocateFCBInSearchList(a_volCtrlBlockPtr, a_fileNum, a_fileRefNum, a_fileCtrlBlockPtr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UTGetForkControlBlockSize(ppc_cpu *c)
+{
+    gaddr a_fcbSize = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UTGetForkControlBlockSize(a_fcbSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMGetGDeviceTablecloth(ppc_cpu *c)
+{
+    gaddr a_displayDevice = (gaddr)c->gpr[3];
+    gaddr a_tablecloth = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMGetGDeviceTablecloth(a_displayDevice, a_tablecloth);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DMSetGDeviceTablecloth(ppc_cpu *c)
+{
+    gaddr a_displayDevice = (gaddr)c->gpr[3];
+    gaddr a_tablecloth = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DMSetGDeviceTablecloth(a_displayDevice, a_tablecloth);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ParseAIFFHeader(ppc_cpu *c)
 {
     int16_t a_fRefNum = (int16_t)c->gpr[3];
@@ -29991,6 +30849,14 @@ static void ppcglue_SetDefaultSoundOutput(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_CheckQuickTimeRegistration(ppc_cpu *c)
+{
+    gaddr a_registrationKey = (gaddr)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    tb_CheckQuickTimeRegistration(a_registrationKey, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviesError(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMoviesError();
@@ -30009,6 +30875,55 @@ static void ppcglue_GetMoviesStickyError(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_PrePrerollMovie(ppc_cpu *c)
+{
+    int32_t a_m = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    int32_t a_rate = (int32_t)c->gpr[5];
+    int32_t a_proc = (int32_t)c->gpr[6];
+    gaddr a_refcon = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PrePrerollMovie(a_m, a_time, a_rate, a_proc, a_refcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AbortPrePrerollMovie(ppc_cpu *c)
+{
+    int32_t a_m = (int32_t)c->gpr[3];
+    int16_t a_err = (int16_t)c->gpr[4];
+    tb_AbortPrePrerollMovie(a_m, a_err);
+    c->pc = c->lr;
+}
+
+static void ppcglue_LoadMovieIntoRam(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    int32_t a_flags = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LoadMovieIntoRam(a_theMovie, a_time, a_duration, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_LoadTrackIntoRam(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    int32_t a_flags = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LoadTrackIntoRam(a_theTrack, a_time, a_duration, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_LoadMediaIntoRam(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    int32_t a_flags = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_LoadMediaIntoRam(a_theMedia, a_time, a_duration, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMovieActive(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -30016,10 +30931,116 @@ static void ppcglue_GetMovieActive(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTGetWallClockTimeBase(ppc_cpu *c)
+{
+    gaddr a_wallClockTimeBase = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetWallClockTimeBase(a_wallClockTimeBase);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerOpen(ppc_cpu *c)
+{
+    c->gpr[3] = (uint32_t)tb_QTIdleManagerOpen();
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerClose(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerClose(a_im);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerGetNextIdleTime(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    gaddr a_nextIdle = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerGetNextIdleTime(a_im, a_nextIdle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerSetNextIdleTime(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    gaddr a_nextIdle = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerSetNextIdleTime(a_im, a_nextIdle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerSetNextIdleTimeNever(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerSetNextIdleTimeNever(a_im);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerSetNextIdleTimeNow(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerSetNextIdleTimeNow(a_im);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerSetNextIdleTimeDelta(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    int32_t a_duration = (int32_t)c->gpr[4];
+    int32_t a_scale = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerSetNextIdleTimeDelta(a_im, a_duration, a_scale);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerSetParent(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    int32_t a_parent = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerSetParent(a_im, a_parent);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTIdleManagerNeedsAnIdle(ppc_cpu *c)
+{
+    int32_t a_im = (int32_t)c->gpr[3];
+    gaddr a_needsOne = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTIdleManagerNeedsAnIdle(a_im, a_needsOne);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GoToEndOfMovie(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    tb_GoToEndOfMovie(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMoviePreviewMode(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_GetMoviePreviewMode(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMoviePreviewMode(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int8_t a_usePreview = (int8_t)c->gpr[4];
+    tb_SetMoviePreviewMode(a_theMovie, a_usePreview);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ShowMoviePoster(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     tb_ShowMoviePoster(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PlayMoviePreview(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_callOutProc = (int32_t)c->gpr[4];
+    int32_t a_refcon = (int32_t)c->gpr[5];
+    tb_PlayMoviePreview(a_theMovie, a_callOutProc, a_refcon);
     c->pc = c->lr;
 }
 
@@ -30048,12 +31069,30 @@ static void ppcglue_SetMovieMasterClock(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_ChooseMovieClock(ppc_cpu *c)
+{
+    int32_t a_m = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    tb_ChooseMovieClock(a_m, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMovieGWorld(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     gaddr a_port = (gaddr)c->gpr[4];
     gaddr a_gdh = (gaddr)c->gpr[5];
     tb_GetMovieGWorld(a_theMovie, a_port, a_gdh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieDrawingCompleteProc(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_proc = (int32_t)c->gpr[5];
+    int32_t a_refCon = (int32_t)c->gpr[6];
+    tb_SetMovieDrawingCompleteProc(a_theMovie, a_flags, a_proc, a_refCon);
     c->pc = c->lr;
 }
 
@@ -30065,6 +31104,33 @@ static void ppcglue_GetMovieNaturalBoundsRect(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetNextTrackForCompositing(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_theTrack = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetNextTrackForCompositing(a_theMovie, a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPrevTrackForCompositing(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_theTrack = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetPrevTrackForCompositing(a_theMovie, a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackGWorld(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_port = (int32_t)c->gpr[4];
+    int32_t a_gdh = (int32_t)c->gpr[5];
+    int32_t a_proc = (int32_t)c->gpr[6];
+    int32_t a_refCon = (int32_t)c->gpr[7];
+    tb_SetTrackGWorld(a_theTrack, a_port, a_gdh, a_proc, a_refCon);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviePict(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -30073,10 +31139,26 @@ static void ppcglue_GetMoviePict(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetTrackPict(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetTrackPict(a_theTrack, a_time);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMoviePosterPict(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetMoviePosterPict(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InvalidateMovieRegion(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_invalidRgn = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InvalidateMovieRegion(a_theMovie, a_invalidRgn);
     c->pc = c->lr;
 }
 
@@ -30110,10 +31192,138 @@ static void ppcglue_SetMovieClipRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetTrackClipRgn(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackClipRgn(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackClipRgn(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_theClip = (int32_t)c->gpr[4];
+    tb_SetTrackClipRgn(a_theTrack, a_theClip);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieDisplayBoundsRgn(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMovieDisplayBoundsRgn(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackDisplayBoundsRgn(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackDisplayBoundsRgn(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieBoundsRgn(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMovieBoundsRgn(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackMovieBoundsRgn(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackMovieBoundsRgn(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackBoundsRgn(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackBoundsRgn(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackMatte(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackMatte(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackMatte(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_theMatte = (int32_t)c->gpr[4];
+    tb_SetTrackMatte(a_theTrack, a_theMatte);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeMatte(ppc_cpu *c)
+{
+    int32_t a_theMatte = (int32_t)c->gpr[3];
+    tb_DisposeMatte(a_theMatte);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieVideoOutput(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_vout = (int32_t)c->gpr[4];
+    tb_SetMovieVideoOutput(a_theMovie, a_vout);
+    c->pc = c->lr;
+}
+
 static void ppcglue_NewMovie(ppc_cpu *c)
 {
     int32_t a_flags = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_NewMovie(a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutMovieIntoHandle(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_publicMovie = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutMovieIntoHandle(a_theMovie, a_publicMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutMovieIntoDataFork(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int16_t a_fRefNum = (int16_t)c->gpr[4];
+    int32_t a_offset = (int32_t)c->gpr[5];
+    int32_t a_maxSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutMovieIntoDataFork(a_theMovie, a_fRefNum, a_offset, a_maxSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutMovieIntoDataFork64(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_fRefNum = (int32_t)c->gpr[4];
+    gaddr a_offset = (gaddr)c->gpr[5];
+    int32_t a_maxSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutMovieIntoDataFork64(a_theMovie, a_fRefNum, a_offset, a_maxSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutMovieIntoStorage(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dh = (int32_t)c->gpr[4];
+    gaddr a_offset = (gaddr)c->gpr[5];
+    int32_t a_maxSize = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutMovieIntoStorage(a_theMovie, a_dh, a_offset, a_maxSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutMovieForDataRefIntoHandle(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dataRef = (int32_t)c->gpr[4];
+    int32_t a_dataRefType = (int32_t)c->gpr[5];
+    int32_t a_publicMovie = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutMovieForDataRefIntoHandle(a_theMovie, a_dataRef, a_dataRefType, a_publicMovie);
     c->pc = c->lr;
 }
 
@@ -30135,6 +31345,14 @@ static void ppcglue_GetMovieTimeScale(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetMovieTimeScale(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieTimeScale(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_timeScale = (int32_t)c->gpr[4];
+    tb_SetMovieTimeScale(a_theMovie, a_timeScale);
     c->pc = c->lr;
 }
 
@@ -30191,6 +31409,55 @@ static void ppcglue_SetMovieVolume(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetMovieMatrix(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_matrix = (gaddr)c->gpr[4];
+    tb_GetMovieMatrix(a_theMovie, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieMatrix(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_matrix = (gaddr)c->gpr[4];
+    tb_SetMovieMatrix(a_theMovie, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMoviePreviewTime(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_previewTime = (gaddr)c->gpr[4];
+    gaddr a_previewDuration = (gaddr)c->gpr[5];
+    tb_GetMoviePreviewTime(a_theMovie, a_previewTime, a_previewDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMoviePreviewTime(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_previewTime = (int32_t)c->gpr[4];
+    int32_t a_previewDuration = (int32_t)c->gpr[5];
+    tb_SetMoviePreviewTime(a_theMovie, a_previewTime, a_previewDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMoviePosterTime(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMoviePosterTime(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMoviePosterTime(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_posterTime = (int32_t)c->gpr[4];
+    tb_SetMoviePosterTime(a_theMovie, a_posterTime);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMovieSelection(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -30206,6 +31473,24 @@ static void ppcglue_SetMovieSelection(ppc_cpu *c)
     int32_t a_selectionTime = (int32_t)c->gpr[4];
     int32_t a_selectionDuration = (int32_t)c->gpr[5];
     tb_SetMovieSelection(a_theMovie, a_selectionTime, a_selectionDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieActiveSegment(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    tb_SetMovieActiveSegment(a_theMovie, a_startTime, a_duration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieActiveSegment(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_startTime = (gaddr)c->gpr[4];
+    gaddr a_duration = (gaddr)c->gpr[5];
+    tb_GetMovieActiveSegment(a_theMovie, a_startTime, a_duration);
     c->pc = c->lr;
 }
 
@@ -30233,10 +31518,51 @@ static void ppcglue_SetMovieTimeValue(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetMovieUserData(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMovieUserData(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetTimeUntilNextTask(ppc_cpu *c)
+{
+    gaddr a_duration = (gaddr)c->gpr[3];
+    int32_t a_scale = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetTimeUntilNextTask(a_duration, a_scale);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTInstallNextTaskNeededSoonerCallback(ppc_cpu *c)
+{
+    int32_t a_callbackProc = (int32_t)c->gpr[3];
+    int32_t a_scale = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    gaddr a_refcon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTInstallNextTaskNeededSoonerCallback(a_callbackProc, a_scale, a_flags, a_refcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTUninstallNextTaskNeededSoonerCallback(ppc_cpu *c)
+{
+    int32_t a_callbackProc = (int32_t)c->gpr[3];
+    gaddr a_refcon = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTUninstallNextTaskNeededSoonerCallback(a_callbackProc, a_refcon);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMovieTrackCount(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetMovieTrackCount(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieTrack(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_trackID = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetMovieTrack(a_theMovie, a_trackID);
     c->pc = c->lr;
 }
 
@@ -30258,10 +31584,48 @@ static void ppcglue_GetMovieIndTrackType(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetTrackID(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackID(a_theTrack);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetTrackMovie(ppc_cpu *c)
 {
     int32_t a_theTrack = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetTrackMovie(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewMovieTrack(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_width = (int32_t)c->gpr[4];
+    int32_t a_height = (int32_t)c->gpr[5];
+    int16_t a_trackVolume = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)tb_NewMovieTrack(a_theMovie, a_width, a_height, a_trackVolume);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeMovieTrack(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    tb_DisposeMovieTrack(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackCreationTime(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackCreationTime(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackModificationTime(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackModificationTime(a_theTrack);
     c->pc = c->lr;
 }
 
@@ -30280,10 +31644,263 @@ static void ppcglue_SetTrackEnabled(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetTrackUsage(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackUsage(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackUsage(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_usage = (int32_t)c->gpr[4];
+    tb_SetTrackUsage(a_theTrack, a_usage);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackDuration(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackDuration(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackOffset(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackOffset(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackOffset(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_movieOffsetTime = (int32_t)c->gpr[4];
+    tb_SetTrackOffset(a_theTrack, a_movieOffsetTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackLayer(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTrackLayer(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackLayer(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int16_t a_layer = (int16_t)c->gpr[4];
+    tb_SetTrackLayer(a_theTrack, a_layer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackAlternate(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackAlternate(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackAlternate(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_alternateT = (int32_t)c->gpr[4];
+    tb_SetTrackAlternate(a_theTrack, a_alternateT);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetAutoTrackAlternatesEnabled(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int8_t a_enable = (int8_t)c->gpr[4];
+    tb_SetAutoTrackAlternatesEnabled(a_theMovie, a_enable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SelectMovieAlternates(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    tb_SelectMovieAlternates(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackVolume(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTrackVolume(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackVolume(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int16_t a_volume = (int16_t)c->gpr[4];
+    tb_SetTrackVolume(a_theTrack, a_volume);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackMatrix(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    gaddr a_matrix = (gaddr)c->gpr[4];
+    tb_GetTrackMatrix(a_theTrack, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackMatrix(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    gaddr a_matrix = (gaddr)c->gpr[4];
+    tb_SetTrackMatrix(a_theTrack, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackDimensions(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    gaddr a_width = (gaddr)c->gpr[4];
+    gaddr a_height = (gaddr)c->gpr[5];
+    tb_GetTrackDimensions(a_theTrack, a_width, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackDimensions(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_width = (int32_t)c->gpr[4];
+    int32_t a_height = (int32_t)c->gpr[5];
+    tb_SetTrackDimensions(a_theTrack, a_width, a_height);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackUserData(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackUserData(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackDisplayMatrix(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    gaddr a_matrix = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTrackDisplayMatrix(a_theTrack, a_matrix);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackSoundLocalizationSettings(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    gaddr a_settings = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTrackSoundLocalizationSettings(a_theTrack, a_settings);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackSoundLocalizationSettings(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_settings = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetTrackSoundLocalizationSettings(a_theTrack, a_settings);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewTrackMedia(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_mediaType = (int32_t)c->gpr[4];
+    int32_t a_timeScale = (int32_t)c->gpr[5];
+    int32_t a_dataRef = (int32_t)c->gpr[6];
+    int32_t a_dataRefType = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_NewTrackMedia(a_theTrack, a_mediaType, a_timeScale, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeTrackMedia(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    tb_DisposeTrackMedia(a_theMedia);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetTrackMedia(ppc_cpu *c)
 {
     int32_t a_theTrack = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetTrackMedia(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaTrack(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaTrack(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaCreationTime(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaCreationTime(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaModificationTime(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaModificationTime(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaTimeScale(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaTimeScale(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaTimeScale(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_timeScale = (int32_t)c->gpr[4];
+    tb_SetMediaTimeScale(a_theMedia, a_timeScale);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaDuration(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaDuration(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaLanguage(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaLanguage(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaLanguage(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_language = (int16_t)c->gpr[4];
+    tb_SetMediaLanguage(a_theMedia, a_language);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaQuality(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaQuality(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaQuality(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_quality = (int16_t)c->gpr[4];
+    tb_SetMediaQuality(a_theMedia, a_quality);
     c->pc = c->lr;
 }
 
@@ -30294,6 +31911,346 @@ static void ppcglue_GetMediaHandlerDescription(ppc_cpu *c)
     int32_t a_creatorName = (int32_t)c->gpr[5];
     gaddr a_creatorManufacturer = (gaddr)c->gpr[6];
     tb_GetMediaHandlerDescription(a_theMedia, a_mediaType, a_creatorName, a_creatorManufacturer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaUserData(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaUserData(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaInputMap(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_inputMap = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaInputMap(a_theMedia, a_inputMap);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaInputMap(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_inputMap = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaInputMap(a_theMedia, a_inputMap);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaHandler(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaHandler(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaHandler(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_mH = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaHandler(a_theMedia, a_mH);
+    c->pc = c->lr;
+}
+
+static void ppcglue_BeginMediaEdits(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_BeginMediaEdits(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_EndMediaEdits(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EndMediaEdits(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaDefaultDataRefIndex(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaDefaultDataRefIndex(a_theMedia, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaDataHandlerDescription(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    gaddr a_dhType = (gaddr)c->gpr[5];
+    int32_t a_creatorName = (int32_t)c->gpr[6];
+    gaddr a_creatorManufacturer = (gaddr)c->gpr[7];
+    tb_GetMediaDataHandlerDescription(a_theMedia, a_index, a_dhType, a_creatorName, a_creatorManufacturer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaDataHandler(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetMediaDataHandler(a_theMedia, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaDataHandler(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    int32_t a_dataHandler = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaDataHandler(a_theMedia, a_index, a_dataHandler);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetDataHandler(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataHandlerSubType = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetDataHandler(a_dataRef, a_dataHandlerSubType, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenADataHandler(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataHandlerSubType = (int32_t)c->gpr[4];
+    int32_t a_anchorDataRef = (int32_t)c->gpr[5];
+    int32_t a_anchorDataRefType = (int32_t)c->gpr[6];
+    int32_t a_tb = (int32_t)c->gpr[7];
+    int32_t a_flags = (int32_t)c->gpr[8];
+    gaddr a_dh = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenADataHandler(a_dataRef, a_dataHandlerSubType, a_anchorDataRef, a_anchorDataRefType, a_tb, a_flags, a_dh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSampleDescriptionCount(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaSampleDescriptionCount(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSampleDescription(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_index = (int32_t)c->gpr[4];
+    int32_t a_descH = (int32_t)c->gpr[5];
+    tb_GetMediaSampleDescription(a_theMedia, a_index, a_descH);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaSampleDescription(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_index = (int32_t)c->gpr[4];
+    int32_t a_descH = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaSampleDescription(a_theMedia, a_index, a_descH);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSampleCount(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaSampleCount(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSyncSampleCount(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMediaSyncSampleCount(a_theMedia);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SampleNumToMediaTime(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_logicalSampleNum = (int32_t)c->gpr[4];
+    gaddr a_sampleTime = (gaddr)c->gpr[5];
+    gaddr a_sampleDuration = (gaddr)c->gpr[6];
+    tb_SampleNumToMediaTime(a_theMedia, a_logicalSampleNum, a_sampleTime, a_sampleDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MediaTimeToSampleNum(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    gaddr a_sampleNum = (gaddr)c->gpr[5];
+    gaddr a_sampleTime = (gaddr)c->gpr[6];
+    gaddr a_sampleDuration = (gaddr)c->gpr[7];
+    tb_MediaTimeToSampleNum(a_theMedia, a_time, a_sampleNum, a_sampleTime, a_sampleDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddMediaSample(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_dataIn = (int32_t)c->gpr[4];
+    int32_t a_inOffset = (int32_t)c->gpr[5];
+    int32_t a_size = (int32_t)c->gpr[6];
+    int32_t a_durationPerSample = (int32_t)c->gpr[7];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[8];
+    int32_t a_numberOfSamples = (int32_t)c->gpr[9];
+    int16_t a_sampleFlags = (int16_t)c->gpr[10];
+    gaddr a_sampleTime = (gaddr)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddMediaSample(a_theMedia, a_dataIn, a_inOffset, a_size, a_durationPerSample, a_sampleDescriptionH, a_numberOfSamples, a_sampleFlags, a_sampleTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddMediaSampleReference(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_dataOffset = (int32_t)c->gpr[4];
+    int32_t a_size = (int32_t)c->gpr[5];
+    int32_t a_durationPerSample = (int32_t)c->gpr[6];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[7];
+    int32_t a_numberOfSamples = (int32_t)c->gpr[8];
+    int16_t a_sampleFlags = (int16_t)c->gpr[9];
+    gaddr a_sampleTime = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddMediaSampleReference(a_theMedia, a_dataOffset, a_size, a_durationPerSample, a_sampleDescriptionH, a_numberOfSamples, a_sampleFlags, a_sampleTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddMediaSampleReferences(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[4];
+    int32_t a_numberOfSamples = (int32_t)c->gpr[5];
+    int32_t a_sampleRefs = (int32_t)c->gpr[6];
+    gaddr a_sampleTime = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddMediaSampleReferences(a_theMedia, a_sampleDescriptionH, a_numberOfSamples, a_sampleRefs, a_sampleTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddMediaSampleReferences64(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[4];
+    int32_t a_numberOfSamples = (int32_t)c->gpr[5];
+    int32_t a_sampleRefs = (int32_t)c->gpr[6];
+    gaddr a_sampleTime = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddMediaSampleReferences64(a_theMedia, a_sampleDescriptionH, a_numberOfSamples, a_sampleRefs, a_sampleTime);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSample(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_dataOut = (int32_t)c->gpr[4];
+    int32_t a_maxSizeToGrow = (int32_t)c->gpr[5];
+    gaddr a_size = (gaddr)c->gpr[6];
+    int32_t a_time = (int32_t)c->gpr[7];
+    gaddr a_sampleTime = (gaddr)c->gpr[8];
+    gaddr a_durationPerSample = (gaddr)c->gpr[9];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[10];
+    gaddr a_sampleDescriptionIndex = (gaddr)rd32(c->gpr[1] + 56);
+    int32_t a_maxNumberOfSamples = (int32_t)rd32(c->gpr[1] + 60);
+    gaddr a_numberOfSamples = (gaddr)rd32(c->gpr[1] + 64);
+    gaddr a_sampleFlags = (gaddr)rd32(c->gpr[1] + 68);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaSample(a_theMedia, a_dataOut, a_maxSizeToGrow, a_size, a_time, a_sampleTime, a_durationPerSample, a_sampleDescriptionH, a_sampleDescriptionIndex, a_maxNumberOfSamples, a_numberOfSamples, a_sampleFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSampleReference(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_dataOffset = (gaddr)c->gpr[4];
+    gaddr a_size = (gaddr)c->gpr[5];
+    int32_t a_time = (int32_t)c->gpr[6];
+    gaddr a_sampleTime = (gaddr)c->gpr[7];
+    gaddr a_durationPerSample = (gaddr)c->gpr[8];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[9];
+    gaddr a_sampleDescriptionIndex = (gaddr)c->gpr[10];
+    int32_t a_maxNumberOfSamples = (int32_t)rd32(c->gpr[1] + 56);
+    gaddr a_numberOfSamples = (gaddr)rd32(c->gpr[1] + 60);
+    gaddr a_sampleFlags = (gaddr)rd32(c->gpr[1] + 64);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaSampleReference(a_theMedia, a_dataOffset, a_size, a_time, a_sampleTime, a_durationPerSample, a_sampleDescriptionH, a_sampleDescriptionIndex, a_maxNumberOfSamples, a_numberOfSamples, a_sampleFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSampleReferences(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    gaddr a_sampleTime = (gaddr)c->gpr[5];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[6];
+    gaddr a_sampleDescriptionIndex = (gaddr)c->gpr[7];
+    int32_t a_maxNumberOfEntries = (int32_t)c->gpr[8];
+    gaddr a_actualNumberofEntries = (gaddr)c->gpr[9];
+    int32_t a_sampleRefs = (int32_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaSampleReferences(a_theMedia, a_time, a_sampleTime, a_sampleDescriptionH, a_sampleDescriptionIndex, a_maxNumberOfEntries, a_actualNumberofEntries, a_sampleRefs);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaSampleReferences64(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    gaddr a_sampleTime = (gaddr)c->gpr[5];
+    int32_t a_sampleDescriptionH = (int32_t)c->gpr[6];
+    gaddr a_sampleDescriptionIndex = (gaddr)c->gpr[7];
+    int32_t a_maxNumberOfEntries = (int32_t)c->gpr[8];
+    gaddr a_actualNumberofEntries = (gaddr)c->gpr[9];
+    int32_t a_sampleRefs = (int32_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaSampleReferences64(a_theMedia, a_time, a_sampleTime, a_sampleDescriptionH, a_sampleDescriptionIndex, a_maxNumberOfEntries, a_actualNumberofEntries, a_sampleRefs);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaPreferredChunkSize(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_maxChunkSize = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaPreferredChunkSize(a_theMedia, a_maxChunkSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaPreferredChunkSize(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_maxChunkSize = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaPreferredChunkSize(a_theMedia, a_maxChunkSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaShadowSync(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_frameDiffSampleNum = (int32_t)c->gpr[4];
+    int32_t a_syncSampleNum = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaShadowSync(a_theMedia, a_frameDiffSampleNum, a_syncSampleNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaShadowSync(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_frameDiffSampleNum = (int32_t)c->gpr[4];
+    gaddr a_syncSampleNum = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaShadowSync(a_theMedia, a_frameDiffSampleNum, a_syncSampleNum);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertMediaIntoTrack(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_trackStart = (int32_t)c->gpr[4];
+    int32_t a_mediaTime = (int32_t)c->gpr[5];
+    int32_t a_mediaDuration = (int32_t)c->gpr[6];
+    int32_t a_mediaRate = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InsertMediaIntoTrack(a_theTrack, a_trackStart, a_mediaTime, a_mediaDuration, a_mediaRate);
+    c->pc = c->lr;
+}
+
+static void ppcglue_InsertTrackSegment(ppc_cpu *c)
+{
+    int32_t a_srcTrack = (int32_t)c->gpr[3];
+    int32_t a_dstTrack = (int32_t)c->gpr[4];
+    int32_t a_srcIn = (int32_t)c->gpr[5];
+    int32_t a_srcDuration = (int32_t)c->gpr[6];
+    int32_t a_dstIn = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InsertTrackSegment(a_srcTrack, a_dstTrack, a_srcIn, a_srcDuration, a_dstIn);
     c->pc = c->lr;
 }
 
@@ -30308,6 +32265,15 @@ static void ppcglue_InsertMovieSegment(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_InsertEmptyTrackSegment(ppc_cpu *c)
+{
+    int32_t a_dstTrack = (int32_t)c->gpr[3];
+    int32_t a_dstIn = (int32_t)c->gpr[4];
+    int32_t a_dstDuration = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_InsertEmptyTrackSegment(a_dstTrack, a_dstIn, a_dstDuration);
+    c->pc = c->lr;
+}
+
 static void ppcglue_InsertEmptyMovieSegment(ppc_cpu *c)
 {
     int32_t a_dstMovie = (int32_t)c->gpr[3];
@@ -30317,12 +32283,41 @@ static void ppcglue_InsertEmptyMovieSegment(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DeleteTrackSegment(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteTrackSegment(a_theTrack, a_startTime, a_duration);
+    c->pc = c->lr;
+}
+
 static void ppcglue_DeleteMovieSegment(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     int32_t a_startTime = (int32_t)c->gpr[4];
     int32_t a_duration = (int32_t)c->gpr[5];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteMovieSegment(a_theMovie, a_startTime, a_duration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ScaleTrackSegment(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_oldDuration = (int32_t)c->gpr[5];
+    int32_t a_newDuration = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ScaleTrackSegment(a_theTrack, a_startTime, a_oldDuration, a_newDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ScaleMovieSegment(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_oldDuration = (int32_t)c->gpr[5];
+    int32_t a_newDuration = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ScaleMovieSegment(a_theMovie, a_startTime, a_oldDuration, a_newDuration);
     c->pc = c->lr;
 }
 
@@ -30348,10 +32343,252 @@ static void ppcglue_PasteMovieSelection(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_AddMovieSelection(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_src = (int32_t)c->gpr[4];
+    tb_AddMovieSelection(a_theMovie, a_src);
+    c->pc = c->lr;
+}
+
 static void ppcglue_ClearMovieSelection(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     tb_ClearMovieSelection(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PasteHandleIntoMovie(ppc_cpu *c)
+{
+    int32_t a_h = (int32_t)c->gpr[3];
+    int32_t a_handleType = (int32_t)c->gpr[4];
+    int32_t a_theMovie = (int32_t)c->gpr[5];
+    int32_t a_flags = (int32_t)c->gpr[6];
+    int32_t a_userComp = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PasteHandleIntoMovie(a_h, a_handleType, a_theMovie, a_flags, a_userComp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutMovieIntoTypedHandle(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_targetTrack = (int32_t)c->gpr[4];
+    int32_t a_handleType = (int32_t)c->gpr[5];
+    int32_t a_publicMovie = (int32_t)c->gpr[6];
+    int32_t a_start = (int32_t)c->gpr[7];
+    int32_t a_dur = (int32_t)c->gpr[8];
+    int32_t a_flags = (int32_t)c->gpr[9];
+    int32_t a_userComp = (int32_t)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutMovieIntoTypedHandle(a_theMovie, a_targetTrack, a_handleType, a_publicMovie, a_start, a_dur, a_flags, a_userComp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_IsScrapMovie(ppc_cpu *c)
+{
+    int32_t a_targetTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_IsScrapMovie(a_targetTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyTrackSettings(ppc_cpu *c)
+{
+    int32_t a_srcTrack = (int32_t)c->gpr[3];
+    int32_t a_dstTrack = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CopyTrackSettings(a_srcTrack, a_dstTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyMovieSettings(ppc_cpu *c)
+{
+    int32_t a_srcMovie = (int32_t)c->gpr[3];
+    int32_t a_dstMovie = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CopyMovieSettings(a_srcMovie, a_dstMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddEmptyTrackToMovie(ppc_cpu *c)
+{
+    int32_t a_srcTrack = (int32_t)c->gpr[3];
+    int32_t a_dstMovie = (int32_t)c->gpr[4];
+    int32_t a_dataRef = (int32_t)c->gpr[5];
+    int32_t a_dataRefType = (int32_t)c->gpr[6];
+    gaddr a_dstTrack = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddEmptyTrackToMovie(a_srcTrack, a_dstMovie, a_dataRef, a_dataRefType, a_dstTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddClonedTrackToMovie(ppc_cpu *c)
+{
+    int32_t a_srcTrack = (int32_t)c->gpr[3];
+    int32_t a_dstMovie = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    gaddr a_dstTrack = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddClonedTrackToMovie(a_srcTrack, a_dstMovie, a_flags, a_dstTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewMovieEditState(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_NewMovieEditState(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UseMovieEditState(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_toState = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UseMovieEditState(a_theMovie, a_toState);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeMovieEditState(ppc_cpu *c)
+{
+    int32_t a_state = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposeMovieEditState(a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewTrackEditState(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_NewTrackEditState(a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UseTrackEditState(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_state = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UseTrackEditState(a_theTrack, a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeTrackEditState(ppc_cpu *c)
+{
+    int32_t a_state = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposeTrackEditState(a_state);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddTrackReference(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_refTrack = (int32_t)c->gpr[4];
+    int32_t a_refType = (int32_t)c->gpr[5];
+    gaddr a_addedIndex = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddTrackReference(a_theTrack, a_refTrack, a_refType, a_addedIndex);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteTrackReference(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_refType = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteTrackReference(a_theTrack, a_refType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackReference(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_refTrack = (int32_t)c->gpr[4];
+    int32_t a_refType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetTrackReference(a_theTrack, a_refTrack, a_refType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackReference(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_refType = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetTrackReference(a_theTrack, a_refType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextTrackReferenceType(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_refType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetNextTrackReferenceType(a_theTrack, a_refType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackReferenceCount(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_refType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetTrackReferenceCount(a_theTrack, a_refType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ConvertFileToMovieFile(ppc_cpu *c)
+{
+    gaddr a_inputFile = (gaddr)c->gpr[3];
+    gaddr a_outputFile = (gaddr)c->gpr[4];
+    int32_t a_creator = (int32_t)c->gpr[5];
+    int16_t a_scriptTag = (int16_t)c->gpr[6];
+    gaddr a_resID = (gaddr)c->gpr[7];
+    int32_t a_flags = (int32_t)c->gpr[8];
+    int32_t a_userComp = (int32_t)c->gpr[9];
+    int32_t a_proc = (int32_t)c->gpr[10];
+    int32_t a_refCon = (int32_t)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ConvertFileToMovieFile(a_inputFile, a_outputFile, a_creator, a_scriptTag, a_resID, a_flags, a_userComp, a_proc, a_refCon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ConvertMovieToFile(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_onlyTrack = (int32_t)c->gpr[4];
+    gaddr a_outputFile = (gaddr)c->gpr[5];
+    int32_t a_fileType = (int32_t)c->gpr[6];
+    int32_t a_creator = (int32_t)c->gpr[7];
+    int16_t a_scriptTag = (int16_t)c->gpr[8];
+    gaddr a_resID = (gaddr)c->gpr[9];
+    int32_t a_flags = (int32_t)c->gpr[10];
+    int32_t a_userComp = (int32_t)rd32(c->gpr[1] + 56);
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ConvertMovieToFile(a_theMovie, a_onlyTrack, a_outputFile, a_fileType, a_creator, a_scriptTag, a_resID, a_flags, a_userComp);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieImporterForDataRef(ppc_cpu *c)
+{
+    int32_t a_dataRefType = (int32_t)c->gpr[3];
+    int32_t a_dataRef = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    gaddr a_importer = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMovieImporterForDataRef(a_dataRefType, a_dataRef, a_flags, a_importer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetMIMETypeInfo(ppc_cpu *c)
+{
+    gaddr a_mimeStringStart = (gaddr)c->gpr[3];
+    int16_t a_mimeStringLength = (int16_t)c->gpr[4];
+    int32_t a_infoSelector = (int32_t)c->gpr[5];
+    gaddr a_infoDataPtr = (gaddr)c->gpr[6];
+    gaddr a_infoDataSize = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetMIMETypeInfo(a_mimeStringStart, a_mimeStringLength, a_infoSelector, a_infoDataPtr, a_infoDataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_TrackTimeToMediaTime(ppc_cpu *c)
+{
+    int32_t a_value = (int32_t)c->gpr[3];
+    int32_t a_theTrack = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_TrackTimeToMediaTime(a_value, a_theTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackEditRate(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_atTime = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetTrackEditRate(a_theTrack, a_atTime);
     c->pc = c->lr;
 }
 
@@ -30361,6 +32598,282 @@ static void ppcglue_GetMovieDataSize(ppc_cpu *c)
     int32_t a_startTime = (int32_t)c->gpr[4];
     int32_t a_duration = (int32_t)c->gpr[5];
     c->gpr[3] = (uint32_t)tb_GetMovieDataSize(a_theMovie, a_startTime, a_duration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieDataSize64(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    gaddr a_dataSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMovieDataSize64(a_theMovie, a_startTime, a_duration, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackDataSize(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetTrackDataSize(a_theTrack, a_startTime, a_duration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackDataSize64(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    gaddr a_dataSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetTrackDataSize64(a_theTrack, a_startTime, a_duration, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaDataSize(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetMediaDataSize(a_theMedia, a_startTime, a_duration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaDataSize64(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_startTime = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    gaddr a_dataSize = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaDataSize64(a_theMedia, a_startTime, a_duration, a_dataSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PtInMovie(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_pt = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_PtInMovie(a_theMovie, a_pt);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PtInTrack(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_pt = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_PtInTrack(a_theTrack, a_pt);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieLanguage(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_language = (int32_t)c->gpr[4];
+    tb_SetMovieLanguage(a_theMovie, a_language);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetUserData(a_theUserData, a_data, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddUserData(a_theUserData, a_data, a_udType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveUserData(a_theUserData, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CountUserDataType(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CountUserDataType(a_theUserData, a_udType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextUserDataType(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_GetNextUserDataType(a_theUserData, a_udType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetUserDataItem(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_size = (int32_t)c->gpr[5];
+    int32_t a_udType = (int32_t)c->gpr[6];
+    int32_t a_index = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetUserDataItem(a_theUserData, a_data, a_size, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetUserDataItem(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    gaddr a_data = (gaddr)c->gpr[4];
+    int32_t a_size = (int32_t)c->gpr[5];
+    int32_t a_udType = (int32_t)c->gpr[6];
+    int32_t a_index = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetUserDataItem(a_theUserData, a_data, a_size, a_udType, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddUserDataText(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    int16_t a_itlRegionTag = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddUserDataText(a_theUserData, a_data, a_udType, a_index, a_itlRegionTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetUserDataText(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_data = (int32_t)c->gpr[4];
+    int32_t a_udType = (int32_t)c->gpr[5];
+    int32_t a_index = (int32_t)c->gpr[6];
+    int16_t a_itlRegionTag = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetUserDataText(a_theUserData, a_data, a_udType, a_index, a_itlRegionTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveUserDataText(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_udType = (int32_t)c->gpr[4];
+    int32_t a_index = (int32_t)c->gpr[5];
+    int16_t a_itlRegionTag = (int16_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveUserDataText(a_theUserData, a_udType, a_index, a_itlRegionTag);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewUserData(ppc_cpu *c)
+{
+    gaddr a_theUserData = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewUserData(a_theUserData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeUserData(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposeUserData(a_theUserData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewUserDataFromHandle(ppc_cpu *c)
+{
+    int32_t a_h = (int32_t)c->gpr[3];
+    gaddr a_theUserData = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewUserDataFromHandle(a_h, a_theUserData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_PutUserDataIntoHandle(ppc_cpu *c)
+{
+    int32_t a_theUserData = (int32_t)c->gpr[3];
+    int32_t a_h = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_PutUserDataIntoHandle(a_theUserData, a_h);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyMovieUserData(ppc_cpu *c)
+{
+    int32_t a_srcMovie = (int32_t)c->gpr[3];
+    int32_t a_dstMovie = (int32_t)c->gpr[4];
+    int32_t a_copyRule = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CopyMovieUserData(a_srcMovie, a_dstMovie, a_copyRule);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyTrackUserData(ppc_cpu *c)
+{
+    int32_t a_srcTrack = (int32_t)c->gpr[3];
+    int32_t a_dstTrack = (int32_t)c->gpr[4];
+    int32_t a_copyRule = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CopyTrackUserData(a_srcTrack, a_dstTrack, a_copyRule);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyMediaUserData(ppc_cpu *c)
+{
+    int32_t a_srcMedia = (int32_t)c->gpr[3];
+    int32_t a_dstMedia = (int32_t)c->gpr[4];
+    int32_t a_copyRule = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CopyMediaUserData(a_srcMedia, a_dstMedia, a_copyRule);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CopyUserData(ppc_cpu *c)
+{
+    int32_t a_srcUserData = (int32_t)c->gpr[3];
+    int32_t a_dstUserData = (int32_t)c->gpr[4];
+    int32_t a_copyRule = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CopyUserData(a_srcUserData, a_dstUserData, a_copyRule);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMoviePropertyAtom(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_propertyAtom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMoviePropertyAtom(a_theMovie, a_propertyAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMoviePropertyAtom(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_propertyAtom = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMoviePropertyAtom(a_theMovie, a_propertyAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaNextInterestingTime(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_interestingTimeFlags = (int16_t)c->gpr[4];
+    int32_t a_time = (int32_t)c->gpr[5];
+    int32_t a_rate = (int32_t)c->gpr[6];
+    gaddr a_interestingTime = (gaddr)c->gpr[7];
+    gaddr a_interestingDuration = (gaddr)c->gpr[8];
+    tb_GetMediaNextInterestingTime(a_theMedia, a_interestingTimeFlags, a_time, a_rate, a_interestingTime, a_interestingDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackNextInterestingTime(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int16_t a_interestingTimeFlags = (int16_t)c->gpr[4];
+    int32_t a_time = (int32_t)c->gpr[5];
+    int32_t a_rate = (int32_t)c->gpr[6];
+    gaddr a_interestingTime = (gaddr)c->gpr[7];
+    gaddr a_interestingDuration = (gaddr)c->gpr[8];
+    tb_GetTrackNextInterestingTime(a_theTrack, a_interestingTimeFlags, a_time, a_rate, a_interestingTime, a_interestingDuration);
     c->pc = c->lr;
 }
 
@@ -30375,6 +32888,25 @@ static void ppcglue_GetMovieNextInterestingTime(ppc_cpu *c)
     gaddr a_interestingTime = (gaddr)c->gpr[9];
     gaddr a_interestingDuration = (gaddr)c->gpr[10];
     tb_GetMovieNextInterestingTime(a_theMovie, a_interestingTimeFlags, a_numMediaTypes, a_whichMediaTypes, a_time, a_rate, a_interestingTime, a_interestingDuration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateMovieFile(ppc_cpu *c)
+{
+    gaddr a_fileSpec = (gaddr)c->gpr[3];
+    int32_t a_creator = (int32_t)c->gpr[4];
+    int16_t a_scriptTag = (int16_t)c->gpr[5];
+    int32_t a_createMovieFileFlags = (int32_t)c->gpr[6];
+    gaddr a_resRefNum = (gaddr)c->gpr[7];
+    gaddr a_newmovie = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateMovieFile(a_fileSpec, a_creator, a_scriptTag, a_createMovieFileFlags, a_resRefNum, a_newmovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteMovieFile(ppc_cpu *c)
+{
+    gaddr a_fileSpec = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteMovieFile(a_fileSpec);
     c->pc = c->lr;
 }
 
@@ -30399,6 +32931,64 @@ static void ppcglue_NewMovieFromDataFork(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NewMovieFromDataFork64(ppc_cpu *c)
+{
+    gaddr a_theMovie = (gaddr)c->gpr[3];
+    int32_t a_fRefNum = (int32_t)c->gpr[4];
+    gaddr a_fileOffset = (gaddr)c->gpr[5];
+    int16_t a_newMovieFlags = (int16_t)c->gpr[6];
+    gaddr a_dataRefWasChanged = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewMovieFromDataFork64(a_theMovie, a_fRefNum, a_fileOffset, a_newMovieFlags, a_dataRefWasChanged);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewMovieFromUserProc(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    int16_t a_flags = (int16_t)c->gpr[4];
+    gaddr a_dataRefWasChanged = (gaddr)c->gpr[5];
+    int32_t a_getProc = (int32_t)c->gpr[6];
+    gaddr a_refCon = (gaddr)c->gpr[7];
+    int32_t a_defaultDataRef = (int32_t)c->gpr[8];
+    int32_t a_dataRefType = (int32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewMovieFromUserProc(a_m, a_flags, a_dataRefWasChanged, a_getProc, a_refCon, a_defaultDataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewMovieFromDataRef(ppc_cpu *c)
+{
+    gaddr a_m = (gaddr)c->gpr[3];
+    int16_t a_flags = (int16_t)c->gpr[4];
+    gaddr a_id = (gaddr)c->gpr[5];
+    int32_t a_dataRef = (int32_t)c->gpr[6];
+    int32_t a_dataRefType = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewMovieFromDataRef(a_m, a_flags, a_id, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewMovieFromStorageOffset(ppc_cpu *c)
+{
+    gaddr a_theMovie = (gaddr)c->gpr[3];
+    int32_t a_dh = (int32_t)c->gpr[4];
+    gaddr a_fileOffset = (gaddr)c->gpr[5];
+    int16_t a_newMovieFlags = (int16_t)c->gpr[6];
+    gaddr a_dataRefWasChanged = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewMovieFromStorageOffset(a_theMovie, a_dh, a_fileOffset, a_newMovieFlags, a_dataRefWasChanged);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewMovieForDataRefFromHandle(ppc_cpu *c)
+{
+    gaddr a_theMovie = (gaddr)c->gpr[3];
+    int32_t a_h = (int32_t)c->gpr[4];
+    int16_t a_newMovieFlags = (int16_t)c->gpr[5];
+    gaddr a_dataRefWasChanged = (gaddr)c->gpr[6];
+    int32_t a_dataRef = (int32_t)c->gpr[7];
+    int32_t a_dataRefType = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewMovieForDataRefFromHandle(a_theMovie, a_h, a_newMovieFlags, a_dataRefWasChanged, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
 static void ppcglue_AddMovieResource(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -30419,6 +33009,68 @@ static void ppcglue_UpdateMovieResource(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_RemoveMovieResource(ppc_cpu *c)
+{
+    int16_t a_resRefNum = (int16_t)c->gpr[3];
+    int16_t a_resId = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveMovieResource(a_resRefNum, a_resId);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    int32_t a_creator = (int32_t)c->gpr[5];
+    int16_t a_scriptTag = (int16_t)c->gpr[6];
+    int32_t a_createMovieFileFlags = (int32_t)c->gpr[7];
+    gaddr a_outDataHandler = (gaddr)c->gpr[8];
+    gaddr a_newmovie = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateMovieStorage(a_dataRef, a_dataRefType, a_creator, a_scriptTag, a_createMovieFileFlags, a_outDataHandler, a_newmovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_OpenMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    gaddr a_outDataHandler = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_OpenMovieStorage(a_dataRef, a_dataRefType, a_flags, a_outDataHandler);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CloseMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dh = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CloseMovieStorage(a_dh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DeleteMovieStorage(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DeleteMovieStorage(a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddMovieToStorage(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dh = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddMovieToStorage(a_theMovie, a_dh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_UpdateMovieInStorage(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dh = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_UpdateMovieInStorage(a_theMovie, a_dh);
+    c->pc = c->lr;
+}
+
 static void ppcglue_HasMovieChanged(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
@@ -30433,11 +33085,239 @@ static void ppcglue_ClearMovieChanged(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetMovieDefaultDataRef(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dataRef = (int32_t)c->gpr[4];
+    int32_t a_dataRefType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMovieDefaultDataRef(a_theMovie, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieDefaultDataRef(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_dataRef = (gaddr)c->gpr[4];
+    gaddr a_dataRefType = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMovieDefaultDataRef(a_theMovie, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieAnchorDataRef(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_dataRef = (int32_t)c->gpr[4];
+    int32_t a_dataRefType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMovieAnchorDataRef(a_theMovie, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieAnchorDataRef(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_dataRef = (gaddr)c->gpr[4];
+    gaddr a_dataRefType = (gaddr)c->gpr[5];
+    gaddr a_outFlags = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMovieAnchorDataRef(a_theMovie, a_dataRef, a_dataRefType, a_outFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieColorTable(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_ctab = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMovieColorTable(a_theMovie, a_ctab);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieColorTable(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_ctab = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMovieColorTable(a_theMovie, a_ctab);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FlattenMovie(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_movieFlattenFlags = (int32_t)c->gpr[4];
+    gaddr a_theFile = (gaddr)c->gpr[5];
+    int32_t a_creator = (int32_t)c->gpr[6];
+    int16_t a_scriptTag = (int16_t)c->gpr[7];
+    int32_t a_createMovieFileFlags = (int32_t)c->gpr[8];
+    gaddr a_resId = (gaddr)c->gpr[9];
+    int32_t a_resName = (int32_t)c->gpr[10];
+    tb_FlattenMovie(a_theMovie, a_movieFlattenFlags, a_theFile, a_creator, a_scriptTag, a_createMovieFileFlags, a_resId, a_resName);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FlattenMovieData(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_movieFlattenFlags = (int32_t)c->gpr[4];
+    gaddr a_theFile = (gaddr)c->gpr[5];
+    int32_t a_creator = (int32_t)c->gpr[6];
+    int16_t a_scriptTag = (int16_t)c->gpr[7];
+    int32_t a_createMovieFileFlags = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_FlattenMovieData(a_theMovie, a_movieFlattenFlags, a_theFile, a_creator, a_scriptTag, a_createMovieFileFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_FlattenMovieDataToDataRef(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_movieFlattenFlags = (int32_t)c->gpr[4];
+    int32_t a_dataRef = (int32_t)c->gpr[5];
+    int32_t a_dataRefType = (int32_t)c->gpr[6];
+    int32_t a_creator = (int32_t)c->gpr[7];
+    int16_t a_scriptTag = (int16_t)c->gpr[8];
+    int32_t a_createMovieFileFlags = (int32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)tb_FlattenMovieDataToDataRef(a_theMovie, a_movieFlattenFlags, a_dataRef, a_dataRefType, a_creator, a_scriptTag, a_createMovieFileFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieProgressProc(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_p = (int32_t)c->gpr[4];
+    int32_t a_refcon = (int32_t)c->gpr[5];
+    tb_SetMovieProgressProc(a_theMovie, a_p, a_refcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieProgressProc(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_p = (gaddr)c->gpr[4];
+    gaddr a_refcon = (gaddr)c->gpr[5];
+    tb_GetMovieProgressProc(a_theMovie, a_p, a_refcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CreateShortcutMovieFile(ppc_cpu *c)
+{
+    gaddr a_fileSpec = (gaddr)c->gpr[3];
+    int32_t a_creator = (int32_t)c->gpr[4];
+    int16_t a_scriptTag = (int16_t)c->gpr[5];
+    int32_t a_createMovieFileFlags = (int32_t)c->gpr[6];
+    int32_t a_targetDataRef = (int32_t)c->gpr[7];
+    int32_t a_targetDataRefType = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CreateShortcutMovieFile(a_fileSpec, a_creator, a_scriptTag, a_createMovieFileFlags, a_targetDataRef, a_targetDataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MovieSearchText(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_text = (int32_t)c->gpr[4];
+    int32_t a_size = (int32_t)c->gpr[5];
+    int32_t a_searchFlags = (int32_t)c->gpr[6];
+    gaddr a_searchTrack = (gaddr)c->gpr[7];
+    gaddr a_searchTime = (gaddr)c->gpr[8];
+    gaddr a_searchOffset = (gaddr)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MovieSearchText(a_theMovie, a_text, a_size, a_searchFlags, a_searchTrack, a_searchTime, a_searchOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetPosterBox(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_boxRect = (gaddr)c->gpr[4];
+    tb_GetPosterBox(a_theMovie, a_boxRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetPosterBox(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_boxRect = (gaddr)c->gpr[4];
+    tb_SetPosterBox(a_theMovie, a_boxRect);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieSegmentDisplayBoundsRgn(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetMovieSegmentDisplayBoundsRgn(a_theMovie, a_time, a_duration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackSegmentDisplayBoundsRgn(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_time = (int32_t)c->gpr[4];
+    int32_t a_duration = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_GetTrackSegmentDisplayBoundsRgn(a_theTrack, a_time, a_duration);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMovieCoverProcs(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    int32_t a_uncoverProc = (int32_t)c->gpr[4];
+    int32_t a_coverProc = (int32_t)c->gpr[5];
+    int32_t a_refcon = (int32_t)c->gpr[6];
+    tb_SetMovieCoverProcs(a_theMovie, a_uncoverProc, a_coverProc, a_refcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieCoverProcs(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_uncoverProc = (gaddr)c->gpr[4];
+    gaddr a_coverProc = (gaddr)c->gpr[5];
+    gaddr a_refcon = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMovieCoverProcs(a_theMovie, a_uncoverProc, a_coverProc, a_refcon);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackStatus(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetTrackStatus(a_theTrack);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetMovieStatus(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     gaddr a_firstProblemTrack = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)tb_GetMovieStatus(a_theMovie, a_firstProblemTrack);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMovieLoadState(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetMovieLoadState(a_theMovie);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CanQuickTimeOpenFile(ppc_cpu *c)
+{
+    int32_t a_fileSpec = (int32_t)c->gpr[3];
+    int32_t a_fileType = (int32_t)c->gpr[4];
+    int32_t a_fileNameExtension = (int32_t)c->gpr[5];
+    gaddr a_outCanOpenWithGraphicsImporter = (gaddr)c->gpr[6];
+    gaddr a_outCanOpenAsMovie = (gaddr)c->gpr[7];
+    gaddr a_outPreferGraphicsImporter = (gaddr)c->gpr[8];
+    int32_t a_inFlags = (int32_t)c->gpr[9];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CanQuickTimeOpenFile(a_fileSpec, a_fileType, a_fileNameExtension, a_outCanOpenWithGraphicsImporter, a_outCanOpenAsMovie, a_outPreferGraphicsImporter, a_inFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CanQuickTimeOpenDataRef(ppc_cpu *c)
+{
+    int32_t a_dataRef = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    gaddr a_outCanOpenWithGraphicsImporter = (gaddr)c->gpr[5];
+    gaddr a_outCanOpenAsMovie = (gaddr)c->gpr[6];
+    gaddr a_outPreferGraphicsImporter = (gaddr)c->gpr[7];
+    int32_t a_inFlags = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CanQuickTimeOpenDataRef(a_dataRef, a_dataRefType, a_outCanOpenWithGraphicsImporter, a_outCanOpenAsMovie, a_outPreferGraphicsImporter, a_inFlags);
     c->pc = c->lr;
 }
 
@@ -30456,12 +33336,108 @@ static void ppcglue_NewMovieFromScrap(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_GetMediaDataRef(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    gaddr a_dataRef = (gaddr)c->gpr[5];
+    gaddr a_dataRefType = (gaddr)c->gpr[6];
+    gaddr a_dataRefAttributes = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaDataRef(a_theMedia, a_index, a_dataRef, a_dataRefType, a_dataRefAttributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaDataRef(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    int32_t a_dataRef = (int32_t)c->gpr[5];
+    int32_t a_dataRefType = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaDataRef(a_theMedia, a_index, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaDataRefAttributes(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int16_t a_index = (int16_t)c->gpr[4];
+    int32_t a_dataRefAttributes = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaDataRefAttributes(a_theMedia, a_index, a_dataRefAttributes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddMediaDataRef(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_index = (gaddr)c->gpr[4];
+    int32_t a_dataRef = (int32_t)c->gpr[5];
+    int32_t a_dataRefType = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddMediaDataRef(a_theMedia, a_index, a_dataRef, a_dataRefType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaDataRefCount(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_count = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaDataRefCount(a_theMedia, a_count);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTNewAlias(ppc_cpu *c)
+{
+    gaddr a_fss = (gaddr)c->gpr[3];
+    gaddr a_alias = (gaddr)c->gpr[4];
+    int8_t a_minimal = (int8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNewAlias(a_fss, a_alias, a_minimal);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SetMoviePlayHints(ppc_cpu *c)
 {
     int32_t a_theMovie = (int32_t)c->gpr[3];
     int32_t a_flags = (int32_t)c->gpr[4];
     int32_t a_flagsMask = (int32_t)c->gpr[5];
     tb_SetMoviePlayHints(a_theMovie, a_flags, a_flagsMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaPlayHints(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_flagsMask = (int32_t)c->gpr[5];
+    tb_SetMediaPlayHints(a_theMedia, a_flags, a_flagsMask);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaPlayHints(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_flags = (gaddr)c->gpr[4];
+    tb_GetMediaPlayHints(a_theMedia, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetTrackLoadSettings(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    int32_t a_preloadTime = (int32_t)c->gpr[4];
+    int32_t a_preloadDuration = (int32_t)c->gpr[5];
+    int32_t a_preloadFlags = (int32_t)c->gpr[6];
+    int32_t a_defaultHints = (int32_t)c->gpr[7];
+    tb_SetTrackLoadSettings(a_theTrack, a_preloadTime, a_preloadDuration, a_preloadFlags, a_defaultHints);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetTrackLoadSettings(ppc_cpu *c)
+{
+    int32_t a_theTrack = (int32_t)c->gpr[3];
+    gaddr a_preloadTime = (gaddr)c->gpr[4];
+    gaddr a_preloadDuration = (gaddr)c->gpr[5];
+    gaddr a_preloadFlags = (gaddr)c->gpr[6];
+    gaddr a_defaultHints = (gaddr)c->gpr[7];
+    tb_GetTrackLoadSettings(a_theTrack, a_preloadTime, a_preloadDuration, a_preloadFlags, a_defaultHints);
     c->pc = c->lr;
 }
 
@@ -30483,6 +33459,502 @@ static void ppcglue_EndFullScreen(ppc_cpu *c)
     int32_t a_fullState = (int32_t)c->gpr[3];
     int32_t a_flags = (int32_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_EndFullScreen(a_fullState, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTNewAtomContainer(ppc_cpu *c)
+{
+    gaddr a_atomData = (gaddr)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNewAtomContainer(a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTDisposeAtomContainer(ppc_cpu *c)
+{
+    int32_t a_atomData = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTDisposeAtomContainer(a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetNextChildType(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_currentChildType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_QTGetNextChildType(a_container, a_parentAtom, a_currentChildType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCountChildrenOfType(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_childType = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCountChildrenOfType(a_container, a_parentAtom, a_childType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTFindChildByIndex(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_atomType = (int32_t)c->gpr[5];
+    int16_t a_index = (int16_t)c->gpr[6];
+    gaddr a_id = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_QTFindChildByIndex(a_container, a_parentAtom, a_atomType, a_index, a_id);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTFindChildByID(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_atomType = (int32_t)c->gpr[5];
+    int32_t a_id = (int32_t)c->gpr[6];
+    gaddr a_index = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)tb_QTFindChildByID(a_container, a_parentAtom, a_atomType, a_id, a_index);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTNextChildAnyType(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_currentChild = (int32_t)c->gpr[5];
+    gaddr a_nextChild = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNextChildAnyType(a_container, a_parentAtom, a_currentChild, a_nextChild);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetAtomData(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int32_t a_dataSize = (int32_t)c->gpr[5];
+    gaddr a_atomData = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetAtomData(a_container, a_atom, a_dataSize, a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCopyAtomDataToHandle(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int32_t a_targetHandle = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCopyAtomDataToHandle(a_container, a_atom, a_targetHandle);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCopyAtomDataToPtr(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int8_t a_sizeOrLessOK = (int8_t)c->gpr[5];
+    int32_t a_size = (int32_t)c->gpr[6];
+    gaddr a_targetPtr = (gaddr)c->gpr[7];
+    gaddr a_actualSize = (gaddr)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCopyAtomDataToPtr(a_container, a_atom, a_sizeOrLessOK, a_size, a_targetPtr, a_actualSize);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetAtomTypeAndID(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    gaddr a_atomType = (gaddr)c->gpr[5];
+    gaddr a_id = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetAtomTypeAndID(a_container, a_atom, a_atomType, a_id);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCopyAtom(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    gaddr a_targetContainer = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCopyAtom(a_container, a_atom, a_targetContainer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTLockContainer(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTLockContainer(a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetAtomDataPtr(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    gaddr a_dataSize = (gaddr)c->gpr[5];
+    gaddr a_atomData = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetAtomDataPtr(a_container, a_atom, a_dataSize, a_atomData);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTUnlockContainer(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTUnlockContainer(a_container);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTInsertChild(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_atomType = (int32_t)c->gpr[5];
+    int32_t a_id = (int32_t)c->gpr[6];
+    int16_t a_index = (int16_t)c->gpr[7];
+    int32_t a_dataSize = (int32_t)c->gpr[8];
+    gaddr a_data = (gaddr)c->gpr[9];
+    gaddr a_newAtom = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTInsertChild(a_container, a_parentAtom, a_atomType, a_id, a_index, a_dataSize, a_data, a_newAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTInsertChildren(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int32_t a_childrenContainer = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTInsertChildren(a_container, a_parentAtom, a_childrenContainer);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRemoveAtom(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRemoveAtom(a_container, a_atom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRemoveChildren(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRemoveChildren(a_container, a_atom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTReplaceAtom(ppc_cpu *c)
+{
+    int32_t a_targetContainer = (int32_t)c->gpr[3];
+    int32_t a_targetAtom = (int32_t)c->gpr[4];
+    int32_t a_replacementContainer = (int32_t)c->gpr[5];
+    int32_t a_replacementAtom = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTReplaceAtom(a_targetContainer, a_targetAtom, a_replacementContainer, a_replacementAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSwapAtoms(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom1 = (int32_t)c->gpr[4];
+    int32_t a_atom2 = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSwapAtoms(a_container, a_atom1, a_atom2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetAtomID(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_atom = (int32_t)c->gpr[4];
+    int32_t a_newID = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetAtomID(a_container, a_atom, a_newID);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetAtomParent(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_childAtom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_QTGetAtomParent(a_container, a_childAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetMediaPropertyAtom(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    int32_t a_propertyAtom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetMediaPropertyAtom(a_theMedia, a_propertyAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMediaPropertyAtom(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_propertyAtom = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMediaPropertyAtom(a_theMedia, a_propertyAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetQuickTimePreference(ppc_cpu *c)
+{
+    int32_t a_preferenceType = (int32_t)c->gpr[3];
+    gaddr a_preferenceAtom = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetQuickTimePreference(a_preferenceType, a_preferenceAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SetQuickTimePreference(ppc_cpu *c)
+{
+    int32_t a_preferenceType = (int32_t)c->gpr[3];
+    int32_t a_preferenceAtom = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SetQuickTimePreference(a_preferenceType, a_preferenceAtom);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTAddMovieError(ppc_cpu *c)
+{
+    int32_t a_movieH = (int32_t)c->gpr[3];
+    int32_t a_c = (int32_t)c->gpr[4];
+    int32_t a_errorCode = (int32_t)c->gpr[5];
+    int32_t a_stringReplacements = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTAddMovieError(a_movieH, a_c, a_errorCode, a_stringReplacements);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetAccessKeys(ppc_cpu *c)
+{
+    int32_t a_accessKeyType = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    gaddr a_keys = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetAccessKeys(a_accessKeyType, a_flags, a_keys);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRegisterAccessKey(ppc_cpu *c)
+{
+    int32_t a_accessKeyType = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_accessKey = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRegisterAccessKey(a_accessKeyType, a_flags, a_accessKey);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTUnregisterAccessKey(ppc_cpu *c)
+{
+    int32_t a_accessKeyType = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    int32_t a_accessKey = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTUnregisterAccessKey(a_accessKeyType, a_flags, a_accessKey);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetMovieRestrictions(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_outRestrictionSet = (gaddr)c->gpr[4];
+    gaddr a_outSeed = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetMovieRestrictions(a_theMovie, a_outRestrictionSet, a_outSeed);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRestrictionsGetInfo(ppc_cpu *c)
+{
+    int32_t a_inRestrictionSet = (int32_t)c->gpr[3];
+    gaddr a_outRestrictionClassCount = (gaddr)c->gpr[4];
+    gaddr a_outSeed = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRestrictionsGetInfo(a_inRestrictionSet, a_outRestrictionClassCount, a_outSeed);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRestrictionsGetIndClass(ppc_cpu *c)
+{
+    int32_t a_inRestrictionSet = (int32_t)c->gpr[3];
+    int32_t a_inIndex = (int32_t)c->gpr[4];
+    gaddr a_outClass = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRestrictionsGetIndClass(a_inRestrictionSet, a_inIndex, a_outClass);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTRestrictionsGetItem(ppc_cpu *c)
+{
+    int32_t a_inRestrictionSet = (int32_t)c->gpr[3];
+    int32_t a_inRestrictionClass = (int32_t)c->gpr[4];
+    gaddr a_outRestrictions = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTRestrictionsGetItem(a_inRestrictionSet, a_inRestrictionClass, a_outRestrictions);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetSupportedRestrictions(ppc_cpu *c)
+{
+    int32_t a_inRestrictionClass = (int32_t)c->gpr[3];
+    gaddr a_outRestrictionIDs = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetSupportedRestrictions(a_inRestrictionClass, a_outRestrictionIDs);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTCreateUUID(ppc_cpu *c)
+{
+    gaddr a_outUUID = (gaddr)c->gpr[3];
+    int32_t a_creationFlags = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTCreateUUID(a_outUUID, a_creationFlags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTEqualUUIDs(ppc_cpu *c)
+{
+    gaddr a_uuid1 = (gaddr)c->gpr[3];
+    gaddr a_uuid2 = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_QTEqualUUIDs(a_uuid1, a_uuid2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MakeTrackTimeTable(ppc_cpu *c)
+{
+    int32_t a_trackH = (int32_t)c->gpr[3];
+    gaddr a_offsets = (gaddr)c->gpr[4];
+    int32_t a_startTime = (int32_t)c->gpr[5];
+    int32_t a_endTime = (int32_t)c->gpr[6];
+    int32_t a_timeIncrement = (int32_t)c->gpr[7];
+    int16_t a_firstDataRefIndex = (int16_t)c->gpr[8];
+    int16_t a_lastDataRefIndex = (int16_t)c->gpr[9];
+    gaddr a_retdataRefSkew = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeTrackTimeTable(a_trackH, a_offsets, a_startTime, a_endTime, a_timeIncrement, a_firstDataRefIndex, a_lastDataRefIndex, a_retdataRefSkew);
+    c->pc = c->lr;
+}
+
+static void ppcglue_MakeMediaTimeTable(ppc_cpu *c)
+{
+    int32_t a_theMedia = (int32_t)c->gpr[3];
+    gaddr a_offsets = (gaddr)c->gpr[4];
+    int32_t a_startTime = (int32_t)c->gpr[5];
+    int32_t a_endTime = (int32_t)c->gpr[6];
+    int32_t a_timeIncrement = (int32_t)c->gpr[7];
+    int16_t a_firstDataRefIndex = (int16_t)c->gpr[8];
+    int16_t a_lastDataRefIndex = (int16_t)c->gpr[9];
+    gaddr a_retdataRefSkew = (gaddr)c->gpr[10];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeMediaTimeTable(a_theMedia, a_offsets, a_startTime, a_endTime, a_timeIncrement, a_firstDataRefIndex, a_lastDataRefIndex, a_retdataRefSkew);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetMaxLoadedTimeInMovie(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_time = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetMaxLoadedTimeInMovie(a_theMovie, a_time);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTMovieNeedsTimeTable(ppc_cpu *c)
+{
+    int32_t a_theMovie = (int32_t)c->gpr[3];
+    gaddr a_needsTimeTable = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTMovieNeedsTimeTable(a_theMovie, a_needsTimeTable);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetDataRefMaxFileOffset(ppc_cpu *c)
+{
+    int32_t a_movieH = (int32_t)c->gpr[3];
+    int32_t a_dataRefType = (int32_t)c->gpr[4];
+    int32_t a_dataRef = (int32_t)c->gpr[5];
+    gaddr a_offset = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetDataRefMaxFileOffset(a_movieH, a_dataRefType, a_dataRef, a_offset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTBandwidthRequest(ppc_cpu *c)
+{
+    int32_t a_priority = (int32_t)c->gpr[3];
+    int32_t a_callback = (int32_t)c->gpr[4];
+    gaddr a_refcon = (gaddr)c->gpr[5];
+    gaddr a_bwRef = (gaddr)c->gpr[6];
+    int32_t a_flags = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTBandwidthRequest(a_priority, a_callback, a_refcon, a_bwRef, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTBandwidthRequestForTimeBase(ppc_cpu *c)
+{
+    int32_t a_tb = (int32_t)c->gpr[3];
+    int32_t a_priority = (int32_t)c->gpr[4];
+    int32_t a_callback = (int32_t)c->gpr[5];
+    gaddr a_refcon = (gaddr)c->gpr[6];
+    gaddr a_bwRef = (gaddr)c->gpr[7];
+    int32_t a_flags = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTBandwidthRequestForTimeBase(a_tb, a_priority, a_callback, a_refcon, a_bwRef, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTBandwidthRelease(ppc_cpu *c)
+{
+    int32_t a_bwRef = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTBandwidthRelease(a_bwRef, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTScheduledBandwidthRequest(ppc_cpu *c)
+{
+    int32_t a_scheduleRec = (int32_t)c->gpr[3];
+    int32_t a_notificationCallback = (int32_t)c->gpr[4];
+    gaddr a_refcon = (gaddr)c->gpr[5];
+    gaddr a_sbwRef = (gaddr)c->gpr[6];
+    int32_t a_flags = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTScheduledBandwidthRequest(a_scheduleRec, a_notificationCallback, a_refcon, a_sbwRef, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTScheduledBandwidthRelease(ppc_cpu *c)
+{
+    int32_t a_sbwRef = (int32_t)c->gpr[3];
+    int32_t a_flags = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTScheduledBandwidthRelease(a_sbwRef, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ITextAddString(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int16_t a_theRegionCode = (int16_t)c->gpr[5];
+    int32_t a_theString = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ITextAddString(a_container, a_parentAtom, a_theRegionCode, a_theString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ITextRemoveString(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int16_t a_theRegionCode = (int16_t)c->gpr[5];
+    int32_t a_flags = (int32_t)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ITextRemoveString(a_container, a_parentAtom, a_theRegionCode, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ITextGetString(ppc_cpu *c)
+{
+    int32_t a_container = (int32_t)c->gpr[3];
+    int32_t a_parentAtom = (int32_t)c->gpr[4];
+    int16_t a_requestedRegion = (int16_t)c->gpr[5];
+    gaddr a_foundRegion = (gaddr)c->gpr[6];
+    int32_t a_theString = (int32_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_ITextGetString(a_container, a_parentAtom, a_requestedRegion, a_foundRegion, a_theString);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTTextToNativeText(ppc_cpu *c)
+{
+    int32_t a_theText = (int32_t)c->gpr[3];
+    int32_t a_encoding = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTTextToNativeText(a_theText, a_encoding, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTParseTextHREF(ppc_cpu *c)
+{
+    gaddr a_href = (gaddr)c->gpr[3];
+    int32_t a_hrefLen = (int32_t)c->gpr[4];
+    int32_t a_inContainer = (int32_t)c->gpr[5];
+    gaddr a_outContainer = (gaddr)c->gpr[6];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTParseTextHREF(a_href, a_hrefLen, a_inContainer, a_outContainer);
     c->pc = c->lr;
 }
 
@@ -30673,6 +34145,89 @@ static void ppcglue_GetTimeBaseEffectiveRate(ppc_cpu *c)
 {
     int32_t a_tb = (int32_t)c->gpr[3];
     c->gpr[3] = (uint32_t)tb_GetTimeBaseEffectiveRate(a_tb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewCallBack(ppc_cpu *c)
+{
+    int32_t a_tb = (int32_t)c->gpr[3];
+    int16_t a_cbType = (int16_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)tb_NewCallBack(a_tb, a_cbType);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeCallBack(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    tb_DisposeCallBack(a_cb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCallBackType(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCallBackType(a_cb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetCallBackTimeBase(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetCallBackTimeBase(a_cb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CallMeWhen(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    int32_t a_callBackProc = (int32_t)c->gpr[4];
+    int32_t a_refCon = (int32_t)c->gpr[5];
+    int32_t a_param1 = (int32_t)c->gpr[6];
+    int32_t a_param2 = (int32_t)c->gpr[7];
+    int32_t a_param3 = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CallMeWhen(a_cb, a_callBackProc, a_refCon, a_param1, a_param2, a_param3);
+    c->pc = c->lr;
+}
+
+static void ppcglue_CancelCallBack(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    tb_CancelCallBack(a_cb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_AddCallBackToTimeBase(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_AddCallBackToTimeBase(a_cb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RemoveCallBackFromTimeBase(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RemoveCallBackFromTimeBase(a_cb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetFirstCallBack(ppc_cpu *c)
+{
+    int32_t a_tb = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetFirstCallBack(a_tb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GetNextCallBack(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_GetNextCallBack(a_cb);
+    c->pc = c->lr;
+}
+
+static void ppcglue_ExecuteCallBack(ppc_cpu *c)
+{
+    int32_t a_cb = (int32_t)c->gpr[3];
+    tb_ExecuteCallBack(a_cb);
     c->pc = c->lr;
 }
 
@@ -31241,6 +34796,15 @@ static void ppcglue_SetCSequencePreferredPacketSize(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NewImageGWorld(ppc_cpu *c)
+{
+    gaddr a_gworld = (gaddr)c->gpr[3];
+    int32_t a_idh = (int32_t)c->gpr[4];
+    int32_t a_flags = (int32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewImageGWorld(a_gworld, a_idh, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetCSequenceDataRateParams(ppc_cpu *c)
 {
     int32_t a_seqID = (int32_t)c->gpr[3];
@@ -31254,6 +34818,33 @@ static void ppcglue_GetCSequenceFrameNumber(ppc_cpu *c)
     int32_t a_seqID = (int32_t)c->gpr[3];
     gaddr a_frameNumber = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetCSequenceFrameNumber(a_seqID, a_frameNumber);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GDHasScale(ppc_cpu *c)
+{
+    int32_t a_gdh = (int32_t)c->gpr[3];
+    int16_t a_depth = (int16_t)c->gpr[4];
+    gaddr a_scale = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GDHasScale(a_gdh, a_depth, a_scale);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GDGetScale(ppc_cpu *c)
+{
+    int32_t a_gdh = (int32_t)c->gpr[3];
+    gaddr a_scale = (gaddr)c->gpr[4];
+    gaddr a_flags = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GDGetScale(a_gdh, a_scale, a_flags);
+    c->pc = c->lr;
+}
+
+static void ppcglue_GDSetScale(ppc_cpu *c)
+{
+    int32_t a_gdh = (int32_t)c->gpr[3];
+    int32_t a_scale = (int32_t)c->gpr[4];
+    int16_t a_flags = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GDSetScale(a_gdh, a_scale, a_flags);
     c->pc = c->lr;
 }
 
@@ -31293,6 +34884,27 @@ static void ppcglue_GetGraphicsImporterForDataRefWithFlags(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTGetFileNameExtension(ppc_cpu *c)
+{
+    int32_t a_fileName = (int32_t)c->gpr[3];
+    int32_t a_fileType = (int32_t)c->gpr[4];
+    gaddr a_extension = (gaddr)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetFileNameExtension(a_fileName, a_fileType, a_extension);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTNewGWorld(ppc_cpu *c)
+{
+    gaddr a_offscreenGWorld = (gaddr)c->gpr[3];
+    int32_t a_PixelFormat = (int32_t)c->gpr[4];
+    gaddr a_boundsRect = (gaddr)c->gpr[5];
+    int32_t a_cTable = (int32_t)c->gpr[6];
+    int32_t a_aGDevice = (int32_t)c->gpr[7];
+    int32_t a_flags = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTNewGWorld(a_offscreenGWorld, a_PixelFormat, a_boundsRect, a_cTable, a_aGDevice, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_QTNewGWorldFromPtr(ppc_cpu *c)
 {
     gaddr a_gw = (gaddr)c->gpr[3];
@@ -31307,11 +34919,127 @@ static void ppcglue_QTNewGWorldFromPtr(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_QTUpdateGWorld(ppc_cpu *c)
+{
+    gaddr a_offscreenGWorld = (gaddr)c->gpr[3];
+    int32_t a_PixelFormat = (int32_t)c->gpr[4];
+    gaddr a_boundsRect = (gaddr)c->gpr[5];
+    int32_t a_cTable = (int32_t)c->gpr[6];
+    int32_t a_aGDevice = (int32_t)c->gpr[7];
+    int32_t a_flags = (int32_t)c->gpr[8];
+    c->gpr[3] = (uint32_t)tb_QTUpdateGWorld(a_offscreenGWorld, a_PixelFormat, a_boundsRect, a_cTable, a_aGDevice, a_flags);
+    c->pc = c->lr;
+}
+
 static void ppcglue_MakeImageDescriptionForPixMap(ppc_cpu *c)
 {
     int32_t a_pixmap = (int32_t)c->gpr[3];
     gaddr a_idh = (gaddr)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_MakeImageDescriptionForPixMap(a_pixmap, a_idh);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixelSize(ppc_cpu *c)
+{
+    int32_t a_PixelFormat = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetPixelSize(a_PixelFormat);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixelFormatDepthForImageDescription(ppc_cpu *c)
+{
+    int32_t a_pixelFormat = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTGetPixelFormatDepthForImageDescription(a_pixelFormat);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixMapPtrRowBytes(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_QTGetPixMapPtrRowBytes(a_pm);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixMapHandleRowBytes(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_QTGetPixMapHandleRowBytes(a_pm);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetPixMapPtrRowBytes(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    int32_t a_rowBytes = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetPixMapPtrRowBytes(a_pm, a_rowBytes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetPixMapHandleRowBytes(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    int32_t a_rowBytes = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetPixMapHandleRowBytes(a_pm, a_rowBytes);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixMapPtrGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_QTGetPixMapPtrGammaLevel(a_pm);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetPixMapPtrGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    int32_t a_gammaLevel = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetPixMapPtrGammaLevel(a_pm, a_gammaLevel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixMapHandleGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_QTGetPixMapHandleGammaLevel(a_pm);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetPixMapHandleGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    int32_t a_gammaLevel = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetPixMapHandleGammaLevel(a_pm, a_gammaLevel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixMapPtrRequestedGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_QTGetPixMapPtrRequestedGammaLevel(a_pm);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetPixMapPtrRequestedGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    int32_t a_requestedGammaLevel = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetPixMapPtrRequestedGammaLevel(a_pm, a_requestedGammaLevel);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTGetPixMapHandleRequestedGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)tb_QTGetPixMapHandleRequestedGammaLevel(a_pm);
+    c->pc = c->lr;
+}
+
+static void ppcglue_QTSetPixMapHandleRequestedGammaLevel(ppc_cpu *c)
+{
+    int32_t a_pm = (int32_t)c->gpr[3];
+    int32_t a_requestedGammaLevel = (int32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_QTSetPixMapHandleRequestedGammaLevel(a_pm, a_requestedGammaLevel);
     c->pc = c->lr;
 }
 
@@ -33550,38 +37278,6 @@ static void ppctrap_ShutDwnRemove(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_Comp3to1(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x40010u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xA800));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_Comp6to1(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xC0010u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xA800));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_UnsignedFixedMulDiv(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -35043,17 +38739,6 @@ static void ppctrap_GetScaledBatteryInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_CheckQuickTimeRegistration(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x2DAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_SetMoviesErrorProc(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -35062,217 +38747,6 @@ static void ppctrap_SetMoviesErrorProc(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap((uint16_t)(0xAAAA));
     ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_PrePrerollMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2F7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AbortPrePrerollMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x2F8u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_LoadMovieIntoRam(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_LoadTrackIntoRam(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x16Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_LoadMediaIntoRam(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetWallClockTimeBase(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x347u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerOpen(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x348u);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerClose(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x349u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerGetNextIdleTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x34Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerSetNextIdleTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x34Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerSetNextIdleTimeNever(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x373u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerSetNextIdleTimeNow(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x374u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerSetNextIdleTimeDelta(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x375u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerSetParent(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x34Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTIdleManagerNeedsAnIdle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x371u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
     c->pc = c->lr;
 }
 
@@ -35293,3012 +38767,6 @@ static void ppctrap_CreateMovieControl(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_GoToEndOfMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMoviePreviewMode(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMoviePreviewMode(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x10u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(1, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_PlayMoviePreview(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xF2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_ChooseMovieClock(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x269u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieDrawingCompleteProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x1DEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetNextTrackForCompositing(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1FAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetPrevTrackForCompositing(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1FBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackGWorld(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x9Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackPict(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_InvalidateMovieRegion(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x22Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackClipRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x102u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackClipRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x103u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieDisplayBoundsRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xFBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackDisplayBoundsRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x112u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieBoundsRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xFEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackMovieBoundsRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xFFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackBoundsRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x111u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackMatte(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x115u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackMatte(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x116u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeMatte(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x14Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieVideoOutput(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x340u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutMovieIntoHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x22u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutMovieIntoDataFork(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1B4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutMovieIntoDataFork64(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2EAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutMovieIntoStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x391u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutMovieForDataRefIntoHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x380u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieTimeScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x2Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x31u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x32u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMoviePreviewTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x33u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMoviePreviewTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x34u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMoviePosterTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x35u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMoviePosterTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x36u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieActiveSegment(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x15Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieActiveSegment(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x15Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x3Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetTimeUntilNextTask(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x36Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTInstallNextTaskNeededSoonerCallback(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x376u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTUninstallNextTaskNeededSoonerCallback(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x377u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieTrack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x40u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x127u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewMovieTrack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x188u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeMovieTrack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x42u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackCreationTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x43u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackModificationTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x44u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackUsage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x47u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackUsage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x48u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackDuration(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x4Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackOffset(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x4Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackOffset(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x4Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackLayer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x50u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackLayer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x51u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackAlternate(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x52u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackAlternate(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x53u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetAutoTrackAlternatesEnabled(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x15Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(1, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SelectMovieAlternates(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x15Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackVolume(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x54u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackVolume(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x55u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x56u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x57u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackDimensions(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x5Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackDimensions(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x5Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x5Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackDisplayMatrix(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x263u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackSoundLocalizationSettings(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x282u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackSoundLocalizationSettings(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x283u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewTrackMedia(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x18Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeTrackMedia(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x61u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaTrack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xC5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaCreationTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x66u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaModificationTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x67u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaTimeScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x68u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaTimeScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x69u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaDuration(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x6Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaLanguage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaLanguage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x6Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaQuality(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x6Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaQuality(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x6Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x70u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaInputMap(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x249u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaInputMap(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x24Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x71u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x190u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_BeginMediaEdits(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x72u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_EndMediaEdits(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x73u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaDefaultDataRefIndex(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1E0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaDataHandlerDescription(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x19Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaDataHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x19Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaDataHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1A0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetDataHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1EDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_OpenADataHandler(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x31Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSampleDescriptionCount(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x77u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSampleDescription(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x78u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaSampleDescription(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1D0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSampleCount(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x79u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSyncSampleCount(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x2B2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SampleNumToMediaTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x7Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_MediaTimeToSampleNum(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x7Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMediaSample(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(2, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMediaSampleReference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(2, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMediaSampleReferences(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1F7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMediaSampleReferences64(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2E8u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSample(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap_push(4, rd32(c->gpr[1] + 64));
-    ppc_trap_push(4, rd32(c->gpr[1] + 68));
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSampleReference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x7Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap_push(4, rd32(c->gpr[1] + 60));
-    ppc_trap_push(4, rd32(c->gpr[1] + 64));
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSampleReferences(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x235u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaSampleReferences64(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2E9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaPreferredChunkSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1F8u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaPreferredChunkSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1F9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaShadowSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x121u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaShadowSync(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x122u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_InsertMediaIntoTrack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x183u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_InsertTrackSegment(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x85u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_InsertEmptyTrackSegment(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x87u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DeleteTrackSegment(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x89u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ScaleTrackSegment(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ScaleMovieSegment(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMovieSelection(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x152u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_PasteHandleIntoMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xCBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutMovieIntoTypedHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1CDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_IsScrapMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xCCu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CopyTrackSettings(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x153u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CopyMovieSettings(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x154u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddEmptyTrackToMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x74u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddClonedTrackToMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x344u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewMovieEditState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x104u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_UseMovieEditState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x105u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeMovieEditState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x106u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewTrackEditState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x107u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_UseTrackEditState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x108u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeTrackEditState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x109u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddTrackReference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1F0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DeleteTrackReference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1F1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackReference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1F2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackReference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1F3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetNextTrackReferenceType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1F4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackReferenceCount(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1F5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ConvertFileToMovieFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1CBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ConvertMovieToFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1CCu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap_push(4, rd32(c->gpr[1] + 56));
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieImporterForDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2C7u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetMIMETypeInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x36Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_TrackTimeToMediaTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x96u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackEditRate(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x123u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieDataSize64(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2EBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackDataSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x149u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackDataSize64(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2ECu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaDataSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x99u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaDataSize64(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2EDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PtInMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PtInTrack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieLanguage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x9Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xA0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CountUserDataType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetNextUserDataType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x1A5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetUserDataItem(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x126u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetUserDataItem(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddUserDataText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetUserDataText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveUserDataText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x14Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x130u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewUserDataFromHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x131u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_PutUserDataIntoHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x132u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CopyMovieUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x386u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CopyTrackUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x387u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CopyMediaUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x388u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CopyUserData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x389u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMoviePropertyAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x284u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMoviePropertyAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x285u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaNextInterestingTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x16Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackNextInterestingTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xE2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_CreateMovieFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x191u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DeleteMovieFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x175u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewMovieFromDataFork64(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2EEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewMovieFromUserProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1ECu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewMovieFromDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x220u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewMovieFromStorageOffset(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3B4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewMovieForDataRefFromHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x381u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveMovieResource(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x176u);
-    ppc_trap_push(2, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CreateMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_OpenMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CloseMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DeleteMovieStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMovieToStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x38Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_UpdateMovieInStorage(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x390u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieDefaultDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1C1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieDefaultDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1D2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieAnchorDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x315u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieAnchorDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x316u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieColorTable(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x205u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieColorTable(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x206u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FlattenMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x19Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_FlattenMovieData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x19Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_FlattenMovieDataToDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x392u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieProgressProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x19Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieProgressProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x300u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_CreateShortcutMovieFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2FAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MovieSearchText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x207u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetPosterBox(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x16Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetPosterBox(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x170u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieSegmentDisplayBoundsRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x16Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackSegmentDisplayBoundsRgn(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x16Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMovieCoverProcs(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x179u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieCoverProcs(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1DDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackStatus(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x172u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMovieLoadState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x314u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CanQuickTimeOpenFile(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x33Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CanQuickTimeOpenDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x33Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_ShowMovieInformation(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -38306,150 +38774,6 @@ static void ppctrap_ShowMovieInformation(ppc_cpu *c)
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x197u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1C9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaDataRefAttributes(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1CAu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddMediaDataRef(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x198u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaDataRefCount(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x199u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTNewAlias(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x201u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaPlayHints(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x1A2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaPlayHints(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x2CEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetTrackLoadSettings(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x1E3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetTrackLoadSettings(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x1E4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
     ppc_trap((uint16_t)(0xAAAA));
     ppc_trap_end();
     c->pc = c->lr;
@@ -38725,385 +39049,6 @@ static void ppctrap_GetSpriteProperty(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTNewAtomContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTDisposeAtomContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetNextChildType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x20Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCountChildrenOfType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x20Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTFindChildByIndex(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x210u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTFindChildByID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x21Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTNextChildAnyType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x200u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetAtomData(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x211u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCopyAtomDataToHandle(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x212u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCopyAtomDataToPtr(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x213u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetAtomTypeAndID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x232u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCopyAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x214u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTLockContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x215u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetAtomDataPtr(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x216u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTUnlockContainer(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x217u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTInsertChild(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x218u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap_push(4, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTInsertChildren(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x219u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRemoveAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRemoveChildren(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTReplaceAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x21Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSwapAtoms(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x1FFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetAtomID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x231u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetAtomParent(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x2EFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetMediaPropertyAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x22Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMediaPropertyAtom(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x22Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_QTNewTween(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -39202,34 +39147,6 @@ static void ppctrap_RemoveSoundDescriptionExtension(ppc_cpu *c)
     ppc_trap_begin();
     ppc_trap_push(2, 0);
     ppc_trap_set(0, 0x2D1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetQuickTimePreference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2D4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SetQuickTimePreference(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2D5u);
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap((uint16_t)(0xAAAA));
@@ -39344,553 +39261,6 @@ static void ppctrap_QTGetEffectSpeed(ppc_cpu *c)
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
     c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTAddMovieError(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x37Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetAccessKeys(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2B3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRegisterAccessKey(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2B4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTUnregisterAccessKey(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2B5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetMovieRestrictions(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3A5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRestrictionsGetInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3A1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRestrictionsGetIndClass(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3A2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTRestrictionsGetItem(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3A3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetSupportedRestrictions(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3B2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTCreateUUID(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x39Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTEqualUUIDs(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x39Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int8_t)(ppc_trap_result(1)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MakeTrackTimeTable(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2BEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(2, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_MakeMediaTimeTable(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2BFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(2, c->gpr[8]);
-    ppc_trap_push(2, c->gpr[9]);
-    ppc_trap_push(4, c->gpr[10]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetMaxLoadedTimeInMovie(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2C0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTMovieNeedsTimeTable(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2C3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetDataRefMaxFileOffset(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2C6u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTBandwidthRequest(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2F5u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTBandwidthRequestForTimeBase(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x318u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTBandwidthRelease(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2F6u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTScheduledBandwidthRequest(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x310u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTScheduledBandwidthRelease(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x311u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ITextAddString(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x27Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ITextRemoveString(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x27Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ITextGetString(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x27Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTTextToNativeText(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x2DBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTParseTextHREF(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x319u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewCallBack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xEBu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeCallBack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xECu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetCallBackType(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xEDu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetCallBackTimeBase(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0xEEu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CallMeWhen(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xB8u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_CancelCallBack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xB9u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_AddCallBackToTimeBase(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x129u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RemoveCallBackFromTimeBase(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x12Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetFirstCallBack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x12Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GetNextCallBack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x12Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_ExecuteCallBack(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x12Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
     c->pc = c->lr;
 }
 
@@ -40385,21 +39755,6 @@ static void ppctrap_DragAlignedGrayRgn(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_NewImageGWorld(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x52u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetBestDeviceRect(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40421,51 +39776,6 @@ static void ppctrap_SetSequenceProgressProc(ppc_cpu *c)
     ppc_trap_set(0, 0x56u);
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GDHasScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GDGetScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5Bu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_GDSetScale(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x5Cu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
     ppc_trap((uint16_t)(0xAAA3));
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
     ppc_trap_end();
@@ -40759,21 +40069,6 @@ static void ppctrap_HitTestDSequenceData(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTGetFileNameExtension(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x61u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_ImageTranscodeSequenceBegin(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40913,235 +40208,11 @@ static void ppctrap_ImageFieldSequenceEnd(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_QTNewGWorld(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x80u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTUpdateGWorld(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x81u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, c->gpr[8]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_MakeImageDescriptionForEffect(ppc_cpu *c)
 {
     ppc_trap_begin();
     ppc_trap_push(2, 0);
     ppc_trap_set(0, 0x92u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixelSize(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x86u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixelFormatDepthForImageDescription(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0xA3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixMapPtrRowBytes(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x8Du);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixMapHandleRowBytes(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x8Eu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetPixMapPtrRowBytes(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x90u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetPixMapHandleRowBytes(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x8Fu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixMapPtrGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x93u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetPixMapPtrGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x94u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixMapHandleGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x96u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetPixMapHandleGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x97u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixMapPtrRequestedGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x98u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetPixMapPtrRequestedGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x99u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTGetPixMapHandleRequestedGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x9Au);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAAA3));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_QTSetPixMapHandleRequestedGammaLevel(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x9Bu);
     ppc_trap_push(4, c->gpr[3]);
     ppc_trap_push(4, c->gpr[4]);
     ppc_trap((uint16_t)(0xAAA3));
@@ -41717,14 +40788,14 @@ const ppc_export ppc_exports[] = {
     {"AVLInsert", ppcglue_AVLInsert},
     {"AVLRemove", ppcglue_AVLRemove},
     {"AVLWalk", ppcglue_AVLWalk},
-    {"AbortPrePrerollMovie", ppctrap_AbortPrePrerollMovie},
+    {"AbortPrePrerollMovie", ppcglue_AbortPrePrerollMovie},
     {"AcceptHighLevelEvent", ppcglue_AcceptHighLevelEvent},
     {"AcquireIconRef", ppcglue_AcquireIconRef},
     {"ActivateControl", ppcglue_ActivateControl},
     {"ActivatePalette", ppcglue_ActivatePalette},
     {"ActivateTSMDocument", ppcglue_ActivateTSMDocument},
-    {"AddCallBackToTimeBase", ppctrap_AddCallBackToTimeBase},
-    {"AddClonedTrackToMovie", ppctrap_AddClonedTrackToMovie},
+    {"AddCallBackToTimeBase", ppcglue_AddCallBackToTimeBase},
+    {"AddClonedTrackToMovie", ppcglue_AddClonedTrackToMovie},
     {"AddCollectionItem", ppcglue_AddCollectionItem},
     {"AddCollectionItemHdl", ppctrap_AddCollectionItemHdl},
     {"AddComp", ppcglue_AddComp},
@@ -41732,29 +40803,29 @@ const ppc_export ppc_exports[] = {
     {"AddDataBrowserListViewColumn", ppcglue_AddDataBrowserListViewColumn},
     {"AddDragItemFlavor", ppcglue_AddDragItemFlavor},
     {"AddDrive", ppcglue_AddDrive},
-    {"AddEmptyTrackToMovie", ppctrap_AddEmptyTrackToMovie},
+    {"AddEmptyTrackToMovie", ppcglue_AddEmptyTrackToMovie},
     {"AddFilePreview", ppcglue_AddFilePreview},
     {"AddFolderDescriptor", ppcglue_AddFolderDescriptor},
     {"AddFolderRouting", ppcglue_AddFolderRouting},
     {"AddIconToSuite", ppcglue_AddIconToSuite},
     {"AddImageDescriptionExtension", ppctrap_AddImageDescriptionExtension},
-    {"AddMediaDataRef", ppctrap_AddMediaDataRef},
-    {"AddMediaSample", ppctrap_AddMediaSample},
-    {"AddMediaSampleReference", ppctrap_AddMediaSampleReference},
-    {"AddMediaSampleReferences", ppctrap_AddMediaSampleReferences},
-    {"AddMediaSampleReferences64", ppctrap_AddMediaSampleReferences64},
+    {"AddMediaDataRef", ppcglue_AddMediaDataRef},
+    {"AddMediaSample", ppcglue_AddMediaSample},
+    {"AddMediaSampleReference", ppcglue_AddMediaSampleReference},
+    {"AddMediaSampleReferences", ppcglue_AddMediaSampleReferences},
+    {"AddMediaSampleReferences64", ppcglue_AddMediaSampleReferences64},
     {"AddMovieExecuteWiredActionsProc", ppctrap_AddMovieExecuteWiredActionsProc},
     {"AddMovieResource", ppcglue_AddMovieResource},
-    {"AddMovieSelection", ppctrap_AddMovieSelection},
-    {"AddMovieToStorage", ppctrap_AddMovieToStorage},
+    {"AddMovieSelection", ppcglue_AddMovieSelection},
+    {"AddMovieToStorage", ppcglue_AddMovieToStorage},
     {"AddPt", ppcglue_AddPt},
     {"AddResource", ppcglue_AddResource},
     {"AddSearch", ppcglue_AddSearch},
     {"AddSoundDescriptionExtension", ppctrap_AddSoundDescriptionExtension},
     {"AddTime", ppcglue_AddTime},
-    {"AddTrackReference", ppctrap_AddTrackReference},
-    {"AddUserData", ppctrap_AddUserData},
-    {"AddUserDataText", ppctrap_AddUserDataText},
+    {"AddTrackReference", ppcglue_AddTrackReference},
+    {"AddUserData", ppcglue_AddUserData},
+    {"AddUserDataText", ppcglue_AddUserDataText},
     {"AdvanceKeyboardFocus", ppcglue_AdvanceKeyboardFocus},
     {"Alert", ppcglue_Alert},
     {"AlignScreenRect", ppcglue_AlignScreenRect},
@@ -41785,7 +40856,7 @@ const ppc_export ppc_exports[] = {
     {"BatteryCount", ppcglue_BatteryCount},
     {"BatteryStatus", ppcglue_BatteryStatus},
     {"BeginFullScreen", ppcglue_BeginFullScreen},
-    {"BeginMediaEdits", ppctrap_BeginMediaEdits},
+    {"BeginMediaEdits", ppcglue_BeginMediaEdits},
     {"BeginSystemMode", ppcglue_BeginSystemMode},
     {"BeginThemeDragSound", ppcglue_BeginThemeDragSound},
     {"BeginUpdate", ppcglue_BeginUpdate},
@@ -41828,11 +40899,11 @@ const ppc_export ppc_exports[] = {
     {"CalcVisBehind", ppcglue_CalcVisBehind},
     {"CallEditionOpenerProc", ppctrap_CallEditionOpenerProc},
     {"CallFormatIOProc", ppctrap_CallFormatIOProc},
-    {"CallMeWhen", ppctrap_CallMeWhen},
+    {"CallMeWhen", ppcglue_CallMeWhen},
     {"CanDocBeOpened", ppcglue_CanDocBeOpened},
-    {"CanQuickTimeOpenDataRef", ppctrap_CanQuickTimeOpenDataRef},
-    {"CanQuickTimeOpenFile", ppctrap_CanQuickTimeOpenFile},
-    {"CancelCallBack", ppctrap_CancelCallBack},
+    {"CanQuickTimeOpenDataRef", ppcglue_CanQuickTimeOpenDataRef},
+    {"CanQuickTimeOpenFile", ppcglue_CanQuickTimeOpenFile},
+    {"CancelCallBack", ppcglue_CancelCallBack},
     {"CancelSwitch", ppcglue_CancelSwitch},
     {"CautionAlert", ppcglue_CautionAlert},
     {"ChangeControlPropertyAttributes", ppcglue_ChangeControlPropertyAttributes},
@@ -41847,9 +40918,9 @@ const ppc_export ppc_exports[] = {
     {"CharacterByteType", ppcglue_CharacterByteType},
     {"CharacterType", ppcglue_CharacterType},
     {"CheckItem", ppcglue_CheckItem},
-    {"CheckQuickTimeRegistration", ppctrap_CheckQuickTimeRegistration},
+    {"CheckQuickTimeRegistration", ppcglue_CheckQuickTimeRegistration},
     {"CheckUpdate", ppcglue_CheckUpdate},
-    {"ChooseMovieClock", ppctrap_ChooseMovieClock},
+    {"ChooseMovieClock", ppcglue_ChooseMovieClock},
     {"ClearIntlResourceCache", ppcglue_ClearIntlResourceCache},
     {"ClearKeyboardFocus", ppcglue_ClearKeyboardFocus},
     {"ClearMenuBar", ppcglue_ClearMenuBar},
@@ -41870,7 +40941,7 @@ const ppc_export ppc_exports[] = {
     {"CloseMappedFile", ppcglue_CloseMappedFile},
     {"CloseMixerSoundComponent", ppcglue_CloseMixerSoundComponent},
     {"CloseMovieFile", ppcglue_CloseMovieFile},
-    {"CloseMovieStorage", ppctrap_CloseMovieStorage},
+    {"CloseMovieStorage", ppcglue_CloseMovieStorage},
     {"ClosePicture", ppcglue_ClosePicture},
     {"ClosePoly", ppcglue_ClosePoly},
     {"ClosePort", ppcglue_ClosePort},
@@ -41886,8 +40957,8 @@ const ppc_export ppc_exports[] = {
     {"CollectionTagExists", ppctrap_CollectionTagExists},
     {"Color2Index", ppcglue_Color2Index},
     {"ColorBit", ppcglue_ColorBit},
-    {"Comp3to1", ppctrap_Comp3to1},
-    {"Comp6to1", ppctrap_Comp6to1},
+    {"Comp3to1", ppcglue_Comp3to1},
+    {"Comp6to1", ppcglue_Comp6to1},
     {"CompAdd", ppcglue_CompAdd},
     {"CompCompare", ppcglue_CompCompare},
     {"CompDiv", ppcglue_CompDiv},
@@ -41911,9 +40982,9 @@ const ppc_export ppc_exports[] = {
     {"ConcatMatrix", ppcglue_ConcatMatrix},
     {"ContextualMenuSelect", ppcglue_ContextualMenuSelect},
     {"ContinueSpeech", ppcglue_ContinueSpeech},
-    {"ConvertFileToMovieFile", ppctrap_ConvertFileToMovieFile},
+    {"ConvertFileToMovieFile", ppcglue_ConvertFileToMovieFile},
     {"ConvertImage", ppctrap_ConvertImage},
-    {"ConvertMovieToFile", ppctrap_ConvertMovieToFile},
+    {"ConvertMovieToFile", ppcglue_ConvertMovieToFile},
     {"ConvertTime", ppcglue_ConvertTime},
     {"ConvertTimeScale", ppcglue_ConvertTimeScale},
     {"CopyBits", ppcglue_CopyBits},
@@ -41922,17 +40993,17 @@ const ppc_export ppc_exports[] = {
     {"CopyDeepMask", ppcglue_CopyDeepMask},
     {"CopyMask", ppcglue_CopyMask},
     {"CopyMatrix", ppcglue_CopyMatrix},
-    {"CopyMediaUserData", ppctrap_CopyMediaUserData},
+    {"CopyMediaUserData", ppcglue_CopyMediaUserData},
     {"CopyMovieSelection", ppcglue_CopyMovieSelection},
-    {"CopyMovieSettings", ppctrap_CopyMovieSettings},
-    {"CopyMovieUserData", ppctrap_CopyMovieUserData},
+    {"CopyMovieSettings", ppcglue_CopyMovieSettings},
+    {"CopyMovieUserData", ppcglue_CopyMovieUserData},
     {"CopyPalette", ppcglue_CopyPalette},
     {"CopyPixMap", ppcglue_CopyPixMap},
     {"CopyPixPat", ppcglue_CopyPixPat},
     {"CopyRgn", ppcglue_CopyRgn},
-    {"CopyTrackSettings", ppctrap_CopyTrackSettings},
-    {"CopyTrackUserData", ppctrap_CopyTrackUserData},
-    {"CopyUserData", ppctrap_CopyUserData},
+    {"CopyTrackSettings", ppcglue_CopyTrackSettings},
+    {"CopyTrackUserData", ppcglue_CopyTrackUserData},
+    {"CopyUserData", ppcglue_CopyUserData},
     {"CouldAlert", ppcglue_CouldAlert},
     {"CouldDialog", ppcglue_CouldDialog},
     {"Count1Resources", ppcglue_Count1Resources},
@@ -41951,7 +41022,7 @@ const ppc_export ppc_exports[] = {
     {"CountSymbols", ppctrap_CountSymbols},
     {"CountTaggedCollectionItems", ppctrap_CountTaggedCollectionItems},
     {"CountTypes", ppcglue_CountTypes},
-    {"CountUserDataType", ppctrap_CountUserDataType},
+    {"CountUserDataType", ppcglue_CountUserDataType},
     {"CountVoices", ppcglue_CountVoices},
     {"CreateBevelButtonControl", ppcglue_CreateBevelButtonControl},
     {"CreateChasingArrowsControl", ppcglue_CreateChasingArrowsControl},
@@ -41971,8 +41042,8 @@ const ppc_export ppc_exports[] = {
     {"CreateLittleArrowsControl", ppcglue_CreateLittleArrowsControl},
     {"CreateLogicalDescriptor", ppcglue_CreateLogicalDescriptor},
     {"CreateMovieControl", ppctrap_CreateMovieControl},
-    {"CreateMovieFile", ppctrap_CreateMovieFile},
-    {"CreateMovieStorage", ppctrap_CreateMovieStorage},
+    {"CreateMovieFile", ppcglue_CreateMovieFile},
+    {"CreateMovieStorage", ppcglue_CreateMovieStorage},
     {"CreateNewWindow", ppcglue_CreateNewWindow},
     {"CreateObjSpecifier", ppcglue_CreateObjSpecifier},
     {"CreateOffsetDescriptor", ppcglue_CreateOffsetDescriptor},
@@ -41992,7 +41063,7 @@ const ppc_export ppc_exports[] = {
     {"CreateScrollBarControl", ppcglue_CreateScrollBarControl},
     {"CreateScrollingTextBoxControl", ppcglue_CreateScrollingTextBoxControl},
     {"CreateSeparatorControl", ppcglue_CreateSeparatorControl},
-    {"CreateShortcutMovieFile", ppctrap_CreateShortcutMovieFile},
+    {"CreateShortcutMovieFile", ppcglue_CreateShortcutMovieFile},
     {"CreateSliderControl", ppcglue_CreateSliderControl},
     {"CreateStaticTextControl", ppcglue_CreateStaticTextControl},
     {"CreateTabsControl", ppcglue_CreateTabsControl},
@@ -42063,6 +41134,7 @@ const ppc_export ppc_exports[] = {
     {"DMGetEnableByAVID", ppcglue_DMGetEnableByAVID},
     {"DMGetFirstScreenDevice", ppcglue_DMGetFirstScreenDevice},
     {"DMGetGDeviceByDisplayID", ppcglue_DMGetGDeviceByDisplayID},
+    {"DMGetGDeviceTablecloth", ppcglue_DMGetGDeviceTablecloth},
     {"DMGetGammaByAVID", ppcglue_DMGetGammaByAVID},
     {"DMGetGraphicInfoByAVID", ppcglue_DMGetGraphicInfoByAVID},
     {"DMGetIndexedComponentFromList", ppcglue_DMGetIndexedComponentFromList},
@@ -42102,6 +41174,7 @@ const ppc_export ppc_exports[] = {
     {"DMSetDisplayComponent", ppcglue_DMSetDisplayComponent},
     {"DMSetDisplayMode", ppcglue_DMSetDisplayMode},
     {"DMSetEnableByAVID", ppcglue_DMSetEnableByAVID},
+    {"DMSetGDeviceTablecloth", ppcglue_DMSetGDeviceTablecloth},
     {"DMSetGammaByAVID", ppcglue_DMSetGammaByAVID},
     {"DMSetMainDisplay", ppcglue_DMSetMainDisplay},
     {"DMSuspendConfigure", ppcglue_DMSuspendConfigure},
@@ -42112,6 +41185,7 @@ const ppc_export ppc_exports[] = {
     {"DateToSeconds", ppctrap_DateToSeconds},
     {"DeactivateControl", ppcglue_DeactivateControl},
     {"DeactivateTSMDocument", ppcglue_DeactivateTSMDocument},
+    {"DebugAssert", ppcglue_DebugAssert},
     {"DebugStr", ppcglue_DebugStr},
     {"Debugger", ppcglue_Debugger},
     {"DebuggerEnter", ppcglue_DebuggerEnter},
@@ -42136,13 +41210,13 @@ const ppc_export ppc_exports[] = {
     {"DeleteMCEntries", ppcglue_DeleteMCEntries},
     {"DeleteMenu", ppcglue_DeleteMenu},
     {"DeleteMenuItem", ppcglue_DeleteMenuItem},
-    {"DeleteMovieFile", ppctrap_DeleteMovieFile},
+    {"DeleteMovieFile", ppcglue_DeleteMovieFile},
     {"DeleteMovieSegment", ppcglue_DeleteMovieSegment},
-    {"DeleteMovieStorage", ppctrap_DeleteMovieStorage},
+    {"DeleteMovieStorage", ppcglue_DeleteMovieStorage},
     {"DeleteRecordFromDictionary", ppcglue_DeleteRecordFromDictionary},
     {"DeleteTSMDocument", ppcglue_DeleteTSMDocument},
-    {"DeleteTrackReference", ppctrap_DeleteTrackReference},
-    {"DeleteTrackSegment", ppctrap_DeleteTrackSegment},
+    {"DeleteTrackReference", ppcglue_DeleteTrackReference},
+    {"DeleteTrackSegment", ppcglue_DeleteTrackSegment},
     {"DeleteUserIdentity", ppcglue_DeleteUserIdentity},
     {"DeltaPoint", ppcglue_DeltaPoint},
     {"Dequeue", ppcglue_Dequeue},
@@ -42161,10 +41235,11 @@ const ppc_export ppc_exports[] = {
     {"DisposeCCursor", ppcglue_DisposeCCursor},
     {"DisposeCIcon", ppcglue_DisposeCIcon},
     {"DisposeCTable", ppcglue_DisposeCTable},
-    {"DisposeCallBack", ppctrap_DisposeCallBack},
+    {"DisposeCallBack", ppcglue_DisposeCallBack},
     {"DisposeCodecNameList", ppcglue_DisposeCodecNameList},
     {"DisposeCollection", ppcglue_DisposeCollection},
     {"DisposeControl", ppcglue_DisposeControl},
+    {"DisposeDebugComponent", ppcglue_DisposeDebugComponent},
     {"DisposeDialog", ppcglue_DisposeDialog},
     {"DisposeDrag", ppcglue_DisposeDrag},
     {"DisposeGDevice", ppcglue_DisposeGDevice},
@@ -42172,12 +41247,12 @@ const ppc_export ppc_exports[] = {
     {"DisposeHandle", ppcglue_DisposeHandle},
     {"DisposeIconSuite", ppcglue_DisposeIconSuite},
     {"DisposeMCInfo", ppcglue_DisposeMCInfo},
-    {"DisposeMatte", ppctrap_DisposeMatte},
+    {"DisposeMatte", ppcglue_DisposeMatte},
     {"DisposeMenu", ppcglue_DisposeMenu},
     {"DisposeMovie", ppcglue_DisposeMovie},
     {"DisposeMovieController", ppcglue_DisposeMovieController},
-    {"DisposeMovieEditState", ppctrap_DisposeMovieEditState},
-    {"DisposeMovieTrack", ppctrap_DisposeMovieTrack},
+    {"DisposeMovieEditState", ppcglue_DisposeMovieEditState},
+    {"DisposeMovieTrack", ppcglue_DisposeMovieTrack},
     {"DisposePalette", ppcglue_DisposePalette},
     {"DisposePictInfo", ppctrap_DisposePictInfo},
     {"DisposePixMap", ppcglue_DisposePixMap},
@@ -42192,9 +41267,9 @@ const ppc_export ppc_exports[] = {
     {"DisposeThemeDrawingState", ppcglue_DisposeThemeDrawingState},
     {"DisposeThread", ppcglue_DisposeThread},
     {"DisposeTimeBase", ppcglue_DisposeTimeBase},
-    {"DisposeTrackEditState", ppctrap_DisposeTrackEditState},
-    {"DisposeTrackMedia", ppctrap_DisposeTrackMedia},
-    {"DisposeUserData", ppctrap_DisposeUserData},
+    {"DisposeTrackEditState", ppcglue_DisposeTrackEditState},
+    {"DisposeTrackMedia", ppcglue_DisposeTrackMedia},
+    {"DisposeUserData", ppcglue_DisposeUserData},
     {"DisposeWindow", ppcglue_DisposeWindow},
     {"DoVBLTask", ppcglue_DoVBLTask},
     {"DragAlignedGrayRgn", ppctrap_DragAlignedGrayRgn},
@@ -42277,7 +41352,7 @@ const ppc_export ppc_exports[] = {
     {"EnableMenuItemIcon", ppcglue_EnableMenuItemIcon},
     {"EnableProcessorCycling", ppcglue_EnableProcessorCycling},
     {"EndFullScreen", ppcglue_EndFullScreen},
-    {"EndMediaEdits", ppctrap_EndMediaEdits},
+    {"EndMediaEdits", ppcglue_EndMediaEdits},
     {"EndSystemMode", ppcglue_EndSystemMode},
     {"EndThemeDragSound", ppcglue_EndThemeDragSound},
     {"EndUpdate", ppcglue_EndUpdate},
@@ -42297,12 +41372,29 @@ const ppc_export ppc_exports[] = {
     {"EraseRoundRect", ppcglue_EraseRoundRect},
     {"ErrorSound", ppcglue_ErrorSound},
     {"EventAvail", ppcglue_EventAvail},
-    {"ExecuteCallBack", ppctrap_ExecuteCallBack},
+    {"ExecuteCallBack", ppcglue_ExecuteCallBack},
     {"ExecuteDataBrowserEditCommand", ppcglue_ExecuteDataBrowserEditCommand},
     {"ExitMovies", ppcglue_ExitMovies},
     {"ExitToShell", ppctrap_ExitToShell},
     {"Exp1to3", ppcglue_Exp1to3},
     {"Exp1to6", ppcglue_Exp1to6},
+    {"ExpMgrConfigReadByte", ppcglue_ExpMgrConfigReadByte},
+    {"ExpMgrConfigReadLong", ppcglue_ExpMgrConfigReadLong},
+    {"ExpMgrConfigReadWord", ppcglue_ExpMgrConfigReadWord},
+    {"ExpMgrConfigWriteByte", ppcglue_ExpMgrConfigWriteByte},
+    {"ExpMgrConfigWriteLong", ppcglue_ExpMgrConfigWriteLong},
+    {"ExpMgrConfigWriteWord", ppcglue_ExpMgrConfigWriteWord},
+    {"ExpMgrIOReadByte", ppcglue_ExpMgrIOReadByte},
+    {"ExpMgrIOReadLong", ppcglue_ExpMgrIOReadLong},
+    {"ExpMgrIOReadWord", ppcglue_ExpMgrIOReadWord},
+    {"ExpMgrIOWriteByte", ppcglue_ExpMgrIOWriteByte},
+    {"ExpMgrIOWriteLong", ppcglue_ExpMgrIOWriteLong},
+    {"ExpMgrIOWriteWord", ppcglue_ExpMgrIOWriteWord},
+    {"ExpMgrInterruptAcknowledgeReadByte", ppcglue_ExpMgrInterruptAcknowledgeReadByte},
+    {"ExpMgrInterruptAcknowledgeReadLong", ppcglue_ExpMgrInterruptAcknowledgeReadLong},
+    {"ExpMgrInterruptAcknowledgeReadWord", ppcglue_ExpMgrInterruptAcknowledgeReadWord},
+    {"ExpMgrSpecialCycleBroadcastLong", ppcglue_ExpMgrSpecialCycleBroadcastLong},
+    {"ExpMgrSpecialCycleWriteLong", ppcglue_ExpMgrSpecialCycleWriteLong},
     {"ExtendFileTypeList", ppcglue_ExtendFileTypeList},
     {"ExtendedToString", ppcglue_ExtendedToString},
     {"FCompressImage", ppcglue_FCompressImage},
@@ -42420,9 +41512,9 @@ const ppc_export ppc_exports[] = {
     {"FlashMenuBar", ppcglue_FlashMenuBar},
     {"FlattenCollection", ppctrap_FlattenCollection},
     {"FlattenCollectionToHdl", ppctrap_FlattenCollectionToHdl},
-    {"FlattenMovie", ppctrap_FlattenMovie},
-    {"FlattenMovieData", ppctrap_FlattenMovieData},
-    {"FlattenMovieDataToDataRef", ppctrap_FlattenMovieDataToDataRef},
+    {"FlattenMovie", ppcglue_FlattenMovie},
+    {"FlattenMovieData", ppcglue_FlattenMovieData},
+    {"FlattenMovieDataToDataRef", ppcglue_FlattenMovieDataToDataRef},
     {"FlattenPartialCollection", ppctrap_FlattenPartialCollection},
     {"FlushCodeCache", ppctrap_FlushCodeCache},
     {"FlushEvents", ppcglue_FlushEvents},
@@ -42459,9 +41551,9 @@ const ppc_export ppc_exports[] = {
     {"FrontNonFloatingWindow", ppcglue_FrontNonFloatingWindow},
     {"FrontWindow", ppcglue_FrontWindow},
     {"FullProcessorSpeed", ppcglue_FullProcessorSpeed},
-    {"GDGetScale", ppctrap_GDGetScale},
-    {"GDHasScale", ppctrap_GDHasScale},
-    {"GDSetScale", ppctrap_GDSetScale},
+    {"GDGetScale", ppcglue_GDGetScale},
+    {"GDHasScale", ppcglue_GDHasScale},
+    {"GDSetScale", ppcglue_GDSetScale},
     {"GDeviceChanged", ppcglue_GDeviceChanged},
     {"GXAlertTheUser", ppctrap_GXAlertTheUser},
     {"GXChangedFormat", ppctrap_GXChangedFormat},
@@ -42638,8 +41730,8 @@ const ppc_export ppc_exports[] = {
     {"GetCTSeed", ppcglue_GetCTSeed},
     {"GetCTable", ppcglue_GetCTable},
     {"GetCWMgrPort", ppcglue_GetCWMgrPort},
-    {"GetCallBackTimeBase", ppctrap_GetCallBackTimeBase},
-    {"GetCallBackType", ppctrap_GetCallBackType},
+    {"GetCallBackTimeBase", ppcglue_GetCallBackTimeBase},
+    {"GetCallBackType", ppcglue_GetCallBackType},
     {"GetCaretTime", ppcglue_GetCaretTime},
     {"GetClip", ppcglue_GetClip},
     {"GetCodecInfo", ppcglue_GetCodecInfo},
@@ -42745,9 +41837,12 @@ const ppc_export ppc_exports[] = {
     {"GetDataBrowserTarget", ppcglue_GetDataBrowserTarget},
     {"GetDataBrowserUserState", ppcglue_GetDataBrowserUserState},
     {"GetDataBrowserViewStyle", ppcglue_GetDataBrowserViewStyle},
-    {"GetDataHandler", ppctrap_GetDataHandler},
+    {"GetDataHandler", ppcglue_GetDataHandler},
     {"GetDateTime", ppcglue_GetDateTime},
     {"GetDblTime", ppcglue_GetDblTime},
+    {"GetDebugComponentInfo", ppcglue_GetDebugComponentInfo},
+    {"GetDebugOptionInfo", ppcglue_GetDebugOptionInfo},
+    {"GetDeepIconsEnabled", ppcglue_GetDeepIconsEnabled},
     {"GetDefaultInputMethod", ppcglue_GetDefaultInputMethod},
     {"GetDefaultOutputVolume", ppcglue_GetDefaultOutputVolume},
     {"GetDefaultSoundOutput", ppcglue_GetDefaultSoundOutput},
@@ -42790,7 +41885,7 @@ const ppc_export ppc_exports[] = {
     {"GetFileViewAccessOptions", ppcglue_GetFileViewAccessOptions},
     {"GetFileViewFromAddress", ppcglue_GetFileViewFromAddress},
     {"GetFileViewInformation", ppcglue_GetFileViewInformation},
-    {"GetFirstCallBack", ppctrap_GetFirstCallBack},
+    {"GetFirstCallBack", ppcglue_GetFirstCallBack},
     {"GetFlavorData", ppcglue_GetFlavorData},
     {"GetFlavorDataSize", ppcglue_GetFlavorDataSize},
     {"GetFlavorFlags", ppcglue_GetFlavorFlags},
@@ -42864,38 +41959,38 @@ const ppc_export ppc_exports[] = {
     {"GetMatrixType", ppcglue_GetMatrixType},
     {"GetMaxCompressionSize", ppcglue_GetMaxCompressionSize},
     {"GetMaxDevice", ppcglue_GetMaxDevice},
-    {"GetMaxLoadedTimeInMovie", ppctrap_GetMaxLoadedTimeInMovie},
+    {"GetMaxLoadedTimeInMovie", ppcglue_GetMaxLoadedTimeInMovie},
     {"GetMaxResourceSize", ppcglue_GetMaxResourceSize},
-    {"GetMediaCreationTime", ppctrap_GetMediaCreationTime},
-    {"GetMediaDataHandler", ppctrap_GetMediaDataHandler},
-    {"GetMediaDataHandlerDescription", ppctrap_GetMediaDataHandlerDescription},
-    {"GetMediaDataRef", ppctrap_GetMediaDataRef},
-    {"GetMediaDataRefCount", ppctrap_GetMediaDataRefCount},
-    {"GetMediaDataSize", ppctrap_GetMediaDataSize},
-    {"GetMediaDataSize64", ppctrap_GetMediaDataSize64},
-    {"GetMediaDuration", ppctrap_GetMediaDuration},
-    {"GetMediaHandler", ppctrap_GetMediaHandler},
+    {"GetMediaCreationTime", ppcglue_GetMediaCreationTime},
+    {"GetMediaDataHandler", ppcglue_GetMediaDataHandler},
+    {"GetMediaDataHandlerDescription", ppcglue_GetMediaDataHandlerDescription},
+    {"GetMediaDataRef", ppcglue_GetMediaDataRef},
+    {"GetMediaDataRefCount", ppcglue_GetMediaDataRefCount},
+    {"GetMediaDataSize", ppcglue_GetMediaDataSize},
+    {"GetMediaDataSize64", ppcglue_GetMediaDataSize64},
+    {"GetMediaDuration", ppcglue_GetMediaDuration},
+    {"GetMediaHandler", ppcglue_GetMediaHandler},
     {"GetMediaHandlerDescription", ppcglue_GetMediaHandlerDescription},
-    {"GetMediaInputMap", ppctrap_GetMediaInputMap},
-    {"GetMediaLanguage", ppctrap_GetMediaLanguage},
-    {"GetMediaModificationTime", ppctrap_GetMediaModificationTime},
-    {"GetMediaNextInterestingTime", ppctrap_GetMediaNextInterestingTime},
-    {"GetMediaPlayHints", ppctrap_GetMediaPlayHints},
-    {"GetMediaPreferredChunkSize", ppctrap_GetMediaPreferredChunkSize},
-    {"GetMediaPropertyAtom", ppctrap_GetMediaPropertyAtom},
-    {"GetMediaQuality", ppctrap_GetMediaQuality},
-    {"GetMediaSample", ppctrap_GetMediaSample},
-    {"GetMediaSampleCount", ppctrap_GetMediaSampleCount},
-    {"GetMediaSampleDescription", ppctrap_GetMediaSampleDescription},
-    {"GetMediaSampleDescriptionCount", ppctrap_GetMediaSampleDescriptionCount},
-    {"GetMediaSampleReference", ppctrap_GetMediaSampleReference},
-    {"GetMediaSampleReferences", ppctrap_GetMediaSampleReferences},
-    {"GetMediaSampleReferences64", ppctrap_GetMediaSampleReferences64},
-    {"GetMediaShadowSync", ppctrap_GetMediaShadowSync},
-    {"GetMediaSyncSampleCount", ppctrap_GetMediaSyncSampleCount},
-    {"GetMediaTimeScale", ppctrap_GetMediaTimeScale},
-    {"GetMediaTrack", ppctrap_GetMediaTrack},
-    {"GetMediaUserData", ppctrap_GetMediaUserData},
+    {"GetMediaInputMap", ppcglue_GetMediaInputMap},
+    {"GetMediaLanguage", ppcglue_GetMediaLanguage},
+    {"GetMediaModificationTime", ppcglue_GetMediaModificationTime},
+    {"GetMediaNextInterestingTime", ppcglue_GetMediaNextInterestingTime},
+    {"GetMediaPlayHints", ppcglue_GetMediaPlayHints},
+    {"GetMediaPreferredChunkSize", ppcglue_GetMediaPreferredChunkSize},
+    {"GetMediaPropertyAtom", ppcglue_GetMediaPropertyAtom},
+    {"GetMediaQuality", ppcglue_GetMediaQuality},
+    {"GetMediaSample", ppcglue_GetMediaSample},
+    {"GetMediaSampleCount", ppcglue_GetMediaSampleCount},
+    {"GetMediaSampleDescription", ppcglue_GetMediaSampleDescription},
+    {"GetMediaSampleDescriptionCount", ppcglue_GetMediaSampleDescriptionCount},
+    {"GetMediaSampleReference", ppcglue_GetMediaSampleReference},
+    {"GetMediaSampleReferences", ppcglue_GetMediaSampleReferences},
+    {"GetMediaSampleReferences64", ppcglue_GetMediaSampleReferences64},
+    {"GetMediaShadowSync", ppcglue_GetMediaShadowSync},
+    {"GetMediaSyncSampleCount", ppcglue_GetMediaSyncSampleCount},
+    {"GetMediaTimeScale", ppcglue_GetMediaTimeScale},
+    {"GetMediaTrack", ppcglue_GetMediaTrack},
+    {"GetMediaUserData", ppcglue_GetMediaUserData},
     {"GetMemFragment", ppctrap_GetMemFragment},
     {"GetMenu", ppcglue_GetMenu},
     {"GetMenuBar", ppcglue_GetMenuBar},
@@ -42917,48 +42012,48 @@ const ppc_export ppc_exports[] = {
     {"GetModalDialogEventMask", ppcglue_GetModalDialogEventMask},
     {"GetMouse", ppcglue_GetMouse},
     {"GetMovieActive", ppcglue_GetMovieActive},
-    {"GetMovieActiveSegment", ppctrap_GetMovieActiveSegment},
-    {"GetMovieAnchorDataRef", ppctrap_GetMovieAnchorDataRef},
-    {"GetMovieBoundsRgn", ppctrap_GetMovieBoundsRgn},
+    {"GetMovieActiveSegment", ppcglue_GetMovieActiveSegment},
+    {"GetMovieAnchorDataRef", ppcglue_GetMovieAnchorDataRef},
+    {"GetMovieBoundsRgn", ppcglue_GetMovieBoundsRgn},
     {"GetMovieBox", ppcglue_GetMovieBox},
     {"GetMovieClipRgn", ppcglue_GetMovieClipRgn},
-    {"GetMovieColorTable", ppctrap_GetMovieColorTable},
-    {"GetMovieCoverProcs", ppctrap_GetMovieCoverProcs},
+    {"GetMovieColorTable", ppcglue_GetMovieColorTable},
+    {"GetMovieCoverProcs", ppcglue_GetMovieCoverProcs},
     {"GetMovieCreationTime", ppcglue_GetMovieCreationTime},
     {"GetMovieDataSize", ppcglue_GetMovieDataSize},
-    {"GetMovieDataSize64", ppctrap_GetMovieDataSize64},
-    {"GetMovieDefaultDataRef", ppctrap_GetMovieDefaultDataRef},
-    {"GetMovieDisplayBoundsRgn", ppctrap_GetMovieDisplayBoundsRgn},
+    {"GetMovieDataSize64", ppcglue_GetMovieDataSize64},
+    {"GetMovieDefaultDataRef", ppcglue_GetMovieDefaultDataRef},
+    {"GetMovieDisplayBoundsRgn", ppcglue_GetMovieDisplayBoundsRgn},
     {"GetMovieDisplayClipRgn", ppcglue_GetMovieDisplayClipRgn},
     {"GetMovieDuration", ppcglue_GetMovieDuration},
     {"GetMovieGWorld", ppcglue_GetMovieGWorld},
-    {"GetMovieImporterForDataRef", ppctrap_GetMovieImporterForDataRef},
+    {"GetMovieImporterForDataRef", ppcglue_GetMovieImporterForDataRef},
     {"GetMovieIndTrack", ppcglue_GetMovieIndTrack},
     {"GetMovieIndTrackType", ppcglue_GetMovieIndTrackType},
-    {"GetMovieLoadState", ppctrap_GetMovieLoadState},
-    {"GetMovieMatrix", ppctrap_GetMovieMatrix},
+    {"GetMovieLoadState", ppcglue_GetMovieLoadState},
+    {"GetMovieMatrix", ppcglue_GetMovieMatrix},
     {"GetMovieModificationTime", ppcglue_GetMovieModificationTime},
     {"GetMovieNaturalBoundsRect", ppcglue_GetMovieNaturalBoundsRect},
     {"GetMovieNextInterestingTime", ppcglue_GetMovieNextInterestingTime},
     {"GetMoviePict", ppcglue_GetMoviePict},
     {"GetMoviePosterPict", ppcglue_GetMoviePosterPict},
-    {"GetMoviePosterTime", ppctrap_GetMoviePosterTime},
+    {"GetMoviePosterTime", ppcglue_GetMoviePosterTime},
     {"GetMoviePreferredRate", ppcglue_GetMoviePreferredRate},
     {"GetMoviePreferredVolume", ppcglue_GetMoviePreferredVolume},
-    {"GetMoviePreviewMode", ppctrap_GetMoviePreviewMode},
-    {"GetMoviePreviewTime", ppctrap_GetMoviePreviewTime},
-    {"GetMovieProgressProc", ppctrap_GetMovieProgressProc},
-    {"GetMoviePropertyAtom", ppctrap_GetMoviePropertyAtom},
+    {"GetMoviePreviewMode", ppcglue_GetMoviePreviewMode},
+    {"GetMoviePreviewTime", ppcglue_GetMoviePreviewTime},
+    {"GetMovieProgressProc", ppcglue_GetMovieProgressProc},
+    {"GetMoviePropertyAtom", ppcglue_GetMoviePropertyAtom},
     {"GetMovieRate", ppcglue_GetMovieRate},
-    {"GetMovieSegmentDisplayBoundsRgn", ppctrap_GetMovieSegmentDisplayBoundsRgn},
+    {"GetMovieSegmentDisplayBoundsRgn", ppcglue_GetMovieSegmentDisplayBoundsRgn},
     {"GetMovieSelection", ppcglue_GetMovieSelection},
     {"GetMovieStatus", ppcglue_GetMovieStatus},
     {"GetMovieTime", ppcglue_GetMovieTime},
     {"GetMovieTimeBase", ppcglue_GetMovieTimeBase},
     {"GetMovieTimeScale", ppcglue_GetMovieTimeScale},
-    {"GetMovieTrack", ppctrap_GetMovieTrack},
+    {"GetMovieTrack", ppcglue_GetMovieTrack},
     {"GetMovieTrackCount", ppcglue_GetMovieTrackCount},
-    {"GetMovieUserData", ppctrap_GetMovieUserData},
+    {"GetMovieUserData", ppcglue_GetMovieUserData},
     {"GetMovieVolume", ppcglue_GetMovieVolume},
     {"GetMoviesError", ppcglue_GetMoviesError},
     {"GetMoviesStickyError", ppcglue_GetMoviesStickyError},
@@ -42970,7 +42065,7 @@ const ppc_export ppc_exports[] = {
     {"GetNewMBar", ppcglue_GetNewMBar},
     {"GetNewPalette", ppcglue_GetNewPalette},
     {"GetNewWindow", ppcglue_GetNewWindow},
-    {"GetNextCallBack", ppctrap_GetNextCallBack},
+    {"GetNextCallBack", ppcglue_GetNextCallBack},
     {"GetNextDevice", ppcglue_GetNextDevice},
     {"GetNextEvent", ppcglue_GetNextEvent},
     {"GetNextFOND", ppctrap_GetNextFOND},
@@ -42978,9 +42073,9 @@ const ppc_export ppc_exports[] = {
     {"GetNextImageDescriptionExtensionType", ppctrap_GetNextImageDescriptionExtensionType},
     {"GetNextMappedFile", ppcglue_GetNextMappedFile},
     {"GetNextProcess", ppcglue_GetNextProcess},
-    {"GetNextTrackForCompositing", ppctrap_GetNextTrackForCompositing},
-    {"GetNextTrackReferenceType", ppctrap_GetNextTrackReferenceType},
-    {"GetNextUserDataType", ppctrap_GetNextUserDataType},
+    {"GetNextTrackForCompositing", ppcglue_GetNextTrackForCompositing},
+    {"GetNextTrackReferenceType", ppcglue_GetNextTrackReferenceType},
+    {"GetNextUserDataType", ppcglue_GetNextUserDataType},
     {"GetOSDefault", ppcglue_GetOSDefault},
     {"GetOSEvent", ppcglue_GetOSEvent},
     {"GetOSTrapAddress", ppcglue_GetOSTrapAddress},
@@ -43006,13 +42101,13 @@ const ppc_export ppc_exports[] = {
     {"GetPort", ppcglue_GetPort},
     {"GetPortCustomXFerProc", ppcglue_GetPortCustomXFerProc},
     {"GetPortNameFromProcessSerialNumber", ppcglue_GetPortNameFromProcessSerialNumber},
-    {"GetPosterBox", ppctrap_GetPosterBox},
+    {"GetPosterBox", ppcglue_GetPosterBox},
     {"GetPreserveGlyph", ppcglue_GetPreserveGlyph},
-    {"GetPrevTrackForCompositing", ppctrap_GetPrevTrackForCompositing},
+    {"GetPrevTrackForCompositing", ppcglue_GetPrevTrackForCompositing},
     {"GetProcessInformation", ppcglue_GetProcessInformation},
     {"GetProcessSerialNumberFromPortName", ppcglue_GetProcessSerialNumberFromPortName},
     {"GetPtrSize", ppcglue_GetPtrSize},
-    {"GetQuickTimePreference", ppctrap_GetQuickTimePreference},
+    {"GetQuickTimePreference", ppcglue_GetQuickTimePreference},
     {"GetResAttrs", ppcglue_GetResAttrs},
     {"GetResFileAttrs", ppcglue_GetResFileAttrs},
     {"GetResInfo", ppcglue_GetResInfo},
@@ -43100,43 +42195,43 @@ const ppc_export ppc_exports[] = {
     {"GetTimeBaseTime", ppcglue_GetTimeBaseTime},
     {"GetTimeout", ppcglue_GetTimeout},
     {"GetToolTrapAddress", ppcglue_GetToolTrapAddress},
-    {"GetTrackAlternate", ppctrap_GetTrackAlternate},
-    {"GetTrackBoundsRgn", ppctrap_GetTrackBoundsRgn},
-    {"GetTrackClipRgn", ppctrap_GetTrackClipRgn},
-    {"GetTrackCreationTime", ppctrap_GetTrackCreationTime},
-    {"GetTrackDataSize", ppctrap_GetTrackDataSize},
-    {"GetTrackDataSize64", ppctrap_GetTrackDataSize64},
-    {"GetTrackDimensions", ppctrap_GetTrackDimensions},
-    {"GetTrackDisplayBoundsRgn", ppctrap_GetTrackDisplayBoundsRgn},
-    {"GetTrackDisplayMatrix", ppctrap_GetTrackDisplayMatrix},
-    {"GetTrackDuration", ppctrap_GetTrackDuration},
-    {"GetTrackEditRate", ppctrap_GetTrackEditRate},
+    {"GetTrackAlternate", ppcglue_GetTrackAlternate},
+    {"GetTrackBoundsRgn", ppcglue_GetTrackBoundsRgn},
+    {"GetTrackClipRgn", ppcglue_GetTrackClipRgn},
+    {"GetTrackCreationTime", ppcglue_GetTrackCreationTime},
+    {"GetTrackDataSize", ppcglue_GetTrackDataSize},
+    {"GetTrackDataSize64", ppcglue_GetTrackDataSize64},
+    {"GetTrackDimensions", ppcglue_GetTrackDimensions},
+    {"GetTrackDisplayBoundsRgn", ppcglue_GetTrackDisplayBoundsRgn},
+    {"GetTrackDisplayMatrix", ppcglue_GetTrackDisplayMatrix},
+    {"GetTrackDuration", ppcglue_GetTrackDuration},
+    {"GetTrackEditRate", ppcglue_GetTrackEditRate},
     {"GetTrackEnabled", ppcglue_GetTrackEnabled},
-    {"GetTrackID", ppctrap_GetTrackID},
-    {"GetTrackLayer", ppctrap_GetTrackLayer},
-    {"GetTrackLoadSettings", ppctrap_GetTrackLoadSettings},
-    {"GetTrackMatrix", ppctrap_GetTrackMatrix},
-    {"GetTrackMatte", ppctrap_GetTrackMatte},
+    {"GetTrackID", ppcglue_GetTrackID},
+    {"GetTrackLayer", ppcglue_GetTrackLayer},
+    {"GetTrackLoadSettings", ppcglue_GetTrackLoadSettings},
+    {"GetTrackMatrix", ppcglue_GetTrackMatrix},
+    {"GetTrackMatte", ppcglue_GetTrackMatte},
     {"GetTrackMedia", ppcglue_GetTrackMedia},
-    {"GetTrackModificationTime", ppctrap_GetTrackModificationTime},
+    {"GetTrackModificationTime", ppcglue_GetTrackModificationTime},
     {"GetTrackMovie", ppcglue_GetTrackMovie},
-    {"GetTrackMovieBoundsRgn", ppctrap_GetTrackMovieBoundsRgn},
-    {"GetTrackNextInterestingTime", ppctrap_GetTrackNextInterestingTime},
-    {"GetTrackOffset", ppctrap_GetTrackOffset},
-    {"GetTrackPict", ppctrap_GetTrackPict},
-    {"GetTrackReference", ppctrap_GetTrackReference},
-    {"GetTrackReferenceCount", ppctrap_GetTrackReferenceCount},
-    {"GetTrackSegmentDisplayBoundsRgn", ppctrap_GetTrackSegmentDisplayBoundsRgn},
-    {"GetTrackSoundLocalizationSettings", ppctrap_GetTrackSoundLocalizationSettings},
-    {"GetTrackStatus", ppctrap_GetTrackStatus},
-    {"GetTrackUsage", ppctrap_GetTrackUsage},
-    {"GetTrackUserData", ppctrap_GetTrackUserData},
-    {"GetTrackVolume", ppctrap_GetTrackVolume},
+    {"GetTrackMovieBoundsRgn", ppcglue_GetTrackMovieBoundsRgn},
+    {"GetTrackNextInterestingTime", ppcglue_GetTrackNextInterestingTime},
+    {"GetTrackOffset", ppcglue_GetTrackOffset},
+    {"GetTrackPict", ppcglue_GetTrackPict},
+    {"GetTrackReference", ppcglue_GetTrackReference},
+    {"GetTrackReferenceCount", ppcglue_GetTrackReferenceCount},
+    {"GetTrackSegmentDisplayBoundsRgn", ppcglue_GetTrackSegmentDisplayBoundsRgn},
+    {"GetTrackSoundLocalizationSettings", ppcglue_GetTrackSoundLocalizationSettings},
+    {"GetTrackStatus", ppcglue_GetTrackStatus},
+    {"GetTrackUsage", ppcglue_GetTrackUsage},
+    {"GetTrackUserData", ppcglue_GetTrackUserData},
+    {"GetTrackVolume", ppcglue_GetTrackVolume},
     {"GetTranslationExtensionName", ppcglue_GetTranslationExtensionName},
     {"GetTrapAddress", ppcglue_GetTrapAddress},
-    {"GetUserData", ppctrap_GetUserData},
-    {"GetUserDataItem", ppctrap_GetUserDataItem},
-    {"GetUserDataText", ppctrap_GetUserDataText},
+    {"GetUserData", ppcglue_GetUserData},
+    {"GetUserDataItem", ppcglue_GetUserDataItem},
+    {"GetUserDataText", ppcglue_GetUserDataText},
     {"GetVoiceDescription", ppcglue_GetVoiceDescription},
     {"GetVoiceInfo", ppcglue_GetVoiceInfo},
     {"GetWMgrPort", ppcglue_GetWMgrPort},
@@ -43160,7 +42255,7 @@ const ppc_export ppc_exports[] = {
     {"GetZoneList", ppcglue_GetZoneList},
     {"GlobalToLocal", ppcglue_GlobalToLocal},
     {"GoToBeginningOfMovie", ppcglue_GoToBeginningOfMovie},
-    {"GoToEndOfMovie", ppctrap_GoToEndOfMovie},
+    {"GoToEndOfMovie", ppcglue_GoToEndOfMovie},
     {"GoToPublisherSection", ppctrap_GoToPublisherSection},
     {"GrafDevice", ppcglue_GrafDevice},
     {"GrowWindow", ppcglue_GrowWindow},
@@ -43245,9 +42340,9 @@ const ppc_export ppc_exports[] = {
     {"IPCKillListPorts", ppcglue_IPCKillListPorts},
     {"IPCListPortsAsync", ppcglue_IPCListPortsAsync},
     {"IPCListPortsSync", ppcglue_IPCListPortsSync},
-    {"ITextAddString", ppctrap_ITextAddString},
-    {"ITextGetString", ppctrap_ITextGetString},
-    {"ITextRemoveString", ppctrap_ITextRemoveString},
+    {"ITextAddString", ppcglue_ITextAddString},
+    {"ITextGetString", ppcglue_ITextGetString},
+    {"ITextRemoveString", ppcglue_ITextRemoveString},
     {"IUDatePString", ppcglue_IUDatePString},
     {"IUDateString", ppcglue_IUDateString},
     {"IULDateString", ppcglue_IULDateString},
@@ -43267,6 +42362,8 @@ const ppc_export ppc_exports[] = {
     {"IconMethodToRgn", ppctrap_IconMethodToRgn},
     {"IconRefToIconFamily", ppcglue_IconRefToIconFamily},
     {"IconRefToRgn", ppcglue_IconRefToRgn},
+    {"IconServicesInit", ppcglue_IconServicesInit},
+    {"IconServicesTerminate", ppcglue_IconServicesTerminate},
     {"IconSuiteToIconFamily", ppcglue_IconSuiteToIconFamily},
     {"IconSuiteToRgn", ppcglue_IconSuiteToRgn},
     {"IdentifyFolder", ppcglue_IdentifyFolder},
@@ -43312,20 +42409,21 @@ const ppc_export ppc_exports[] = {
     {"InsXTime", ppcglue_InsXTime},
     {"InsertDialogItem", ppcglue_InsertDialogItem},
     {"InsertEmptyMovieSegment", ppcglue_InsertEmptyMovieSegment},
-    {"InsertEmptyTrackSegment", ppctrap_InsertEmptyTrackSegment},
+    {"InsertEmptyTrackSegment", ppcglue_InsertEmptyTrackSegment},
     {"InsertFontResMenu", ppcglue_InsertFontResMenu},
     {"InsertIntlResMenu", ppcglue_InsertIntlResMenu},
-    {"InsertMediaIntoTrack", ppctrap_InsertMediaIntoTrack},
+    {"InsertMediaIntoTrack", ppcglue_InsertMediaIntoTrack},
     {"InsertMenu", ppcglue_InsertMenu},
     {"InsertMenuItem", ppcglue_InsertMenuItem},
     {"InsertMovieSegment", ppcglue_InsertMovieSegment},
     {"InsertRecordToDictionary", ppcglue_InsertRecordToDictionary},
     {"InsertResMenu", ppcglue_InsertResMenu},
     {"InsertSRTRec", ppcglue_InsertSRTRec},
-    {"InsertTrackSegment", ppctrap_InsertTrackSegment},
+    {"InsertTrackSegment", ppcglue_InsertTrackSegment},
     {"InsetRect", ppcglue_InsetRect},
     {"InsetRgn", ppcglue_InsetRgn},
     {"InstallControlManagerDragHandlers", ppcglue_InstallControlManagerDragHandlers},
+    {"InstallDebugAssertOutputHandler", ppcglue_InstallDebugAssertOutputHandler},
     {"InstallExtensionNotificationProc", ppcglue_InstallExtensionNotificationProc},
     {"InstallExtensionTableHandlerProc", ppcglue_InstallExtensionTableHandlerProc},
     {"InstallFS", ppcglue_InstallFS},
@@ -43337,7 +42435,7 @@ const ppc_export ppc_exports[] = {
     {"InvalRect", ppcglue_InvalRect},
     {"InvalRgn", ppcglue_InvalRgn},
     {"InvalidateFolderDescriptorCache", ppcglue_InvalidateFolderDescriptorCache},
-    {"InvalidateMovieRegion", ppctrap_InvalidateMovieRegion},
+    {"InvalidateMovieRegion", ppcglue_InvalidateMovieRegion},
     {"InvalidateSprite", ppctrap_InvalidateSprite},
     {"InvalidateSpriteWorld", ppctrap_InvalidateSpriteWorld},
     {"InverseMatrix", ppcglue_InverseMatrix},
@@ -43370,7 +42468,7 @@ const ppc_export ppc_exports[] = {
     {"IsOutline", ppcglue_IsOutline},
     {"IsProcessorCyclingEnabled", ppcglue_IsProcessorCyclingEnabled},
     {"IsRegisteredSection", ppcglue_IsRegisteredSection},
-    {"IsScrapMovie", ppctrap_IsScrapMovie},
+    {"IsScrapMovie", ppcglue_IsScrapMovie},
     {"IsShowContextualMenuClick", ppcglue_IsShowContextualMenuClick},
     {"IsSpindownDisabled", ppcglue_IsSpindownDisabled},
     {"IsThemeInColor", ppcglue_IsThemeInColor},
@@ -43889,11 +42987,11 @@ const ppc_export ppc_exports[] = {
     {"LineTo", ppcglue_LineTo},
     {"LoWord", ppcglue_LoWord},
     {"LoadIconCache", ppctrap_LoadIconCache},
-    {"LoadMediaIntoRam", ppctrap_LoadMediaIntoRam},
-    {"LoadMovieIntoRam", ppctrap_LoadMovieIntoRam},
+    {"LoadMediaIntoRam", ppcglue_LoadMediaIntoRam},
+    {"LoadMovieIntoRam", ppcglue_LoadMovieIntoRam},
     {"LoadResource", ppcglue_LoadResource},
     {"LoadScrap", ppcglue_LoadScrap},
-    {"LoadTrackIntoRam", ppctrap_LoadTrackIntoRam},
+    {"LoadTrackIntoRam", ppcglue_LoadTrackIntoRam},
     {"LocalToGlobal", ppcglue_LocalToGlobal},
     {"LockPixels", ppcglue_LockPixels},
     {"Long2Fix", ppcglue_Long2Fix},
@@ -43948,12 +43046,12 @@ const ppc_export ppc_exports[] = {
     {"MakeIconCache", ppctrap_MakeIconCache},
     {"MakeImageDescriptionForEffect", ppctrap_MakeImageDescriptionForEffect},
     {"MakeImageDescriptionForPixMap", ppcglue_MakeImageDescriptionForPixMap},
-    {"MakeMediaTimeTable", ppctrap_MakeMediaTimeTable},
+    {"MakeMediaTimeTable", ppcglue_MakeMediaTimeTable},
     {"MakeRGBPat", ppcglue_MakeRGBPat},
     {"MakeThumbnailFromPicture", ppctrap_MakeThumbnailFromPicture},
     {"MakeThumbnailFromPictureFile", ppctrap_MakeThumbnailFromPictureFile},
     {"MakeThumbnailFromPixMap", ppctrap_MakeThumbnailFromPixMap},
-    {"MakeTrackTimeTable", ppctrap_MakeTrackTimeTable},
+    {"MakeTrackTimeTable", ppcglue_MakeTrackTimeTable},
     {"MakeVoiceSpec", ppcglue_MakeVoiceSpec},
     {"MapFileView", ppcglue_MapFileView},
     {"MapMatrix", ppcglue_MapMatrix},
@@ -43971,7 +43069,7 @@ const ppc_export ppc_exports[] = {
     {"MeasureJust", ppcglue_MeasureJust},
     {"MeasureJustified", ppcglue_MeasureJustified},
     {"MeasureText", ppcglue_MeasureText},
-    {"MediaTimeToSampleNum", ppctrap_MediaTimeToSampleNum},
+    {"MediaTimeToSampleNum", ppcglue_MediaTimeToSampleNum},
     {"MenuChoice", ppcglue_MenuChoice},
     {"MenuEvent", ppcglue_MenuEvent},
     {"MenuKey", ppcglue_MenuKey},
@@ -43989,7 +43087,7 @@ const ppc_export ppc_exports[] = {
     {"MoveTo", ppcglue_MoveTo},
     {"MoveWindow", ppcglue_MoveWindow},
     {"MovieExecuteWiredActions", ppctrap_MovieExecuteWiredActions},
-    {"MovieSearchText", ppctrap_MovieSearchText},
+    {"MovieSearchText", ppcglue_MovieSearchText},
     {"MoviesTask", ppcglue_MoviesTask},
     {"Munger", ppcglue_Munger},
     {"NFindWord", ppcglue_NFindWord},
@@ -44023,10 +43121,12 @@ const ppc_export ppc_exports[] = {
     {"NewAliasMinimalFromFullPath", ppcglue_NewAliasMinimalFromFullPath},
     {"NewCServiceWindow", ppcglue_NewCServiceWindow},
     {"NewCWindow", ppcglue_NewCWindow},
-    {"NewCallBack", ppctrap_NewCallBack},
+    {"NewCallBack", ppcglue_NewCallBack},
     {"NewCollection", ppcglue_NewCollection},
     {"NewColorDialog", ppcglue_NewColorDialog},
     {"NewControl", ppcglue_NewControl},
+    {"NewDebugComponent", ppcglue_NewDebugComponent},
+    {"NewDebugOption", ppcglue_NewDebugOption},
     {"NewDialog", ppcglue_NewDialog},
     {"NewDrag", ppcglue_NewDrag},
     {"NewEmptyHandle", ppcglue_NewEmptyHandle},
@@ -44042,22 +43142,22 @@ const ppc_export ppc_exports[] = {
     {"NewHandleSys", ppcglue_NewHandleSys},
     {"NewHandleSysClear", ppcglue_NewHandleSysClear},
     {"NewIconSuite", ppcglue_NewIconSuite},
-    {"NewImageGWorld", ppctrap_NewImageGWorld},
+    {"NewImageGWorld", ppcglue_NewImageGWorld},
     {"NewLayer", ppcglue_NewLayer},
     {"NewMenu", ppcglue_NewMenu},
     {"NewMovie", ppcglue_NewMovie},
     {"NewMovieController", ppcglue_NewMovieController},
-    {"NewMovieEditState", ppctrap_NewMovieEditState},
-    {"NewMovieForDataRefFromHandle", ppctrap_NewMovieForDataRefFromHandle},
+    {"NewMovieEditState", ppcglue_NewMovieEditState},
+    {"NewMovieForDataRefFromHandle", ppcglue_NewMovieForDataRefFromHandle},
     {"NewMovieFromDataFork", ppcglue_NewMovieFromDataFork},
-    {"NewMovieFromDataFork64", ppctrap_NewMovieFromDataFork64},
-    {"NewMovieFromDataRef", ppctrap_NewMovieFromDataRef},
+    {"NewMovieFromDataFork64", ppcglue_NewMovieFromDataFork64},
+    {"NewMovieFromDataRef", ppcglue_NewMovieFromDataRef},
     {"NewMovieFromFile", ppcglue_NewMovieFromFile},
     {"NewMovieFromHandle", ppcglue_NewMovieFromHandle},
     {"NewMovieFromScrap", ppcglue_NewMovieFromScrap},
-    {"NewMovieFromStorageOffset", ppctrap_NewMovieFromStorageOffset},
-    {"NewMovieFromUserProc", ppctrap_NewMovieFromUserProc},
-    {"NewMovieTrack", ppctrap_NewMovieTrack},
+    {"NewMovieFromStorageOffset", ppcglue_NewMovieFromStorageOffset},
+    {"NewMovieFromUserProc", ppcglue_NewMovieFromUserProc},
+    {"NewMovieTrack", ppcglue_NewMovieTrack},
     {"NewPalette", ppcglue_NewPalette},
     {"NewPictInfo", ppctrap_NewPictInfo},
     {"NewPixMap", ppcglue_NewPixMap},
@@ -44083,10 +43183,10 @@ const ppc_export ppc_exports[] = {
     {"NewTempScreenBuffer", ppcglue_NewTempScreenBuffer},
     {"NewThread", ppcglue_NewThread},
     {"NewTimeBase", ppcglue_NewTimeBase},
-    {"NewTrackEditState", ppctrap_NewTrackEditState},
-    {"NewTrackMedia", ppctrap_NewTrackMedia},
-    {"NewUserData", ppctrap_NewUserData},
-    {"NewUserDataFromHandle", ppctrap_NewUserDataFromHandle},
+    {"NewTrackEditState", ppcglue_NewTrackEditState},
+    {"NewTrackMedia", ppcglue_NewTrackMedia},
+    {"NewUserData", ppcglue_NewUserData},
+    {"NewUserDataFromHandle", ppcglue_NewUserDataFromHandle},
     {"NewWindow", ppcglue_NewWindow},
     {"NoPurgePixels", ppcglue_NoPurgePixels},
     {"NormalizeThemeDrawingState", ppcglue_NormalizeThemeDrawingState},
@@ -44099,7 +43199,7 @@ const ppc_export ppc_exports[] = {
     {"OffsetRect", ppcglue_OffsetRect},
     {"OffsetRgn", ppcglue_OffsetRgn},
     {"OpColor", ppcglue_OpColor},
-    {"OpenADataHandler", ppctrap_OpenADataHandler},
+    {"OpenADataHandler", ppcglue_OpenADataHandler},
     {"OpenCPicture", ppcglue_OpenCPicture},
     {"OpenCPort", ppcglue_OpenCPort},
     {"OpenCursorComponent", ppcglue_OpenCursorComponent},
@@ -44111,7 +43211,7 @@ const ppc_export ppc_exports[] = {
     {"OpenMappedScratchFile", ppcglue_OpenMappedScratchFile},
     {"OpenMixerSoundComponent", ppcglue_OpenMixerSoundComponent},
     {"OpenMovieFile", ppcglue_OpenMovieFile},
-    {"OpenMovieStorage", ppctrap_OpenMovieStorage},
+    {"OpenMovieStorage", ppcglue_OpenMovieStorage},
     {"OpenNewEdition", ppctrap_OpenNewEdition},
     {"OpenPicture", ppcglue_OpenPicture},
     {"OpenPoly", ppcglue_OpenPoly},
@@ -44527,7 +43627,7 @@ const ppc_export ppc_exports[] = {
     {"ParamText", ppcglue_ParamText},
     {"ParseAIFFHeader", ppcglue_ParseAIFFHeader},
     {"ParseTable", ppcglue_ParseTable},
-    {"PasteHandleIntoMovie", ppctrap_PasteHandleIntoMovie},
+    {"PasteHandleIntoMovie", ppcglue_PasteHandleIntoMovie},
     {"PasteMovieSelection", ppcglue_PasteMovieSelection},
     {"PauseSpeechAt", ppcglue_PauseSpeechAt},
     {"PenMode", ppcglue_PenMode},
@@ -44542,7 +43642,7 @@ const ppc_export ppc_exports[] = {
     {"PixPatChanged", ppcglue_PixPatChanged},
     {"Pixel2Char", ppcglue_Pixel2Char},
     {"PixelToChar", ppcglue_PixelToChar},
-    {"PlayMoviePreview", ppctrap_PlayMoviePreview},
+    {"PlayMoviePreview", ppcglue_PlayMoviePreview},
     {"PlayThemeSound", ppcglue_PlayThemeSound},
     {"PlotCIcon", ppcglue_PlotCIcon},
     {"PlotCIconHandle", ppcglue_PlotCIconHandle},
@@ -44588,7 +43688,7 @@ const ppc_export ppc_exports[] = {
     {"PrStlDialog", ppcglue_PrStlDialog},
     {"PrStlInit", ppcglue_PrStlInit},
     {"PrValidate", ppcglue_PrValidate},
-    {"PrePrerollMovie", ppctrap_PrePrerollMovie},
+    {"PrePrerollMovie", ppcglue_PrePrerollMovie},
     {"PrerollMovie", ppcglue_PrerollMovie},
     {"PrimeTime", ppcglue_PrimeTime},
     {"PrintDefault", ppcglue_PrintDefault},
@@ -44600,10 +43700,10 @@ const ppc_export ppc_exports[] = {
     {"PtInIconMethod", ppctrap_PtInIconMethod},
     {"PtInIconRef", ppcglue_PtInIconRef},
     {"PtInIconSuite", ppcglue_PtInIconSuite},
-    {"PtInMovie", ppctrap_PtInMovie},
+    {"PtInMovie", ppcglue_PtInMovie},
     {"PtInRect", ppcglue_PtInRect},
     {"PtInRgn", ppcglue_PtInRgn},
-    {"PtInTrack", ppctrap_PtInTrack},
+    {"PtInTrack", ppcglue_PtInTrack},
     {"PtToAngle", ppcglue_PtToAngle},
     {"PtrAndHand", ppcglue_PtrAndHand},
     {"PtrToHand", ppctrap_PtrToHand},
@@ -44615,107 +43715,107 @@ const ppc_export ppc_exports[] = {
     {"PurgeMemSys", ppcglue_PurgeMemSys},
     {"PurgeSpace", ppctrap_PurgeSpace},
     {"PurgeSpaceSys", ppctrap_PurgeSpaceSys},
-    {"PutMovieForDataRefIntoHandle", ppctrap_PutMovieForDataRefIntoHandle},
-    {"PutMovieIntoDataFork", ppctrap_PutMovieIntoDataFork},
-    {"PutMovieIntoDataFork64", ppctrap_PutMovieIntoDataFork64},
-    {"PutMovieIntoHandle", ppctrap_PutMovieIntoHandle},
-    {"PutMovieIntoStorage", ppctrap_PutMovieIntoStorage},
-    {"PutMovieIntoTypedHandle", ppctrap_PutMovieIntoTypedHandle},
+    {"PutMovieForDataRefIntoHandle", ppcglue_PutMovieForDataRefIntoHandle},
+    {"PutMovieIntoDataFork", ppcglue_PutMovieIntoDataFork},
+    {"PutMovieIntoDataFork64", ppcglue_PutMovieIntoDataFork64},
+    {"PutMovieIntoHandle", ppcglue_PutMovieIntoHandle},
+    {"PutMovieIntoStorage", ppcglue_PutMovieIntoStorage},
+    {"PutMovieIntoTypedHandle", ppcglue_PutMovieIntoTypedHandle},
     {"PutMovieOnScrap", ppcglue_PutMovieOnScrap},
     {"PutScrap", ppcglue_PutScrap},
-    {"PutUserDataIntoHandle", ppctrap_PutUserDataIntoHandle},
+    {"PutUserDataIntoHandle", ppcglue_PutUserDataIntoHandle},
     {"QDDone", ppcglue_QDDone},
     {"QDError", ppcglue_QDError},
     {"QDTextBounds", ppcglue_QDTextBounds},
-    {"QTAddMovieError", ppctrap_QTAddMovieError},
-    {"QTBandwidthRelease", ppctrap_QTBandwidthRelease},
-    {"QTBandwidthRequest", ppctrap_QTBandwidthRequest},
-    {"QTBandwidthRequestForTimeBase", ppctrap_QTBandwidthRequestForTimeBase},
-    {"QTCopyAtom", ppctrap_QTCopyAtom},
-    {"QTCopyAtomDataToHandle", ppctrap_QTCopyAtomDataToHandle},
-    {"QTCopyAtomDataToPtr", ppctrap_QTCopyAtomDataToPtr},
-    {"QTCountChildrenOfType", ppctrap_QTCountChildrenOfType},
+    {"QTAddMovieError", ppcglue_QTAddMovieError},
+    {"QTBandwidthRelease", ppcglue_QTBandwidthRelease},
+    {"QTBandwidthRequest", ppcglue_QTBandwidthRequest},
+    {"QTBandwidthRequestForTimeBase", ppcglue_QTBandwidthRequestForTimeBase},
+    {"QTCopyAtom", ppcglue_QTCopyAtom},
+    {"QTCopyAtomDataToHandle", ppcglue_QTCopyAtomDataToHandle},
+    {"QTCopyAtomDataToPtr", ppcglue_QTCopyAtomDataToPtr},
+    {"QTCountChildrenOfType", ppcglue_QTCountChildrenOfType},
     {"QTCreateStandardParameterDialog", ppctrap_QTCreateStandardParameterDialog},
-    {"QTCreateUUID", ppctrap_QTCreateUUID},
+    {"QTCreateUUID", ppcglue_QTCreateUUID},
     {"QTDismissStandardParameterDialog", ppctrap_QTDismissStandardParameterDialog},
-    {"QTDisposeAtomContainer", ppctrap_QTDisposeAtomContainer},
+    {"QTDisposeAtomContainer", ppcglue_QTDisposeAtomContainer},
     {"QTDisposeTween", ppctrap_QTDisposeTween},
     {"QTDoTween", ppctrap_QTDoTween},
     {"QTDoTweenPtr", ppctrap_QTDoTweenPtr},
-    {"QTEqualUUIDs", ppctrap_QTEqualUUIDs},
-    {"QTFindChildByID", ppctrap_QTFindChildByID},
-    {"QTFindChildByIndex", ppctrap_QTFindChildByIndex},
-    {"QTGetAccessKeys", ppctrap_QTGetAccessKeys},
-    {"QTGetAtomDataPtr", ppctrap_QTGetAtomDataPtr},
-    {"QTGetAtomParent", ppctrap_QTGetAtomParent},
-    {"QTGetAtomTypeAndID", ppctrap_QTGetAtomTypeAndID},
-    {"QTGetDataRefMaxFileOffset", ppctrap_QTGetDataRefMaxFileOffset},
+    {"QTEqualUUIDs", ppcglue_QTEqualUUIDs},
+    {"QTFindChildByID", ppcglue_QTFindChildByID},
+    {"QTFindChildByIndex", ppcglue_QTFindChildByIndex},
+    {"QTGetAccessKeys", ppcglue_QTGetAccessKeys},
+    {"QTGetAtomDataPtr", ppcglue_QTGetAtomDataPtr},
+    {"QTGetAtomParent", ppcglue_QTGetAtomParent},
+    {"QTGetAtomTypeAndID", ppcglue_QTGetAtomTypeAndID},
+    {"QTGetDataRefMaxFileOffset", ppcglue_QTGetDataRefMaxFileOffset},
     {"QTGetEffectSpeed", ppctrap_QTGetEffectSpeed},
     {"QTGetEffectsList", ppctrap_QTGetEffectsList},
     {"QTGetEffectsListExtended", ppctrap_QTGetEffectsListExtended},
-    {"QTGetFileNameExtension", ppctrap_QTGetFileNameExtension},
-    {"QTGetMIMETypeInfo", ppctrap_QTGetMIMETypeInfo},
-    {"QTGetMovieRestrictions", ppctrap_QTGetMovieRestrictions},
-    {"QTGetNextChildType", ppctrap_QTGetNextChildType},
-    {"QTGetPixMapHandleGammaLevel", ppctrap_QTGetPixMapHandleGammaLevel},
-    {"QTGetPixMapHandleRequestedGammaLevel", ppctrap_QTGetPixMapHandleRequestedGammaLevel},
-    {"QTGetPixMapHandleRowBytes", ppctrap_QTGetPixMapHandleRowBytes},
-    {"QTGetPixMapPtrGammaLevel", ppctrap_QTGetPixMapPtrGammaLevel},
-    {"QTGetPixMapPtrRequestedGammaLevel", ppctrap_QTGetPixMapPtrRequestedGammaLevel},
-    {"QTGetPixMapPtrRowBytes", ppctrap_QTGetPixMapPtrRowBytes},
-    {"QTGetPixelFormatDepthForImageDescription", ppctrap_QTGetPixelFormatDepthForImageDescription},
-    {"QTGetPixelSize", ppctrap_QTGetPixelSize},
-    {"QTGetSupportedRestrictions", ppctrap_QTGetSupportedRestrictions},
-    {"QTGetTimeUntilNextTask", ppctrap_QTGetTimeUntilNextTask},
-    {"QTGetWallClockTimeBase", ppctrap_QTGetWallClockTimeBase},
-    {"QTIdleManagerClose", ppctrap_QTIdleManagerClose},
-    {"QTIdleManagerGetNextIdleTime", ppctrap_QTIdleManagerGetNextIdleTime},
-    {"QTIdleManagerNeedsAnIdle", ppctrap_QTIdleManagerNeedsAnIdle},
-    {"QTIdleManagerOpen", ppctrap_QTIdleManagerOpen},
-    {"QTIdleManagerSetNextIdleTime", ppctrap_QTIdleManagerSetNextIdleTime},
-    {"QTIdleManagerSetNextIdleTimeDelta", ppctrap_QTIdleManagerSetNextIdleTimeDelta},
-    {"QTIdleManagerSetNextIdleTimeNever", ppctrap_QTIdleManagerSetNextIdleTimeNever},
-    {"QTIdleManagerSetNextIdleTimeNow", ppctrap_QTIdleManagerSetNextIdleTimeNow},
-    {"QTIdleManagerSetParent", ppctrap_QTIdleManagerSetParent},
-    {"QTInsertChild", ppctrap_QTInsertChild},
-    {"QTInsertChildren", ppctrap_QTInsertChildren},
-    {"QTInstallNextTaskNeededSoonerCallback", ppctrap_QTInstallNextTaskNeededSoonerCallback},
+    {"QTGetFileNameExtension", ppcglue_QTGetFileNameExtension},
+    {"QTGetMIMETypeInfo", ppcglue_QTGetMIMETypeInfo},
+    {"QTGetMovieRestrictions", ppcglue_QTGetMovieRestrictions},
+    {"QTGetNextChildType", ppcglue_QTGetNextChildType},
+    {"QTGetPixMapHandleGammaLevel", ppcglue_QTGetPixMapHandleGammaLevel},
+    {"QTGetPixMapHandleRequestedGammaLevel", ppcglue_QTGetPixMapHandleRequestedGammaLevel},
+    {"QTGetPixMapHandleRowBytes", ppcglue_QTGetPixMapHandleRowBytes},
+    {"QTGetPixMapPtrGammaLevel", ppcglue_QTGetPixMapPtrGammaLevel},
+    {"QTGetPixMapPtrRequestedGammaLevel", ppcglue_QTGetPixMapPtrRequestedGammaLevel},
+    {"QTGetPixMapPtrRowBytes", ppcglue_QTGetPixMapPtrRowBytes},
+    {"QTGetPixelFormatDepthForImageDescription", ppcglue_QTGetPixelFormatDepthForImageDescription},
+    {"QTGetPixelSize", ppcglue_QTGetPixelSize},
+    {"QTGetSupportedRestrictions", ppcglue_QTGetSupportedRestrictions},
+    {"QTGetTimeUntilNextTask", ppcglue_QTGetTimeUntilNextTask},
+    {"QTGetWallClockTimeBase", ppcglue_QTGetWallClockTimeBase},
+    {"QTIdleManagerClose", ppcglue_QTIdleManagerClose},
+    {"QTIdleManagerGetNextIdleTime", ppcglue_QTIdleManagerGetNextIdleTime},
+    {"QTIdleManagerNeedsAnIdle", ppcglue_QTIdleManagerNeedsAnIdle},
+    {"QTIdleManagerOpen", ppcglue_QTIdleManagerOpen},
+    {"QTIdleManagerSetNextIdleTime", ppcglue_QTIdleManagerSetNextIdleTime},
+    {"QTIdleManagerSetNextIdleTimeDelta", ppcglue_QTIdleManagerSetNextIdleTimeDelta},
+    {"QTIdleManagerSetNextIdleTimeNever", ppcglue_QTIdleManagerSetNextIdleTimeNever},
+    {"QTIdleManagerSetNextIdleTimeNow", ppcglue_QTIdleManagerSetNextIdleTimeNow},
+    {"QTIdleManagerSetParent", ppcglue_QTIdleManagerSetParent},
+    {"QTInsertChild", ppcglue_QTInsertChild},
+    {"QTInsertChildren", ppcglue_QTInsertChildren},
+    {"QTInstallNextTaskNeededSoonerCallback", ppcglue_QTInstallNextTaskNeededSoonerCallback},
     {"QTIsStandardParameterDialogEvent", ppctrap_QTIsStandardParameterDialogEvent},
-    {"QTLockContainer", ppctrap_QTLockContainer},
-    {"QTMovieNeedsTimeTable", ppctrap_QTMovieNeedsTimeTable},
-    {"QTNewAlias", ppctrap_QTNewAlias},
-    {"QTNewAtomContainer", ppctrap_QTNewAtomContainer},
-    {"QTNewGWorld", ppctrap_QTNewGWorld},
+    {"QTLockContainer", ppcglue_QTLockContainer},
+    {"QTMovieNeedsTimeTable", ppcglue_QTMovieNeedsTimeTable},
+    {"QTNewAlias", ppcglue_QTNewAlias},
+    {"QTNewAtomContainer", ppcglue_QTNewAtomContainer},
+    {"QTNewGWorld", ppcglue_QTNewGWorld},
     {"QTNewGWorldFromPtr", ppcglue_QTNewGWorldFromPtr},
     {"QTNewTween", ppctrap_QTNewTween},
-    {"QTNextChildAnyType", ppctrap_QTNextChildAnyType},
-    {"QTParseTextHREF", ppctrap_QTParseTextHREF},
+    {"QTNextChildAnyType", ppcglue_QTNextChildAnyType},
+    {"QTParseTextHREF", ppcglue_QTParseTextHREF},
     {"QTPrivateCall273", ppcglue_QTPrivateCall273},
     {"QTPrivateCall274", ppcglue_QTPrivateCall274},
-    {"QTRegisterAccessKey", ppctrap_QTRegisterAccessKey},
-    {"QTRemoveAtom", ppctrap_QTRemoveAtom},
-    {"QTRemoveChildren", ppctrap_QTRemoveChildren},
-    {"QTReplaceAtom", ppctrap_QTReplaceAtom},
-    {"QTRestrictionsGetIndClass", ppctrap_QTRestrictionsGetIndClass},
-    {"QTRestrictionsGetInfo", ppctrap_QTRestrictionsGetInfo},
-    {"QTRestrictionsGetItem", ppctrap_QTRestrictionsGetItem},
-    {"QTScheduledBandwidthRelease", ppctrap_QTScheduledBandwidthRelease},
-    {"QTScheduledBandwidthRequest", ppctrap_QTScheduledBandwidthRequest},
-    {"QTSetAtomData", ppctrap_QTSetAtomData},
-    {"QTSetAtomID", ppctrap_QTSetAtomID},
-    {"QTSetPixMapHandleGammaLevel", ppctrap_QTSetPixMapHandleGammaLevel},
-    {"QTSetPixMapHandleRequestedGammaLevel", ppctrap_QTSetPixMapHandleRequestedGammaLevel},
-    {"QTSetPixMapHandleRowBytes", ppctrap_QTSetPixMapHandleRowBytes},
-    {"QTSetPixMapPtrGammaLevel", ppctrap_QTSetPixMapPtrGammaLevel},
-    {"QTSetPixMapPtrRequestedGammaLevel", ppctrap_QTSetPixMapPtrRequestedGammaLevel},
-    {"QTSetPixMapPtrRowBytes", ppctrap_QTSetPixMapPtrRowBytes},
+    {"QTRegisterAccessKey", ppcglue_QTRegisterAccessKey},
+    {"QTRemoveAtom", ppcglue_QTRemoveAtom},
+    {"QTRemoveChildren", ppcglue_QTRemoveChildren},
+    {"QTReplaceAtom", ppcglue_QTReplaceAtom},
+    {"QTRestrictionsGetIndClass", ppcglue_QTRestrictionsGetIndClass},
+    {"QTRestrictionsGetInfo", ppcglue_QTRestrictionsGetInfo},
+    {"QTRestrictionsGetItem", ppcglue_QTRestrictionsGetItem},
+    {"QTScheduledBandwidthRelease", ppcglue_QTScheduledBandwidthRelease},
+    {"QTScheduledBandwidthRequest", ppcglue_QTScheduledBandwidthRequest},
+    {"QTSetAtomData", ppcglue_QTSetAtomData},
+    {"QTSetAtomID", ppcglue_QTSetAtomID},
+    {"QTSetPixMapHandleGammaLevel", ppcglue_QTSetPixMapHandleGammaLevel},
+    {"QTSetPixMapHandleRequestedGammaLevel", ppcglue_QTSetPixMapHandleRequestedGammaLevel},
+    {"QTSetPixMapHandleRowBytes", ppcglue_QTSetPixMapHandleRowBytes},
+    {"QTSetPixMapPtrGammaLevel", ppcglue_QTSetPixMapPtrGammaLevel},
+    {"QTSetPixMapPtrRequestedGammaLevel", ppcglue_QTSetPixMapPtrRequestedGammaLevel},
+    {"QTSetPixMapPtrRowBytes", ppcglue_QTSetPixMapPtrRowBytes},
     {"QTStandardParameterDialogDoAction", ppctrap_QTStandardParameterDialogDoAction},
-    {"QTSwapAtoms", ppctrap_QTSwapAtoms},
-    {"QTTextToNativeText", ppctrap_QTTextToNativeText},
-    {"QTUninstallNextTaskNeededSoonerCallback", ppctrap_QTUninstallNextTaskNeededSoonerCallback},
-    {"QTUnlockContainer", ppctrap_QTUnlockContainer},
-    {"QTUnregisterAccessKey", ppctrap_QTUnregisterAccessKey},
-    {"QTUpdateGWorld", ppctrap_QTUpdateGWorld},
+    {"QTSwapAtoms", ppcglue_QTSwapAtoms},
+    {"QTTextToNativeText", ppcglue_QTTextToNativeText},
+    {"QTUninstallNextTaskNeededSoonerCallback", ppcglue_QTUninstallNextTaskNeededSoonerCallback},
+    {"QTUnlockContainer", ppcglue_QTUnlockContainer},
+    {"QTUnregisterAccessKey", ppcglue_QTUnregisterAccessKey},
+    {"QTUpdateGWorld", ppcglue_QTUpdateGWorld},
     {"QuadToQuadMatrix", ppctrap_QuadToQuadMatrix},
     {"RGB2CMY", ppcglue_RGB2CMY},
     {"RGB2HSL", ppcglue_RGB2HSL},
@@ -44801,7 +43901,7 @@ const ppc_export ppc_exports[] = {
     {"ReleaseFolder", ppcglue_ReleaseFolder},
     {"ReleaseIconRef", ppcglue_ReleaseIconRef},
     {"ReleaseResource", ppcglue_ReleaseResource},
-    {"RemoveCallBackFromTimeBase", ppctrap_RemoveCallBackFromTimeBase},
+    {"RemoveCallBackFromTimeBase", ppcglue_RemoveCallBackFromTimeBase},
     {"RemoveCollectionItem", ppcglue_RemoveCollectionItem},
     {"RemoveControlProperty", ppcglue_RemoveControlProperty},
     {"RemoveDataBrowserItems", ppcglue_RemoveDataBrowserItems},
@@ -44816,13 +43916,13 @@ const ppc_export ppc_exports[] = {
     {"RemoveImageDescriptionExtension", ppctrap_RemoveImageDescriptionExtension},
     {"RemoveIndexedCollectionItem", ppctrap_RemoveIndexedCollectionItem},
     {"RemoveMovieExecuteWiredActionsProc", ppctrap_RemoveMovieExecuteWiredActionsProc},
-    {"RemoveMovieResource", ppctrap_RemoveMovieResource},
+    {"RemoveMovieResource", ppcglue_RemoveMovieResource},
     {"RemoveReceiveHandler", ppcglue_RemoveReceiveHandler},
     {"RemoveResource", ppcglue_RemoveResource},
     {"RemoveSoundDescriptionExtension", ppctrap_RemoveSoundDescriptionExtension},
     {"RemoveTrackingHandler", ppcglue_RemoveTrackingHandler},
-    {"RemoveUserData", ppctrap_RemoveUserData},
-    {"RemoveUserDataText", ppctrap_RemoveUserDataText},
+    {"RemoveUserData", ppcglue_RemoveUserData},
+    {"RemoveUserDataText", ppcglue_RemoveUserDataText},
     {"RemoveWindowProperty", ppcglue_RemoveWindowProperty},
     {"RemoveWindowProxy", ppcglue_RemoveWindowProxy},
     {"ReplaceDSequenceImageDescription", ppctrap_ReplaceDSequenceImageDescription},
@@ -44854,13 +43954,29 @@ const ppc_export ppc_exports[] = {
     {"RsrcMapEntry", ppctrap_RsrcMapEntry},
     {"RsrcZoneInit", ppcglue_RsrcZoneInit},
     {"RstFLock", ppcglue_RstFLock},
+    {"SBDrawBarGraph", ppcglue_SBDrawBarGraph},
+    {"SBEnableShowHideHotKey", ppcglue_SBEnableShowHideHotKey},
+    {"SBGetBarGraphWidth", ppcglue_SBGetBarGraphWidth},
+    {"SBGetControlStripFontID", ppcglue_SBGetControlStripFontID},
+    {"SBGetControlStripFontSize", ppcglue_SBGetControlStripFontSize},
+    {"SBGetDetachIconSuite", ppcglue_SBGetDetachIconSuite},
     {"SBGetDetachedIndString", ppcglue_SBGetDetachedIndString},
+    {"SBGetShowHideHotKey", ppcglue_SBGetShowHideHotKey},
+    {"SBHitTrackSlider", ppcglue_SBHitTrackSlider},
     {"SBIsControlStripVisible", ppcglue_SBIsControlStripVisible},
+    {"SBIsShowHideHotKeyEnabled", ppcglue_SBIsShowHideHotKeyEnabled},
     {"SBLoadPreferences", ppcglue_SBLoadPreferences},
+    {"SBModalDialogInContext", ppcglue_SBModalDialogInContext},
     {"SBOpenModuleResourceFile", ppcglue_SBOpenModuleResourceFile},
     {"SBSafeToAccessStartupDisk", ppcglue_SBSafeToAccessStartupDisk},
     {"SBSavePreferences", ppcglue_SBSavePreferences},
+    {"SBSetControlStripFontID", ppcglue_SBSetControlStripFontID},
+    {"SBSetControlStripFontSize", ppcglue_SBSetControlStripFontSize},
+    {"SBSetShowHideHotKey", ppcglue_SBSetShowHideHotKey},
+    {"SBShowHelpString", ppcglue_SBShowHelpString},
     {"SBShowHideControlStrip", ppcglue_SBShowHideControlStrip},
+    {"SBTrackPopupMenu", ppcglue_SBTrackPopupMenu},
+    {"SBTrackSlider", ppcglue_SBTrackSlider},
     {"SCSIAction", ppcglue_SCSIAction},
     {"SCSICmd", ppcglue_SCSICmd},
     {"SCSIComplete", ppcglue_SCSIComplete},
@@ -44967,16 +44083,16 @@ const ppc_export ppc_exports[] = {
     {"SSearchSRT", ppcglue_SSearchSRT},
     {"SUpdateSRT", ppcglue_SUpdateSRT},
     {"SameProcess", ppcglue_SameProcess},
-    {"SampleNumToMediaTime", ppctrap_SampleNumToMediaTime},
+    {"SampleNumToMediaTime", ppcglue_SampleNumToMediaTime},
     {"SaveBack", ppcglue_SaveBack},
     {"SaveEntries", ppcglue_SaveEntries},
     {"SaveFore", ppcglue_SaveFore},
     {"SaveMixedModeState", ppctrap_SaveMixedModeState},
     {"SaveOld", ppcglue_SaveOld},
     {"ScaleMatrix", ppcglue_ScaleMatrix},
-    {"ScaleMovieSegment", ppctrap_ScaleMovieSegment},
+    {"ScaleMovieSegment", ppcglue_ScaleMovieSegment},
     {"ScalePt", ppcglue_ScalePt},
-    {"ScaleTrackSegment", ppctrap_ScaleTrackSegment},
+    {"ScaleTrackSegment", ppcglue_ScaleTrackSegment},
     {"ScreenRes", ppcglue_ScreenRes},
     {"ScrollRect", ppcglue_ScrollRect},
     {"SecondsToDate", ppcglue_SecondsToDate},
@@ -44987,7 +44103,7 @@ const ppc_export ppc_exports[] = {
     {"SeedCFill", ppcglue_SeedCFill},
     {"SeedFill", ppcglue_SeedFill},
     {"SelectDialogItemText", ppcglue_SelectDialogItemText},
-    {"SelectMovieAlternates", ppctrap_SelectMovieAlternates},
+    {"SelectMovieAlternates", ppcglue_SelectMovieAlternates},
     {"SelectWindow", ppcglue_SelectWindow},
     {"SendAEFromTSMComponent", ppcglue_SendAEFromTSMComponent},
     {"SendBehind", ppcglue_SendBehind},
@@ -44996,7 +44112,7 @@ const ppc_export ppc_exports[] = {
     {"SetAnimatedThemeCursor", ppcglue_SetAnimatedThemeCursor},
     {"SetApplBase", ppcglue_SetApplBase},
     {"SetApplLimit", ppcglue_SetApplLimit},
-    {"SetAutoTrackAlternatesEnabled", ppctrap_SetAutoTrackAlternatesEnabled},
+    {"SetAutoTrackAlternatesEnabled", ppcglue_SetAutoTrackAlternatesEnabled},
     {"SetAutomaticControlDragTrackingEnabledForWindow", ppcglue_SetAutomaticControlDragTrackingEnabledForWindow},
     {"SetBevelButtonContentInfo", ppcglue_SetBevelButtonContentInfo},
     {"SetBevelButtonGraphicAlignment", ppcglue_SetBevelButtonGraphicAlignment},
@@ -45101,7 +44217,9 @@ const ppc_export ppc_exports[] = {
     {"SetDataBrowserUserState", ppcglue_SetDataBrowserUserState},
     {"SetDataBrowserViewStyle", ppcglue_SetDataBrowserViewStyle},
     {"SetDateTime", ppcglue_SetDateTime},
+    {"SetDebugOptionValue", ppcglue_SetDebugOptionValue},
     {"SetDebuggerNotificationProcs", ppcglue_SetDebuggerNotificationProcs},
+    {"SetDeepIconsEnabled", ppcglue_SetDeepIconsEnabled},
     {"SetDefaultInputMethod", ppcglue_SetDefaultInputMethod},
     {"SetDefaultOutputVolume", ppcglue_SetDefaultOutputVolume},
     {"SetDefaultSoundOutput", ppcglue_SetDefaultSoundOutput},
@@ -45166,20 +44284,20 @@ const ppc_export ppc_exports[] = {
     {"SetMCEntries", ppcglue_SetMCEntries},
     {"SetMCInfo", ppcglue_SetMCInfo},
     {"SetMappedFileSize", ppcglue_SetMappedFileSize},
-    {"SetMediaDataHandler", ppctrap_SetMediaDataHandler},
-    {"SetMediaDataRef", ppctrap_SetMediaDataRef},
-    {"SetMediaDataRefAttributes", ppctrap_SetMediaDataRefAttributes},
-    {"SetMediaDefaultDataRefIndex", ppctrap_SetMediaDefaultDataRefIndex},
-    {"SetMediaHandler", ppctrap_SetMediaHandler},
-    {"SetMediaInputMap", ppctrap_SetMediaInputMap},
-    {"SetMediaLanguage", ppctrap_SetMediaLanguage},
-    {"SetMediaPlayHints", ppctrap_SetMediaPlayHints},
-    {"SetMediaPreferredChunkSize", ppctrap_SetMediaPreferredChunkSize},
-    {"SetMediaPropertyAtom", ppctrap_SetMediaPropertyAtom},
-    {"SetMediaQuality", ppctrap_SetMediaQuality},
-    {"SetMediaSampleDescription", ppctrap_SetMediaSampleDescription},
-    {"SetMediaShadowSync", ppctrap_SetMediaShadowSync},
-    {"SetMediaTimeScale", ppctrap_SetMediaTimeScale},
+    {"SetMediaDataHandler", ppcglue_SetMediaDataHandler},
+    {"SetMediaDataRef", ppcglue_SetMediaDataRef},
+    {"SetMediaDataRefAttributes", ppcglue_SetMediaDataRefAttributes},
+    {"SetMediaDefaultDataRefIndex", ppcglue_SetMediaDefaultDataRefIndex},
+    {"SetMediaHandler", ppcglue_SetMediaHandler},
+    {"SetMediaInputMap", ppcglue_SetMediaInputMap},
+    {"SetMediaLanguage", ppcglue_SetMediaLanguage},
+    {"SetMediaPlayHints", ppcglue_SetMediaPlayHints},
+    {"SetMediaPreferredChunkSize", ppcglue_SetMediaPreferredChunkSize},
+    {"SetMediaPropertyAtom", ppcglue_SetMediaPropertyAtom},
+    {"SetMediaQuality", ppcglue_SetMediaQuality},
+    {"SetMediaSampleDescription", ppcglue_SetMediaSampleDescription},
+    {"SetMediaShadowSync", ppcglue_SetMediaShadowSync},
+    {"SetMediaTimeScale", ppcglue_SetMediaTimeScale},
     {"SetMenuBar", ppcglue_SetMenuBar},
     {"SetMenuExcludesMarkColumn", ppcglue_SetMenuExcludesMarkColumn},
     {"SetMenuFlash", ppcglue_SetMenuFlash},
@@ -45197,34 +44315,34 @@ const ppc_export ppc_exports[] = {
     {"SetMenuItemTextEncoding", ppcglue_SetMenuItemTextEncoding},
     {"SetModalDialogEventMask", ppcglue_SetModalDialogEventMask},
     {"SetMovieActive", ppcglue_SetMovieActive},
-    {"SetMovieActiveSegment", ppctrap_SetMovieActiveSegment},
-    {"SetMovieAnchorDataRef", ppctrap_SetMovieAnchorDataRef},
+    {"SetMovieActiveSegment", ppcglue_SetMovieActiveSegment},
+    {"SetMovieAnchorDataRef", ppcglue_SetMovieAnchorDataRef},
     {"SetMovieBox", ppcglue_SetMovieBox},
     {"SetMovieClipRgn", ppcglue_SetMovieClipRgn},
-    {"SetMovieColorTable", ppctrap_SetMovieColorTable},
-    {"SetMovieCoverProcs", ppctrap_SetMovieCoverProcs},
-    {"SetMovieDefaultDataRef", ppctrap_SetMovieDefaultDataRef},
+    {"SetMovieColorTable", ppcglue_SetMovieColorTable},
+    {"SetMovieCoverProcs", ppcglue_SetMovieCoverProcs},
+    {"SetMovieDefaultDataRef", ppcglue_SetMovieDefaultDataRef},
     {"SetMovieDisplayClipRgn", ppcglue_SetMovieDisplayClipRgn},
-    {"SetMovieDrawingCompleteProc", ppctrap_SetMovieDrawingCompleteProc},
+    {"SetMovieDrawingCompleteProc", ppcglue_SetMovieDrawingCompleteProc},
     {"SetMovieGWorld", ppcglue_SetMovieGWorld},
-    {"SetMovieLanguage", ppctrap_SetMovieLanguage},
+    {"SetMovieLanguage", ppcglue_SetMovieLanguage},
     {"SetMovieMasterClock", ppcglue_SetMovieMasterClock},
     {"SetMovieMasterTimeBase", ppcglue_SetMovieMasterTimeBase},
-    {"SetMovieMatrix", ppctrap_SetMovieMatrix},
+    {"SetMovieMatrix", ppcglue_SetMovieMatrix},
     {"SetMoviePlayHints", ppcglue_SetMoviePlayHints},
-    {"SetMoviePosterTime", ppctrap_SetMoviePosterTime},
+    {"SetMoviePosterTime", ppcglue_SetMoviePosterTime},
     {"SetMoviePreferredRate", ppcglue_SetMoviePreferredRate},
     {"SetMoviePreferredVolume", ppcglue_SetMoviePreferredVolume},
-    {"SetMoviePreviewMode", ppctrap_SetMoviePreviewMode},
-    {"SetMoviePreviewTime", ppctrap_SetMoviePreviewTime},
-    {"SetMovieProgressProc", ppctrap_SetMovieProgressProc},
-    {"SetMoviePropertyAtom", ppctrap_SetMoviePropertyAtom},
+    {"SetMoviePreviewMode", ppcglue_SetMoviePreviewMode},
+    {"SetMoviePreviewTime", ppcglue_SetMoviePreviewTime},
+    {"SetMovieProgressProc", ppcglue_SetMovieProgressProc},
+    {"SetMoviePropertyAtom", ppcglue_SetMoviePropertyAtom},
     {"SetMovieRate", ppcglue_SetMovieRate},
     {"SetMovieSelection", ppcglue_SetMovieSelection},
     {"SetMovieTime", ppcglue_SetMovieTime},
-    {"SetMovieTimeScale", ppctrap_SetMovieTimeScale},
+    {"SetMovieTimeScale", ppcglue_SetMovieTimeScale},
     {"SetMovieTimeValue", ppcglue_SetMovieTimeValue},
-    {"SetMovieVideoOutput", ppctrap_SetMovieVideoOutput},
+    {"SetMovieVideoOutput", ppcglue_SetMovieVideoOutput},
     {"SetMovieVolume", ppcglue_SetMovieVolume},
     {"SetMoviesErrorProc", ppctrap_SetMoviesErrorProc},
     {"SetOSDefault", ppcglue_SetOSDefault},
@@ -45240,12 +44358,12 @@ const ppc_export ppc_exports[] = {
     {"SetPortCustomXFerProc", ppcglue_SetPortCustomXFerProc},
     {"SetPortDialogPort", ppcglue_SetPortDialogPort},
     {"SetPortPix", ppcglue_SetPortPix},
-    {"SetPosterBox", ppctrap_SetPosterBox},
+    {"SetPosterBox", ppcglue_SetPosterBox},
     {"SetPreserveGlyph", ppcglue_SetPreserveGlyph},
     {"SetProcessorSpeed", ppcglue_SetProcessorSpeed},
     {"SetPt", ppcglue_SetPt},
     {"SetPtrSize", ppcglue_SetPtrSize},
-    {"SetQuickTimePreference", ppctrap_SetQuickTimePreference},
+    {"SetQuickTimePreference", ppcglue_SetQuickTimePreference},
     {"SetRect", ppcglue_SetRect},
     {"SetRectRgn", ppcglue_SetRectRgn},
     {"SetResAttrs", ppcglue_SetResAttrs},
@@ -45311,25 +44429,25 @@ const ppc_export ppc_exports[] = {
     {"SetTimeBaseZero", ppcglue_SetTimeBaseZero},
     {"SetTimeout", ppcglue_SetTimeout},
     {"SetToolTrapAddress", ppcglue_SetToolTrapAddress},
-    {"SetTrackAlternate", ppctrap_SetTrackAlternate},
-    {"SetTrackClipRgn", ppctrap_SetTrackClipRgn},
-    {"SetTrackDimensions", ppctrap_SetTrackDimensions},
+    {"SetTrackAlternate", ppcglue_SetTrackAlternate},
+    {"SetTrackClipRgn", ppcglue_SetTrackClipRgn},
+    {"SetTrackDimensions", ppcglue_SetTrackDimensions},
     {"SetTrackEnabled", ppcglue_SetTrackEnabled},
-    {"SetTrackGWorld", ppctrap_SetTrackGWorld},
-    {"SetTrackLayer", ppctrap_SetTrackLayer},
-    {"SetTrackLoadSettings", ppctrap_SetTrackLoadSettings},
-    {"SetTrackMatrix", ppctrap_SetTrackMatrix},
-    {"SetTrackMatte", ppctrap_SetTrackMatte},
-    {"SetTrackOffset", ppctrap_SetTrackOffset},
-    {"SetTrackReference", ppctrap_SetTrackReference},
-    {"SetTrackSoundLocalizationSettings", ppctrap_SetTrackSoundLocalizationSettings},
-    {"SetTrackUsage", ppctrap_SetTrackUsage},
-    {"SetTrackVolume", ppctrap_SetTrackVolume},
+    {"SetTrackGWorld", ppcglue_SetTrackGWorld},
+    {"SetTrackLayer", ppcglue_SetTrackLayer},
+    {"SetTrackLoadSettings", ppcglue_SetTrackLoadSettings},
+    {"SetTrackMatrix", ppcglue_SetTrackMatrix},
+    {"SetTrackMatte", ppcglue_SetTrackMatte},
+    {"SetTrackOffset", ppcglue_SetTrackOffset},
+    {"SetTrackReference", ppcglue_SetTrackReference},
+    {"SetTrackSoundLocalizationSettings", ppcglue_SetTrackSoundLocalizationSettings},
+    {"SetTrackUsage", ppcglue_SetTrackUsage},
+    {"SetTrackVolume", ppcglue_SetTrackVolume},
     {"SetTranslationAdvertisement", ppcglue_SetTranslationAdvertisement},
     {"SetTrapAddress", ppcglue_SetTrapAddress},
     {"SetUpControlBackground", ppcglue_SetUpControlBackground},
     {"SetUpControlTextColor", ppcglue_SetUpControlTextColor},
-    {"SetUserDataItem", ppctrap_SetUserDataItem},
+    {"SetUserDataItem", ppcglue_SetUserDataItem},
     {"SetVideoDefault", ppcglue_SetVideoDefault},
     {"SetWRefCon", ppcglue_SetWRefCon},
     {"SetWTitle", ppcglue_SetWTitle},
@@ -45508,6 +44626,7 @@ const ppc_export ppc_exports[] = {
     {"TEUseStyleScrap", ppcglue_TEUseStyleScrap},
     {"TSMEvent", ppcglue_TSMEvent},
     {"TSMMenuSelect", ppcglue_TSMMenuSelect},
+    {"TaskLevel", ppcglue_TaskLevel},
     {"TempDisposeHandle", ppcglue_TempDisposeHandle},
     {"TempFreeMem", ppcglue_TempFreeMem},
     {"TempHLock", ppcglue_TempHLock},
@@ -45534,7 +44653,7 @@ const ppc_export ppc_exports[] = {
     {"TrackControl", ppcglue_TrackControl},
     {"TrackDrag", ppcglue_TrackDrag},
     {"TrackGoAway", ppcglue_TrackGoAway},
-    {"TrackTimeToMediaTime", ppctrap_TrackTimeToMediaTime},
+    {"TrackTimeToMediaTime", ppcglue_TrackTimeToMediaTime},
     {"TransformFixedPoints", ppcglue_TransformFixedPoints},
     {"TransformFixedRect", ppcglue_TransformFixedRect},
     {"TransformPoints", ppcglue_TransformPoints},
@@ -45552,6 +44671,56 @@ const ppc_export ppc_exports[] = {
     {"TypeSelectCompare", ppcglue_TypeSelectCompare},
     {"TypeSelectFindItem", ppcglue_TypeSelectFindItem},
     {"TypeSelectNewKey", ppcglue_TypeSelectNewKey},
+    {"UTAddFCBToSearchList", ppcglue_UTAddFCBToSearchList},
+    {"UTAddNewVCB", ppcglue_UTAddNewVCB},
+    {"UTAdjustEOF", ppcglue_UTAdjustEOF},
+    {"UTAllocateFCB", ppcglue_UTAllocateFCB},
+    {"UTAllocateVCB", ppcglue_UTAllocateVCB},
+    {"UTAllocateWDCB", ppcglue_UTAllocateWDCB},
+    {"UTBlockInFQHashP", ppcglue_UTBlockInFQHashP},
+    {"UTCacheReadIP", ppcglue_UTCacheReadIP},
+    {"UTCacheWriteIP", ppcglue_UTCacheWriteIP},
+    {"UTCheckDirBusy", ppcglue_UTCheckDirBusy},
+    {"UTCheckFCB", ppcglue_UTCheckFCB},
+    {"UTCheckFileModifiable", ppcglue_UTCheckFileModifiable},
+    {"UTCheckFileRefNum", ppcglue_UTCheckFileRefNum},
+    {"UTCheckForkPermissions", ppcglue_UTCheckForkPermissions},
+    {"UTCheckPermission", ppcglue_UTCheckPermission},
+    {"UTCheckVolModifiable", ppcglue_UTCheckVolModifiable},
+    {"UTCheckVolOffline", ppcglue_UTCheckVolOffline},
+    {"UTCheckVolRefNum", ppcglue_UTCheckVolRefNum},
+    {"UTCheckWDRefNum", ppcglue_UTCheckWDRefNum},
+    {"UTDetermineVol", ppcglue_UTDetermineVol},
+    {"UTDisposeVCB", ppcglue_UTDisposeVCB},
+    {"UTEjectVol", ppcglue_UTEjectVol},
+    {"UTFindDrive", ppcglue_UTFindDrive},
+    {"UTFlushCache", ppcglue_UTFlushCache},
+    {"UTGetBlock", ppcglue_UTGetBlock},
+    {"UTGetDefaultVol", ppcglue_UTGetDefaultVol},
+    {"UTGetForkControlBlockSize", ppcglue_UTGetForkControlBlockSize},
+    {"UTGetPathComponentName", ppcglue_UTGetPathComponentName},
+    {"UTIndexFCB", ppcglue_UTIndexFCB},
+    {"UTLocateFCB", ppcglue_UTLocateFCB},
+    {"UTLocateFCBInSearchList", ppcglue_UTLocateFCBInSearchList},
+    {"UTLocateNextFCB", ppcglue_UTLocateNextFCB},
+    {"UTLocateNextVCB", ppcglue_UTLocateNextVCB},
+    {"UTLocateVCBByName", ppcglue_UTLocateVCBByName},
+    {"UTLocateVCBByRefNum", ppcglue_UTLocateVCBByRefNum},
+    {"UTMarkDirty", ppcglue_UTMarkDirty},
+    {"UTParsePathname", ppcglue_UTParsePathname},
+    {"UTReleaseBlock", ppcglue_UTReleaseBlock},
+    {"UTReleaseFCB", ppcglue_UTReleaseFCB},
+    {"UTReleaseWDCB", ppcglue_UTReleaseWDCB},
+    {"UTRemoveFCBFromSearchList", ppcglue_UTRemoveFCBFromSearchList},
+    {"UTResolveFCB", ppcglue_UTResolveFCB},
+    {"UTResolveFileRefNum", ppcglue_UTResolveFileRefNum},
+    {"UTResolveWDCB", ppcglue_UTResolveWDCB},
+    {"UTSetDefaultVol", ppcglue_UTSetDefaultVol},
+    {"UTTrashBlocks", ppcglue_UTTrashBlocks},
+    {"UTTrashFileBlocks", ppcglue_UTTrashFileBlocks},
+    {"UTTrashVolBlocks", ppcglue_UTTrashVolBlocks},
+    {"UTVolCacheReadIP", ppcglue_UTVolCacheReadIP},
+    {"UTVolCacheWriteIP", ppcglue_UTVolCacheWriteIP},
     {"UnRegisterSection", ppcglue_UnRegisterSection},
     {"UnflattenCollection", ppctrap_UnflattenCollection},
     {"UnflattenCollectionFromHdl", ppctrap_UnflattenCollectionFromHdl},
@@ -45576,17 +44745,17 @@ const ppc_export ppc_exports[] = {
     {"UpdateGWorld", ppcglue_UpdateGWorld},
     {"UpdateIconRef", ppcglue_UpdateIconRef},
     {"UpdateMovie", ppcglue_UpdateMovie},
-    {"UpdateMovieInStorage", ppctrap_UpdateMovieInStorage},
+    {"UpdateMovieInStorage", ppcglue_UpdateMovieInStorage},
     {"UpdateMovieResource", ppcglue_UpdateMovieResource},
     {"UpdateResFile", ppcglue_UpdateResFile},
     {"UpdateSystemActivity", ppcglue_UpdateSystemActivity},
     {"UpdateTranslationProgress", ppcglue_UpdateTranslationProgress},
     {"UseDictionary", ppcglue_UseDictionary},
     {"UseInputWindow", ppcglue_UseInputWindow},
-    {"UseMovieEditState", ppctrap_UseMovieEditState},
+    {"UseMovieEditState", ppcglue_UseMovieEditState},
     {"UseResFile", ppcglue_UseResFile},
     {"UseThemeFont", ppcglue_UseThemeFont},
-    {"UseTrackEditState", ppctrap_UseTrackEditState},
+    {"UseTrackEditState", ppcglue_UseTrackEditState},
     {"VInstall", ppcglue_VInstall},
     {"VRemove", ppcglue_VRemove},
     {"ValidRect", ppcglue_ValidRect},

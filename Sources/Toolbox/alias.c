@@ -283,13 +283,78 @@ bool alias_host_of_record(gaddr rec, uint32_t len, char *host, size_t hostsize)
     return ok;
 }
 
+/* Where an alias made relative to a file leads from fromFile: up from
+ * its folder nlvlFrom - 1 levels, then down the last nlvlTo - 1 folders of
+ * the target's path and its name, as the Alias Manager searched when the
+ * absolute path fails (a game's data moved off its developer's disk:
+ * Bugdom's skeletons name their 3DMF files so). */
+static bool relative_host(gaddr fromFile, gaddr alias, char *host, size_t hostsize)
+{
+    if (!fromFile || !alias || !rd32(alias))
+        return false;
+    gaddr rec = rd32(alias);
+    int16_t from = (int16_t)rd16(rec + 130), to = (int16_t)rd16(rec + 132);
+    if (from < 1 || to < 1 || from > 16 || to > 16)
+        return false;
+    char fromhost[PATH_MAX];
+    if (!fm_host_path((int16_t)rd16(fromFile), (int32_t)rd32(fromFile + 2), fromFile + 6, true, fromhost,
+                      sizeof fromhost))
+        return false;
+    /* The folder: fromFile's, then up. */
+    for (int up = 0; up < from; up++) {
+        char *slash = strrchr(fromhost, '/');
+        if (!slash || slash == fromhost)
+            return false;
+        *slash = 0;
+    }
+    uint8_t mac[1100];
+    size_t n = fm_mac_path_of_host(fromhost, mac, sizeof mac - 300);
+    if (!n)
+        return false;
+    /* The target's last `to` components: from its absolute path, or its
+     * name alone. */
+    uint16_t len;
+    gaddr abs = find_tag(rec, tagAbsolutePath, &len);
+    uint8_t tail[300];
+    size_t tn = 0;
+    if (abs && len < sizeof tail) {
+        uint8_t path[300];
+        gget(path, abs, len);
+        size_t start = len;
+        for (int k = 0; k < to && start > 0;) {
+            start--;
+            if (path[start] == ':' && start + 1 < len)
+                k++;
+        }
+        if (path[start] == ':')
+            start++;
+        tn = len - start;
+        memcpy(tail, path + start, tn);
+    } else {
+        tn = rd8(rec + 50);
+        if (tn > 63)
+            return false;
+        gget(tail, rec + 51, (uint32_t)tn);
+    }
+    if (n && mac[n - 1] != ':')
+        mac[n++] = ':';
+    memcpy(mac + n, tail, tn);
+    n += tn;
+    return fm_host_of_mac_path(mac, n, host, hostsize) && fm_host_exists(host);
+}
+
 int16_t tb_ResolveAlias(gaddr fromFile, gaddr alias, gaddr target, gaddr wasChanged)
 {
     if (wasChanged)
         wr8(wasChanged, 0);
     char host[PATH_MAX];
     bool moved;
-    if (!target_host_moved(alias, host, sizeof host, &moved))
+    bool found = target_host_moved(alias, host, sizeof host, &moved);
+    if ((!found || !fm_host_exists(host)) && relative_host(fromFile, alias, host, sizeof host)) {
+        found = true;
+        moved = true;
+    }
+    if (!found)
         return paramErrA;
     fm_spec_for_path(host, target);
     if (moved && wasChanged)

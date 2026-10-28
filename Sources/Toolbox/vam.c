@@ -213,7 +213,9 @@ void ot_tasks_pump(void)
         uint32_t arg = t->arg;
         if (!t->proc)
             continue;
-        if (mm_is_descriptor(t->proc))
+        if (ot_is_68k_proc(t->proc) || mm_is_68k_proc(t->proc))
+            mm_call(t->proc, 0x000000C0 /* Pascal, one long: Open Transport's 68k tasks */, &arg, 1);
+        else if (mm_is_descriptor(t->proc))
             mm_call(t->proc, 0x000000C1 /* C, one long */, &arg, 1);
         else
             ppc_call(t->proc, &arg, 1);

@@ -48,6 +48,7 @@ enum { RD_SIZE = 12, RR_SIZE = 20 };
 #define RR_ISA 5
 #define RR_FLAGS 6
 #define RR_PROC 8
+#define RR_RESERVED2 12
 #define RR_SELECTOR 16
 
 bool mm_is_descriptor(gaddr p) { return p && rd16(p) == 0xAAFE; }
@@ -101,7 +102,22 @@ static bool mm_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *
         /* kFragmentNeedsPreparing: the routine is a PEF container (an
          * accelerated code resource's); its main is the routine.  The
          * record keeps the result, as Mixed Mode's did. */
-        gaddr tv = cfm_prepare_container(*proc);
+        /* A descriptor an XCMD's tool saved after preparing it in memory
+         * keeps stale addresses in procDescriptor, and the container's
+         * offset in the reserved word after it; failing that the container
+         * follows the records (QuickFiles, Bob's Bricks, Weather or Not?,
+         * CallerID Remote, Type & Speak, EasyMail all do). */
+        gaddr pef = *proc;
+        if (rd32(pef) != 0x4A6F7921u /* Joy! */) {
+            gaddr base = (flags & 1) ? rd : 0;
+            gaddr alt = rd32(rr + RR_RESERVED2) ? base + rd32(rr + RR_RESERVED2) : 0;
+            gaddr after = rd + RD_RECORDS + (rd16(rd + RD_ROUTINE_COUNT) + 1u) * RR_SIZE;
+            if (alt && rd32(alt) == 0x4A6F7921u)
+                pef = alt;
+            else if (rd32(after) == 0x4A6F7921u)
+                pef = after;
+        }
+        gaddr tv = cfm_prepare_container(pef);
         if (tv) {
             wr32(rr + RR_PROC, tv);
             wr16(rr + RR_FLAGS, (uint16_t)(flags & ~3u));

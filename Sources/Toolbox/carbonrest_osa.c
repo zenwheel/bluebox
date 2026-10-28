@@ -81,50 +81,13 @@ CALL(OSAGetSysTerminology, 0x110B, "424")
 CALL(OSAGetPropertyNames, 0x110C, "444")
 CALL(OSAGetHandlerNames, 0x110D, "444")
 
-/* OSAComp.h: the storage type of script data is kept after it, in the
- * handle's last four bytes. */
-enum { errOSABadStorageType = -1752 };
-
-static void os_OSAAddStorageType(ppc_cpu *c)
-{
-    gaddr h = A(0);
-    if (!h || !rd32(h))
-        RET(errOSABadStorageType);
-    int32_t n = tb_GetHandleSize(h);
-    tb_SetHandleSize(h, n + 4);
-    if (tb_GetHandleSize(h) != n + 4)
-        RET(memFullErr);
-    wr32(rd32(h) + (uint32_t)n, A(1));
-    RET(noErr);
-}
-
-static void os_OSAGetStorageType(ppc_cpu *c)
-{
-    gaddr h = A(0);
-    int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
-    if (n < 4 || !A(1))
-        RET(errOSABadStorageType);
-    wr32(A(1), rd32(rd32(h) + (uint32_t)n - 4));
-    RET(noErr);
-}
-
-static void os_OSARemoveStorageType(ppc_cpu *c)
-{
-    gaddr h = A(0);
-    int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
-    if (n < 4)
-        RET(errOSABadStorageType);
-    tb_SetHandleSize(h, n - 4);
-    RET(noErr);
-}
-
 void rest_osa_reset(void) {}
 
 #define X(name) { #name, os_##name }
 const ppc_export rest_osa_exports[] = {
     X(ASGetAppTerminology), X(ASGetHandler), X(ASGetProperty), X(ASGetSourceStyleNames), X(ASGetSourceStyles),
     X(ASInit), X(ASSetHandler), X(ASSetProperty), X(ASSetSourceStyles),
-    X(OSACopyScript), X(OSAAddStorageType), X(OSAAvailableDialectCodeList), X(OSAAvailableDialects),
+    X(OSACopyScript), X(OSAAvailableDialectCodeList), X(OSAAvailableDialects),
     X(OSADebuggerCreateSession), X(OSADebuggerDisposeCallFrame), X(OSADebuggerDisposeSession),
     X(OSADebuggerGetBreakpoint), X(OSADebuggerGetCallFrameState), X(OSADebuggerGetCurrentCallFrame),
     X(OSADebuggerGetDefaultBreakpoint), X(OSADebuggerGetPreviousCallFrame), X(OSADebuggerGetSessionState),
@@ -132,8 +95,8 @@ const ppc_export rest_osa_exports[] = {
     X(OSADebuggerSetBreakpoint), X(OSADebuggerSetVariable),
     X(OSAGenericToRealID), X(OSAGetAppTerminology), X(OSAGetCurrentDialect), X(OSAGetDefaultScriptingComponent),
     X(OSAGetDialectInfo), X(OSAGetHandler), X(OSAGetHandlerNames), X(OSAGetProperty), X(OSAGetPropertyNames),
-    X(OSAGetScriptingComponent), X(OSAGetScriptingComponentFromStored), X(OSAGetStorageType),
-    X(OSAGetSysTerminology), X(OSARealToGenericID), X(OSARemoveStorageType), X(OSASetCurrentDialect),
+    X(OSAGetScriptingComponent), X(OSAGetScriptingComponentFromStored),
+    X(OSAGetSysTerminology), X(OSARealToGenericID), X(OSASetCurrentDialect),
     X(OSASetHandler), X(OSASetProperty),
 };
 const unsigned rest_osa_export_count = sizeof rest_osa_exports / sizeof rest_osa_exports[0];

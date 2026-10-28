@@ -19,8 +19,8 @@
 #include "tb_internal.h"
 #include "trap.h"
 
-#define MAX_COMPONENTS 64
-#define MAX_INSTANCES 128
+#define MAX_COMPONENTS 256
+#define MAX_INSTANCES 1024
 
 /* The IDs we hand out: tags in the high word, so they never look like 0. */
 #define COMPONENT_TAG 0x00C10000u
@@ -44,6 +44,8 @@ typedef struct {
     int16_t opened;   /* the refnum we opened it as, until CloseComponentResFile */
     unsigned instances;
     uint32_t captured_by; /* component ID, when captured */
+    component_c_fn cfn;   /* a component of ours in C (QuickTime's), called directly */
+    void *cookie;
 } component;
 
 typedef struct {
@@ -95,7 +97,8 @@ static uint32_t register_component(uint32_t type, uint32_t subtype, uint32_t man
 {
     for (unsigned i = 0; i < MAX_COMPONENTS; i++) {
         if (!comps[i].used) {
-            comps[i] = (component){ true, type, subtype, manu, flags, entry, name, info, icon, 0, resfile, "", 0, 0, 0 };
+            comps[i] = (component){ true, type, subtype, manu, flags, entry, name, info, icon, 0, resfile, "", 0, 0, 0,
+                                    NULL, NULL };
             if (resfile < 0 || !rm_host_path(resfile, comps[i].path, sizeof comps[i].path))
                 comps[i].path[0] = 0;
             mod_seed++;
@@ -105,11 +108,18 @@ static uint32_t register_component(uint32_t type, uint32_t subtype, uint32_t man
     return 0;
 }
 
+/* The entry of our C components, should anything call it as 68k code:
+ * (params, storage) on the stack, the result above them. */
+static void c_component_stub(cpu68k *c, uint16_t tw);
+static gaddr c_entry; /* its native, registered at each boot */
+
 /* Call a component routine: ComponentResult (params, storage). */
 static int32_t call_entry(instance *in, gaddr params)
 {
     cpu68k *c = g_cpu;
     component *k = &comps[in->comp];
+    if (k->cfn)
+        return k->cfn(INSTANCE_TAG | (uint32_t)(in - insts), params, k->cookie);
     uint32_t saved_a5 = c->a[5];
     if (in->a5)
         c->a[5] = in->a5;
@@ -137,6 +147,20 @@ static int32_t send_request(instance *in, uint32_t ci, int16_t what, int has_arg
     int32_t r = call_entry(in, p);
     tb_DisposePtr(p);
     return r;
+}
+
+static void c_component_stub(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(c);
+    cpu_pop32(c); /* storage */
+    gaddr params = cpu_pop32(c);
+    uint32_t size = rd8(params + 1);
+    instance *in = inst_of(rd32(params + 4 + size));
+    int32_t r = in && comps[in->comp].cfn ? comps[in->comp].cfn(rd32(params + 4 + size), params, comps[in->comp].cookie)
+                                          : badComponentInstance;
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
 }
 
 static uint32_t open_component(uint32_t cid, int16_t *errp)
@@ -655,6 +679,85 @@ void components_set_storage(uint32_t ci, gaddr storage)
 }
 
 void components_close(uint32_t ci) { close_component(ci); }
+
+/* A component of ours written in C: its routine gets the instance and the
+ * ComponentParameters, with no 68k code between.  Its name and info are
+ * Pascal strings in handles, for GetComponentInfo. */
+static gaddr pstring_handle(const char *s)
+{
+    if (!s)
+        return 0;
+    size_t n = strlen(s) > 255 ? 255 : strlen(s);
+    gaddr h = tb_NewHandle((int32_t)n + 1, true, false);
+    if (h && rd32(h)) {
+        wr8(rd32(h), (uint8_t)n);
+        for (size_t i = 0; i < n; i++)
+            wr8(rd32(h) + 1 + (uint32_t)i, (uint8_t)s[i]);
+    }
+    return h;
+}
+
+uint32_t components_register_c(uint32_t type, uint32_t subtype, uint32_t manufacturer, uint32_t flags,
+                               const char *name, const char *info, component_c_fn fn, void *cookie)
+{
+    if (!c_entry)
+        c_entry = native_register(c_component_stub, "QuickTimeComponent", 0);
+    uint32_t id = register_component(type, subtype, manufacturer, flags, c_entry, pstring_handle(name),
+                                     pstring_handle(info), 0, -1);
+    component *k = comp_of(id);
+    if (k) {
+        k->cfn = fn;
+        k->cookie = cookie;
+    }
+    return id;
+}
+
+/* Any instance's routine with these parameters (its own or ours). */
+int32_t components_call(uint32_t ci, gaddr params)
+{
+    instance *in = inst_of(ci);
+    if (!in)
+        return badComponentInstance;
+    int32_t r = call_entry(in, params);
+    in->error = (int16_t)(r & 0xFFFF) == r ? (int16_t)r : in->error;
+    return r;
+}
+
+/* The component an instance is of, or 0. */
+uint32_t components_component_of(uint32_t ci)
+{
+    instance *in = inst_of(ci);
+    return in ? COMPONENT_TAG | in->comp : 0;
+}
+
+/* The component's description, for natives. */
+bool components_describe(uint32_t cid, uint32_t *type, uint32_t *subtype, uint32_t *manufacturer)
+{
+    component *k = comp_of(cid);
+    if (!k)
+        return false;
+    *type = k->type;
+    *subtype = k->subtype;
+    *manufacturer = k->manufacturer;
+    return true;
+}
+
+/* FindNextComponent for natives: description fields of 0 match anything. */
+uint32_t components_find_next(uint32_t after, uint32_t type, uint32_t subtype, uint32_t manufacturer)
+{
+    unsigned start = 0;
+    if (after) {
+        component *k = comp_of(after);
+        start = k ? (unsigned)(k - comps) + 1 : MAX_COMPONENTS;
+    }
+    for (unsigned i = start; i < MAX_COMPONENTS; i++)
+        if (comps[i].used && !comps[i].captured_by && (!type || comps[i].type == type) &&
+            (!subtype || comps[i].subtype == subtype) && (!manufacturer || comps[i].manufacturer == manufacturer))
+            return COMPONENT_TAG | i;
+    return 0;
+}
+
+uint32_t components_open_component(uint32_t cid, int16_t *err) { return open_component(cid, err); }
 
 /* ---- Internet Config ('PREF' 'ICAp') ----
  * Programs that require Internet Config open it themselves (Internet
@@ -1337,9 +1440,11 @@ void components_reset(void)
     ic_ndefault = 0;
     memset(comps, 0, sizeof comps);
     memset(insts, 0, sizeof insts);
+    c_entry = 0;
     register_component(fourcc("PREF"), fourcc("ICAp"), fourcc("JPQE"), 0,
                        native_register(ic_component, "InternetConfig", 0), 0, 0, 0, -1);
     qt_tune_register(); /* QuickTime's tune player and note allocator */
     qt_gimport_register(); /* and its graphics importer */
     qt_clock_register();   /* and microsecond clock */
+    qt_components_reset(); /* and the rest of QuickTime's components (qt_comp.c) */
 }

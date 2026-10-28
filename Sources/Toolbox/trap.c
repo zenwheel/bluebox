@@ -137,7 +137,9 @@ typedef struct {
     unsigned count;
 } disp_entry;
 
-static disp_entry disps[64];
+/* Room for every dispatcher (66 now; a table that fills silently drops the
+ * rest, whose traps then answer "unimplemented"). */
+static disp_entry disps[256];
 static unsigned ndisps;
 
 static const disp_entry *find_disp(uint16_t tw)
@@ -180,7 +182,7 @@ static bool answers_zero(const char *dispatcher)
  * run: GetTrapAddress still finds Unimplemented there, as it would in an
  * ordinary run, so a program testing for the trap (Tubular Worlds, for
  * the Code Fragment Manager) takes the same path. */
-static uint32_t census_only[64];
+static uint32_t census_only[256];
 static unsigned ncensus_only;
 
 gaddr trap_visible_address(gaddr a)

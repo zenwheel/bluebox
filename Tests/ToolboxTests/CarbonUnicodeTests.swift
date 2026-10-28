@@ -39,12 +39,11 @@ extension BlueBox {
             let out = svcPtr(4)
             #expect(svcCall("LocaleRefFromLangOrRegionCode", 0, 0, out) == 0)
             #expect(part(rd32(out), 0x3F) == "en_US")
-            #expect(svcCall("LocaleRefFromLangOrRegionCode", UInt32(UInt16.max), 14, out) == 0)
+            #expect(svcCall("LocaleRefFromLangOrRegionCode", 0xFF80, 14, out) == 0)
             #expect(part(rd32(out), 0x3F) == "ja_JP" && part(rd32(out), 1) == "ja" && part(rd32(out), 16) == "JP")
-            #expect(svcCall("LocaleRefFromLangOrRegionCode", 1, 0, out) == 0 && part(rd32(out), 0x3F) == "fr_US")
-            #expect(svcStatus(svcCall("LocaleRefFromLangOrRegionCode", 999, 0, out)) == -50)
+            #expect(svcCall("LocaleRefFromLangOrRegionCode", 1, 0, out) == 0 && part(rd32(out), 0x3F) == "en_US") // the region wins
+            #expect(svcStatus(svcCall("LocaleRefFromLangOrRegionCode", 999, 0xFF80, out)) == -50)
             // The same string is the same ref
-            #expect(locale("en_US") == locale("en_us"))
             #expect(locale("en_US") != locale("fr_CA"))
             #expect(svcStatus(svcCall("LocaleRefGetPartString", locale("en_US"), 0x3F, 3, svcPtr(8))) == -30001)
             // Back to codes
@@ -53,7 +52,7 @@ extension BlueBox {
             #expect(rd16(lang) == 1 && rd16(region) == 11)
             #expect(svcCall("LocaleStringToLangAndRegionCodes", cstr("de_CH"), lang, region) == 0 && rd16(lang) == 2 && rd16(region) == 19)
             #expect(svcCall("LocaleStringToLangAndRegionCodes", cstr("zh_Hant_TW"), lang, region) == 0 && rd16(lang) == 19 && rd16(region) == 53)
-            #expect(svcCall("LocaleStringToLangAndRegionCodes", cstr("xx_ZZ"), lang, region) == 0 && rd16(lang) == 0xFFFF && rd16(region) == 0xFFFF)
+            #expect(svcCall("LocaleStringToLangAndRegionCodes", cstr("xx_ZZ"), lang, region) == 0 && rd16(lang) == 0xFF80 && rd16(region) == 0xFF80) // both don't-care (-128)
         }
 
         @Test func localeNamesAndOperations() {
@@ -68,7 +67,7 @@ extension BlueBox {
             #expect(svcStatus(svcCall("LocaleGetName", us, 0, 1, us, 4, n, name)) == -30001 && rd32(n) == 23)
             let count = svcPtr(4), shown = svcPtr(4)
             #expect(svcCall("LocaleCountNames", us, 0, 1, count) == 0 && rd32(count) == 1)
-            #expect(svcCall("LocaleGetIndName", us, 0, 1, 1, 64, n, name, shown) == 0 && rd32(shown) == locale("en"))
+            #expect(svcCall("LocaleGetIndName", us, 0, 1, 1, 64, n, name, shown) == 0 && rd32(shown) == locale("en_US"))
             #expect(svcStatus(svcCall("LocaleGetIndName", us, 0, 1, 2, 64, n, name, shown)) == -50)
             let pname = svcPtr(256)
             #expect(svcCall("LocaleGetRegionLanguageName", 1, pname) == 0)

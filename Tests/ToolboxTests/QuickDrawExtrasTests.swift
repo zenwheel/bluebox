@@ -640,6 +640,30 @@ extension BlueBox {
             tb_DisposeWindow(w)
         }
 
+        /// A program's own WDEF on a window made invisible is not asked for the
+        /// window's regions until the window is shown (CanOpener's WDEF calls
+        /// routines the program hands it after NewCWindow returns).
+        @Test func ownWDEFCalcsRegionsWhenShown() {
+            // move.w 8(a7),d0; cmpi.w #2,d0; bne.s +6; lea count(pc),a1; addq.w #1,(a1);
+            // movea.l (a7)+,a0; adda.w #12,a7; jmp (a0); count: dc.w 0
+            let words: [UInt16] = [0x302F, 8, 0x0C40, 2, 0x6606, 0x43FA, 12, 0x5251, 0x205F, 0xDEFC, 12, 0x4ED0, 0]
+            var code = [UInt8]()
+            for v in words { code += [UInt8(v >> 8), UInt8(v & 0xFF)] }
+            launchTestApp([TestResource(type: "WDEF", id: 128, data: code)])
+            _ = initToolbox()
+            g_cpu!.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            let h = tb_GetResource(Int32(bitPattern: fourCC("WDEF")), 128)
+            func count() -> UInt16 { rd16(rd32(h) + 24) }
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 300), 0, 0, 0x800, 0xFFFF_FFFF, 0, 0)
+            #expect(w != 0 && count() == 0)              // not yet asked
+            tb_ShowWindow(w)
+            #expect(count() == 1)
+            let v = tb_NewCWindow(0, rect(100, 100, 200, 300), 0, 1, 0x800, 0xFFFF_FFFF, 0, 0)
+            #expect(count() == 2)                        // a visible one at once
+            tb_DisposeWindow(v)
+            tb_DisposeWindow(w)
+        }
+
         /// A WDEF that reads portBits.bounds finds the PixMap's bounds there
         /// while it works out a colour window's regions (Total Distortion's
         /// FinderHider WDEF); the grafVars handle is back afterwards.

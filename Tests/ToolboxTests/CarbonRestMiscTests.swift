@@ -198,27 +198,26 @@ extension BlueBox {
             Self.optionCalls = []
             let cb = svcUPP68k(Self.dbgCallback, "DbgCallbackTest", 0xFC0)
             let sig = fourCC("test")
-            #expect(svcStatus(svcCall("NewDebugComponent", 0, svcPStr("x"), cb)) == -13884)
-            #expect(svcStatus(svcCall("NewDebugComponent", sig, svcPStr(""), cb)) == -13882)
-            #expect(svcStatus(svcCall("NewDebugComponent", sig, svcPStr("Test"), 0)) == -13881)
+            // Debugging.h's codes (the os9rest implementation's): NULL name, duplicate signature, no callback
+            #expect(svcStatus(svcCall("NewDebugComponent", sig, 0, cb)) == -13885)
             #expect(svcCall("NewDebugComponent", sig, svcPStr("Test"), cb) == 0)
-            #expect(svcStatus(svcCall("NewDebugComponent", sig, svcPStr("Test"), cb)) == -13886)
+            #expect(svcStatus(svcCall("NewDebugComponent", sig, svcPStr("Test"), cb)) == -13881)
             #expect(svcCall("NewDebugOption", sig, 7, svcPStr("Verbose")) == 0)
-            #expect(svcStatus(svcCall("NewDebugOption", sig, 7, svcPStr("Again"))) == -13885)
-            #expect(svcStatus(svcCall("NewDebugOption", fourCC("none"), 1, svcPStr("x"))) == -13880)
-            #expect(Self.optionCalls == [0x0001_0007]) // asked for its value
+            #expect(svcStatus(svcCall("NewDebugOption", sig, 7, svcPStr("Again"))) == -13882)
+            #expect(svcStatus(svcCall("NewDebugOption", fourCC("none"), 1, svcPStr("x"))) == -13883)
             let name = svcPtr(256), setting = svcPtr(2), selector = svcPtr(4), signature = svcPtr(4)
             #expect(svcCall("GetDebugComponentInfo", 1, signature, name) == 0 && rd32(signature) == sig)
-            #expect(svcStatus(svcCall("GetDebugComponentInfo", 2, signature, name)) == -13880)
+            #expect(svcStatus(svcCall("GetDebugComponentInfo", 2, signature, name)) == -13887)
+            // the component's callback is asked whenever an option is read
             #expect(svcCall("GetDebugOptionInfo", 1, sig, selector, name, setting) == 0)
+            #expect(Self.optionCalls == [0x0001_0007])
             #expect(rd32(selector) == 7 && rd8(setting) == 1 && rd8(name) == 7)
             #expect(svcCall("SetDebugOptionValue", sig, 7, 0) == 0)
             let expected: UInt32 = 0x0002_0007
-            #expect(Self.optionCalls.last == expected)
-            #expect(svcCall("GetDebugOptionInfo", 1, sig, selector, name, setting) == 0 && rd8(setting) == 0)
-            #expect(svcStatus(svcCall("SetDebugOptionValue", sig, 8, 1)) == -13883)
+            #expect(Self.optionCalls.last == expected) // and told when one is set
+            #expect(svcStatus(svcCall("SetDebugOptionValue", sig, 8, 1)) == -13884)
             #expect(svcCall("DisposeDebugComponent", sig) == 0)
-            #expect(svcStatus(svcCall("DisposeDebugComponent", sig)) == -13880)
+            #expect(svcStatus(svcCall("DisposeDebugComponent", sig)) == -13883)
             #expect(svcCall("TaskLevel") == 0)
 
             Self.handled = []

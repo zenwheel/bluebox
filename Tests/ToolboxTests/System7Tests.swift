@@ -63,6 +63,34 @@ extension BlueBox {
             #expect(pstring(at: name) == "note.txt")
         }
 
+        /// An alias made on another disk, relative to the file it came
+        /// from (Bugdom's skeletons naming their 3DMF files): found beside
+        /// that file when its absolute path is gone.
+        @Test func relativeAliasFoundFromItsFile() {
+            let dir = launchTestApp()
+            _ = hostFile("model.3dmf", "3DMF", in: dir)
+            let skel = hostFile("model.skeleton", "x", in: dir)
+            var rec = [UInt8](repeating: 0, count: 150)
+            rec[7] = 2                                  // version 2
+            let name = Array("model.3dmf".utf8)
+            rec[50] = UInt8(name.count)
+            rec.replaceSubrange(51..<51 + name.count, with: name)
+            rec[131] = 1; rec[133] = 1                  // nlvlFrom 1, nlvlTo 1
+            let abs = Array("Projects:Game:Data:model.3dmf".utf8)
+            rec += [0, 2, 0, UInt8(abs.count)] + abs
+            if abs.count & 1 == 1 { rec.append(0) }
+            rec += [0xFF, 0xFF, 0, 0]
+            rec[4] = UInt8(rec.count >> 8); rec[5] = UInt8(rec.count & 0xFF)
+            let h = tb_NewHandle(Int32(rec.count), false, false)
+            for (i, b) in rec.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+            let from = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            fm_spec_for_path(skel.path, from)
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            #expect(tb_ResolveAlias(0, h, spec, 0) != 0)       // no file to start from
+            #expect(tb_ResolveAlias(from, h, spec, 0) == 0)
+            #expect(pstring(at: spec + UInt32(FSSpec_name_off)) == "model.3dmf")
+        }
+
         @Test func missingTargetIsFileNotFound() {
             let dir = launchTestApp()
             let file = hostFile("gone.txt", "x", in: dir)

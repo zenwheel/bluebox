@@ -286,8 +286,9 @@ gaddr tb_GetMenu(int16_t rid)
         return 0;
     tb_HNoPurge(h);
     gaddr p = rd32(h);
-    /* The resource holds the MDEF's ID where the handle will go. */
-    int16_t mdef = (int16_t)(MenuInfo_menuProc(p) & 0xFFFF);
+    /* The resource holds the MDEF's ID (a word, then a reserved one) where
+     * the handle will go. */
+    int16_t mdef = (int16_t)(MenuInfo_menuProc(p) >> 16);
     /* (a definition CarbonLib's RegisterMenuDefinition registered first) */
     gaddr mh = carbonmenu_registered_def(mdef);
     if (!mh)
@@ -830,6 +831,30 @@ static void layout_titles(void)
         p = rd32(mlist());
     }
     wr16(p + 2, (uint16_t)x);
+}
+
+static qrect title_rect(int i);
+
+/* The rectangle of a menu's title in the menu bar (global coordinates), for
+ * the menus in the bar. */
+bool menu_title_rect_of(int16_t menuID, int16_t out[4])
+{
+    layout_titles();
+    for (int i = 0; i < nmenus(); i++) {
+        gaddr mh = menu_at(i);
+        if (mh && (int16_t)rd16(rd32(mh)) == menuID) {
+            qrect r = title_rect(i);
+            out[0] = r.top, out[1] = r.left, out[2] = r.bottom, out[3] = r.right;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The menu bar's rectangle: the screen's width and the bar's height. */
+void menu_bar_rect(int16_t out[4])
+{
+    out[0] = 0, out[1] = 0, out[2] = (int16_t)mbar_height(), out[3] = (int16_t)g_screen_width;
 }
 
 static qrect title_rect(int i)
