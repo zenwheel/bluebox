@@ -272,7 +272,7 @@ static int16_t run_alert(int16_t id, int kind)
             result = (int16_t)r;
     } else {
         LOGF(LOG_UNIMPL, "alert %d: %s\n", id, a.message);
-        machine_idle(); /* headless: the user's answer is the wait for input */
+        machine_idle_answered(); /* headless: the user's answer is the wait for input */
     }
     return result;
 }
@@ -333,7 +333,7 @@ int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gadd
             result = (int16_t)r;
     } else {
         LOGF(LOG_UNIMPL, "alert standard: %s\n", a.message);
-        machine_idle();
+        machine_idle_answered();
     }
     if (item_hit)
         wr16(item_hit, (uint16_t)result);

@@ -592,6 +592,20 @@ bool machine_waiting_for_input(void) { return g_cpu && g_cpu->icount - last_idle
 
 void machine_idle(void) { machine_idle_for(-1); }
 
+/* The wait for the user's answer to an alert that headless answers itself
+ * (its default button): time passes as for any wait, but the menu walk
+ * takes no step, as the alert is in front of everything and the window
+ * behind (a dialog the program is between ModalDialog calls in: Moose
+ * Frazer's) is not the program's to take input from now. */
+static bool answering;
+
+void machine_idle_answered(void)
+{
+    answering = true;
+    machine_idle_for(-1);
+    answering = false;
+}
+
 /* The same for WaitNextEvent's sleep, in ticks (negative: as long as the
  * script lets it): the clock moves on no further than the program asked
  * to sleep, so a program doing its work between null events (the Finder
@@ -604,7 +618,8 @@ void machine_idle_for(int32_t sleep)
     last_idle = c->icount;
     c->icount += 1000;
     uint32_t presses = ev_press_count();
-    walker_idle(c->icount);
+    if (!answering)
+        walker_idle(c->icount);
     if (c->halted)
         return;
     /* A click the walk just gave is the program's to see: the clock moving

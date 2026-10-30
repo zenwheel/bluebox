@@ -65,6 +65,41 @@ extension BlueBox {
             }
         }
 
+        /// The wait for a headless alert's answer (its default button) is
+        /// no walk step: the window behind it (a dialog the program is
+        /// between ModalDialog calls in, Moose Frazer's) is not the
+        /// program's to take input from then.
+        @Test func anAlertsAnswerTakesNoWalkStep() throws {
+            let dir = try launch(cat(be16(0xA9F4))) // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            _ = dialog([50, 50, 150, 250])
+            tb_FlushEvents(-1, 0)
+            machine_set_instruction_limit(0)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            let ev = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            machine_idle_answered()
+            #expect(tb_EventAvail(8, ev) == 0) // no key for the dialog behind
+            machine_idle()
+            #expect(tb_EventAvail(8, ev) != 0) // the walk's Return, its first step
+        }
+
+        /// A rect in guest memory.
+        func rect(_ v: [Int]) -> UInt32 {
+            let r = tb_NewPtr(8, false, true)
+            for (i, x) in v.enumerated() { wr16(r + UInt32(i * 2), UInt16(x)) }
+            return r
+        }
+
+        /// A dialog in front with no items.
+        func dialog(_ r: [Int]) -> UInt32 {
+            let items = tb_NewHandle(2, false, true)
+            wr16(rd32(items), 0xFFFF) // no items
+            return tb_NewDialog(0, rect(r), tb_NewPtr(2, false, true), 1, 0, 0xFFFF_FFFF, 0, 0, items)
+        }
+
         /// A program that is one window of buttons, with no menu bar
         /// (Disinfectant 1.6): the walk presses its button, which here
         /// ends the program.
