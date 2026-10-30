@@ -125,6 +125,25 @@ static inline void b_set_sizec(gaddr b, uint8_t sizec)
 
 static inline gaddr z_first(gaddr z) { return z + Zone_heapData_off; }
 
+/* The zone header's zcbFree, the free bytes in the zone, kept as blocks
+ * are taken and given back: programs read it themselves (Director 6
+ * projectors give up a heap of their own made with InitZone when its
+ * zcbFree is back to what it was when made, and went on using the blocks
+ * in it). */
+static void zone_free_add(gaddr z, int64_t delta)
+{
+    if (z && delta)
+        Zone_set_zcbFree(z, (int32_t)(Zone_zcbFree(z) + delta));
+}
+
+/* Block b of zone z (nonrelocatable or relocatable) becomes free. */
+static void b_free(gaddr z, gaddr b)
+{
+    uint32_t ps = b_psize(b);
+    b_set(b, USE_FREE, 0, 0, ps, 0);
+    zone_free_add(z, ps);
+}
+
 /* Programs from the 64K ROM's days grow the application zone themselves
  * (MaxApplZone's glue in Sword of Ages): they move bkLim and HeapEnd up
  * to ApplLimit, turn the old trailer into a free block reaching the new
@@ -399,8 +418,10 @@ static bool grow_zone(gaddr z, uint32_t need)
             uint64_t top = (uint64_t)io_hi + (newlim - lim);
             newlim = top + HDR <= limit ? (gaddr)top : (limit - HDR) & ~3u;
             gaddr hole = io_lo >= lim + MIN_BLOCK ? io_lo : lim;
-            if (hole > lim)
+            if (hole > lim) {
                 b_set(lim, USE_FREE, 0, 0, hole - lim, 0);
+                zone_free_add(z, hole - lim);
+            }
             b_set(hole, USE_NREL, 0, 0, io_hi - hole, z);
             lim = io_hi;
         } else if (io_lo >= lim + MIN_BLOCK + HDR) {
@@ -411,6 +432,7 @@ static bool grow_zone(gaddr z, uint32_t need)
     }
     /* The old trailer becomes a free block covering the new space. */
     b_set(lim, USE_FREE, 0, 0, newlim - lim, 0);
+    zone_free_add(z, newlim - lim);
     write_trailer(newlim);
     Zone_set_bkLim(z, newlim);
     wr32(LM_HeapEnd, newlim);
@@ -508,7 +530,7 @@ static void purge(gaddr z)
         if (b_use(b) == USE_REL && (blk_state(z, b) & (ST_PURGE | ST_LOCK)) == ST_PURGE) {
             gaddr h = z + b_loc(b);
             wr32(h, 0);
-            b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
+            b_free(z, b);
             LOGF(LOG_MEM, "mm: purged handle %08X\n", h);
         }
     }
@@ -565,7 +587,7 @@ static gaddr make_room(gaddr z, uint32_t psize)
 }
 
 /* Claim the front of free block b for a block of psize bytes. */
-static void carve(gaddr b, uint32_t psize, unsigned use, uint8_t state, uint32_t logical, uint32_t loc)
+static void carve(gaddr z, gaddr b, uint32_t psize, unsigned use, uint8_t state, uint32_t logical, uint32_t loc)
 {
     uint32_t have = b_psize(b);
     if (have - psize >= MIN_BLOCK) {
@@ -581,6 +603,7 @@ static void carve(gaddr b, uint32_t psize, unsigned use, uint8_t state, uint32_t
         sizec = psize - HDR - logical;
     }
     b_set(b, use, state, (uint8_t)sizec, psize, loc);
+    zone_free_add(z, -(int64_t)psize);
 }
 
 static gaddr alloc_master(gaddr z)
@@ -615,7 +638,7 @@ gaddr mm_new_ptr_in(gaddr z, uint32_t size, bool clear)
         set_mem_err(memFullErr);
         return 0;
     }
-    carve(b, ps, USE_NREL, 0, size, z);
+    carve(z, b, ps, USE_NREL, 0, size, z);
     if (clear)
         gmemset(b_data(b), 0, size);
     set_mem_err(noErr);
@@ -629,7 +652,7 @@ static gaddr alloc_rel(gaddr z, gaddr mp, uint32_t size, bool clear)
     gaddr b = ps ? make_room(z, ps) : 0;
     if (!b)
         return 0;
-    carve(b, ps, USE_REL, 0, size, mp - z);
+    carve(z, b, ps, USE_REL, 0, size, mp - z);
     if (clear)
         gmemset(b_data(b), 0, size);
     mp_point(mp, b_data(b));
@@ -680,7 +703,7 @@ void tb_DisposePtr(gaddr p)
         return;
     }
     forget_subzones(b, b + b_psize(b));
-    b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
+    b_free(b_loc(b), b);
     set_mem_err(noErr);
 }
 
@@ -699,7 +722,7 @@ int32_t tb_GetPtrSize(gaddr p)
 /* Resize block b in place if the following free space allows. */
 static bool resize_in_place(gaddr z, gaddr b, uint32_t newsize)
 {
-    uint32_t ps = b_psize(b);
+    uint32_t ps = b_psize(b), was = ps;
     uint32_t need = phys_for(newsize);
     if (!need)
         return false;
@@ -722,6 +745,7 @@ static bool resize_in_place(gaddr z, gaddr b, uint32_t newsize)
         ps = need;
         b_set_psize(b, ps);
     }
+    zone_free_add(z, (int64_t)was - ps);
     uint32_t sizec = ps - HDR - newsize;
     if (sizec > MAX_SIZEC)
         return false;
@@ -770,10 +794,10 @@ static bool clear_after(gaddr z, gaddr b, uint32_t need)
                 f = find_free_outside(z, ps, b, end);
             if (!f)
                 return false; /* what moved stays moved: the heap is whole */
-            carve(f, ps, USE_REL, blk_state(z, n), b_lsize(n), b_loc(n));
+            carve(z, f, ps, USE_REL, blk_state(z, n), b_lsize(n), b_loc(n));
             gmemcpy(b_data(f), b_data(n), b_lsize(n));
             mp_point(z + b_loc(n), b_data(f)); /* the master pointer follows */
-            b_set(n, USE_FREE, 0, 0, ps, 0);
+            b_free(z, n);
         }
         n += ps;
     }
@@ -880,7 +904,7 @@ void tb_DisposeHandle(gaddr h)
             return;
         }
         z = zone_of(b);
-        b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
+        b_free(z, b);
     }
     if (!z)
         z = zone_of(h);
@@ -935,9 +959,9 @@ void tb_SetHandleSize(gaddr h, int32_t newsize)
         set_mem_err(memFullErr);
         return;
     }
-    carve(nb, ps, USE_REL, state & (ST_LOCK | ST_PURGE | ST_RSRC), (uint32_t)newsize, h - z);
+    carve(z, nb, ps, USE_REL, state & (ST_LOCK | ST_PURGE | ST_RSRC), (uint32_t)newsize, h - z);
     gmemcpy(b_data(nb), b_data(b), old < (uint32_t)newsize ? old : (uint32_t)newsize);
-    b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
+    b_free(z, b);
     mp_point(h, b_data(nb));
     if (g_mem_24bit)
         wr8(h, state); /* the flags as they were, unlocked again */
@@ -990,7 +1014,7 @@ void tb_ReallocateHandle(gaddr h, int32_t size)
             return;
         }
         state = h_state(h, b) & ST_RSRC;
-        b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
+        b_free(z, b);
         wr32(h, 0);
     }
     gaddr b = alloc_rel(z, h, (uint32_t)size, false);
@@ -1014,7 +1038,7 @@ void tb_EmptyHandle(gaddr h)
         set_mem_err(memPurErr);
         return;
     }
-    b_set(b, USE_FREE, 0, 0, b_psize(b), 0);
+    b_free(zone_of(b), b);
     wr32(mem_strip(h), 0);
     set_mem_err(noErr);
 }

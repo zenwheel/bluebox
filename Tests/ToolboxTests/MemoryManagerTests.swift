@@ -307,6 +307,82 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// The free bytes of a zone, block by block (the 32-bit headers).
+        func freeBytes(_ z: UInt32) -> UInt32 {
+            let lim = rd32(z + UInt32(Zone_bkLim_off))
+            var b = z + UInt32(Zone_heapData_off), sum: UInt32 = 0
+            while b < lim {
+                let size = rd32(b + 4)
+                if size < 12 { break }
+                if rd8(b) >> 6 == 0 { sum += size }
+                b += size
+            }
+            return sum
+        }
+
+        func zcbFree(_ z: UInt32) -> UInt32 { rd32(z + UInt32(Zone_zcbFree_off)) }
+
+        /// A zone's zcbFree follows its blocks: Director 6 projectors make
+        /// a heap of their own with InitZone and give it up when zcbFree is
+        /// back to what it was made with, so a count that never changed
+        /// threw away a heap still in use.
+        @Test func zoneFreeBytesFollowItsBlocks() {
+            let size: UInt32 = 64 * 1024
+            let sub = tb_NewPtr(Int32(size), false, true)
+            let args = tb_NewPtr(14, false, true)
+            wr32(args, sub)
+            wr32(args + 4, sub + size)
+            wr16(args + 8, 16)
+            var c = cpu68k()
+            c.a.0 = args
+            raw_InitZone(&c, 0xA019)
+            defer {
+                tb_SetZone(appZone)
+                tb_DisposePtr(sub)
+                tb_DisposePtr(args)
+            }
+            let empty = zcbFree(sub)
+            #expect(empty == freeBytes(sub))
+            let ptrs = [100, 2000, 37].map { tb_NewPtr($0, false, false) }
+            #expect(ptrs.allSatisfy { $0 != 0 })
+            #expect(zcbFree(sub) < empty - 2137)
+            #expect(zcbFree(sub) == freeBytes(sub))
+            tb_SetPtrSize(ptrs[1], 500)
+            #expect(zcbFree(sub) == freeBytes(sub))
+            tb_SetPtrSize(ptrs[1], 3000)
+            #expect(zcbFree(sub) == freeBytes(sub))
+            ptrs.forEach { tb_DisposePtr($0) }
+            #expect(zcbFree(sub) == empty)
+
+            // Handles: the master pointers stay; the rest comes back.
+            let h = tb_NewHandle(300, false, false)
+            let withMasters = zcbFree(sub) + 312
+            let blocker = tb_NewPtr(16, false, false)
+            tb_SetHandleSize(h, 5000) // moves past the pointer
+            #expect(zcbFree(sub) == freeBytes(sub))
+            tb_HPurge(h)
+            tb_PurgeMem(Int32(size), false)
+            #expect(rd32(h) == 0)
+            #expect(zcbFree(sub) == freeBytes(sub))
+            tb_ReallocateHandle(h, 40)
+            #expect(zcbFree(sub) == freeBytes(sub))
+            tb_EmptyHandle(h)
+            #expect(zcbFree(sub) == freeBytes(sub))
+            tb_DisposeHandle(h)
+            tb_DisposePtr(blocker)
+            _ = tb_CompactMem(Int32(size), false)
+            #expect(zcbFree(sub) == freeBytes(sub))
+            #expect(zcbFree(sub) == withMasters)
+            #expect(mm_check_zone(sub))
+
+            // The application zone's, growing as well.
+            tb_SetZone(appZone)
+            let big = tb_NewPtr(8 << 20, false, false)
+            #expect(zcbFree(appZone) == freeBytes(appZone))
+            tb_DisposePtr(big)
+            #expect(zcbFree(appZone) == freeBytes(appZone))
+        }
+
         /// The heap check names the call after which a master pointer stopped
         /// pointing at its block (a Boolean written through a stray pointer).
         @Test func heapCheckFindsABrokenMasterPointer() {
