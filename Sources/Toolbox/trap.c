@@ -598,10 +598,14 @@ void machine_idle(void) { machine_idle_for(-1); }
  * behind (a dialog the program is between ModalDialog calls in: Moose
  * Frazer's) is not the program's to take input from now. */
 static bool answering;
+static unsigned answered; /* answers in a row, no other wait between */
 
 void machine_idle_answered(void)
 {
-    answering = true;
+    /* A program that only puts up alert after alert, whatever the answer,
+     * would never be walked to its end: after a hundred in a row the
+     * walk's steps come again. */
+    answering = ++answered < 100;
     machine_idle_for(-1);
     answering = false;
 }
@@ -618,8 +622,10 @@ void machine_idle_for(int32_t sleep)
     last_idle = c->icount;
     c->icount += 1000;
     uint32_t presses = ev_press_count();
-    if (!answering)
+    if (!answering) {
+        answered = 0;
         walker_idle(c->icount);
+    }
     if (c->halted)
         return;
     /* A click the walk just gave is the program's to see: the clock moving

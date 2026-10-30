@@ -86,6 +86,25 @@ extension BlueBox {
             #expect(tb_EventAvail(8, ev) != 0) // the walk's Return, its first step
         }
 
+        /// A program that only puts up alert after alert is still walked:
+        /// after a hundred answers in a row the walk's steps come again
+        /// (MacTools Deluxe's Secure).
+        @Test func alertAfterAlertIsStillWalked() throws {
+            let dir = try launch(cat(be16(0xA9F4))) // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            _ = dialog([50, 50, 150, 250])
+            tb_FlushEvents(-1, 0)
+            machine_set_instruction_limit(0)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            for _ in 0..<50 { machine_idle_answered() }
+            #expect(walker_next_in() == 0) // a step due, not taken
+            for _ in 0..<100 { machine_idle_answered() }
+            #expect(walker_next_in() > 0) // taken
+        }
+
         /// A rect in guest memory.
         func rect(_ v: [Int]) -> UInt32 {
             let r = tb_NewPtr(8, false, true)
