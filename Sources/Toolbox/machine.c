@@ -539,6 +539,7 @@ bool machine_boot(bool census)
     shutdown_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */
+    glm_reset(); /* and OpenGLMemory's blocks */
     qd3d_reset(); /* QuickDraw 3D's and RAVE's objects */
 
     qd_screen_init(screen_w, screen_h);
