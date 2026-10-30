@@ -564,13 +564,6 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String],
     defer { if owned { free(vol) } }
     guard let v = hfs_open(vol, vlen, &err, err.count) else { throw IngestError.diskImage(path, cError(err)) }
     defer { hfs_close(v) }
-    var entries: UnsafeMutablePointer<hfs_entry>?
-    var count = 0
-    guard hfs_list(v, &entries, &count, &err, err.count), let entries else {
-        throw IngestError.diskImage(path, cError(err))
-    }
-    defer { free(entries) }
-
     let volName = macRoman(Array(UnsafeBufferPointer(start: hfs_volume_name(v) + 1,
                                                      count: Int(hfs_volume_name(v)[0]))))
     let root = uniquePath(dir + "/" + hostName(volName.isEmpty ? "Untitled" : volName))
@@ -579,50 +572,24 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String],
     // The folder stands for the volume: runs mount it under its name.
     try? Data((volName.isEmpty ? "Untitled" : volName).utf8).write(to: URL(fileURLWithPath: root + "/.classic-volume"))
 
-    // Folder paths by directory ID; the root folder (ID 2) is the volume itself.
-    var dirs: [UInt32: String] = [2: root]
-    var byID: [UInt32: hfs_entry] = [:]
-    for i in 0..<count where entries[i].is_dir { byID[entries[i].cnid] = entries[i] }
-    func folder(_ id: UInt32, depth: Int = 0) -> String? {
-        if let p = dirs[id] { return p }
-        guard depth < 100, var e = byID[id], let parent = folder(e.parent, depth: depth + 1) else { return nil }
-        let p = parent + "/" + hostName(macRoman(pascal(&e.name)))
-        dirs[id] = p
-        return p
+    // The volume's folders and files copied out (ForkStore's hfs_extract,
+    // which Blue Box also mounts a program's disks with).
+    final class Context {
+        let keep: ((String) -> Bool)?
+        var notes: [String] = []
+        init(keep: ((String) -> Bool)?) { self.keep = keep }
     }
-    for id in byID.keys {
-        if let p = folder(id) { try fm.createDirectory(atPath: p, withIntermediateDirectories: true) }
+    let ctx = Context(keep: keep)
+    let keepFn: hfs_keep_fn = { raw, rel in
+        let ctx = Unmanaged<Context>.fromOpaque(raw!).takeUnretainedValue()
+        return ctx.keep.map { $0(String(cString: rel!)) } ?? true
     }
-    for i in 0..<count where !entries[i].is_dir {
-        var e = entries[i]
-        guard let parent = folder(e.parent) else { continue }
-        let nameBytes = pascal(&e.name)
-        if let keep, !keep(String((parent + "/" + hostName(macRoman(nameBytes))).dropFirst(root.count + 1))) {
-            continue
-        }
-        var mf = mac_file()
-        var data: UnsafeMutablePointer<UInt8>?, rsrc: UnsafeMutablePointer<UInt8>?
-        var dlen = 0, rlen = 0
-        guard hfs_read_fork(v, &e, false, &data, &dlen, &err, err.count),
-              hfs_read_fork(v, &e, true, &rsrc, &rlen, &err, err.count) else {
-            free(data)
-            notes.append("\(macRoman(nameBytes)): skipped (\(cError(err)); image truncated or damaged?)")
-            continue
-        }
-        mf.data = data; mf.data_len = dlen
-        mf.rsrc = rsrc; mf.rsrc_len = rlen
-        withUnsafeMutableBytes(of: &mf.finder_info) { dst in
-            withUnsafeBytes(of: &e.finder_info) { src in dst.copyMemory(from: src) }
-        }
-        mf.has_finder_info = true
-        withUnsafeMutableBytes(of: &mf.name) { dst in
-            for (k, b) in nameBytes.prefix(63).enumerated() { dst[k] = b }
-        }
-        mf.create_date = e.create_date
-        mf.modify_date = e.modify_date
-        defer { mac_file_free(&mf) }
-        try writeAppleDouble(&mf, to: parent + "/" + hostName(macRoman(nameBytes)))
+    let noteFn: hfs_note_fn = { raw, msg in
+        Unmanaged<Context>.fromOpaque(raw!).takeUnretainedValue().notes.append(String(cString: msg!))
     }
+    let ok = hfs_extract(v, root, keepFn, noteFn, Unmanaged.passUnretained(ctx).toOpaque(), &err, err.count)
+    notes += ctx.notes
+    guard ok else { throw IngestError.diskImage(path, cError(err)) }
     return root
 }
 

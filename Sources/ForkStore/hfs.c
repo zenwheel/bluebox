@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "diskimage.h"
 #include "forks.h"
@@ -28,6 +29,8 @@ struct hfs_volume {
     const uint8_t *d;
     size_t len;
     bool plus;             /* HFS+: d and len are the embedded volume */
+    bool mfs;
+    hfs_volinfo info;
     uint32_t block_size;   /* allocation block size */
     uint32_t first_block;  /* first allocation block, in 512-byte sectors */
     uint8_t name[256];
@@ -113,6 +116,7 @@ static uint8_t *read_special(hfs_volume *v, uint32_t size, const uint8_t *rec, s
 }
 
 static hfs_volume *hfsplus_open(const uint8_t *d, size_t len, char *err, size_t errlen);
+static hfs_volume *mfs_open(const uint8_t *d, size_t len, char *err, size_t errlen);
 
 hfs_volume *hfs_open(const uint8_t *d, size_t len, char *err, size_t errlen)
 {
@@ -122,10 +126,8 @@ hfs_volume *hfs_open(const uint8_t *d, size_t len, char *err, size_t errlen)
     }
     const uint8_t *mdb = d + 1024;
     uint16_t sig = be16(mdb);
-    if (sig == 0xD2D7) {
-        snprintf(err, errlen, "MFS volumes (400K disks) are not supported yet");
-        return NULL;
-    }
+    if (sig == 0xD2D7)
+        return mfs_open(d, len, err, errlen);
     if (sig == 0x482B || sig == 0x4858)
         return hfsplus_open(d, len, err, errlen);
     if (sig != 0x4244) {
@@ -159,6 +161,24 @@ hfs_volume *hfs_open(const uint8_t *d, size_t len, char *err, size_t errlen)
         free(v);
         return NULL;
     }
+    hfs_volinfo *in = &v->info;
+    in->signature = 0x4244;
+    in->create_date = be32(mdb + 2);
+    in->modify_date = be32(mdb + 6);
+    in->attributes = be16(mdb + 10);
+    in->root_files = be16(mdb + 12);
+    in->total_blocks = be16(mdb + 18);
+    in->block_size = v->block_size;
+    in->clump_size = be32(mdb + 24);
+    in->first_block = v->first_block;
+    in->next_cnid = be32(mdb + 30);
+    in->free_blocks = be16(mdb + 34);
+    in->backup_date = be32(mdb + 64);
+    in->write_count = be32(mdb + 70);
+    in->root_dirs = be16(mdb + 82);
+    in->file_count = be32(mdb + 84);
+    in->dir_count = be32(mdb + 88);
+    memcpy(in->finder_info, mdb + 92, 32);
     v->extents = read_special(v, be32(mdb + 130), mdb + 134, &v->extents_len);
     v->catalog = read_special(v, be32(mdb + 146), mdb + 150, &v->catalog_len);
     if (!v->catalog || v->catalog_len < 512) {
@@ -179,6 +199,7 @@ void hfs_close(hfs_volume *v)
 }
 
 const uint8_t *hfs_volume_name(const hfs_volume *v) { return v->name; }
+const hfs_volinfo *hfs_volume_info(const hfs_volume *v) { return &v->info; }
 
 /* ---- Catalog listing ---- */
 
@@ -244,12 +265,15 @@ static bool collect(void *vctx, const uint8_t *rec, size_t reclen)
 }
 
 static bool hfsplus_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *err, size_t errlen);
+static bool mfs_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *err, size_t errlen);
 
 bool hfs_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *err, size_t errlen)
 {
     list_ctx ctx = { 0 };
     if (v->plus)
         return hfsplus_list(v, entries, count, err, errlen);
+    if (v->mfs)
+        return mfs_list(v, entries, count, err, errlen);
     bool ok = walk_leaves(v->catalog, v->catalog_len, collect, &ctx);
     if (!ok || ctx.oom) {
         snprintf(err, errlen, ctx.oom ? "out of memory" : "damaged catalog B-tree");
@@ -285,12 +309,16 @@ static bool find_ext(void *vctx, const uint8_t *rec, size_t reclen)
 
 static bool hfsplus_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, size_t *len,
                               char *err, size_t errlen);
+static bool mfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, size_t *len, char *err,
+                          size_t errlen);
 
 bool hfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, size_t *len, char *err,
                    size_t errlen)
 {
     if (v->plus)
         return hfsplus_read_fork(v, e, rsrc, buf, len, err, errlen);
+    if (v->mfs)
+        return mfs_read_fork(v, e, rsrc, buf, len, err, errlen);
     size_t want = rsrc ? e->rsrc_len : e->data_len;
     uint8_t *out = malloc(want ? want : 1);
     if (!out) {
@@ -436,6 +464,21 @@ static hfs_volume *hfsplus_open(const uint8_t *d, size_t len, char *err, size_t 
         free(v);
         return NULL;
     }
+    hfs_volinfo *in = &v->info;
+    in->signature = be16(vh);
+    in->attributes = (uint16_t)be32(vh + 4);
+    in->create_date = be32(vh + 16);
+    in->modify_date = be32(vh + 20);
+    in->backup_date = be32(vh + 24);
+    in->file_count = be32(vh + 32);
+    in->dir_count = be32(vh + 36);
+    in->block_size = v->block_size;
+    in->total_blocks = be32(vh + 44);
+    in->free_blocks = be32(vh + 48);
+    in->clump_size = be32(vh + 60);
+    in->next_cnid = be32(vh + 64);
+    in->write_count = be32(vh + 68);
+    memcpy(in->finder_info, vh + 80, 32);
     char ferr[128];
     v->extents = read_plus_fork(v, vh + 192, 0, 3, &v->extents_len, ferr, sizeof ferr);
     v->catalog = read_plus_fork(v, vh + 272, 0, 4, &v->catalog_len, ferr, sizeof ferr);
@@ -644,5 +687,270 @@ static bool hfsplus_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint
     if (!out)
         return false;
     *buf = out;
+    return true;
+}
+
+/* ---------------------------------------------------------------------- */
+/* MFS */
+
+/* The master directory block's map: a 12-bit link for each allocation
+ * block from 2 on (0 free, 1 a file's last block, else the next block). */
+static uint16_t mfs_link(const hfs_volume *v, uint32_t block)
+{
+    size_t bit = (size_t)(block - 2) * 12;
+    size_t at = 1024 + 64 + bit / 8;
+    if (block < 2 || at + 1 >= v->len)
+        return 1;
+    uint16_t w = be16(v->d + at);
+    return bit % 8 ? w & 0x0FFF : w >> 4;
+}
+
+static hfs_volume *mfs_open(const uint8_t *d, size_t len, char *err, size_t errlen)
+{
+    const uint8_t *mdb = d + 1024;
+    hfs_volume *v = calloc(1, sizeof *v);
+    if (!v) {
+        snprintf(err, errlen, "out of memory");
+        return NULL;
+    }
+    v->d = d;
+    v->len = len;
+    v->mfs = true;
+    v->block_size = be32(mdb + 20);
+    v->first_block = be16(mdb + 28);
+    uint8_t nl = mdb[36] > 27 ? 27 : mdb[36];
+    memcpy(v->name, mdb + 36, (size_t)nl + 1);
+    v->name[0] = nl;
+    if (!v->block_size || v->block_size % 512) {
+        snprintf(err, errlen, "bad allocation block size %u", v->block_size);
+        free(v);
+        return NULL;
+    }
+    hfs_volinfo *in = &v->info;
+    in->signature = 0xD2D7;
+    in->create_date = in->modify_date = be32(mdb + 2);
+    in->backup_date = be32(mdb + 6);
+    in->attributes = be16(mdb + 10);
+    in->root_files = in->file_count = be16(mdb + 12);
+    in->total_blocks = be16(mdb + 18);
+    in->block_size = v->block_size;
+    in->clump_size = be32(mdb + 24);
+    in->first_block = v->first_block;
+    in->next_cnid = be32(mdb + 30);
+    in->free_blocks = be16(mdb + 34);
+    /* The directory: drBlLen blocks from drDirSt. */
+    size_t dir = (size_t)be16(mdb + 14) * 512, dlen = (size_t)be16(mdb + 16) * 512;
+    if (dir >= len || dir + dlen > len) {
+        snprintf(err, errlen, "file directory beyond the volume");
+        free(v);
+        return NULL;
+    }
+    v->catalog = malloc(dlen ? dlen : 1);
+    if (!v->catalog) {
+        free(v);
+        snprintf(err, errlen, "out of memory");
+        return NULL;
+    }
+    memcpy(v->catalog, d + dir, dlen);
+    v->catalog_len = dlen;
+    return v;
+}
+
+/* Directory entries: flags (bit 7 in use), version, FInfo, file number,
+ * the data fork's first block, logical and physical lengths, the resource
+ * fork's, dates and name; an entry never crosses a 512-byte block, and the
+ * rest of a block after the last is zero. */
+static bool mfs_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *err, size_t errlen)
+{
+    size_t n = 0, cap = 64;
+    hfs_entry *list = calloc(cap, sizeof *list);
+    if (!list) {
+        snprintf(err, errlen, "out of memory");
+        return false;
+    }
+    /* The root folder, the volume itself. */
+    list[n].cnid = 2;
+    list[n].parent = 1;
+    list[n].is_dir = true;
+    memcpy(list[n].name, v->name, (size_t)v->name[0] + 1);
+    n++;
+    for (size_t blk = 0; blk < v->catalog_len; blk += 512) {
+        const uint8_t *b = v->catalog + blk;
+        for (size_t at = 0; at + 51 <= 512;) {
+            const uint8_t *e = b + at;
+            if (!(e[0] & 0x80))
+                break;
+            size_t elen = 51 + (size_t)e[50];
+            if (at + elen > 512)
+                break;
+            if (n == cap) {
+                hfs_entry *nl = realloc(list, cap * 2 * sizeof *nl);
+                if (!nl) {
+                    free(list);
+                    snprintf(err, errlen, "out of memory");
+                    return false;
+                }
+                list = nl;
+                cap *= 2;
+            }
+            hfs_entry *h = &list[n++];
+            memset(h, 0, sizeof *h);
+            h->parent = 2;
+            h->cnid = be32(e + 18);
+            memcpy(h->finder_info, e + 2, 16);
+            memset(h->finder_info + 14, 0, 2);   /* fdFldr: MFS's folders are the Finder's own */
+            memcpy(h->data_ext, e + 22, 2);
+            h->data_len = be32(e + 24);
+            memcpy(h->rsrc_ext, e + 32, 2);
+            h->rsrc_len = be32(e + 34);
+            h->create_date = be32(e + 42);
+            h->modify_date = be32(e + 46);
+            uint8_t nl = e[50] > 31 ? 31 : e[50];
+            h->name[0] = nl;
+            memcpy(h->name + 1, e + 51, nl);
+            at += (elen + 1) & ~(size_t)1;
+        }
+    }
+    *entries = list;
+    *count = n;
+    return true;
+}
+
+static bool mfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, size_t *len, char *err,
+                          size_t errlen)
+{
+    size_t want = rsrc ? e->rsrc_len : e->data_len;
+    uint8_t *out = malloc(want ? want : 1);
+    if (!out) {
+        snprintf(err, errlen, "out of memory");
+        return false;
+    }
+    uint32_t block = be16(rsrc ? e->rsrc_ext : e->data_ext);
+    size_t done = 0;
+    unsigned guard = 0;
+    while (done < want) {
+        size_t off = (size_t)v->first_block * 512 + (size_t)(block - 2) * v->block_size;
+        if (block < 2 || off >= v->len || ++guard > 65536) {
+            snprintf(err, errlen, "file %u's blocks run outside the volume", e->cnid);
+            free(out);
+            return false;
+        }
+        size_t n = v->block_size;
+        if (n > want - done)
+            n = want - done;
+        if (off + n > v->len)
+            n = v->len - off;
+        memcpy(out + done, v->d + off, n);
+        done += n;
+        block = mfs_link(v, block);
+    }
+    *buf = out;
+    *len = want;
+    return true;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Copying a volume's files out */
+
+/* A folder and those leading to it. */
+static void mkdir_p(const char *path)
+{
+    char tmp[4096];
+    snprintf(tmp, sizeof tmp, "%s", path);
+    for (char *p = tmp + 1; *p; p++)
+        if (*p == '/') {
+            *p = 0;
+            mkdir(tmp, 0755);
+            *p = '/';
+        }
+    mkdir(tmp, 0755);
+}
+
+/* A Mac name as a host one: '/' (a host path's separator) becomes ':'. */
+static void host_name(const uint8_t *pname, char *out, size_t outsize)
+{
+    uint8_t tmp[32];
+    int n = pname[0] > 31 ? 31 : pname[0];
+    for (int i = 0; i < n; i++)
+        tmp[i] = pname[1 + i] == '/' ? ':' : pname[1 + i];
+    macroman_to_utf8(tmp, (size_t)n, out, outsize);
+    if (!out[0] || !strcmp(out, ".") || !strcmp(out, ".."))
+        snprintf(out, outsize, "Untitled");
+}
+
+/* A folder's host path by its ID (the root, 2, is root); depth-limited
+ * against loops in a damaged catalog. */
+static bool folder_path(const hfs_entry *list, size_t n, uint32_t id, const char *root, char *out, size_t outsize,
+                        int depth)
+{
+    if (id == 2) {
+        snprintf(out, outsize, "%s", root);
+        return true;
+    }
+    if (depth > 100)
+        return false;
+    for (size_t i = 0; i < n; i++)
+        if (list[i].is_dir && list[i].cnid == id) {
+            char parent[4096], name[256];
+            if (!folder_path(list, n, list[i].parent, root, parent, sizeof parent, depth + 1))
+                return false;
+            host_name(list[i].name, name, sizeof name);
+            snprintf(out, outsize, "%s/%s", parent, name);
+            return true;
+        }
+    return false;
+}
+
+bool hfs_extract(hfs_volume *v, const char *root, hfs_keep_fn keep, hfs_note_fn note, void *ctx, char *err,
+                 size_t errlen)
+{
+    hfs_entry *list;
+    size_t n;
+    if (!hfs_list(v, &list, &n, err, errlen))
+        return false;
+    char path[4096], parent[4096], name[256];
+    for (size_t i = 0; i < n; i++) {
+        if (!list[i].is_dir || list[i].cnid == 2)
+            continue;
+        if (folder_path(list, n, list[i].cnid, root, path, sizeof path, 0))
+            mkdir_p(path);
+    }
+    for (size_t i = 0; i < n; i++) {
+        hfs_entry *e = &list[i];
+        if (e->is_dir || !folder_path(list, n, e->parent, root, parent, sizeof parent, 0))
+            continue;
+        host_name(e->name, name, sizeof name);
+        snprintf(path, sizeof path, "%s/%s", parent, name);
+        if (keep && !keep(ctx, path + strlen(root) + 1))
+            continue;
+        mac_file f = { 0 };
+        char ferr[256] = "";
+        size_t dlen = 0, rlen = 0;
+        if (!hfs_read_fork(v, e, false, &f.data, &dlen, ferr, sizeof ferr) ||
+            !hfs_read_fork(v, e, true, &f.rsrc, &rlen, ferr, sizeof ferr)) {
+            free(f.data);
+            if (note) {
+                char msg[512];
+                snprintf(msg, sizeof msg, "%s: skipped (%s; image truncated or damaged?)", name, ferr);
+                note(ctx, msg);
+            }
+            continue;
+        }
+        f.data_len = dlen;
+        f.rsrc_len = rlen;
+        memcpy(f.finder_info, e->finder_info, 32);
+        f.has_finder_info = true;
+        memcpy(f.name, e->name + 1, e->name[0] > 63 ? 63 : e->name[0]);
+        f.create_date = e->create_date;
+        f.modify_date = e->modify_date;
+        bool ok = appledouble_write(path, &f, ferr, sizeof ferr);
+        mac_file_free(&f);
+        if (!ok) {
+            snprintf(err, errlen, "%s", ferr);
+            free(list);
+            return false;
+        }
+    }
+    free(list);
     return true;
 }

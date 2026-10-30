@@ -50,16 +50,71 @@ typedef struct {
     uint8_t data_fork[80], rsrc_fork[80]; /* HFS+: fork data records */
 } hfs_entry;
 
+/* What a volume's master directory block (or HFS+ volume header) says of
+ * it, as the File Manager's volume control block keeps it. */
+typedef struct {
+    uint16_t signature;     /* 'BD' HFS, 0xD2D7 MFS, 'H+' or 'HX' */
+    uint16_t attributes;    /* bit 7 locked by hardware, 8 unmounted cleanly, 15 locked by software */
+    uint32_t create_date, modify_date, backup_date;
+    uint32_t block_size, total_blocks, free_blocks;
+    uint32_t first_block;   /* allocation block 0's (HFS) or 2's (MFS) 512-byte sector */
+    uint32_t clump_size, next_cnid, write_count;
+    uint32_t file_count, dir_count; /* the whole volume's */
+    uint16_t root_files, root_dirs;
+    uint8_t finder_info[32];
+} hfs_volinfo;
+
 /* Open a volume held in memory (the buffer must outlive the volume): HFS,
- * HFS+ or HFSX, the last two bare or inside an HFS wrapper. */
+ * HFS+ or HFSX, the last two bare or inside an HFS wrapper, or MFS. */
 hfs_volume *hfs_open(const uint8_t *vol, size_t len, char *err, size_t errlen);
 void hfs_close(hfs_volume *v);
 /* Volume name as a Pascal string (MacRoman); for HFS+, after hfs_list. */
 const uint8_t *hfs_volume_name(const hfs_volume *v);
+const hfs_volinfo *hfs_volume_info(const hfs_volume *v);
 /* Every catalog entry (files and folders), in catalog order. */
 bool hfs_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *err, size_t errlen);
 /* Read one fork of a file. */
 bool hfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, size_t *len,
                    char *err, size_t errlen);
+
+/* Copy every file out into a host folder (made already) standing for the
+ * root: folders as folders, files as AppleDouble pairs, '/' in a name as
+ * ':'.  keep (if any) is asked with each file's path under root; note is
+ * told of a file that could not be read, which is skipped. */
+typedef bool (*hfs_keep_fn)(void *ctx, const char *relpath);
+typedef void (*hfs_note_fn)(void *ctx, const char *message);
+bool hfs_extract(hfs_volume *v, const char *root, hfs_keep_fn keep, hfs_note_fn note, void *ctx, char *err,
+                 size_t errlen);
+
+/* ---- Writing an HFS volume ---- */
+
+/* One file or folder of a volume to build.  IDs are the caller's (16 and
+ * up, unique); the root folder is 2 and is not listed. */
+typedef struct {
+    uint32_t cnid, parent;
+    bool is_dir;
+    uint8_t name[32];        /* Pascal, MacRoman, at most 31 */
+    uint8_t finder_info[32]; /* FInfo+FXInfo or DInfo+DXInfo */
+    uint32_t create_date, modify_date;
+    const uint8_t *data, *rsrc;
+    uint32_t data_len, rsrc_len;
+} hfs_build_entry;
+
+typedef struct {
+    uint8_t name[28];        /* Pascal, at most 27 */
+    uint32_t size;           /* the disk's bytes; the volume fills it */
+    uint32_t block_size;     /* allocation block size, or 0 for the smallest that fits */
+    uint32_t create_date, modify_date, backup_date, write_count;
+    uint16_t attributes;     /* the locked bits kept; "unmounted cleanly" is set */
+    uint8_t finder_info[32];
+    /* Catalog order of two names (Pascal strings): HFS's, without regard
+     * to case.  NULL compares ASCII letters without case. */
+    int (*compare)(const uint8_t *a, const uint8_t *b);
+} hfs_build_params;
+
+/* An HFS volume holding the entries, as a disk of params->size bytes
+ * (malloc'd).  False when they don't fit (err says so). */
+bool hfs_build(const hfs_build_params *params, const hfs_build_entry *entries, size_t count, uint8_t **out,
+               char *err, size_t errlen);
 
 #endif
