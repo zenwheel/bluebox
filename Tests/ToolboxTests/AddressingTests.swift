@@ -114,6 +114,103 @@ extension BlueBox {
             }
         }
 
+        /// A nil window is no window: in a 24-bit run low memory's bytes
+        /// where its windowDefProc would be reach into the application
+        /// zone, and DrawGrowIcon(nil) ran the zone's header as a WDEF
+        /// (ScanPaint, MacroPaint; DisposeDialog(nil) in QIF Convert).
+        @Test func nilWindowIsNoWindow() {
+            boot24 {
+                launchTestApp()
+                _ = initToolbox()
+                let low = (0..<0x100).map { rd8(UInt32($0)) }
+                let pc = g_cpu!.pointee.pc
+                tb_DrawGrowIcon(0)
+                tb_MoveWindow(0, 20, 40, 1)
+                tb_SizeWindow(0, 100, 100, 1)
+                tb_ShowWindow(0)
+                tb_HideWindow(0)
+                tb_SelectWindow(0)
+                tb_SetWRefCon(0, 0x1234)
+                #expect(tb_GetWRefCon(0) == 0)
+                tb_CloseWindow(0)
+                tb_DisposeWindow(0)
+                tb_DisposeDialog(0)
+                #expect(g_cpu!.pointee.pc == pc)
+                #expect((0..<0x100).map { rd8(UInt32($0)) } == low)
+                #expect(mm_heap_valid())
+            }
+        }
+
+        /// A 24-bit run's zones have the 24-bit Memory Manager's 8-byte
+        /// block headers (use in the top two bits, size correction in the
+        /// low nibble of the first byte, the size in the low 24 bits, then
+        /// the relative handle or the zone), and a walk by them, as
+        /// Brickles' sound driver makes one, goes from the zone's first
+        /// block to its trailer through every block.
+        @Test func heapBlocksHave24BitHeaders() {
+            boot24 {
+                let z = rd32(UInt32(LM_ApplZone))
+                let p = tb_NewPtr(10, false, true)
+                #expect(rd32(p - 8) >> 30 == 1)
+                #expect(rd32(p - 8) & 0x00FF_FFFF == 20 && (rd32(p - 8) >> 24) & 0x0F == 2)
+                #expect(rd32(p - 4) == z && tb_GetPtrSize(p) == 10)
+                let h = tb_NewHandle(37, false, true)
+                let d = rd32(h)
+                #expect(rd32(d - 8) >> 30 == 2 && rd32(d - 8) & 0x00FF_FFFF == 48)
+                #expect(rd32(d - 4) == h - z && tb_GetHandleSize(h) == 37)
+                #expect(tb_RecoverHandle(d, false) == h)
+                tb_HLock(h)
+                #expect(rd32(h) == d | 0x8000_0000 && rd32(d - 8) >> 30 == 2)  // the flags aren't in the header
+                tb_HUnlock(h)
+                let small = tb_NewHandle(0, false, true)
+                #expect(rd32(rd32(small) - 8) & 0x00FF_FFFF == 12)  // the smallest block
+                tb_SetHandleSize(h, 5000)
+                tb_DisposePtr(p)
+                _ = tb_CompactMem(0x7FFF_FFFF, false)
+                #expect(tb_GetHandleSize(h) == 5000 && mm_check_zone(z))
+                // Walked by the headers alone.
+                let lim = rd32(z)
+                var b = z + 52, n = 0, sawHandle = false
+                while b < lim && n < 100_000 {
+                    let size = rd32(b) & 0x00FF_FFFF
+                    #expect(size >= 12)
+                    if size < 12 { break }
+                    if rd32(b) >> 30 == 2 && rd32(b + 4) == h - z {
+                        sawHandle = true
+                        #expect(b + 8 == rd32(h) && size - 8 - ((rd32(b) >> 24) & 0x0F) == 5000)
+                    }
+                    b += size
+                    n += 1
+                }
+                #expect(b == lim && sawHandle)
+                #expect(rd32(lim) & 0x00FF_FFFF == 12)  // the trailer
+                // A zone of the program's own is made the same way.
+                let area = tb_NewPtr(8 * 1024, false, true)
+                mm_init_zone(area, area + 8 * 1024, 4)
+                #expect(rd32(area + 52) >> 30 == 0 && rd32(area + 52) & 0x00FF_FFFF == rd32(area) - (area + 52))
+                #expect(mm_check_zone(area))
+            }
+        }
+
+        /// A window or a routine's address is the same with flags in its
+        /// top byte (a locked handle's master pointer copied): the window
+        /// is a window, and a trap patched with a stub's address so is
+        /// still the stub.
+        @Test func addressesWithFlagsNameTheSameThings() {
+            boot24 {
+                launchTestApp()
+                _ = initToolbox()
+                let r = tb_NewPtr(8, false, true)
+                for (i, v) in [40, 40, 100, 200].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+                let w = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+                #expect(tb_IsValidWindowPtr(w | 0x8000_0000) != 0)
+                let stub = tb_GetTrapAddress(0xA9F4, true, true)  // ExitToShell
+                #expect(native_index_for(stub) >= 0)
+                #expect(native_index_for(stub | 0x4000_0000) == native_index_for(stub))
+                tb_DisposeWindow(w)
+            }
+        }
+
         /// The flags are the master pointer's top byte: HLock sets bit 7
         /// there, and a lock set there directly (BSET #7,(A0)) keeps the
         /// block from moving.

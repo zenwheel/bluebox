@@ -773,8 +773,10 @@ bool qd_pixpat_image(gaddr pp, int *w, int *h, uint16_t (**rgb)[3])
 
 void tb_DisposePixPat(gaddr pp)
 {
-    if (pp)
+    if (pp) {
+        qd_port_pixpat_disposed(pp);
         tb_DisposeHandle(pp);
+    }
 }
 
 /* The pattern itself goes in a colour port, as QuickDraw put it: programs

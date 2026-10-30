@@ -1,9 +1,9 @@
 /*
- * Memory Manager: classic heap zones in the guest arena (32-bit format).
+ * Memory Manager: classic heap zones in the guest arena.
  *
  * A zone is a 52-byte header followed by contiguous blocks up to bkLim,
- * where a 12-byte free "trailer" block marks the end.  Each block has a
- * 12-byte header:
+ * where a 12-byte free "trailer" block marks the end.  In a 32-bit run
+ * each block has the 32-bit Memory Manager's 12-byte header:
  *
  *   +0  flags: block use in bits 7-6 (0 free, 1 nonrelocatable, 2 relocatable)
  *   +1  handle state: lock 0x80, purge 0x40, resource 0x20
@@ -12,6 +12,14 @@
  *   +4  physical size, header included
  *   +8  relocatable: master pointer offset from the zone; nonrelocatable: zone
  *
+ * In a 24-bit run every zone has the 24-bit Memory Manager's 8-byte
+ * header, as a Mac started in 24-bit mode made them all; programs of
+ * those days walk the heap by it (Brickles' sound driver, Wizard's Fire):
+ *
+ *   +0  block use in bits 31-30, size correction in bits 27-24, physical
+ *       size, header included, in bits 23-0
+ *   +4  relocatable: master pointer offset from the zone; nonrelocatable: zone
+ *
  * The application zone can grow on demand up to its limit, so there is no
  * fixed partition: memory is committed by the host only when touched.
  *
@@ -19,7 +27,7 @@
  * live where a 24-bit heap kept them, in the top byte of its master
  * pointer: programs of those days set and test them there themselves
  * (BSET #7,(A0) to lock), and read master pointers with the flags in.
- * The header's byte is kept the same.
+ * The 24-bit header has no byte for them.
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,7 +37,10 @@
 
 enum { USE_FREE = 0, USE_NREL = 1, USE_REL = 2 };
 enum { ST_LOCK = 0x80, ST_PURGE = 0x40, ST_RSRC = 0x20 };
-enum { HDR = 12, MIN_BLOCK = 16 };
+enum { TRAILER = 12 }; /* the zone's last block, in both formats */
+#define HDR (g_mem_24bit ? 8u : 12u)
+#define MIN_BLOCK (g_mem_24bit ? 12u : 16u)
+#define MAX_SIZEC (g_mem_24bit ? 15u : 255u)
 
 /* What the Memory Manager reports at most (free space, Gestalt's RAM):
  * 128 MB, about what the Quadra 800 we answer as could hold (136 MB).
@@ -43,10 +54,10 @@ static gaddr appl_max_limit; /* 0 = application zone does not grow */
 /* Block helpers */
 
 static inline unsigned b_use(gaddr b) { return rd8(b) >> 6; }
-static inline uint8_t b_state(gaddr b) { return rd8(b + 1); }
-static inline uint8_t b_sizec(gaddr b) { return rd8(b + 3); }
-static inline uint32_t b_psize(gaddr b) { return rd32(b + 4); }
-static inline uint32_t b_loc(gaddr b) { return rd32(b + 8); }
+static inline uint8_t b_state(gaddr b) { return g_mem_24bit ? 0 : rd8(b + 1); }
+static inline uint8_t b_sizec(gaddr b) { return g_mem_24bit ? rd8(b) & 0x0F : rd8(b + 3); }
+static inline uint32_t b_psize(gaddr b) { return g_mem_24bit ? rd32(b) & 0x00FFFFFFu : rd32(b + 4); }
+static inline uint32_t b_loc(gaddr b) { return rd32(b + (g_mem_24bit ? 4 : 8)); }
 static inline uint32_t b_lsize(gaddr b) { return b_psize(b) - HDR - b_sizec(b); }
 /* The block after b; a block too small to have a header is damage (a
  * program writing over it), and ends the walk rather than standing still
@@ -75,19 +86,41 @@ static inline uint8_t h_state(gaddr h, gaddr b) { return g_mem_24bit ? rd8(mem_s
 
 static inline void h_set_state(gaddr h, gaddr b, uint8_t state)
 {
-    wr8(b + 1, state & (ST_LOCK | ST_PURGE | ST_RSRC));
     if (g_mem_24bit)
         wr8(mem_strip(h), state);
+    else
+        wr8(b + 1, state & (ST_LOCK | ST_PURGE | ST_RSRC));
 }
 
 static void b_set(gaddr b, unsigned use, uint8_t state, uint8_t sizec, uint32_t psize, uint32_t loc)
 {
+    if (g_mem_24bit) {
+        wr32(b, (uint32_t)use << 30 | (uint32_t)(sizec & 0x0F) << 24 | (psize & 0x00FFFFFFu));
+        wr32(b + 4, loc);
+        return;
+    }
     wr8(b, (uint8_t)(use << 6));
     wr8(b + 1, state);
     wr8(b + 2, 0);
     wr8(b + 3, sizec);
     wr32(b + 4, psize);
     wr32(b + 8, loc);
+}
+
+static inline void b_set_psize(gaddr b, uint32_t psize)
+{
+    if (g_mem_24bit)
+        wr32(b, (rd32(b) & 0xFF000000u) | (psize & 0x00FFFFFFu));
+    else
+        wr32(b + 4, psize);
+}
+
+static inline void b_set_sizec(gaddr b, uint8_t sizec)
+{
+    if (g_mem_24bit)
+        wr8(b, (uint8_t)((rd8(b) & 0xF0) | (sizec & 0x0F)));
+    else
+        wr8(b + 3, sizec);
 }
 
 static inline gaddr z_first(gaddr z) { return z + Zone_heapData_off; }
@@ -104,7 +137,7 @@ static void adopt_hand_growth(gaddr z, gaddr lim)
         uint32_t ps = b_psize(b);
         if (b_use(b) == USE_FREE && (rd32(b) & 0x00FFFFFFu) == lim - b && b + ps != lim) {
             b_set(b, USE_FREE, 0, 0, lim - b, 0);
-            b_set(lim, USE_FREE, 0, 0, HDR, 0);
+            b_set(lim, USE_FREE, 0, 0, TRAILER, 0);
             return;
         }
         if (ps < HDR || (ps & 3) || b + ps > lim)
@@ -115,7 +148,8 @@ static void adopt_hand_growth(gaddr z, gaddr lim)
 static inline gaddr z_lim(gaddr z)
 {
     gaddr lim = Zone_bkLim(z);
-    if (__builtin_expect(rd32(lim) == HDR, 0) && rd32(lim + 4) != HDR && lim < 0x01000000u && lim > z)
+    if (__builtin_expect(rd32(lim) == TRAILER, 0) && !g_mem_24bit && rd32(lim + 4) != TRAILER && lim < 0x01000000u &&
+        lim > z)
         adopt_hand_growth(z, lim);
     return lim;
 }
@@ -127,13 +161,14 @@ static inline gaddr pick_zone(bool sys) { return sys ? sys_zone() : cur_zone(); 
 
 static uint32_t cap(uint32_t v) { return v > g_mem_report_cap ? g_mem_report_cap : v; }
 
-/* Physical size for a logical size: header + data, 4-byte aligned, minimum 16. */
+/* Physical size for a logical size: header + data, 4-byte aligned, at
+ * least MIN_BLOCK; 0 when it can't be had (a 24-bit header holds 24 bits). */
 static uint32_t phys_for(uint32_t logical)
 {
     uint64_t p = ((uint64_t)logical + HDR + 3) & ~(uint64_t)3;
     if (p < MIN_BLOCK)
         p = MIN_BLOCK;
-    return p > 0xFFFFFFF0u ? 0 : (uint32_t)p;
+    return p > (g_mem_24bit ? 0x00FFFFFCu : 0xFFFFFFF0u) ? 0 : (uint32_t)p;
 }
 
 /* The zone's allocPtr is the rover: allocation searches from it (next
@@ -188,7 +223,7 @@ static void coalesce(gaddr z, gaddr b)
         ps += b_psize(n);
         n = b + ps;
     }
-    wr32(b + 4, ps);
+    b_set_psize(b, ps);
     rover_merged(z, b, ps);
 }
 
@@ -205,12 +240,12 @@ static void forget_subzones(gaddr from, gaddr to)
 {
     int k = 0;
     for (int i = 0; i < nsubzones; i++)
-        if (subzones[i].z >= to || subzones[i].lim + HDR <= from)
+        if (subzones[i].z >= to || subzones[i].lim + TRAILER <= from)
             subzones[k++] = subzones[i];
     nsubzones = k;
 }
 
-static bool in_zone(gaddr z, gaddr addr) { return z && addr >= z && addr < z_lim(z) + HDR; }
+static bool in_zone(gaddr z, gaddr addr) { return z && addr >= z && addr < z_lim(z) + TRAILER; }
 
 /* Which zone owns this address?  The innermost one that holds it. */
 static gaddr zone_of(gaddr addr)
@@ -285,7 +320,7 @@ static gaddr handle_block(gaddr h, int16_t *err)
 
 static void write_trailer(gaddr lim)
 {
-    b_set(lim, USE_FREE, 0, 0, HDR, 0);
+    b_set(lim, USE_FREE, 0, 0, TRAILER, 0);
 }
 
 static void link_masters(gaddr z, gaddr first, unsigned n)
@@ -303,7 +338,7 @@ void mm_init_zone(gaddr z, gaddr limit, uint16_t more_masters)
 {
     limit &= ~3u;
     gmemset(z, 0, Zone_SIZEOF);
-    gaddr lim = limit - HDR;
+    gaddr lim = limit - TRAILER;
     forget_subzones(z, limit);
     Zone_set_bkLim(z, lim);
     Zone_set_moreMast(z, more_masters ? more_masters : 32);
@@ -332,13 +367,13 @@ static bool grow_zone(gaddr z, uint32_t need)
      * place, as below 16 MB for programs not 32-bit clean) would leave the
      * zone's last block an odd size. */
     limit &= ~3u;
-    if (lim + HDR >= limit)
+    if (lim + TRAILER >= limit)
         return false;
     /* With less room than asked for, all of it: the free block ending the
      * zone makes up the rest, as MaxMem counted it (Vampire Castle asks
      * for nearly what MaxMem said and makes its own heap at address 0 if
      * it doesn't get it). */
-    uint64_t room = (limit - HDR - lim) & ~(uint64_t)3;
+    uint64_t room = (limit - TRAILER - lim) & ~(uint64_t)3;
     if (room < MIN_BLOCK)
         return false;
     if (want > room)
@@ -509,7 +544,7 @@ static void carve(gaddr b, uint32_t psize, unsigned use, uint8_t state, uint32_t
         psize = have;
     }
     uint32_t sizec = psize - HDR - logical;
-    if (sizec > 255) { /* oversized tail: split it off after all */
+    if (sizec > MAX_SIZEC) { /* oversized tail: split it off after all */
         uint32_t keep = phys_for(logical);
         b_set(b + keep, USE_FREE, 0, 0, psize - keep, 0);
         psize = keep;
@@ -646,7 +681,7 @@ static bool resize_in_place(gaddr z, gaddr b, uint32_t newsize)
         if (ps + b_psize(n) < need)
             return false;
         uint32_t total = ps + b_psize(n);
-        wr32(b + 4, total);
+        b_set_psize(b, total);
         rover_merged(z, b, total);
         ps = total;
     }
@@ -655,12 +690,12 @@ static bool resize_in_place(gaddr z, gaddr b, uint32_t newsize)
         b_set(b + need, USE_FREE, 0, 0, ps - need, 0);
         coalesce(z, b + need);
         ps = need;
-        wr32(b + 4, ps);
+        b_set_psize(b, ps);
     }
     uint32_t sizec = ps - HDR - newsize;
-    if (sizec > 255)
+    if (sizec > MAX_SIZEC)
         return false;
-    wr8(b + 3, (uint8_t)sizec);
+    b_set_sizec(b, (uint8_t)sizec);
     return true;
 }
 
@@ -705,7 +740,7 @@ static bool clear_after(gaddr z, gaddr b, uint32_t need)
                 f = find_free_outside(z, ps, b, end);
             if (!f)
                 return false; /* what moved stays moved: the heap is whole */
-            carve(f, ps, USE_REL, b_state(n), b_lsize(n), b_loc(n));
+            carve(f, ps, USE_REL, blk_state(z, n), b_lsize(n), b_loc(n));
             gmemcpy(b_data(f), b_data(n), b_lsize(n));
             mp_point(z + b_loc(n), b_data(f)); /* the master pointer follows */
             b_set(n, USE_FREE, 0, 0, ps, 0);
@@ -1054,7 +1089,7 @@ static uint32_t growth_room(gaddr z)
     if (limit > appl_max_limit || !limit)
         limit = appl_max_limit;
     limit &= ~3u; /* blocks are whole longs, as grow_zone makes them */
-    return limit > z_lim(z) + HDR ? limit - HDR - z_lim(z) : 0;
+    return limit > z_lim(z) + TRAILER ? limit - TRAILER - z_lim(z) : 0;
 }
 
 /* Largest block obtainable by compaction (and purging, if purge is set),
@@ -1151,7 +1186,7 @@ int32_t tb_StackSpace(void)
 void tb_SetApplLimit(gaddr newlimit)
 {
     gaddr z = appl_zone();
-    if (newlimit < z_lim(z) + HDR) {
+    if (newlimit < z_lim(z) + TRAILER) {
         set_mem_err(memFullErr);
         return;
     }
@@ -1165,8 +1200,8 @@ void tb_MaxApplZone(void)
     gaddr limit = rd32(LM_ApplLimit);
     if (appl_max_limit && limit > appl_max_limit)
         limit = appl_max_limit;
-    if (limit > z_lim(z) + HDR)
-        grow_zone(z, limit - HDR - z_lim(z));
+    if (limit > z_lim(z) + TRAILER)
+        grow_zone(z, limit - TRAILER - z_lim(z));
     set_mem_err(noErr);
 }
 
@@ -1253,7 +1288,9 @@ bool mm_check_zone(gaddr z)
     gaddr b = z_first(z), prev = 0;
     while (b < lim) {
         uint32_t ps = b_psize(b);
-        if (ps < HDR || b + ps > lim || (ps & 3)) {
+        /* A 24-bit heap's blocks may be whole words only, as a 68000's
+         * Memory Manager made them and programs grow heaps by hand. */
+        if (ps < HDR || b + ps > lim || (ps & (g_mem_24bit ? 1u : 3u))) {
             /* The block before says where this one starts: its size may be
              * what was damaged. */
             log_printf("mm: zone %08X damaged at block %08X (size %u; the block before is %08X)\n", z, b, ps, prev);
