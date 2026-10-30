@@ -14,10 +14,11 @@
  * BLUEBOX_HEAPCHECK) says which item it came from.
  *
  * A program with no menu bar is nudged with keys and clicks, then has the
- * buttons of its window pressed (a program that is one window); one that
- * draws on meanwhile (a game) is walked too.  Else, half a minute from its
- * start, the walk ends "found no menu bar", or "no menu bar or window" for
- * one with nothing on the screen (a background program).
+ * buttons of its window pressed (a program that is one window), or with
+ * none, the pictures drawn in it clicked; one that draws on meanwhile (a
+ * game) is walked too.  Else, half a minute from its start, the walk ends
+ * "found no menu bar", or "no menu bar or window" for one with nothing on
+ * the screen (a background program).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,7 @@
 #include <strings.h>
 
 #include "machine.h"
+#include "qd_internal.h"
 #include "tb_internal.h"
 
 /* Time between steps (the program's own work), and from the menu bar's
@@ -72,7 +74,9 @@ static struct {
     uint64_t clicked;
 } pressed_in[NWINDOWS];
 static int npressed_in;
-static unsigned pressed; /* buttons pressed so */
+static unsigned pressed;  /* buttons pressed so */
+static unsigned pictured; /* pictures clicked so */
+static int picture_waits; /* steps since the last, for what it opens */
 static int button_waits;  /* steps waiting for a dimmed one */
 /* The screen of a program with no menu bar at the last step, from halfway
  * through its first nudging on, and whether it changed from one step to
@@ -83,6 +87,17 @@ static uint8_t *screen_then;
 static int screen_w, screen_h;
 static bool screen_moved;
 static gaddr front_then; /* the window in front at the last step */
+/* The pictures drawn into windows (DrawPicture, CopyBits from a picture
+ * drawn off screen), by port and local rectangle: a window with no
+ * buttons whose buttons are pictures (AutoEye's "Manual" and "Automatic")
+ * has them clicked in turn. */
+enum { NSPOTS = 128 };
+static struct {
+    gaddr port;
+    qrect r;
+    bool clicked;
+} spots[NSPOTS];
+static int nspots;
 
 void machine_set_menu_walk(bool on)
 {
@@ -91,9 +106,10 @@ void machine_set_menu_walk(bool on)
     item_n = 1;
     waits = nopen = 0;
     next_at = menus_at = started_at = 0;
-    chosen = dialogs = left = pressed = 0;
+    chosen = dialogs = left = pressed = pictured = 0;
     left_open = 0;
     npressed_in = 0;
+    nspots = picture_waits = 0;
     button_waits = 0;
     free(screen_then);
     screen_then = NULL;
@@ -114,7 +130,7 @@ static bool passed_over(const char *text)
 
 /* Whether the walk has done anything yet (a menu item chosen, a button
  * pressed): a dialog before is the program's own start. */
-static bool begun(void) { return chosen || pressed; }
+static bool begun(void) { return chosen || pressed || pictured; }
 
 /* A button that would turn the program down at its start (a licence's
  * Decline), as Cancel would. */
@@ -275,6 +291,55 @@ static bool press_a_button(bool *dimmed)
         pressed_in[at].clicked |= 1ull << (i - 1);
         pressed++;
         snprintf(last, sizeof last, "button \"%s\"", text);
+        snprintf(what, sizeof what, "%s (no menu bar)", last);
+        say(what);
+        click(x, y);
+        return true;
+    }
+    return false;
+}
+
+void walker_note_drawn(gaddr port, int top, int left, int bottom, int right)
+{
+    if (!walking || !port || bottom - top < 12 || right - left < 12)
+        return;
+    /* Wholly inside the port and smaller than a quarter of it: not its
+     * background, nor a picture scrolled out of sight. */
+    qrect pr = qrect_get(port + GrafPort_portRect_off);
+    if (top < pr.top || left < pr.left || bottom > pr.bottom || right > pr.right ||
+        4L * (bottom - top) * (right - left) > (long)(pr.bottom - pr.top) * (pr.right - pr.left))
+        return;
+    for (int i = 0; i < nspots; i++)
+        if (spots[i].port == port && spots[i].r.top == top && spots[i].r.left == left && spots[i].r.bottom == bottom &&
+            spots[i].r.right == right)
+            return;
+    if (nspots == NSPOTS)
+        memmove(&spots[0], &spots[1], (size_t)--nspots * sizeof spots[0]);
+    spots[nspots].port = port;
+    spots[nspots].r = (qrect){ (int16_t)top, (int16_t)left, (int16_t)bottom, (int16_t)right };
+    spots[nspots++].clicked = false;
+}
+
+/* The front window's next picture not yet clicked, clicked (true). */
+static bool click_a_picture(void)
+{
+    gaddr w = tb_FrontWindow();
+    if (!w || !WindowRecord_visible(w))
+        return false;
+    gaddr d = dialog_in_front();
+    if (d == w && dialog_modal(w))
+        return false;
+    for (int i = 0; i < nspots; i++) {
+        qrect r = spots[i].r;
+        if (spots[i].port != w || spots[i].clicked)
+            continue;
+        spots[i].clicked = true;
+        pictured++;
+        picture_waits = 0;
+        pixdst px = qd_port_pixels(w);
+        int x = (r.left + r.right) / 2 - px.bounds.left, y = (r.top + r.bottom) / 2 - px.bounds.top;
+        char what[96];
+        snprintf(last, sizeof last, "picture at %d,%d", x, y);
         snprintf(what, sizeof what, "%s (no menu bar)", last);
         say(what);
         click(x, y);
@@ -444,14 +509,20 @@ void walker_idle(uint64_t icount)
          * down (Terrain Builder's). */
         if (dimmed && button_waits++ < BUTTON_WAITS)
             return;
+        /* A game with no menus, in a window or the whole screen, given
+         * keys and clicks: walked if it went on drawing, not one stuck on
+         * a still screen.  One still, with no buttons, has the pictures
+         * in its window clicked (buttons of its own drawing). */
+        bool drew_on = (game || tb_FrontWindow()) && screen_moved;
+        if (!drew_on && !pressed && click_a_picture()) {
+            waits = WAITS;
+            return;
+        }
         if (pressed) {
             no_menu_bar("the program is a window, its buttons pressed");
             return;
         }
-        /* A game with no menus, in a window or the whole screen, given
-         * keys and clicks: walked if it went on drawing, not one stuck on
-         * a still screen. */
-        if ((game || tb_FrontWindow()) && screen_moved) {
+        if (drew_on) {
             no_menu_bar(game ? "the program has the whole screen, it drew on as keys and clicks were given"
                              : "the program has no menus, it drew on as keys and clicks were given");
             return;
@@ -474,6 +545,14 @@ void walker_idle(uint64_t icount)
          * waiting for a key: Nanosaur 1.1.7's). */
         if (now - started_at < PATIENCE) {
             waits = 0;
+            return;
+        }
+        /* Its pictures clicked, and what the last one opened given time to
+         * draw (a window of its own, with pictures of its own): walked. */
+        if (pictured) {
+            if (picture_waits++ < WAITS)
+                return;
+            no_menu_bar("the program is a window, the pictures in it clicked");
             return;
         }
         /* Nothing on the screen of its own: a background program (a

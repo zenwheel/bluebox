@@ -1597,6 +1597,10 @@ static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, 
     bool into_port = port && is_port_bits(port, db);
     if (rd32(db) == rd32(LM_ScrnBase) && into_port)
         note_screen_draw(qrect_get(dst_rect));
+    if (into_port) {
+        qrect dr = qrect_get(dst_rect);
+        walker_note_drawn(port, dr.top, dr.left, dr.bottom, dr.right);
+    }
     if (into_port && qd_rec_active(port) && !qd_rec_suppressed())
         record_copy(src_bitmap, src_rect, dst_rect);
     if (into_port && qd_pic_of(port))

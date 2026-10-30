@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 
 #include "machine.h"
 #include "tb_internal.h"
@@ -19,6 +20,11 @@ static machine_alert_fn alert_fn;
 static void *alert_ctx;
 static bool depth_alerts;
 static int wanted_depth;
+/* The last alert answered headless, and how often it came straight back. */
+static bool have_answered;
+static int16_t last_answered_id;
+static char last_answered[sizeof ((machine_alert *)0)->message];
+static unsigned repeats;
 
 void machine_set_depth_alerts(bool on) { depth_alerts = on; }
 int machine_wanted_depth(void) { return wanted_depth; }
@@ -116,6 +122,8 @@ static void standard_beeper(cpu68k *c, uint16_t tw)
 
 void dialog_reset(void)
 {
+    have_answered = false;
+    repeats = 0;
     wr32(LM_DABeeper, native_register(standard_beeper, "StandardBeeper", 0));
 }
 
@@ -228,6 +236,45 @@ bool dialog_host_alert(machine_alert *a, int *result)
     return true;
 }
 
+/* Headless, the user's answer to an alert: its default button, or the
+ * first button when the default item is none (SpaceInvader's nag has a
+ * hidden text first, and puts itself up again for anything but its OK).
+ * A person seeing the same alert come straight back would not keep
+ * giving the same answer: MidiPhone's "No response from the modem" asks
+ * to Try Again for ever.  So the same alert again, with no other wait for
+ * input between, gets the next answer in turn: Cancel, then the other
+ * buttons in order, then the default again. */
+static int16_t headless_answer(int16_t id, const machine_alert *a, int16_t default_item)
+{
+    unsigned in_row = machine_idle_answered(); /* the user's answer is the wait for input */
+    int order[8], n = 0, first = -1, cancel = -1;
+    for (int i = 0; i < a->nbuttons; i++) {
+        if (a->buttons[i].item == default_item)
+            first = i;
+        else if (cancel < 0 && strcasecmp(a->buttons[i].title, "Cancel") == 0)
+            cancel = i;
+    }
+    if (first < 0 && a->nbuttons)
+        first = 0;
+    if (first < 0)
+        return default_item;
+    order[n++] = first;
+    if (cancel >= 0)
+        order[n++] = cancel;
+    for (int i = 0; i < a->nbuttons; i++) {
+        if (i != first && i != cancel)
+            order[n++] = i;
+    }
+    if (in_row > 1 && have_answered && id == last_answered_id && strcmp(a->message, last_answered) == 0)
+        repeats++;
+    else
+        repeats = 0;
+    have_answered = true;
+    last_answered_id = id;
+    memcpy(last_answered, a->message, sizeof last_answered);
+    return a->buttons[order[repeats % (unsigned)n]].item;
+}
+
 static int16_t run_alert(int16_t id, int kind)
 {
     gaddr alrt = tb_GetResource((int32_t)fourcc("ALRT"), id);
@@ -272,15 +319,7 @@ static int16_t run_alert(int16_t id, int kind)
             result = (int16_t)r;
     } else {
         LOGF(LOG_UNIMPL, "alert %d: %s\n", id, a.message);
-        machine_idle_answered(); /* headless: the user's answer is the wait for input */
-        /* The user's answer is a click on a button: when the default item
-         * is none (SpaceInvader's nag has a hidden text first, and puts
-         * itself up again for anything but its OK), the first button. */
-        bool is_button = false;
-        for (int i = 0; i < a.nbuttons; i++)
-            is_button |= a.buttons[i].item == default_item;
-        if (!is_button && a.nbuttons)
-            result = a.buttons[0].item;
+        result = headless_answer(id, &a, default_item);
     }
     return result;
 }
@@ -341,7 +380,7 @@ int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gadd
             result = (int16_t)r;
     } else {
         LOGF(LOG_UNIMPL, "alert standard: %s\n", a.message);
-        machine_idle_answered();
+        result = headless_answer(0, &a, default_item);
     }
     if (item_hit)
         wr16(item_hit, (uint16_t)result);

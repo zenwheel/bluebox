@@ -86,6 +86,30 @@ extension BlueBox {
             #expect(tb_EventAvail(8, ev) != 0) // the walk's Return, its first step
         }
 
+        /// A scripted snapshot is no input: a program waiting for events
+        /// (SmallTalk's one poll before it loads its Prelude) does not
+        /// have the clock moved on to it, so the snapshot shows what the
+        /// program drew by then; a key after it still does.
+        @Test func aSnapshotDoesNotPullTheClock() throws {
+            let dir = try launch(cat(be16(0xA9F4))) // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            machine_set_instruction_limit(0)
+            let png = dir.appendingPathComponent("snap.png").path
+            let now = g_cpu!.pointee.icount
+            while events_script_next_at() != 0 { events_script_pump(events_script_next_at()) } // none left over
+            machine_script_add_snap(now + 5_000_000, png)
+            #expect(events_script_next_at() == 0)
+            machine_idle()
+            #expect(g_cpu!.pointee.icount < now + 5_000_000)
+            #expect(!FileManager.default.fileExists(atPath: png))
+            machine_script_add(now + 9_000_000, 0, 0x61, 0, 0) // "a"
+            #expect(events_script_next_at() == now + 9_000_000)
+            machine_idle()
+            #expect(g_cpu!.pointee.icount >= now + 9_000_000)
+            #expect(FileManager.default.fileExists(atPath: png)) // taken on the way
+            tb_FlushEvents(-1, 0)
+        }
+
         /// A program that only puts up alert after alert is still walked:
         /// after a hundred answers in a row the walk's steps come again
         /// (MacTools Deluxe's Secure).
@@ -189,6 +213,49 @@ extension BlueBox {
             wr32(rd32(UInt32(LM_CurrentA5)) - 8, w)
             machine_set_menu_walk(true)
             defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+
+        /// A program that quits at a click inside the rect at rect(A5) of
+        /// its window, the current port.
+        let untilAPicture = cat(
+            be16(0x4267),                 // loop: CLR.W -(SP)
+            be16(0x3F3C), be16(2),        // MOVE.W #mDownMask,-(SP)
+            be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+            be16(0xA970),                 // _GetNextEvent
+            be16(0x4A1F),                 // TST.B (SP)+
+            be16(0x67F0),                 // BEQ loop
+            be16(0x486D), be16(0xFFEA),   // PEA event.where(A5)
+            be16(0xA871),                 // _GlobalToLocal
+            be16(0x554F),                 // SUBQ #2,SP
+            be16(0x2F2D), be16(0xFFEA),   // MOVE.L event.where(A5),-(SP)
+            be16(0x486D), be16(0xFFD0),   // PEA rect(A5)
+            be16(0xA8AD),                 // _PtInRect
+            be16(0x4A1F),                 // TST.B (SP)+
+            be16(0x67DA),                 // BEQ loop: a click beside it
+            be16(0xA9F4))                 // _ExitToShell
+
+        /// A window with no menu bar whose buttons are pictures it draws
+        /// (copied from off screen, AutoEye's "Manual" and "Automatic"):
+        /// the walk clicks them, not its background.
+        @Test func aWindowOfPicturesHasThemClicked() throws {
+            let dir = try launch(untilAPicture)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            let w = tb_NewWindow(0, rect([50, 50, 250, 450]), 0, 1, 1, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            let bits = tb_NewPtr(14, false, true)
+            wr32(bits, tb_NewPtr(64 * 200, false, true))
+            wr16(bits + 4, 64)
+            gmemcpy(bits + 6, rect([0, 0, 200, 400]), 8)
+            // The background, then the picture button.
+            tb_CopyBits(bits, w + 2, rect([0, 0, 200, 400]), rect([0, 0, 200, 400]), 0, 0)
+            let button = rect([150, 300, 180, 380])
+            tb_CopyBits(bits, w + 2, rect([0, 0, 30, 80]), button, 0, 0)
+            gmemcpy(rd32(UInt32(LM_CurrentA5)) - 48, button, 8)
             #expect(machine_run(400_000_000) == RUN_HALTED)
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
         }

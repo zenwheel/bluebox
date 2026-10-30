@@ -628,14 +628,16 @@ void machine_idle(void) { machine_idle_for(-1); }
 static bool answering;
 static unsigned answered; /* answers in a row, no other wait between */
 
-void machine_idle_answered(void)
+unsigned machine_idle_answered(void)
 {
     /* A program that only puts up alert after alert, whatever the answer,
      * would never be walked to its end: after a hundred in a row the
      * walk's steps come again. */
-    answering = ++answered < 100;
+    unsigned in_row = ++answered;
+    answering = in_row < 100;
     machine_idle_for(-1);
     answering = false;
+    return in_row;
 }
 
 /* The same for WaitNextEvent's sleep, in ticks (negative: as long as the

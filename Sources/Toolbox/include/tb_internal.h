@@ -102,6 +102,7 @@ int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y); /* 
 bool ctl_push_button(gaddr ch, bool custom);
 void walker_idle(uint64_t now);
 uint64_t walker_next_in(void); /* ns to the walk's next step; 0: due, or no walk */
+void walker_note_drawn(gaddr port, int top, int left, int bottom, int right); /* a picture drawn into a port */
 
 /* ---- Resource Manager internals ---- */
 
@@ -303,7 +304,7 @@ bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
 void machine_idle_for(int32_t sleep); /* the same, the clock moving on no more than sleep ticks */
-void machine_idle_answered(void); /* the wait for a headless alert's answer: no walk step */
+unsigned machine_idle_answered(void); /* the wait for a headless alert's answer: no walk step; answers in a row */
 void time_reset(void);
 /* Layers and Open Transport's tasks (vam.c): a new run; the tasks due. */
 void vam_reset(void);

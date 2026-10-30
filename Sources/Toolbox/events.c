@@ -146,8 +146,18 @@ void machine_script_add_snap(uint64_t at, const char *path)
     machine_script_add(at, 5, nsnap_paths++, 0, 0);
 }
 
-/* The next step not yet applied: its instruction count, or 0. */
-uint64_t events_script_next_at(void) { return script_next < nscript ? script[script_next].at : 0; }
+/* The next input not yet applied: its instruction count, or 0.  A
+ * screenshot is no input: the clock of a program waiting for input moves
+ * on to the next key or click, not to a snapshot, which would otherwise
+ * be taken at the program's first wait however much it had yet to draw
+ * (SmallTalk polls for events once before loading its Prelude). */
+uint64_t events_script_next_at(void)
+{
+    for (int i = script_next; i < nscript; i++)
+        if (script[i].kind != 5)
+            return script[i].at;
+    return 0;
+}
 
 void machine_choose_menu(int16_t menu_id, int16_t item);
 
