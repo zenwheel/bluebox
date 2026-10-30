@@ -100,8 +100,8 @@ extension BlueBox {
         }
     }
 
-    /// The SCSI Manager for a bus with only the Mac on it, and an ATA
-    /// Manager with no buses.
+    /// The SCSI Manager for a bus with the Mac and its startup disk (ID 0)
+    /// on it, and an ATA Manager with no buses.
     @Suite struct SCSIManager {
         init() { bootMachine() }
 
@@ -125,7 +125,72 @@ extension BlueBox {
             #expect(ppcErr("SCSIGet", []) == 0 && ppcErr("SCSIReset", []) == 0 && ppcErr("SCSIGet", []) == 0)
         }
 
-        @Test func scsiManager43SeesOneEmptyBus() {
+        /// The startup disk at ID 0 (its driver is -33) answers: INQUIRY,
+        /// READ CAPACITY and MODE SENSE through a TIB, the status and
+        /// message after; a WRITE is refused with DATA PROTECT.
+        @Test func theDiskAtID0Answers() {
+            let cdb = tb_NewPtr(16, false, true), buf = tb_NewPtr(1024, false, true), tib = tb_NewPtr(40, false, true)
+            let stat = tb_NewPtr(2, false, true), msg = tb_NewPtr(2, false, true)
+            func command(_ bytes: [UInt8], read n: UInt32) -> (Int16, Int16) {
+                for (i, b) in bytes.enumerated() { wr8(cdb + UInt32(i), b) }
+                gmemset(buf, 0, 1024)
+                #expect(ppcErr("SCSIGet", []) == 0 && ppcErr("SCSISelect", [0]) == 0)
+                #expect(ppcErr("SCSICmd", [cdb, UInt32(bytes.count)]) == 0)
+                var r: Int16 = 0
+                if n > 0 {
+                    wr16(tib, 1); wr32(tib + 2, buf); wr32(tib + 6, n) // scInc
+                    wr16(tib + 10, 7)                                   // scStop
+                    r = ppcErr("SCSIRead", [tib])
+                }
+                #expect(ppcErr("SCSIComplete", [stat, msg, 60]) == 0 && rd16(msg) == 0)
+                return (r, Int16(bitPattern: rd16(stat)))
+            }
+            var (r, st) = command([0x12, 0, 0, 0, 36, 0], read: 36)             // INQUIRY
+            #expect(r == 0 && st == 0 && rd8(buf) == 0 && rd8(buf + 4) == 31)  // a direct-access device
+            #expect(rd32(tib + 2) == buf + 36)                                 // scInc moved its address on
+            (r, st) = command([0x25, 0, 0, 0, 0, 0, 0, 0, 0, 0], read: 8)      // READ CAPACITY
+            #expect(r == 0 && st == 0 && rd32(buf) == 0x3F_FFFF && rd32(buf + 4) == 512)
+            (r, st) = command([0x1A, 0, 0x03, 0, 255, 0], read: 64)            // MODE SENSE, the format page
+            #expect(r == 5 && st == 0)                                         // scPhaseErr: 36 bytes, not 64
+            #expect(rd8(buf) == 35 && rd8(buf + 3) == 8 && rd32(buf + 8) == 512) // block descriptor: 512-byte blocks
+            #expect(rd8(buf + 12) == 3 && rd16(buf + 12 + 12) == 512)          // the format page's bytes per sector
+            (r, st) = command([0x08, 0, 0, 0, 1, 0], read: 512)                // READ(6) of block 0: zeros
+            #expect(r == 0 && st == 0 && rd32(buf + 508) == 0)
+            (r, st) = command([0x0A, 0, 0, 0, 1, 0], read: 0)                  // WRITE(6)
+            #expect(st == 2)                                                   // CHECK CONDITION
+            (r, st) = command([0x03, 0, 0, 0, 18, 0], read: 18)                // REQUEST SENSE
+            #expect(r == 0 && st == 0 && rd8(buf) == 0x70 && rd8(buf + 2) == 7 && rd8(buf + 12) == 0x27)
+            #expect(ppcErr("SCSIRead", [tib]) == 8)                            // no target connected
+            #expect(tb_SCSIStat() == 0)
+        }
+
+        /// SCSIExecIO on the disk: data to a buffer, and autosense when a
+        /// command fails.
+        @Test func execIOOnTheDisk() {
+            let pb = tb_NewPtr(176, false, true), data = tb_NewPtr(64, false, true), sense = tb_NewPtr(32, false, true)
+            wr16(pb + 6, 176)
+            wr8(pb + 8, 1)                        // SCSIExecIO
+            wr32(pb + 12, 0)                      // bus 0, ID 0, LUN 0
+            wr32(pb + 20, 0x4000_0000)            // scsiDirectionIn
+            wr32(pb + 40, data); wr32(pb + 44, 64)
+            wr32(pb + 48, sense); wr8(pb + 52, 18)
+            wr8(pb + 53, 10)
+            for (i, b) in [0x25, 0, 0, 0, 0, 0, 0, 0, 0, 0].enumerated() { wr8(pb + 68 + UInt32(i), UInt8(b)) }
+            #expect(ppcErr("SCSIAction", [pb]) == 0)
+            #expect(rd8(pb + 60) == 0 && rd32(data + 4) == 512 && rd32(pb + 64) == 56) // 8 of 64 moved
+            wr32(pb + 20, 0x8000_0000)            // scsiDirectionOut: WRITE(10)
+            wr8(pb + 68, 0x2A)
+            #expect(ppcErr("SCSIAction", [pb]) == -7932) // scsiNonZeroStatus
+            #expect(rd8(pb + 60) == 2 && rd16(pb + 36) & 2 == 2 && rd8(sense + 2) == 7)
+            wr8(pb + 8, 0x80)                     // SCSIGetVirtualIDInfo: ID 0 is there
+            wr16(pb + 36, 0)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && rd8(pb + 38) == 1)
+            wr8(pb + 8, 0x86)                     // its driver's cross-reference
+            wr32(pb + 12, 0)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && Int16(bitPattern: rd16(pb + 36)) == -33)
+        }
+
+        @Test func scsiManager43SeesOneBus() {
             var r: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("scsi")), &r) == 0 && r & 1 == 1)
             let pb = tb_NewPtr(176, false, true)
@@ -163,14 +228,18 @@ extension BlueBox {
             #expect(ppcErr("SCSIAction", [pb]) == -7882) // scsiNoSuchXref
             #expect(rd32(pb + 40) == 0xFFFF_FFFF) // and nothing after it: a scan ends
             // A scan from bus $FF (Norton's Volume Recover starts at
-            // $00FF0000): the first entry, then the end.
+            // $00FF0000): the first entry, the startup disk's at ID 0 (its
+            // driver -33), then the one added, then the end.
             wr8(pb + 8, 0x85)
             wr32(pb + 12, 0x0000_0500)
             wr16(pb + 36, UInt16(bitPattern: -38))
             #expect(ppcErr("SCSIAction", [pb]) == 0)
             wr8(pb + 8, 0x86)
             wr32(pb + 12, 0x00FF_0000)
-            #expect(ppcErr("SCSIAction", [pb]) == 0 && rd32(pb + 40) == 0x0000_0500)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && rd32(pb + 40) == 0x0000_0000)
+            wr32(pb + 12, 0x0000_0000)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && Int16(bitPattern: rd16(pb + 36)) == -33)
+            #expect(rd32(pb + 40) == 0x0000_0500)
             wr32(pb + 12, 0x0000_0500)
             #expect(ppcErr("SCSIAction", [pb]) == 0 && Int16(bitPattern: rd16(pb + 36)) == -38)
             #expect(rd8(pb + 41) == 0xFF) // the next is on bus $FF: the end
