@@ -756,7 +756,11 @@ There are three backends behind `host_ops.speech`, chosen by profile or `--speec
 
 **Goal:** the everyday Apple menu items, written from scratch to look and behave like Apple's classic ones (no Apple code or resources), so every run's Apple menu has them without a System disk.
 
-- Calculator, Chooser (printers through the host, AppleTalk zones once M5 is in), Jigsaw Puzzle (the classic map puzzle, and a picture from the clipboard), Key Caps (the current font and keyboard layout, Option and dead keys), Note Pad and Scrapbook (kept in the per-user System Folder, Scrapbook through the Scrap Manager), SimpleSound (alert sounds, recording once Sound Input works), Stickies, Alarm Clock.
+- The Chooser, the classic window with its device icons on the left and the choices on the right, built on our own devices instead of Chooser extensions:
+  - Printers: one entry per printer configured on the host, which the Printing Manager then prints to directly (no host print panel), and "Save as PDF", whose right side picks the host folder the PDFs go to (the M3 quick start folder, chosen here).
+  - AppleTalk (M5): the zone list, LaserWriters and other printers found by NBP, and AppleShare servers, connected through our AFP client and mounted as volumes; the user name and AppleTalk on or off, kept in the profile.
+  - The choices are the run's settings (the shell's Defaults edit the same ones), and programs that read the chosen printer through the Printing Manager or the 'STR ' -8192 driver name see it.
+- Calculator, Jigsaw Puzzle (the classic map puzzle, and a picture from the clipboard), Key Caps (the current font and keyboard layout, Option and dead keys), Note Pad and Scrapbook (kept in the per-user System Folder, Scrapbook through the Scrap Manager), SimpleSound (alert sounds, recording once Sound Input works), Stickies, Alarm Clock.
 - Built as desk accessories or small applications with our own Toolbox calls (68k code from our toolchain, or the native SDK of M11), installed in the System Folder's Apple Menu Items, where the Apple menu lists them and opens them.
 - Their look checked against the oracle: window kinds, fonts, icons and behaviour as in System 7.5.
 
@@ -989,3 +993,18 @@ Work found along the way that belongs to no milestone yet (2026-10-22):
 - Basilisk II / SheepShaver (GPL): oracle only.
 - Inside Macintosh (all volumes), Speech Manager docs, Technical Notes, MPW Universal Interfaces: API definitions and struct layouts.
 - SingleStepTests 680x0: CPU test vectors.
+
+### M23: A Finder of our own
+
+**Goal:** a Finder look-alike, written from scratch (no Apple code or resources), as the everyday desktop for Blue Box, beside M21's Apple Finder for those who have one. Added 2026-10-30.
+
+- **Host code, not a guest program:** it is drawn in the classic look (System 7 or Platinum, or the chosen theme) but runs in Blue Box itself, like `bluebox shell`, so it can reach the host where a classic program never may: no guest call starts anything on the host.
+- **What it shows:**
+  - The desktop with the library's applications and documents as volumes and folders, with their own icons (from their bundles, as the shell and `bluebox install` show them), opened in icon, small icon and list views.
+  - The host's files: the home folder (and chosen folders) as a volume, with classic icons for classic files and the host's icons for the rest.
+  - Get Info, labels, comments, aliases and the Trash, on the catalog's Finder information, as M21's Finder keeps them.
+- **What it opens:** a classic program or document starts its own Blue Box run, as `LaunchApplication` and the shell do; a host application or a host document opens with the host (Launch Services on macOS, xdg-open on Linux), by the user's choice in the look-alike, never by a guest call.
+- **Shared with M21:** the catalog and desktop database, the Process Manager's application list, and, in M21's phase 2, programs that quit back to it.
+- **Its own menus:** the Apple menu (M13's items), File, Edit, View, Label, Special (Empty Trash, Restart and Shut Down end the session) and the Application menu of the running programs.
+
+**Exit:** the look-alike opens on the library, shows its applications with their real icons, launches them and their documents, browses the host's home folder and opens host files and applications from it.
