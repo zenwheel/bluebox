@@ -129,6 +129,59 @@ extension BlueBox {
             #expect(Q.call("Q3Exit") == 1)
         }
 
+        /// Looking up a class by name: an unknown name fails without an
+        /// error posted (DesignWorkshop Lite asks for "UpVector" before
+        /// registering its own, and puts up an alert for any error), and a
+        /// registered element class is in the hierarchy by name and type.
+        @Test func hierarchyLookupByName() {
+            launchTestApp()
+            #expect(Q.call("Q3Initialize") == 1)
+            func cstr(_ s: String) -> UInt32 {
+                let p = tb_NewPtr(Int32(s.utf8.count + 1), false, true)
+                for (i, b) in s.utf8.enumerated() { wr8(p + UInt32(i), b) }
+                return p
+            }
+            let out = Q.words([0xDEAD_BEEF])
+            Q.call("Q3Error_Get", [0])
+            #expect(Q.call("Q3ObjectHierarchy_GetTypeFromString", [cstr("UpVector"), out]) == 0)
+            #expect(rd32(out) == 0)
+            #expect(Q.call("Q3Error_Get", [0]) == 0)
+            #expect(Q.call("Q3ObjectHierarchy_IsNameRegistered", [cstr("UpVector")]) == 0)
+            #expect(Q.call("Q3ObjectHierarchy_GetTypeFromString", [cstr("TriMesh"), out]) == 1)
+            #expect(rd32(out) == Self.type("tmsh"))
+            let et = Q.words([0])
+            #expect(Q.call("Q3XElementClass_Register", [et, cstr("Test:Element:Up"), 12, 0]) != 0)
+            #expect(Q.call("Q3ObjectHierarchy_GetTypeFromString", [cstr("Test:Element:Up"), out]) == 1)
+            #expect(rd32(out) == rd32(et))
+            #expect(Q.call("Q3ObjectHierarchy_IsNameRegistered", [cstr("Test:Element:Up")]) == 1)
+            #expect(Q.call("Q3ObjectHierarchy_IsTypeRegistered", [rd32(et)]) == 1)
+            let name = tb_NewPtr(1024, false, true)
+            #expect(Q.call("Q3ObjectHierarchy_GetStringFromType", [rd32(et), name]) == 1)
+            #expect(rd8(name) == UInt8(ascii: "T") && rd8(name + 13) == UInt8(ascii: "U"))
+            #expect(Q.call("Q3Error_Get", [0]) == 0)
+            #expect(Q.call("Q3Exit") == 1)
+        }
+
+        /// A shared object's reference count is at offset 8 of the
+        /// object, as in QuickDraw 3D's own: DesignWorkshop Lite reads it
+        /// there and disposes of the object that many times.
+        @Test func referenceCountInTheObject() {
+            launchTestApp()
+            #expect(Q.call("Q3Initialize") == 1)
+            let text = Q.words([0x4142_0000]) // "AB"
+            let a = Q.call("Q3CString_New", [text]), b = Q.call("Q3CString_New", [text])
+            #expect(a != 0 && b != 0 && b != a + 4)
+            #expect(rd32(a + 8) == 1 && rd32(b + 8) == 1)
+            #expect(Q.call("Q3Shared_GetReference", [a]) == a)
+            #expect(rd32(a + 8) == 2 && rd32(b + 8) == 1)
+            for _ in 0..<rd32(a + 8) { #expect(Q.call("Q3Object_Dispose", [a]) == 1) }
+            #expect(Q.call("Q3Error_Get", [0]) == 0)
+            #expect(Q.call("Q3Object_Dispose", [a]) == 0) // gone
+            #expect(Q.call("Q3Object_Dispose", [b]) == 1)
+            Q.call("Q3Error_Get", [0])
+            #expect(Q.call("Q3Exit") == 1)
+        }
+
         /// A trimesh lit by a directional light into a pixmap draw
         /// context: red where it is, the clear colour elsewhere.
         @Test func rendersATriMesh() {

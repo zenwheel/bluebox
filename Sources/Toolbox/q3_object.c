@@ -4,9 +4,11 @@
  * handles, shared references, sets and attribute sets, strings, errors,
  * warnings and notices.
  *
- * Handles are words of guest memory, taken in chunks from the system
+ * Handles are blocks of guest memory, taken in chunks from the system
  * heap: each names a host record (an object, a group position, a mesh
- * part) and nothing else while it lives.
+ * part) and nothing else while it lives.  An object's block holds its
+ * reference count at offset 8, where QuickDraw 3D's own objects kept it:
+ * DesignWorkshop reads it there to dispose of all its references.
  */
 #include <stdio.h>
 #include <dirent.h>
@@ -22,7 +24,7 @@
 /* ---------------------------------------------------------------------- */
 /* Handles */
 
-enum { CHUNK = 4096, MAX_CHUNKS = 256 };
+enum { CHUNK = 4096, MAX_CHUNKS = 256, SLOT = 16 };
 
 typedef struct {
     int kind;
@@ -40,9 +42,9 @@ gaddr q3_handle_new(int kind, void *p)
     if (!nfree) {
         if (nchunks == MAX_CHUNKS)
             return 0;
-        gaddr base = tb_NewPtr(CHUNK * 4, true, true);
+        gaddr base = tb_NewPtr(CHUNK * SLOT, true, true);
         if (!base)
-            base = tb_NewPtr(CHUNK * 4, false, true);
+            base = tb_NewPtr(CHUNK * SLOT, false, true);
         handle *slots = base ? calloc(CHUNK, sizeof *slots) : NULL;
         if (!slots)
             return 0;
@@ -64,18 +66,19 @@ gaddr q3_handle_new(int kind, void *p)
     uint32_t id = free_list[--nfree];
     int c = (int)(id >> 16), i = (int)(id & 0xFFFF);
     chunk_slots[c][i] = (handle){ kind, p };
-    gaddr g = chunk_base[c] + (uint32_t)i * 4;
+    gaddr g = chunk_base[c] + (uint32_t)i * SLOT;
+    gmemset(g, 0, SLOT);
     wr32(g, 0x51336F62); /* 'Q3ob', for anyone looking */
     return g;
 }
 
 static handle *slot_of(gaddr g)
 {
-    if (!g || (g & 3))
+    if (!g)
         return NULL;
     for (int c = 0; c < nchunks; c++)
-        if (g >= chunk_base[c] && g < chunk_base[c] + CHUNK * 4)
-            return &chunk_slots[c][(g - chunk_base[c]) / 4];
+        if (g >= chunk_base[c] && g < chunk_base[c] + CHUNK * SLOT)
+            return (g - chunk_base[c]) % SLOT ? NULL : &chunk_slots[c][(g - chunk_base[c]) / SLOT];
     return NULL;
 }
 
@@ -92,11 +95,11 @@ void q3_handle_free(gaddr g)
         return;
     h->kind = 0;
     h->p = NULL;
-    wr32(g, 0);
+    gmemset(g, 0, SLOT);
     for (int c = 0; c < nchunks; c++)
-        if (g >= chunk_base[c] && g < chunk_base[c] + CHUNK * 4) {
+        if (g >= chunk_base[c] && g < chunk_base[c] + CHUNK * SLOT) {
             if (nfree < capfree)
-                free_list[nfree++] = (uint32_t)c << 16 | (g - chunk_base[c]) / 4;
+                free_list[nfree++] = (uint32_t)c << 16 | (g - chunk_base[c]) / SLOT;
             break;
         }
 }
@@ -306,6 +309,13 @@ bool q3_initialized(void) { return initialized > 0; }
 
 static void ready_classes(void);
 
+/* The reference count, kept in the handle's block too (see above). */
+static void set_refs(q3obj *o, int refs)
+{
+    o->refs = refs;
+    wr32(o->g + 8, (uint32_t)refs);
+}
+
 q3obj *q3_new(uint32_t type, void *data)
 {
     ready_classes();
@@ -324,7 +334,7 @@ q3obj *q3_new(uint32_t type, void *data)
     }
     o->type = type;
     o->cls = k;
-    o->refs = 1;
+    set_refs(o, 1);
     o->edit = 1;
     o->data = data;
     return o;
@@ -354,7 +364,7 @@ gaddr q3_ref(gaddr g)
     if (!o)
         return 0;
     if (q3_is_shared(o)) {
-        o->refs++;
+        set_refs(o, o->refs + 1);
         return g;
     }
     return q3_duplicate(g);
@@ -382,8 +392,10 @@ void q3_release(gaddr g)
     q3obj *o = q3_get(g);
     if (!o)
         return;
-    if (q3_is_shared(o) && --o->refs > 0)
+    if (q3_is_shared(o) && o->refs > 1) {
+        set_refs(o, o->refs - 1);
         return;
+    }
     destroy(o);
 }
 
@@ -634,39 +646,70 @@ void q3_gstr(gaddr s, char *out, size_t size)
     out[i] = 0;
 }
 
+/* The hierarchy holds the element and attribute classes registered too
+ * (Q3XElementClass_Register makes a class of the element's name). */
+static bool hierarchy_type(const char *name, uint32_t *type)
+{
+    q3class *k = q3_class_named(name);
+    int32_t et;
+    gaddr meta;
+    if (k)
+        *type = k->type;
+    else if (q3_element_class_named(name, &et, &meta))
+        *type = (uint32_t)et;
+    else
+        return false;
+    return true;
+}
+
+static const char *hierarchy_name(uint32_t type)
+{
+    q3class *k = q3_class(type);
+    const char *name = NULL;
+    gaddr meta;
+    if (k)
+        return k->name;
+    if (q3_element_class_of((int32_t)type, &name, &meta))
+        return name;
+    return NULL;
+}
+
+/* A name not registered fails quietly, with kQ3ObjectTypeInvalid: programs
+ * ask before registering their own classes, and DesignWorkshop's error
+ * method put up "an internal error in QuickDraw3D" for an error posted. */
 static void Q3ObjectHierarchy_GetTypeFromString(ppc_cpu *c)
 {
     char name[256];
     q3_gstr(Q3R(0), name, sizeof name);
-    q3class *k = q3_class_named(name);
+    uint32_t type = 0;
+    bool found = hierarchy_type(name, &type);
     if (Q3R(1))
-        wr32(Q3R(1), k ? k->type : 0);
-    if (!k)
-        q3_error(kQ3ErrorInvalidObjectName);
-    Q3RETURN(k ? kQ3Success : kQ3Failure);
+        wr32(Q3R(1), found ? type : 0);
+    Q3RETURN(found ? kQ3Success : kQ3Failure);
 }
 
 static void Q3ObjectHierarchy_GetStringFromType(ppc_cpu *c)
 {
-    q3class *k = q3_class(Q3R(0));
-    if (!k || !Q3R(1)) {
+    const char *name = hierarchy_name(Q3R(0));
+    if (!name || !Q3R(1)) {
         if (Q3R(1))
             wr8(Q3R(1), 0);
         q3_error(kQ3ErrorInvalidObjectClass);
         Q3RETURN(kQ3Failure);
         return;
     }
-    gput(Q3R(1), k->name, (uint32_t)strlen(k->name) + 1);
+    gput(Q3R(1), name, (uint32_t)strlen(name) + 1);
     Q3RETURN(kQ3Success);
 }
 
-static void Q3ObjectHierarchy_IsTypeRegistered(ppc_cpu *c) { Q3RETURN(q3_class(Q3R(0)) != NULL); }
+static void Q3ObjectHierarchy_IsTypeRegistered(ppc_cpu *c) { Q3RETURN(hierarchy_name(Q3R(0)) != NULL); }
 
 static void Q3ObjectHierarchy_IsNameRegistered(ppc_cpu *c)
 {
     char name[256];
+    uint32_t type;
     q3_gstr(Q3R(0), name, sizeof name);
-    Q3RETURN(q3_class_named(name) != NULL);
+    Q3RETURN(hierarchy_type(name, &type));
 }
 
 static void Q3ObjectHierarchy_GetSubClassData(ppc_cpu *c)
