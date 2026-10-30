@@ -454,6 +454,23 @@ static bool param_block_trap(uint16_t op)
     return (t <= 0x18 && t != 0x16) || (t >= 0x41 && t <= 0x45) || t == 0x60 || t == 0xA8;
 }
 
+/* A Toolbox routine in ROM pops its return address and arguments, leaves
+ * its result and jumps back: the arguments stay in memory below the stack
+ * pointer.  Our natives push the return address again over the last of
+ * them, so after the call the program would find its own return address
+ * there.  Programs read what they left below the stack (Agean's New uses a
+ * local it never set, which on a Mac still held the window it had just
+ * passed to GetWRefCon), so the bytes under the return address are put
+ * back as the caller pushed them once it is popped. */
+enum { ARGS_KEPT = 64 };
+
+static void keep_arguments(cpu68k *c, gaddr sp0, const uint8_t *args)
+{
+    gaddr slot = c->a[7] - 4; /* where the return address was popped from */
+    if (slot > sp0 && slot - sp0 <= ARGS_KEPT - 4)
+        gput(slot, args + (slot - sp0), 4);
+}
+
 /* Calls from native code into the guest under way, and the one returned. */
 static int call_depth, returned_depth;
 
@@ -478,6 +495,11 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
         if (!(op & 0x0400))
             cpu_push32(c, c->pc);
         if (n >= 0) {
+            /* The return address and the arguments above it, as the
+             * caller pushed them (see keep_arguments). */
+            gaddr sp0 = c->a[7];
+            uint8_t args[ARGS_KEPT];
+            gget(args, sp0, sizeof args);
             if (!mm_debug_before_call(trap_name(op))) {
                 cpu_halt(c, "heap damaged before %s", trap_name(op));
                 return;
@@ -506,8 +528,10 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
                 if ((c->d[0] & 0xFFFF) == 0)
                     c->sr |= SR_Z;
             }
-            if (!c->halted)
+            if (!c->halted) {
                 c->pc = cpu_pop32(c);
+                keep_arguments(c, sp0, args);
+            }
             if (call_depth == 0)
                 display_trap_done();
         } else {
