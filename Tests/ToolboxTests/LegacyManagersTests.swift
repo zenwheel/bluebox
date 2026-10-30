@@ -159,7 +159,21 @@ extension BlueBox {
             wr8(pb + 8, 0x87)
             #expect(ppcErr("SCSIAction", [pb]) == 0)
             wr8(pb + 8, 0x86)
+            wr32(pb + 40, 0)
             #expect(ppcErr("SCSIAction", [pb]) == -7882) // scsiNoSuchXref
+            #expect(rd32(pb + 40) == 0xFFFF_FFFF) // and nothing after it: a scan ends
+            // A scan from bus $FF (Norton's Volume Recover starts at
+            // $00FF0000): the first entry, then the end.
+            wr8(pb + 8, 0x85)
+            wr32(pb + 12, 0x0000_0500)
+            wr16(pb + 36, UInt16(bitPattern: -38))
+            #expect(ppcErr("SCSIAction", [pb]) == 0)
+            wr8(pb + 8, 0x86)
+            wr32(pb + 12, 0x00FF_0000)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && rd32(pb + 40) == 0x0000_0500)
+            wr32(pb + 12, 0x0000_0500)
+            #expect(ppcErr("SCSIAction", [pb]) == 0 && Int16(bitPattern: rd16(pb + 36)) == -38)
+            #expect(rd8(pb + 41) == 0xFF) // the next is on bus $FF: the end
             #expect(ppcErr("SCSIRegisterBus", [pb]) == -7871 && ppcErr("SCSIKillXPT", [pb]) == -7871)
             #expect(ppcErr("SCSIDeregisterBus", [pb]) == -7869)
         }
