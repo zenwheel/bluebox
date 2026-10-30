@@ -3246,7 +3246,7 @@ int16_t tb_PBSetVInfo(gaddr pb, bool async) { return noErr; }
  * catalog.  The first time a volume's database is opened it is new, and
  * the Finder builds it. */
 
-enum { afpItemNotFound = -5018, afpIconTypeError = -5030 };
+enum { afpItemNotFound = -5012, afpIconTypeError = -5030 };
 
 /* The Finder information in a file's AppleDouble sidecar, read without
  * loading the forks. */

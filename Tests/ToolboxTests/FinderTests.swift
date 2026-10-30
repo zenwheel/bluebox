@@ -472,12 +472,12 @@ extension BlueBox {
 
             // Reset: the icons and applications go; deleted: new again.
             #expect(tb_PBDTReset(d2, false) == 0)
-            #expect(tb_PBDTGetIcon(d2, false) == -5018)
+            #expect(tb_PBDTGetIcon(d2, false) == -5012)
             let spec2 = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
             #expect(tb_FSMakeFSSpec(0, 0, pname("Tool"), spec2) == 0)
             wr32(d2 + UInt32(DTPBRec_ioNamePtr_off), pname("Tool"))
             wr32(d2 + UInt32(DTPBRec_ioDirID_off), rd32(spec2 + 2))
-            #expect(tb_PBDTRemoveAPPL(d2, false) == -5018)
+            #expect(tb_PBDTRemoveAPPL(d2, false) == -5012)
             #expect(tb_PBDTDelete(d2, false) == 0)
             #expect(tb_PBDTOpenInform(d2) == 0 && rd32(d2 + UInt32(DTPBRec_ioTagInfo_off)) == 1)
         }

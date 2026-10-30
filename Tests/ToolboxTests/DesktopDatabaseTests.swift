@@ -8,7 +8,7 @@ extension BlueBox {
     /// The Desktop Manager: icons from applications' bundles and those
     /// programs add, applications by creator, and comments.
     @Suite struct DesktopDatabase {
-        let afpItemNotFound: Int16 = -5018
+        let afpItemNotFound: Int16 = -5012
 
         func handle(_ b: [UInt8]) -> UInt32 {
             let h = tb_NewHandle(Int32(b.count), false, false)
@@ -117,6 +117,10 @@ extension BlueBox {
             let name = tb_NewPtr(64, false, true)
             wr32(appl + UInt32(DTPBRec_ioNamePtr_off), name)
             #expect(tb_PBDTGetAPPL(appl, false) == 0 && pstring(at: name) == "Bundled")
+            // Past the last: afpItemNotFound (-5012), which a program's
+            // loop over the index waits for (NavCom Cache Control).
+            wr16(appl + UInt32(DTPBRec_ioIndex_off), 2)
+            #expect(tb_PBDTGetAPPL(appl, false) == -5012)
         }
 
         @Test func addedIconsAreReturned() {
