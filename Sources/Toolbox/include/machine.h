@@ -663,7 +663,9 @@ void machine_set_code_check(int n);
  * time whenever the program waits for input, dismissing the dialogs they
  * open (Escape, Command-period, Return), and reports each step; it ends
  * "menu walk finished", or stuck in a dialog, or where the program or
- * Blue Box failed. */
+ * Blue Box failed.  A program with no menu bar has its screen walked
+ * instead (what it tests the mouse against and draws clicked), ending
+ * "screen walk finished". */
 void machine_set_menu_walk(bool on);
 /* --walk-avoid: a step a walk with no menu bar (walking a program's screen)
  * is not to take, as it said it at an earlier run of the same program

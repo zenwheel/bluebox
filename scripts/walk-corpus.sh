@@ -9,12 +9,14 @@
 # usage: sh scripts/walk-corpus.sh <census dir> <work dir> [bluebox binary] [jobs]
 #   The census dir holds corpus/ and census_list.txt (paths under corpus/,
 #   one a line).  Writes <work dir>/walk.tsv (program, how it ended, the
-#   last step: a menu item or, with no menu bar, a button; items chosen)
-#   and <work dir>/report.txt (the failures by kind, most first; a program
-#   with no menu bar that was walked as a window of buttons or as a game
-#   drawing on, or that runs only in the background, ends "menu walk
-#   finished" too, one with nothing on the screen "menu walk found no menu
-#   bar or window"); each run's output is kept in <work dir>/logs/.
+#   last step: a menu item or, with no menu bar, a button, a target or a
+#   key; items chosen) and <work dir>/report.txt (the failures by kind,
+#   most first; a program with no menu bar that was walked as a window of
+#   buttons or as a game drawing on, or that runs only in the background,
+#   ends "menu walk finished" too, one whose screen was walked "screen walk
+#   finished", one with nothing on the screen "menu walk found no menu bar
+#   or window"); each run's output is kept in <work dir>/logs/.  A screen
+#   walk's step that ended the program is avoided in a run again.
 #   HEAPCHECK=n checks the heaps every nth call (default 1; 0 for none),
 #   CODECHECK=n checks a PowerPC program's code for changes every nth
 #   call (default 0, none),
@@ -56,25 +58,52 @@ walk_one() {
 	fi
 	home="$work/homes/$name"
 	log="$work/logs/$name.txt"
-	rm -rf "$home"
-	mkdir -p "$home"
 	# A clone where the file system makes them (APFS: no space, no time).
 	folder=$(dirname "$dir/corpus/$rel")
 	if [ ! -d "$folder" ]; then
 		printf '%s\tnot in corpus/ (inside an archive)\t\t0\n' "$rel"
-		rm -rf "$home"
 		return
 	fi
-	cp -cR "$folder" "$home/copy" 2>/dev/null || cp -R "$folder" "$home/copy"
-	status=0
 	# NOWALK: the program left alone, to tell its own quits from the walk's.
 	walk=--walk-menus
 	[ -z "${NOWALK:-}" ] || walk=--census
-	set -- "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-4000000000}"
-	[ -z "$app" ] || set -- "$@" --app "$app"
-	HOME="$home" BLUEBOX_HEAPCHECK="${HEAPCHECK-1}" BLUEBOX_CODECHECK="${CODECHECK-0}" ASAN_OPTIONS=detect_leaks=0 timeout "${WALK_TIMEOUT:-600}" \
-		"$bin" run "$@" >"$log" 2>&1 || status=$?
-	rm -rf "$home"
+	# A step of a screen walk (a program with no menu bar) that ended the
+	# program: the run again from a fresh copy without it, up to three
+	# times (runs go the same way each time, so it gets as far again);
+	# the run before kept if this one found nothing more to do.
+	avoid=
+	tries=0
+	while :; do
+		rm -rf "$home"
+		mkdir -p "$home"
+		cp -cR "$folder" "$home/copy" 2>/dev/null || cp -R "$folder" "$home/copy"
+		status=0
+		set -- "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-4000000000}"
+		[ -z "$app" ] || set -- "$@" --app "$app"
+		while IFS= read -r step; do
+			[ -z "$step" ] || set -- "$@" --walk-avoid "$step"
+		done <<-EOF
+			$avoid
+		EOF
+		HOME="$home" BLUEBOX_HEAPCHECK="${HEAPCHECK-1}" BLUEBOX_CODECHECK="${CODECHECK-0}" ASAN_OPTIONS=detect_leaks=0 timeout "${WALK_TIMEOUT:-600}" \
+			"$bin" run "$@" >"$log" 2>&1 || status=$?
+		rm -rf "$home"
+		if [ "$tries" -gt 0 ] && grep -a -q '^stopped: menu walk found no menu bar' "$log"; then
+			mv "$log.before" "$log"
+			status=0
+			break
+		fi
+		rm -f "$log.before"
+		if [ -n "${NOWALK:-}" ] || [ "$tries" -ge 3 ] || ! grep -a -q '^stopped: ExitToShell' "$log"; then
+			break
+		fi
+		quit=$(grep -a -E '^walk: (menu|button|target|key) ' "$log" | tail -n 1 |
+			sed -n -E 's/^walk: target.* at ([0-9]+,[0-9]+) \(.*/\1/p; s/^walk: (key [^(]*) \(screen.*/\1/p')
+		[ -n "$quit" ] || break
+		avoid=$(printf '%s\n%s' "$avoid" "$quit")
+		cp "$log" "$log.before"
+		tries=$((tries + 1))
+	done
 	if grep -q 'ERROR: AddressSanitizer' "$log"; then
 		end="host memory error: $(grep -m 1 'ERROR: AddressSanitizer' "$log" | sed 's/.*AddressSanitizer: //' | cut -c1-80)"
 	elif [ "$status" -ge 128 ] || [ "$status" -eq 124 ]; then
@@ -90,7 +119,7 @@ walk_one() {
 		done
 		return
 	fi
-	step=$(grep -a -E '^walk: (menu|button)' "$log" | tail -n 1 | sed 's/^walk: //')
+	step=$(grep -a -E '^walk: (menu|button|target|key)' "$log" | tail -n 1 | sed 's/^walk: //')
 	items=$(grep -a -c '^walk: menu' "$log" || true)
 	printf '%s\t%s\t%s\t%s\n' "$rel${app:+ [$app]}" "${end:-none}" "${step:-}" "$items"
 }
@@ -114,6 +143,6 @@ done | xargs -0 -n 1 -P "$jobs" sh "$0" "$dir" "$work" "$bin" "$jobs" >"$work/wa
 # CPU faults, then the rest; walks that finished or reached the limit
 # waiting for input are fine.
 cut -f2 "$work/walk.tsv" | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(code changed by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: library not found: .*) \(for [^)]*\).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/' |
-	grep -v -E 'menu walk finished|waiting for input|not in corpus' | sort | uniq -c | sort -rn >"$work/report.txt" || true
+	grep -v -E 'menu walk finished|screen walk finished|waiting for input|not in corpus' | sort | uniq -c | sort -rn >"$work/report.txt" || true
 printf '%s programs, %s finished their walk\n' "$(wc -l <"$work/walk.tsv" | tr -d ' ')" \
-	"$(grep -c 'menu walk finished' "$work/walk.tsv" || true)"
+	"$(grep -c -E 'menu walk finished|screen walk finished' "$work/walk.tsv" || true)"

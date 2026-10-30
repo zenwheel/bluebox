@@ -16,9 +16,12 @@
  * A program with no menu bar is nudged with keys and clicks, then has the
  * buttons of its window pressed (a program that is one window), or with
  * none, the pictures drawn in it clicked; one that draws on meanwhile (a
- * game) is walked too.  Else, half a minute from its start, the walk ends
- * "found no menu bar", or "no menu bar or window" for one with nothing on
- * the screen (a background program).
+ * game) is walked too.  Else, half a minute from its start, its screen is
+ * walked (see "The screen walk" below): what it tests the mouse against
+ * and draws is clicked, screen by screen, and keys are given, ending
+ * "screen walk finished" if any of it did something; if none did, the
+ * walk ends "found no menu bar", or "no menu bar or window" for one with
+ * nothing on the screen (a background program).
  */
 #include <stdio.h>
 #include <stdlib.h>
