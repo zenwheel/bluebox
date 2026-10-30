@@ -103,7 +103,7 @@ extension BlueBox {
             #expect(machine_boot(true))
             let unimplemented = tb_GetTrapAddress(0xA89F, true, true)
             #expect(tb_GetTrapAddress(0xAA5A, false, false) == unimplemented) // CodeFragmentDispatch
-            #expect(tb_GetTrapAddress(0xAA59, false, false) == unimplemented) // MixedModeDispatch
+            #expect(tb_GetTrapAddress(0xAA59, false, false) != unimplemented) // MixedModeDispatch, implemented ('mixd')
             #expect(tb_GetTrapAddress(0xA9A0, false, false) != unimplemented) // GetResource
             bootMachine()
         }

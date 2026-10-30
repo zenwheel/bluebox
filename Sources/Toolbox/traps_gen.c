@@ -6725,6 +6725,15 @@ static void glue_DisposeRgn(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisposeRoutineDescriptor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_ptr = (gaddr)cpu_pop32(c);
+    tb_DisposeRoutineDescriptor(a_ptr);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposeScreenBuffer(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20057,6 +20066,18 @@ static void glue_NewEmptyHandle(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_NewFatRoutineDescriptor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_info = (uint32_t)cpu_pop32(c);
+    gaddr a_ppc = (gaddr)cpu_pop32(c);
+    gaddr a_m68k = (gaddr)cpu_pop32(c);
+    gaddr r = tb_NewFatRoutineDescriptor(a_m68k, a_ppc, a_info);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewFeaturesDialog(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20421,6 +20442,18 @@ static void glue_NewRgn(cpu68k *c, uint16_t trapword)
     (void)trapword;
     uint32_t ret = cpu_pop32(c);
     gaddr r = tb_NewRgn();
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_NewRoutineDescriptor(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint8_t a_isa = (uint8_t)(cpu_pop16(c) >> 8);
+    uint32_t a_info = (uint32_t)cpu_pop32(c);
+    gaddr a_proc = (gaddr)cpu_pop32(c);
+    gaddr r = tb_NewRoutineDescriptor(a_proc, a_info, a_isa);
     wr32(c->a[7], (uint32_t)r);
     cpu_push32(c, ret);
 }
@@ -25212,6 +25245,17 @@ static void glue_RestoreFore(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_RestoreMixedModeState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_vers = (uint32_t)cpu_pop32(c);
+    gaddr a_statep = (gaddr)cpu_pop32(c);
+    int16_t r = tb_RestoreMixedModeState(a_statep, a_vers);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RetrievePictInfo(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -26477,6 +26521,17 @@ static void glue_SaveFore(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_SaveFore(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_SaveMixedModeState(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_vers = (uint32_t)cpu_pop32(c);
+    gaddr a_statep = (gaddr)cpu_pop32(c);
+    int16_t r = tb_SaveMixedModeState(a_statep, a_vers);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -35715,11 +35770,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA825, (int32_t)0x606u, "SetMenuItemIconHandle", CONV_STACK, 12, 2, glue_SetMenuItemIconHandle},
     {0xA825, (int32_t)0x707u, "GetMenuItemIconHandle", CONV_STACK, 14, 2, glue_GetMenuItemIconHandle},
     {0xA825, (int32_t)0x8FBu, "MenuDispatchFB", CONV_STACK, 8, 2, glue_MenuDispatchFB},
-    {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, 0},
-    {0xAA59, (int32_t)0x1u, "DisposeRoutineDescriptor", CONV_STACK, 4, 0, 0},
-    {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, 0},
-    {0xAA59, (int32_t)0x3u, "SaveMixedModeState", CONV_STACK, 8, 2, 0},
-    {0xAA59, (int32_t)0x4u, "RestoreMixedModeState", CONV_STACK, 8, 2, 0},
+    {0xAA59, (int32_t)0x0u, "NewRoutineDescriptor", CONV_STACK, 10, 4, glue_NewRoutineDescriptor},
+    {0xAA59, (int32_t)0x1u, "DisposeRoutineDescriptor", CONV_STACK, 4, 0, glue_DisposeRoutineDescriptor},
+    {0xAA59, (int32_t)0x2u, "NewFatRoutineDescriptor", CONV_STACK, 12, 4, glue_NewFatRoutineDescriptor},
+    {0xAA59, (int32_t)0x3u, "SaveMixedModeState", CONV_STACK, 8, 2, glue_SaveMixedModeState},
+    {0xAA59, (int32_t)0x4u, "RestoreMixedModeState", CONV_STACK, 8, 2, glue_RestoreMixedModeState},
     {0xA88F, (int32_t)0x1u, "GetActiveTaskInfo", CONV_STACK, 6, 2, glue_GetActiveTaskInfo},
     {0xA88F, (int32_t)0x2u, "GetSwitchInfo", CONV_STACK, 4, 0, glue_GetSwitchInfo},
     {0xA88F, (int32_t)0x3u, "CancelSwitch", CONV_STACK, 0, 0, glue_CancelSwitch},
