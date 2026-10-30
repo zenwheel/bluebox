@@ -56,8 +56,8 @@ extension BlueBox {
                 #expect(rd32(4 * 4) < 0x0100_0000)
                 var r: UInt32 = 0
                 #expect(tb_Gestalt(Int32(bitPattern: fourCC("addr")), &r) == 0 && r == 0x4)
-                // The screen is as deep as fits its 4 MB: 32 bits at 1024 by 768.
-                #expect(machine_screen_depth() == 32)
+                // The screen is as deep as fits a card's megabyte: 8 bits at 1024 by 768.
+                #expect(machine_screen_depth() == 8)
             }
             var r: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("addr")), &r) == 0 && r == 0x7)

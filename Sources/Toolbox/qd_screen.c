@@ -115,8 +115,8 @@ static void describe_screen(gaddr gd, gaddr pm)
 }
 
 /* Whether the screen fits its space at a depth: in 24-bit mode that is
- * the 4 MB of slot space it has, as a video card's was, or a compact
- * Mac's one-bit page in RAM. */
+ * the megabyte of slot space a video card had, or a compact Mac's one-bit
+ * page in RAM. */
 static bool fits(int depth, int width, int height)
 {
     return (uint64_t)row_bytes_for(depth, width) * (uint32_t)height <= g_screen_size;
