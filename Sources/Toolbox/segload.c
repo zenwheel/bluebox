@@ -85,6 +85,12 @@ static gaddr load_segment(int16_t seg)
     for (unsigned i = 0; i < count; i++, e += 8) {
         if (rd16(e + 2) == JMP_ABS_L)
             continue;
+        /* An unloaded entry that names another segment is that segment's:
+         * a Director projector's player lays its jump table over the
+         * stub's, whose XInit entries it still calls once XMain has
+         * unloaded XInit, and they must load XInit again. */
+        if (rd16(e + 2) == MOVE_W_SP && rd16(e + 6) == LOADSEG_TRAP && (int16_t)rd16(e + 4) != seg)
+            continue;
         uint16_t off = rd16(e);
         wr16(e, (uint16_t)seg);
         wr16(e + 2, JMP_ABS_L);
@@ -137,10 +143,16 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
     gaddr code = 0;
     /* The address of a routine as Pascal's @ gives it, its jump table
      * entry (the JMP in it, as System 7.1's Finder passes when its code
-     * zone is full): the segment its entry names. */
+     * zone is full): the segment its entry names.  An entry still in its
+     * unloaded form names a segment not loaded through the jump table,
+     * so there is nothing to unload: getting the CODE resource would read
+     * it in only to make it purgeable, and HyperCard's standalones unload
+     * so segments they keep locked themselves, whose code then moved. */
     if (addr >= jt && addr < jt + jtsize) {
         gaddr e = jt + (addr - jt) / 8 * 8;
-        int16_t s = rd16(e + 2) == JMP_ABS_L ? (int16_t)rd16(e) : rd16(e + 6) == LOADSEG_TRAP ? (int16_t)rd16(e + 4) : -1;
+        if (rd16(e + 2) != JMP_ABS_L)
+            return;
+        int16_t s = (int16_t)rd16(e);
         gaddr h = s >= 0 ? get_code(s) : 0;
         if (h && rd32(h)) {
             seg = s;
