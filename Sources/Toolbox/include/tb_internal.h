@@ -97,6 +97,7 @@ bool dialog_std_filter(gaddr d, gaddr evt, gaddr itemp);
 int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y); /* controls.c */
 bool ctl_push_button(gaddr ch, bool custom);
 void walker_idle(uint64_t now);
+uint64_t walker_next_in(void); /* ns to the walk's next step; 0: due, or no walk */
 
 /* ---- Resource Manager internals ---- */
 
