@@ -1186,11 +1186,18 @@ static void update_active(void)
 /* ---------------------------------------------------------------------- */
 /* List management */
 
+/* The same window?  In 24-bit mode the top byte of the pointer is not
+ * part of it: FileMaker Pro makes its Open dialog in a locked handle's
+ * block, with the master pointer's flags in the pointer, and closes it by
+ * the pointer stripped. */
+static bool same_window(gaddr a, gaddr b) { return mem_strip(a) == mem_strip(b); }
+
 static void unlink_window(gaddr w)
 {
     gaddr prev = 0;
     for (gaddr x = wlist(); x; prev = x, x = WindowRecord_nextWindow(x)) {
-        if (x == w) {
+        if (same_window(x, w)) {
+            w = x;
             if (prev)
                 WindowRecord_set_nextWindow(prev, WindowRecord_nextWindow(w));
             else
@@ -1369,17 +1376,17 @@ static void close_window(gaddr w, bool keep_parts)
     call_wdef(w, wDispose, 0);
     unlink_window(w);
     remove_aux(w);
-    if (active_window == w)
+    if (same_window(active_window, w))
         active_window = 0;
-    if (old_window == w)
+    if (same_window(old_window, w))
         old_window = 0;
     controls_forget_window(w);
     WindowRecord_set_visible(w, 0);
-    if (rd32(LM_CurActivate) == w)
+    if (same_window(rd32(LM_CurActivate), w))
         wr32(LM_CurActivate, 0);
-    if (rd32(LM_CurDeactive) == w)
+    if (same_window(rd32(LM_CurDeactive), w))
         wr32(LM_CurDeactive, 0);
-    if (qd_port() == w)
+    if (same_window(qd_port(), w))
         tb_SetPort(wmgr_port());
     if (!keep_parts)
         free_window_parts(w);
@@ -1406,7 +1413,7 @@ static int ndisposed;
 static bool in_window_list(gaddr w)
 {
     for (gaddr x = wlist(); x; x = WindowRecord_nextWindow(x))
-        if (x == w)
+        if (same_window(x, w))
             return true;
     return false;
 }

@@ -92,6 +92,28 @@ extension BlueBox {
             #expect(d0 == 1)
         }
 
+        /// A window made in storage whose pointer has flags in the top byte
+        /// (a locked handle's block, as FileMaker Pro's Open dialog) and
+        /// closed by the stripped pointer leaves the window list.
+        @Test func windowsAreTheSameWhateverTheTopByte() {
+            boot24 {
+                launchTestApp()
+                _ = initToolbox()
+                let h = tb_NewHandle(Int32(WindowRecord_SIZEOF), false, true)
+                tb_HLock(h)
+                let storage = rd32(h)
+                #expect(storage >> 24 == 0x80)
+                let r = tb_NewPtr(8, false, true)
+                for (i, v) in [40, 40, 100, 200].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+                let first = rd32(UInt32(LM_WindowList))
+                let w = tb_NewWindow(storage, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+                #expect(w != 0 && rd32(UInt32(LM_WindowList)) == w)
+                tb_CloseWindow(w & 0x00FF_FFFF)
+                #expect(rd32(UInt32(LM_WindowList)) == first)
+                #expect(mm_heap_valid())
+            }
+        }
+
         /// The flags are the master pointer's top byte: HLock sets bit 7
         /// there, and a lock set there directly (BSET #7,(A0)) keeps the
         /// block from moving.
