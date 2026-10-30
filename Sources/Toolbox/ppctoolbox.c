@@ -629,12 +629,17 @@ void ppc_toolbox_poll(void)
     }
 }
 
-/* A call that may wait: asynchronous, it goes on in the background;
+/* A call that may wait: asynchronous, it goes on in the background (and
+ * one already answered has its completion routine called all the same);
  * synchronous, it is waited for here. */
 static int16_t waitable(gaddr pb, wait_kind kind, bool async)
 {
     waiting w = { pb, kind, async };
     int16_t r = try_wait(&w);
+    if (r != ioInProgress && async) {
+        finish(pb, r, true);
+        return ioInProgress;
+    }
     if (r != ioInProgress)
         return r;
     if (async) {
@@ -803,15 +808,19 @@ static int16_t call(int sel, gaddr pb, bool async)
     }
 }
 
-/* The result for the caller: in ioResult too, and an asynchronous call's
- * completion queued when it is already done. */
+/* The result for the caller, in ioResult too.  An asynchronous call that
+ * fails before it starts (no such port to start a session with) says so
+ * at once, and its completion routine isn't called: SpeedShare frees the
+ * parameter block then, and a completion run later read the freed block.
+ * One that finishes at once, with its answer or its result, is
+ * completed as one that waited would be. */
 static int16_t ppctb_call(int sel, gaddr pb, bool async)
 {
     int16_t r = call(sel, pb, async);
     if (r == ioInProgress)
         return noErr;
     if (pb && sel)
-        finish(pb, r, async);
+        finish(pb, r, async && r == noErr);
     return r;
 }
 

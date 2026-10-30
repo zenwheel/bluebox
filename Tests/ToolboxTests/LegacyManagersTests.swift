@@ -615,6 +615,29 @@ extension BlueBox {
             #expect(ppcErr("PPCCloseSync", [close]) == 0)
         }
 
+        /// An asynchronous call that fails before it starts returns its error and
+        /// doesn't call its completion routine (SpeedShare frees the block then);
+        /// one that waited and failed has it called.
+        @Test func anAsyncCallThatFailsAtOnceIsNotCompleted() {
+            let a = open("Delta")
+            let marker = tb_NewPtr(4, false, true)
+            wr32(marker, 0)
+            // the completion routine: move.w #1,marker; rts
+            let done = tb_NewPtr(8, false, true)
+            let words: [UInt16] = [0x33FC, 0x0001, hiWord(marker), loWord(marker), 0x4E75]
+            for (i, w) in words.enumerated() { wr16(done + UInt32(i * 2), w) }
+            let start = tb_NewPtr(70, false, true)
+            wr32(start + 12, done)
+            wr16(start + 38, a); wr32(start + 46, portName("Nobody Here"))
+            #expect(ppcErr("PPCStartAsync", [start]) == -906) // destPortErr, at once
+            #expect(Int16(bitPattern: rd16(start + 16)) == -906)
+            pump()
+            #expect(rd16(marker) == 0)
+            let close = tb_NewPtr(64, false, true)
+            wr16(close + 38, a)
+            #expect(ppcErr("PPCCloseSync", [close]) == 0)
+        }
+
         @Test func the68kTrapTakesItsAsyncBit() {
             let pb = tb_NewPtr(64, false, true)
             wr8(pb + 44, 1)
