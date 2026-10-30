@@ -256,7 +256,7 @@ static bool moved_from[NSCREENS]; /* a step on the screen was productive */
  * changed, code run that had not run: targets at where it is (a program
  * that tests the mouse itself: Evolutionary War's planets). */
 enum { SWEEP_W = 16, SWEEP_H = 12, SWEEP_GAP = 200000 /* instructions */ };
-static bool swept[NSCREENS];
+static bool swept[NSCREENS], dragged[NSCREENS];
 static int sweep_steps; /* steps the sweep under way has left */
 static uint32_t usual_cursor;
 
@@ -305,6 +305,7 @@ static void screen_walk_reset(void)
 static bool watching(void) { return walking && !menu_bar_count(); }
 
 static void add_target(int kind, qrect r, int x, int y, int screen, const char *label);
+static bool screen_moved_on(void);
 
 /* Something the program did as the mouse was swept over it. */
 static void hover_here(void)
@@ -646,7 +647,7 @@ static int screen_of(const uint8_t *t)
     memcpy(thumbs[nscreens], t, THUMB_SIZE);
     keys_tried[nscreens] = 0;
     moved_from[nscreens] = false;
-    swept[nscreens] = false;
+    swept[nscreens] = dragged[nscreens] = false;
     memset(clicked_on[nscreens], 0, sizeof clicked_on[nscreens]);
     return nscreens++;
 }
@@ -737,11 +738,10 @@ static int next_target(int s, bool last_resort)
 
 /* The mouse moved over the front window (the screen, with none) in
  * steps a little apart, scripted to come as the program runs. */
-static void sweep(void)
+static qrect walked_area(int *w, int *h)
 {
-    int w = 0, h = 0;
-    machine_screen_size(&w, &h);
-    qrect a = { 20, 0, (int16_t)h, (int16_t)w };
+    machine_screen_size(w, h);
+    qrect a = { 20, 0, (int16_t)*h, (int16_t)*w };
     gaddr fw = tb_FrontWindow();
     if (fw && WindowRecord_visible(fw)) {
         pixdst px = qd_port_pixels(fw);
@@ -749,6 +749,33 @@ static void sweep(void)
         a = (qrect){ (int16_t)(pr.top - px.bounds.top), (int16_t)(pr.left - px.bounds.left),
                      (int16_t)(pr.bottom - px.bounds.top), (int16_t)(pr.right - px.bounds.left) };
     }
+    return a;
+}
+
+/* A drag across the front window (the screen, with none), pressed in its
+ * left quarter, moved right and down, let go: a paint program's stroke
+ * (Saw, Streaky Brush), a slider, a piece moved. */
+static void drag(void)
+{
+    int w = 0, h = 0;
+    qrect a = walked_area(&w, &h);
+    uint64_t at = g_cpu->icount + 100000;
+    int x0 = a.left + (a.right - a.left) / 4, y0 = a.top + (a.bottom - a.top) / 3;
+    int x1 = a.right - (a.right - a.left) / 4, y1 = a.bottom - (a.bottom - a.top) / 3;
+    enum { MOVES = 16 };
+    for (int k = 0; k <= MOVES + 1; k++, at += 100000) {
+        int m = k > MOVES ? MOVES : k;
+        int x = x0 + (x1 - x0) * m / MOVES, y = y0 + (y1 - y0) * m / MOVES;
+        x = x < 0 ? 0 : x >= w ? w - 1 : x;
+        y = y < 0 ? 0 : y >= h ? h - 1 : y;
+        machine_script_add(at, 1, x, y, k == 0 ? 1 : k > MOVES ? 0 : -1);
+    }
+}
+
+static void sweep(void)
+{
+    int w = 0, h = 0;
+    qrect a = walked_area(&w, &h);
     uint64_t at = g_cpu->icount + SWEEP_GAP;
     for (int row = 0; row < SWEEP_H; row++)
         for (int col = 0; col < SWEEP_W; col++, at += SWEEP_GAP) {
@@ -759,6 +786,15 @@ static void sweep(void)
         }
     /* Steps of the machine's time, at 100 ns an instruction. */
     sweep_steps = (int)((at - g_cpu->icount) * 100 / SETTLE) + 2;
+}
+
+/* A step taken on screen s: what is on the screen and the code run so
+ * far, to tell what it did at the next. */
+static void acting(int s)
+{
+    acted_on = s;
+    calls_then = ncall_sites;
+    screen_moved_on();
 }
 
 /* Whether screen s has keys left to give, those avoided passed over. */
@@ -786,9 +822,12 @@ static bool screen_step(uint64_t now)
         say("no menu bar: walking the screen");
     }
     if (watched < WATCH_STEPS) {
-        if (watched++ && !same_screen(t, thumb_then))
+        bool moved = screen_moved_on();
+        if (watched++ && (moved || !same_screen(t, thumb_then)))
             self_moving = true;
         memcpy(thumb_then, t, THUMB_SIZE);
+        if (watched == WATCH_STEPS && self_moving)
+            say("the screen changes by itself: only new code run tells a step did something");
         return true;
     }
     if (!same_screen(t, thumb_then) && settling < 3) {
@@ -805,7 +844,10 @@ static bool screen_step(uint64_t now)
     memcpy(thumb_then, t, THUMB_SIZE);
     int s = screen_of(t);
     place_drawn(s);
-    if (acted_on >= 0 && ((s != acted_on && !restless) || ncall_sites > calls_then)) {
+    /* Changed: another screen, or a part of this one drawn anew (a
+     * stroke painted, a piece moved), more than a caret's blink. */
+    bool changed = acted_on >= 0 && (screen_moved_on() || s != acted_on);
+    if (acted_on >= 0 && ((changed && !restless) || ncall_sites > calls_then)) {
         productive++;
         moved_from[acted_on] = true;
     }
@@ -823,6 +865,15 @@ static bool screen_step(uint64_t now)
         sweep();
         return true;
     }
+    if (i < 0 && !dragged[s]) {
+        dragged[s] = true;
+        snprintf(last, sizeof last, "drag");
+        snprintf(what, sizeof what, "a drag across screen %d", s + 1);
+        say(what);
+        acting(s);
+        drag();
+        return true;
+    }
     if (i < 0 && !keys_left(s))
         i = next_target(s, true);
     if (i >= 0) {
@@ -834,8 +885,7 @@ static bool screen_step(uint64_t now)
                  targets[i].x, targets[i].y);
         snprintf(what, sizeof what, "%s (%s, screen %d)", last, target_kinds[targets[i].kind], s + 1);
         say(what);
-        acted_on = s;
-        calls_then = ncall_sites;
+        acting(s);
         click(targets[i].x, targets[i].y);
         return true;
     }
@@ -845,8 +895,7 @@ static bool screen_step(uint64_t now)
         snprintf(last, sizeof last, "key %s", screen_keys[k].name);
         snprintf(what, sizeof what, "%s (screen %d)", last, s + 1);
         say(what);
-        acted_on = s;
-        calls_then = ncall_sites;
+        acting(s);
         /* Held a while, as a user's: a program reading the keyboard
          * less often than another part of it (a timer task) takes its
          * picture of it sees it down (Boingo Electro's). */
@@ -861,7 +910,11 @@ static bool screen_step(uint64_t now)
  * false if none did (the walk ends as it would have without it). */
 static bool screen_walk_over(void)
 {
-    if (!productive || (!targets_clicked && nscreens < 2))
+    /* With nothing on the screen of its own (no window, not the whole
+     * screen), only a target clicked or a screen of its own coming says
+     * the program was walked, not code run at a key. */
+    bool windowless = !tb_FrontWindow() && !machine_screen_mode_wanted();
+    if (!productive || (windowless && !targets_clicked && nscreens < 2))
         return false;
     printf("walk: screen walk finished: %d screens, %u targets clicked, %u keys, %u steps productive\n", nscreens,
            targets_clicked, keys_given, productive);

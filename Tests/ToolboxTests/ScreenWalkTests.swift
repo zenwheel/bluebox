@@ -186,6 +186,43 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
         }
 
+        /// A program that paints only at a stroke of the mouse (a paint
+        /// program's: Saw's): a click does nothing, a drag across its
+        /// window paints the box at A5-$40, and its screen is walked.
+        @Test func aDragPaints() throws {
+            let dir = try walk.launch(cat(
+                be16(0x4267),                 // loop: CLR.W -(SP)
+                be16(0x3F3C), be16(2),        // MOVE.W #mDownMask,-(SP)
+                be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+                be16(0xA970),                 // _GetNextEvent
+                be16(0x4A1F),                 // TST.B (SP)+
+                be16(0x67F0),                 // BEQ loop
+                be16(0x486D), be16(0xFFEA),   // PEA where(A5)
+                be16(0xA871),                 // _GlobalToLocal
+                be16(0x7004),                 // MOVEQ #mUpMask,D0
+                be16(0xA032),                 // _FlushEvents: earlier clicks' ups
+                be16(0x554F),                 // still: SUBQ #2,SP
+                be16(0xA973),                 // _StillDown
+                be16(0x4A1F),                 // TST.B (SP)+
+                be16(0x66F8),                 // BNE still
+                be16(0x486D), be16(0xFFF0),   // PEA mouse(A5)
+                be16(0xA972),                 // _GetMouse
+                be16(0x302D), be16(0xFFF2),   // MOVE.W mouse.h(A5),D0
+                be16(0x906D), be16(0xFFEC),   // SUB.W where.h(A5),D0
+                be16(0x0C40), be16(100),      // CMPI.W #100,D0
+                be16(0x6DCA),                 // BLT loop: not dragged far
+                be16(0x486D), be16(0xFFC0),   // PEA box(A5)
+                be16(0xA8A2),                 // _PaintRect
+                be16(0x60C2)))                // BRA loop
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = window()
+            put([0, 0, 300, 400], at: 0x40)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(2_000_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "screen walk finished")
+        }
+
         /// A screen where nothing is found to click, which no key moves
         /// on, ends the walk as before: "found no menu bar".
         @Test func aStillScreenIsNotWalked() throws {
