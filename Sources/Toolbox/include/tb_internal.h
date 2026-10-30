@@ -610,6 +610,10 @@ enum { ioInProgress = 1 };
 bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
 enum { DISK_DRIVER_UNIT = 32 };              /* the main volume's disk, as SCSI ID 0 (.Sony keeps -5 for floppies) */
 enum { CD_UNIT = 35 };                    /* .AppleCD, the mounted volumes' driver */
+/* Drive numbers: 1 is the internal floppy drive (.Sony), as on every Mac with one; 1-4 are the
+ * floppy drives' (and the HD20's), so the main volume's SCSI disk is the next, 5, and each mounted
+ * volume's drive comes after it. */
+enum { FLOPPY_DRIVE = 1, BOOT_DRIVE = 5 };
 void io_complete_now(gaddr pb, int16_t result); /* KillIO's: inside the call (timemgr.c) */
 void io_complete_now_for(int16_t refnum);
 void drivers_reset(void);                 /* the unit table, at boot */
@@ -648,7 +652,8 @@ void mactcp_reset(void);
 void mactcp_install_resolver(void);
 /* The Sony driver (.Sony) for a raw floppy disk image, key-disk checks (sony.c). */
 extern const native_driver sony_driver;
-void sony_install_drive(gaddr zone, int16_t drive);
+void sony_install_drive(gaddr zone);       /* drive 1, with or without a disk */
+int16_t sony_eject(void);
 void sony_reset(void);
 /* The Sound Driver (.Sound) of the first Macs (sound.c). */
 extern const native_driver sound_driver;
@@ -662,6 +667,7 @@ int16_t disk_drive_status(gaddr pb);
 void fm_lg2phys_native(cpu68k *c, uint16_t tw);
 int16_t fm_block_io(gaddr pb, bool write);
 void disk_driver_reset(void);
+gaddr disk_floppy_icon(void); /* the floppy disk's ICN#, for .Sony's icon calls */
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
 extern const native_driver mpp_driver, atp_driver, xpp_driver, dsp_driver;
 void adsp_poll(void);

@@ -12,23 +12,27 @@ enum { controlErr_ = -17, statusErr_ = -18, nsDrvErr_ = -56 };
 enum { DISK_UNIT = DISK_DRIVER_UNIT };
 
 /* The icon (ICN#, data and mask) a driver hands back: a pointer to its 256
- * bytes, which stay put.  The System's hard disk icon. */
-static gaddr hd_icon;
+ * bytes, which stay put.  The System's hard disk icon, and its floppy disk
+ * icon for the Sony driver. */
+static gaddr hd_icon, floppy_icon;
 
-static gaddr icon_bytes(void)
+static gaddr icon_copy(gaddr *slot, int16_t id)
 {
-    if (!hd_icon) {
-        gaddr h = tb_GetResource((int32_t)fourcc("ICN#"), -3995);
+    if (!*slot) {
+        gaddr h = tb_GetResource((int32_t)fourcc("ICN#"), id);
         if (!h || !rd32(h) || tb_GetHandleSize(h) < 256)
             return 0;
-        hd_icon = mm_new_ptr_in(rd32(LM_SysZone), 256, false);
-        if (hd_icon)
-            gmemcpy(hd_icon, rd32(h), 256);
+        *slot = mm_new_ptr_in(rd32(LM_SysZone), 256, false);
+        if (*slot)
+            gmemcpy(*slot, rd32(h), 256);
     }
-    return hd_icon;
+    return *slot;
 }
 
-void disk_driver_reset(void) { hd_icon = 0; }
+static gaddr icon_bytes(void) { return icon_copy(&hd_icon, -3995); }
+gaddr disk_floppy_icon(void) { return icon_copy(&floppy_icon, -3998); }
+
+void disk_driver_reset(void) { hd_icon = floppy_icon = 0; }
 
 /* kDriveIcon, kMediaIcon and kDriveInfo for a drive; -1 when the call is
  * another. */

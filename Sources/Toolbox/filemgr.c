@@ -1,7 +1,7 @@
 /*
  * File Manager over host folders.
  *
- * One volume, "Macintosh HD" (vRefNum -1, drive 1), is a folder of its own
+ * One volume, "Macintosh HD" (vRefNum -1, drive 5), is a folder of its own
  * under the user's Library (Application Support/Blue Box/Macintosh HD, or
  * the XDG data directory elsewhere): installers and applications write
  * there freely, and the System Folder lives in it.  The host's files appear
@@ -134,6 +134,15 @@ static mount *mount_of_vref(int16_t vref)
         if (mounts[i].vref == vref)
             return &mounts[i];
     return NULL;
+}
+
+/* A drive number (a positive vRefNum) names the volume in that drive: the
+ * main one's is BOOT_DRIVE, each mounted one's the next.  The floppy drive
+ * (1) holds none of Blue Box's volumes. */
+static mount *mount_of_drive(int16_t drive)
+{
+    int i = drive - BOOT_DRIVE - 1;
+    return i >= 0 && i < nmounts ? &mounts[i] : NULL;
 }
 
 static mount *mount_of_id(int32_t id)
@@ -620,7 +629,7 @@ static int32_t parent_id_of(const char *host)
 /* Directory a (vRefNum, dirID) pair names, or 0. */
 static int32_t base_dir(int16_t vref, int32_t dirid, bool hfs)
 {
-    mount *m = mount_of_vref(vref);
+    mount *m = vref > 0 ? mount_of_drive(vref) : mount_of_vref(vref);
     if (!m && vref <= -32000 && vref > -32000 - MAX_WDS && hfs && (dirid == 1 || dirid == ROOT_ID)) {
         /* A working directory's root is its own volume's. */
         int i = -32000 - vref;
@@ -643,7 +652,7 @@ static int32_t base_dir(int16_t vref, int32_t dirid, bool hfs)
         int i = -32000 - vref;
         return wds[i].used ? wds[i].dirid : 0;
     }
-    if (vref == VREF || vref == 1)
+    if (vref == VREF || vref == BOOT_DRIVE)
         return ROOT_ID;
     return 0;
 }
@@ -919,7 +928,7 @@ static void guest_tables_init(void)
     wr32(v + VCB_vcbClpSiz_off, 32768);
     wr16(v + VCB_vcbFreeBks_off, 0xC000);
     gput(v + VCB_vcbVN_off, vol_name, (uint32_t)vol_name[0] + 1);
-    wr16(v + VCB_vcbDrvNum_off, 1);
+    wr16(v + VCB_vcbDrvNum_off, BOOT_DRIVE);
     wr16(v + VCB_vcbDRefNum_off, (uint16_t)(-1 - DISK_DRIVER_UNIT));
     wr16(v + VCB_vcbVRefNum_off, (uint16_t)VREF);
     wr16(LM_VCBQHdr, 0);
@@ -937,7 +946,7 @@ static void guest_tables_init(void)
         wr32(mv + VCB_vcbLsMod_off, vm);
         wr16(mv + VCB_vcbAtrb_off, 0x8080); /* locked */
         gput(mv + VCB_vcbVN_off, mounts[i].name, (uint32_t)mounts[i].name[0] + 1);
-        wr16(mv + VCB_vcbDrvNum_off, (uint16_t)(2 + i));
+        wr16(mv + VCB_vcbDrvNum_off, (uint16_t)(BOOT_DRIVE + 1 + i));
         wr16(mv + VCB_vcbDRefNum_off, (uint16_t)(-1 - CD_UNIT));
         wr16(mv + VCB_vcbVRefNum_off, (uint16_t)mounts[i].vref);
         wr32(last, mv); /* qLink */
@@ -945,15 +954,18 @@ static void guest_tables_init(void)
     }
     wr32(LM_VCBQHdr + 6, last);
     wr32(LM_DefVCBPtr, v);
-    /* The drive queue: drive 1 holds the volume, and each mounted volume
-     * has its drive too, on the CD driver (programs look up the drive a
-     * volume reports and its driver, as Prince of Persia 2's Mohawk engine
-     * does for its CD).  Four flag bytes precede an element: write-protected,
-     * a disk in place (fixed, or ejectable for a mounted one), installed,
-     * one side. */
+    /* The drive queue: drive 1 is the internal floppy drive, empty unless
+     * a floppy image was given (backup programs and disk tools look for it
+     * and wait for a disk there); the volume is on its SCSI disk's drive,
+     * and each mounted volume has its drive too, on the CD driver
+     * (programs look up the drive a volume reports and its driver, as
+     * Prince of Persia 2's Mohawk engine does for its CD).  Four flag bytes
+     * precede an element: write-protected, a disk in place (fixed, or
+     * ejectable for a mounted one), installed, one side. */
     wr16(LM_DrvQHdr, 0);
     wr32(LM_DrvQHdr + 2, 0);
     wr32(LM_DrvQHdr + 6, 0);
+    sony_install_drive(zone);
     for (int i = -1; i < nmounts; i++) {
         gaddr dq = mm_new_ptr_in(zone, 4 + DrvQEl_SIZEOF, true);
         if (!dq)
@@ -963,7 +975,7 @@ static void guest_tables_init(void)
         wr8(dq + 2, 1);
         gaddr e = dq + 4;
         wr16(e + DrvQEl_qType_off, 1); /* dQDrvSz2 is valid */
-        wr16(e + DrvQEl_dQDrive_off, (uint16_t)(2 + i));
+        wr16(e + DrvQEl_dQDrive_off, (uint16_t)(BOOT_DRIVE + 1 + i));
         wr16(e + DrvQEl_dQRefNum_off, (uint16_t)(i < 0 ? -1 - DISK_DRIVER_UNIT : -1 - CD_UNIT));
         wr16(e + DrvQEl_dQDrvSz_off, 0); /* 2 GB in 512-byte blocks */
         wr16(e + DrvQEl_dQDrvSz2_off, 0x40);
@@ -973,7 +985,6 @@ static void guest_tables_init(void)
             wr32(LM_DrvQHdr + 2, e);
         wr32(LM_DrvQHdr + 6, e);
     }
-    sony_install_drive(zone, (int16_t)(2 + nmounts)); /* a floppy image given to the run, if any */
 }
 
 void fm_fcb_record(int16_t rn, const char *path, bool rsrc, bool write, uint32_t eof, uint32_t pos)
@@ -2246,9 +2257,9 @@ static bool vinfo_volume(int16_t idx, int16_t vref, gaddr namep, mount **m)
         *m = default_mount();
         return true;
     }
-    if (vref == VREF || vref == 1)
+    if (vref == VREF || vref == BOOT_DRIVE)
         return true;
-    if ((*m = mount_of_vref(vref)))
+    if ((*m = mount_of_vref(vref)) || (*m = mount_of_drive(vref)))
         return true;
     if (vref <= -32000 && vref > -32000 - MAX_WDS) {
         int32_t d = base_dir(vref, 0, false);
@@ -2333,7 +2344,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     wr16(pb + VolumeParam_ioVFrBlk_off, 0xC000);
     if (hfs) {
         wr16(pb + HVolumeParam_ioVSigWord_off, 0x4244);
-        wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? 2 + (m - mounts) : 1));
+        wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? BOOT_DRIVE + 1 + (m - mounts) : BOOT_DRIVE));
         wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)(m ? -1 - CD_UNIT : -1 - DISK_DRIVER_UNIT));
         wr16(pb + HVolumeParam_ioVFSID_off, 0);
         wr32(pb + HVolumeParam_ioVBkUp_off, 0);
@@ -3327,8 +3338,11 @@ static int16_t unmount(gaddr pb)
     int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
     mount *m = NULL;
-    /* A drive number names the volume on that drive (the main one's is 1,
-     * each mounted one's the next). */
+    /* A drive number names the volume on that drive (the main one's is
+     * BOOT_DRIVE, each mounted one's the next); the floppy drive's disk
+     * leaves its drive. */
+    if (vref == FLOPPY_DRIVE && !(namep && rd8(namep)))
+        return sony_eject();
     if (vref > 1 && !(namep && rd8(namep))) {
         int16_t drive = vref;
         for (gaddr v = rd32(LM_VCBQHdr + 2); v; v = rd32(v))
@@ -3340,7 +3354,7 @@ static int16_t unmount(gaddr pb)
             for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
                 if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive) {
                     wr8(e - 3, 0);
-                    return drive == 1 ? fBsyErr : noErr;
+                    return drive == BOOT_DRIVE ? fBsyErr : noErr;
                 }
             return -56; /* nsDrvErr */
         }
@@ -3384,9 +3398,12 @@ int16_t tb_PBUnmountVol(gaddr pb) { return unmount(pb); }
 int16_t tb_PBEject(gaddr pb) { return unmount(pb); }
 int16_t tb_PBOffLine(gaddr pb) { return unmount(pb); }
 
-/* DiskEject(drive): the drives are fixed disks, which don't eject. */
+/* DiskEject(drive): the floppy drive ejects its disk; the others are fixed
+ * disks, which don't eject. */
 int16_t tb_DiskEject(int16_t rn)
 {
+    if (rn == FLOPPY_DRIVE)
+        return sony_eject();
     for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e + DrvQEl_qLink_off))
         if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == rn)
             return -17; /* controlErr */
@@ -4642,7 +4659,7 @@ bool fm_volume(uint32_t index, int16_t vref, int16_t *vref_out, char *root, size
     snprintf(root, rootsize, "%s", m ? m->root : root_path);
     const char *n = m ? m->name : vol_name;
     memcpy(name, n, (size_t)(uint8_t)n[0] + 1);
-    *drive = (int16_t)(m ? 2 + (m - mounts) : 1);
+    *drive = (int16_t)(m ? BOOT_DRIVE + 1 + (m - mounts) : BOOT_DRIVE);
     *driver = (int16_t)(m ? -1 - CD_UNIT : -1 - DISK_DRIVER_UNIT);
     return true;
 }

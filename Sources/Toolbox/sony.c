@@ -5,13 +5,14 @@
  * asks the Sony driver for blocks by offset, for the 12 tag bytes that go
  * with each (SetTagBuffer, csCode 8), and for the drive's status.  An image
  * given to the run (a plain sector dump of 400K, 720K, 800K or 1440K, or a
- * Disk Copy 4.2 image with its tags) is what drive 1 holds: the same disk
- * answers reads at drive number 1 and at the drive of its own in the drive
- * queue, so a program that looks the floppy drive up or just takes drive 1
- * finds it.  Writes change the image in memory and nothing else.
+ * Disk Copy 4.2 image with its tags) is the disk in drive 1, the internal
+ * floppy drive (a SuperDrive) in the drive queue, so a program that looks
+ * the floppy drive up or just takes drive 1 finds it.  Writes change the
+ * image in memory and nothing else.
  *
- * Without an image the driver is the drive of the volumes Blue Box mounts:
- * nothing to read raw, so its reads say the drive is offline.
+ * Without an image the drive is there, as on a real Mac, with no disk in
+ * it: its status says so, and reads say the drive is offline.  Status calls
+ * for other drives get the drive queue's answer (the volumes' drives).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,8 +31,10 @@ static struct {
     bool locked;
     gaddr tag_buffer;
     uint32_t mark;
-    int16_t drive; /* the drive number of the queue element made for it */
+    gaddr dq; /* the drive's queue element, after its four flag bytes */
 } disk;
+
+enum { DRIVE = FLOPPY_DRIVE, SUPERDRIVE = 4 };
 
 static uint32_t be32_at(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 
@@ -102,27 +105,36 @@ void sony_reset(void)
     memset(&disk, 0, sizeof disk);
 }
 
-/* A drive queue element for the disk, after the volumes' (filemgr.c). */
-void sony_install_drive(gaddr zone, int16_t drive)
+/* The flag bytes before the queue element, and its size in blocks: the disk's. */
+static void drive_flags(void)
 {
-    if (!disk.data)
+    if (!disk.dq)
         return;
+    bool in = disk.data && disk.present;
+    gaddr f = disk.dq - 4;
+    wr8(f, in && disk.locked ? 0xFF : 0);                       /* write-protected */
+    wr8(f + 1, in ? 1 : 0);                                     /* a disk in place */
+    wr8(f + 2, 1);                                              /* installed */
+    wr8(f + 3, !disk.data || disk.len > 409600 ? 0xFF : 0);     /* two-sided */
+    uint32_t blocks = in ? (uint32_t)(disk.len / SECTOR) : 0;
+    wr16(disk.dq + DrvQEl_dQDrvSz_off, (uint16_t)blocks);
+    wr16(disk.dq + DrvQEl_dQDrvSz2_off, (uint16_t)(blocks >> 16));
+}
+
+/* Drive 1's queue element, the first in the queue (filemgr.c). */
+void sony_install_drive(gaddr zone)
+{
     gaddr dq = mm_new_ptr_in(zone, 4 + DrvQEl_SIZEOF, true);
+    disk.dq = 0;
     if (!dq)
         return;
-    disk.drive = drive;
-    wr8(dq, disk.locked ? 0xFF : 0);                /* write-protected */
-    wr8(dq + 1, 1);                                 /* a disk in place */
-    wr8(dq + 2, 1);                                 /* installed */
-    wr8(dq + 3, disk.len > 409600 ? 2 : 1);         /* sides */
     gaddr e = dq + 4;
-    wr16(e + DrvQEl_qType_off, 0);
-    wr16(e + DrvQEl_dQDrive_off, (uint16_t)drive);
+    wr16(e + DrvQEl_qType_off, 1); /* dQDrvSz2 is valid */
+    wr16(e + DrvQEl_dQDrive_off, DRIVE);
     wr16(e + DrvQEl_dQRefNum_off, (uint16_t)-5);
     wr16(e + DrvQEl_dQFSID_off, 0);
-    uint32_t blocks = (uint32_t)(disk.len / SECTOR);
-    wr16(e + DrvQEl_dQDrvSz_off, (uint16_t)blocks);
-    wr16(e + DrvQEl_dQDrvSz2_off, (uint16_t)(blocks >> 16));
+    disk.dq = e;
+    drive_flags();
     if (rd32(LM_DrvQHdr + 6))
         wr32(rd32(LM_DrvQHdr + 6), e);
     else
@@ -130,18 +142,24 @@ void sony_install_drive(gaddr zone, int16_t drive)
     wr32(LM_DrvQHdr + 6, e);
 }
 
-/* Is the call for the disk: drive 1, or the drive queue element made for it. */
-static bool ours(gaddr pb)
+/* The disk leaves the drive (Eject, DiskEject, the driver's csEject). */
+int16_t sony_eject(void)
 {
-    int16_t v = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
-    return disk.data && (v == 1 || (disk.drive && v == disk.drive));
+    if (!disk.data || !disk.present)
+        return offLinErr;
+    disk.present = false;
+    drive_flags();
+    return noErr;
 }
+
+/* Is the call for the floppy drive. */
+static bool ours(gaddr pb) { return (int16_t)rd16(pb + IOParam_ioVRefNum_off) == DRIVE; }
 
 static int16_t sony_rw(gaddr pb, bool write)
 {
     if (!ours(pb))
-        return disk.data ? nsDrvErr : offLinErr;
-    if (!disk.present)
+        return nsDrvErr;
+    if (!disk.data || !disk.present)
         return offLinErr;
     if (write && disk.locked)
         return wPrErr;
@@ -196,16 +214,23 @@ static int16_t sony_control(gaddr pb, bool async)
         return noErr;
     }
     if (!ours(pb))
-        return disk.data ? nsDrvErr : offLinErr;
+        return nsDrvErr;
+    bool in = disk.data && disk.present;
     switch (cs) {
-    case csVerify: return disk.present ? noErr : offLinErr;
-    case csFormat: return disk.locked ? wPrErr : controlErr; /* a disk image is not formatted again */
-    case csEject: /* the disk leaves the drive */
-        disk.present = false;
-        return noErr;
+    case csVerify: return in ? noErr : offLinErr;
+    case csFormat: return !in ? offLinErr : disk.locked ? wPrErr : controlErr; /* a disk image is not formatted again */
+    case csEject: return sony_eject();
     case csTrackCache: return noErr;
-    case csDriveInfo: /* internal floppy, 800K-capable when the disk is double-sided */
-        wr32(pb + CntrlParam_csParam_off, disk.len > 409600 ? 0x00000001u : 0);
+    case csDriveIcon: /* the drive's icon, and the disk's: the floppy disk */
+    case csMediaIcon: {
+        gaddr icon = disk_floppy_icon();
+        if (!icon)
+            return controlErr;
+        wr32(pb + CntrlParam_csParam_off, icon);
+        return noErr;
+    }
+    case csDriveInfo: /* a SuperDrive (FDHD), internal, primary, removable media */
+        wr32(pb + CntrlParam_csParam_off, SUPERDRIVE);
         return noErr;
     }
     return controlErr;
@@ -218,8 +243,11 @@ static int16_t sony_status(gaddr pb, bool async)
     int16_t cs = (int16_t)rd16(pb + CntrlParam_csCode_off);
     if (!ours(pb))
         return cs == 8 ? disk_drive_status(pb) : statusErr; /* the volumes' drives, as the drive queue has them */
+    bool in = disk.data && disk.present;
     switch (cs) {
     case 6: { /* the formats the drive writes: a list of (capacity in blocks, flags) */
+        if (!in)
+            return offLinErr;
         gaddr p = pb + CntrlParam_csParam_off;
         wr16(p, 1);                                                  /* one format: the disk's */
         wr32(p + 2, (uint32_t)(disk.len / SECTOR));                  /* blocks */
@@ -229,13 +257,15 @@ static int16_t sony_status(gaddr pb, bool async)
     case 8: { /* drive status */
         gaddr st = pb + CntrlParam_csParam_off;
         gmemset(st, 0, DrvSts_SIZEOF);
-        wr8(st + DrvSts_writeProt_off, disk.locked ? 0xFF : 0);
-        wr8(st + DrvSts_diskInPlace_off, disk.present ? 1 : 0);
+        if (disk.dq) /* qLink through dQFSID, as the queue has them */
+            gmemcpy(st + DrvSts_qLink_off, disk.dq, DrvSts_twoSideFmt_off - DrvSts_qLink_off);
+        wr8(st + DrvSts_writeProt_off, in && disk.locked ? 0xFF : 0);
+        wr8(st + DrvSts_diskInPlace_off, in ? 1 : 0);
         wr8(st + DrvSts_installed_off, 1);
-        wr8(st + DrvSts_sides_off, disk.len > 409600 ? 0xFF : 0);   /* two-sided */
-        wr16(st + DrvSts_dQDrive_off, (uint16_t)(disk.drive ? disk.drive : 1));
+        wr8(st + DrvSts_sides_off, !disk.data || disk.len > 409600 ? 0xFF : 0); /* two-sided */
+        wr16(st + DrvSts_dQDrive_off, DRIVE);
         wr16(st + DrvSts_dQRefNum_off, (uint16_t)-5);
-        wr8(st + DrvSts_twoSideFmt_off, disk.len > 409600 ? 0xFF : 0);
+        wr8(st + DrvSts_twoSideFmt_off, in && disk.len > 409600 ? 0xFF : 0);
         return noErr;
     }
     }
