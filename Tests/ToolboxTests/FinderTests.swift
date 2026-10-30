@@ -522,6 +522,20 @@ extension BlueBox {
             #expect(g_cpu!.pointee.icount - before < 200_000) // a tick at most
         }
 
+        /// With no sleep asked for, WaitNextEvent returns at once: the
+        /// clock moves on by the call's own time, not a tick (ApplLoader
+        /// counts 3000 null events before it quits).
+        @Test func noSleepTakesNoTick() {
+            launchTestApp()
+            let ev = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            tb_FlushEvents(-1, 0)
+            for _ in 0..<3 {
+                let before = g_cpu!.pointee.icount
+                _ = tb_WaitNextEvent(0, ev, 0, 0)
+                #expect(g_cpu!.pointee.icount - before < 20_000)
+            }
+        }
+
         /// Quit All Applications from another program (an installer or
         /// updater making way: At Ease 2.0.3 Updater) leaves it running and
         /// answers it, as the Process Manager does once the others quit.

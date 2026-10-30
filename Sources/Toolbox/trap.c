@@ -629,8 +629,14 @@ void machine_idle_for(int32_t sleep)
         return;
     /* Waiting: scripted input comes now, or the clock moves on to it. */
     uint64_t next = events_script_next_at();
-    if (sleep >= 0) {
-        uint64_t slept = c->icount + (uint64_t)(sleep ? sleep : 1) * 166667u; /* a tick at 10 MIPS */
+    if (sleep == 0) {
+        /* No sleep: WaitNextEvent returns at once, as on a Mac, the clock
+         * moved on by the call's own time only, not a tick: a program
+         * counting its null events (ApplLoader quits after 3000 of them)
+         * would otherwise wait most of a minute. */
+        next = 0;
+    } else if (sleep > 0) {
+        uint64_t slept = c->icount + (uint64_t)sleep * 166667u; /* a tick at 10 MIPS */
         if (!next || slept < next)
             next = slept;
         /* The menu walk's next step is input too and ends the sleep there:
