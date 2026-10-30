@@ -810,6 +810,14 @@ static int list_entries(const char *dir, bool files_only, char ***out)
          * until its thread's stack ran down over its code. */
         if (!strcmp(full, root_path) && !on_volume(dir))
             continue;
+        /* So is a mounted volume's (the application's folder): its root
+         * is directory 2 of that volume, and listed in Host as well it
+         * made Macintosh HD's root its own descendant.  Fastback Plus
+         * walked the volume to back it up and went round until it gave
+         * up deeper than 111 folders. */
+        mount *m = mount_of_path(full);
+        if (m && !strcmp(m->root, full) && mount_of_path(dir) != m)
+            continue;
         if (root && !strcmp(name, host_folder))
             continue; /* the Host folder's name is taken */
         if (count == cap) {

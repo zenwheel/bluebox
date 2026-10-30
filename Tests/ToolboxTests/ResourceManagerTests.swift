@@ -644,6 +644,39 @@ extension BlueBox {
             }
             #expect(names.contains("Doc") && !names.contains("Macintosh HD"))
         }
+
+        /// Nor is a folder mounted as a volume of its own (the application's
+        /// disk): its root is that volume's directory 2, and listed inside
+        /// Host it made Macintosh HD's root a folder of its own.  Fastback
+        /// Plus walked the disk to back it up and went round until it gave
+        /// up deeper than 111 folders.
+        @Test func mountedFolderIsNotInsideHost() throws {
+            let tmp = realpath("/tmp", nil).map { p in defer { free(p) }; return String(cString: p) } ?? "/tmp"
+            let base = URL(fileURLWithPath: tmp + "/bluebox-\(UUID().uuidString.prefix(8))")
+            defer { try? FileManager.default.removeItem(at: base) }
+            let vol = base.appendingPathComponent("Vol")
+            try FileManager.default.createDirectory(at: vol, withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: vol.appendingPathComponent("Inside"))
+            let doc = base.appendingPathComponent("Doc")
+            try Data("x".utf8).write(to: doc)
+            machine_mount_folder(vol.path, "Vol")
+            launchTestApp(documents: [doc.path])
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(256, false, true)
+            guestPString(":Host" + base.path.replacingOccurrences(of: "/", with: ":"), at: name)
+            wr32(pb + 18, name)
+            wr16(pb + 22, UInt16(bitPattern: -1)); wr32(pb + 48, 2)
+            #expect(tb_PBGetCatInfo(pb, false) == 0)
+            let dirID = rd32(pb + 48)
+            var names: [String] = []
+            for idx in 1...4 {
+                wr32(pb + 18, name)
+                wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, UInt16(idx)); wr32(pb + 48, dirID)
+                if tb_PBGetCatInfo(pb, false) != 0 { break }
+                names.append(pstring(at: name))
+                #expect(rd32(pb + 48) != 2) // no entry is a volume's root
+            }
+            #expect(names.contains("Doc") && !names.contains("Vol"))
+        }
     }
 }
 }

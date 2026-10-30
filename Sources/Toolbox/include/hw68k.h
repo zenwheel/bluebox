@@ -31,6 +31,7 @@ typedef struct {
     bool via_sound;            /* the sound buffer the VIA's video circuitry plays (compact Macs) */
     bool adb;                  /* ADB rather than the keyboard on the shift register */
     gaddr via, scc_rd, scc_wr, iwm; /* the devices' addresses */
+    bool superdrive;           /* the internal floppy drive is a 1.44 MB SuperDrive (else 800K) */
 } hw_profile;
 
 const hw_profile *hw_find_profile(const char *name);

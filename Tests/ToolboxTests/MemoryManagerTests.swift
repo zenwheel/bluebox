@@ -13,6 +13,24 @@ extension BlueBox {
             sysZone = rd32(UInt32(LM_SysZone))
         }
 
+        /// The application zone grows past the chips' I/O space ($50F00000)
+        /// without a block of its own there: those addresses are the VIA,
+        /// SCC and IWM, not RAM.
+        @Test func zoneGrowsAroundTheIOSpace() {
+            #expect(withUnsafeBytes(of: &g_hw_map) { $0[0x50F] } != 0)
+            var ptrs: [UInt32] = []
+            defer { ptrs.forEach { tb_DisposePtr($0) } }
+            while ptrs.count < 40 {
+                let p = tb_NewPtr(64 << 20, false, false)
+                if p == 0 { break }
+                ptrs.append(p)
+                if p > 0x5100_0000 { break }
+            }
+            #expect(ptrs.last ?? 0 > 0x5100_0000)
+            #expect(ptrs.allSatisfy { $0 + (64 << 20) <= 0x50F0_0000 || $0 >= 0x5100_0000 })
+            #expect(mm_check_zone(appZone))
+        }
+
         @Test func handlesAllocateResizeAndKeepContents() {
             let h = tb_NewHandle(100, false, false)
             #expect(h != 0)

@@ -217,12 +217,32 @@ extension BlueBox {
             #expect(hwRead(rctl) & 1 == 0)
         }
 
-        /// The IWM with no drive: the status register's sense line reads high.
-        @Test func iwmWithoutADrive() {
+        /// The IWM's status register: with no drive enabled the sense line
+        /// reads high; the internal drive, enabled, says it is there with
+        /// no disk in it, and drive 2 is not there.
+        @Test func iwmSensesTheInternalDrive() {
             let base = rd32(UInt32(LM_IWM))
-            _ = hwRead(base + 12 * 512 + 512) // Q6 high
-            _ = hwRead(base + 14 * 512)       // Q7 low
-            #expect(hwRead(base) & 0x80 != 0)
+            func sw(_ n: Int) { _ = hwRead(base + UInt32(n * 512)) }
+            func sense() -> Bool { hwRead(base + 14 * 512) & 0x80 != 0 } // Q7 low: the status register
+            sw(13)                                   // Q6 high
+            for n in [0, 2, 4, 6] { sw(n) }          // CA0-CA2, LSTRB low
+            #expect(sense())                         // no drive enabled
+            sw(9); sw(10)                            // enable drive 1
+            hwWrite(via(V.dirA), hwRead(via(V.dirA)) | 0x20)
+            hwWrite(via(V.bufA), hwRead(via(V.bufA)) | 0x20) // SEL high
+            #expect(!sense())                        // /DRVIN: installed
+            sw(1)
+            #expect(sense())                         // /CSTIN: no disk
+            sw(0); sw(4); sw(5)
+            #expect(sense())                         // reg $C, /TACH: no pulses
+            sw(3)
+            #expect(!sense())                        // reg $E: GCR, not MFM
+            sw(1)
+            #expect(sense())                         // reg $F, /READY: not ready
+            sw(11)
+            sw(0); sw(2); sw(4)
+            #expect(sense())                         // drive 2: nothing there
+            sw(10); sw(8)                            // drive 1, disabled
         }
 
         /// The mouse and keys programs read straight from low memory.

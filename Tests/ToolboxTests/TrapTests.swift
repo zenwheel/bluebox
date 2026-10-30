@@ -45,6 +45,29 @@ extension BlueBox {
             #expect(tb_GetHandleSize(h) == 3)
         }
 
+        /// A Toolbox routine leaves its arguments below the stack pointer as
+        /// the caller pushed them, not its return address over the last of
+        /// them: a program that reads a local it never set (Agean's New)
+        /// finds what it last passed there.
+        @Test func argumentsStayBelowTheStack() {
+            let reason = run([
+                0x554F,                         // SUBQ.W #2,SP        result space
+                0x2F3C, 0x1234, 0x5678,         // MOVE.L #$12345678,-(SP)
+                0xA86A,                         // _HiWord
+                0x3E1F,                         // MOVE.W (SP)+,D7
+                0x2C2F, 0xFFFA,                 // MOVE.L -6(SP),D6    the argument, popped
+                0x3F3C, 0x0011,                 // MOVE.W #17,-(SP)    h
+                0x3F3C, 0x0022,                 // MOVE.W #34,-(SP)    v
+                0xA893,                         // _MoveTo
+                0x2A2F, 0xFFFC,                 // MOVE.L -4(SP),D5
+                0xA9F4,                         // _ExitToShell
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(cpu.pointee.d.7 & 0xFFFF == 0x1234)
+            #expect(cpu.pointee.d.6 == 0x1234_5678)
+            #expect(cpu.pointee.d.5 == 0x0022_0011) // v, then h
+        }
+
         /// Jumping to ROMBase+$0A restarted a Mac before the Shutdown
         /// Manager (World Builder's games): the run ends there.
         @Test func jumpToTheROMsStartRestarts() {

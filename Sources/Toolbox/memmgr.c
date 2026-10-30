@@ -379,6 +379,36 @@ static bool grow_zone(gaddr z, uint32_t need)
     if (want > room)
         want = room;
     gaddr newlim = lim + (uint32_t)want;
+    /* The machine's I/O space (the chips at $50F00000 on a Quadra) is not
+     * RAM, and a zone growing across it keeps it in a nonrelocatable block
+     * of its own: a block there would be read and written by the chips
+     * (Fastback Plus's stack, in a block it took at $50F17xxx, ran into the
+     * IWM). */
+    gaddr io_lo = 0, io_hi = 0;
+    for (gaddr m = lim >> 20; m <= (newlim - 1) >> 20; m++)
+        if (g_hw_map[m]) {
+            io_lo = m << 20;
+            while (m < 4095 && g_hw_map[m + 1])
+                m++;
+            io_hi = (m + 1) << 20;
+            break;
+        }
+    if (io_hi) {
+        if (io_hi + MIN_BLOCK + HDR <= limit) {
+            /* across it: the hole, and all the growth asked for above */
+            uint64_t top = (uint64_t)io_hi + (newlim - lim);
+            newlim = top + HDR <= limit ? (gaddr)top : (limit - HDR) & ~3u;
+            gaddr hole = io_lo >= lim + MIN_BLOCK ? io_lo : lim;
+            if (hole > lim)
+                b_set(lim, USE_FREE, 0, 0, hole - lim, 0);
+            b_set(hole, USE_NREL, 0, 0, io_hi - hole, z);
+            lim = io_hi;
+        } else if (io_lo >= lim + MIN_BLOCK + HDR) {
+            newlim = io_lo - HDR; /* up to it */
+        } else {
+            return false;
+        }
+    }
     /* The old trailer becomes a free block covering the new space. */
     b_set(lim, USE_FREE, 0, 0, newlim - lim, 0);
     write_trailer(newlim);
