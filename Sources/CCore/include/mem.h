@@ -106,6 +106,7 @@ extern gaddr g_watch_lo, g_watch_len;
 extern void (*g_watch_fn)(gaddr a);
 static inline void watch_store(gaddr a)
 {
+    a = mem_strip(a); /* in 24-bit mode, whatever the top byte says */
     if (a - g_watch_lo < g_watch_len)
         g_watch_fn(a);
 }
