@@ -657,6 +657,7 @@ extern const native_driver mactcp_driver;
 void mactcp_poll(void);
 void mactcp_reset(void);
 void mactcp_install_resolver(void);
+bool mactcp_pb(gaddr pb); /* a call to the .IPP driver's */
 /* The Sony driver (.Sony) for a raw floppy disk image, key-disk checks (sony.c). */
 extern const native_driver sony_driver;
 void sony_install_drive(gaddr zone);       /* drive 1, with or without a disk */

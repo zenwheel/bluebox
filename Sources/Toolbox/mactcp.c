@@ -792,6 +792,8 @@ static int16_t ipp_kill(gaddr pb) { return noErr; }
 
 const native_driver mactcp_driver = { ".IPP", 48, ipp_open, ipp_close, ipp_control, NULL, NULL, NULL, ipp_kill };
 
+bool mactcp_pb(gaddr pb) { return (int16_t)rd16(pb + IOParam_ioRefNum_off) == -1 - mactcp_driver.unit; }
+
 /* ---------------------------------------------------------------------- */
 /* Interrupt time: waiting calls go on; notification routines hear of data
  * and of the other end closing. */

@@ -269,6 +269,24 @@ extension BlueBox {
             #expect(calls == ["pre"])
         }
 
+        /// The handler tables have room for as many handlers as a program
+        /// installs (iCab installs 65 event handlers).
+        @Test func manyHandlers() {
+            launchTestApp()
+            let hdlr = tb_NewPtr(Int32(4), false, true), ref = tb_NewPtr(4, false, true)
+            for i in 0..<200 {
+                #expect(tb_AEInstallEventHandler(code("test"), Int32(0x6100_0000 + i), 0x1000 + UInt32(i), Int32(i), 0) == 0)
+                #expect(tb_AEInstallCoercionHandler(code("TEXT"), Int32(0x6100_0000 + i), 0x2000 + UInt32(i), Int32(i), 0, 0) == 0)
+            }
+            for i in [0, 64, 199] {
+                #expect(tb_AEGetEventHandler(code("test"), Int32(0x6100_0000 + i), hdlr, ref, 0) == 0)
+                #expect(rd32(hdlr) == 0x1000 + UInt32(i) && rd32(ref) == UInt32(i))
+            }
+            #expect(tb_AERemoveEventHandler(code("test"), Int32(0x6100_0000 + 64), 0, 0) == 0)
+            #expect(tb_AEGetEventHandler(code("test"), Int32(0x6100_0000 + 64), hdlr, ref, 0) == -1717)
+            #expect(tb_AEGetEventHandler(code("test"), Int32(0x6100_0000 + 199), hdlr, ref, 0) == 0)
+        }
+
         /// An event sent with kAEDontExecute is for recording only: its
         /// handler is not called (PowerPlant sends Close so, then closes).
         @Test func dontExecute() {

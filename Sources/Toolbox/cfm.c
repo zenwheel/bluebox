@@ -1044,9 +1044,17 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
         gmemset(base, 0, total);
         sections[s] = (section){ base, total, kind, base - be32(h + 4) };
         LOGF(LOG_SEG, "cfm: section %d (kind %d) at %08X, %u bytes\n", s, kind, base, total);
-        if (kind == kPatternData)
-            unpack_pattern(pef + off, pef + off + packed, base, unpacked);
-        else
+        /* Pattern data that doesn't decode is a damaged fragment, as the
+         * Code Fragment Manager found it (cfragFragmentCorruptErr): going
+         * on left the rest of the section zero, and ListenDo!'s vtables
+         * there sent its calls into low memory. */
+        if (kind == kPatternData) {
+            if (!unpack_pattern(pef + off, pef + off + packed, base, unpacked)) {
+                snprintf(err, errlen, "the fragment is damaged: section %d's pattern data does not decode", s);
+                free(sections);
+                return false;
+            }
+        } else
             gput(base, pef + off, packed < total ? packed : total);
     }
     if (!loader || loader_len < 56) {

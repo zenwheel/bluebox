@@ -706,8 +706,24 @@ typedef struct {
     bool from_desc;
 } coercion_entry;
 
-static coercion_entry coercions[2][32];
-static int ncoercions[2];
+static coercion_entry *coercions[2];
+static int ncoercions[2], coercion_room[2];
+
+/* Room in a table for one more entry: the Apple Event Manager's tables
+ * grow as handlers are installed (iCab installs 65 event handlers, and
+ * one refused made it give up building what its 'oapp' handler uses). */
+static bool table_room(void **table, int n, int *room, size_t size)
+{
+    if (n < *room)
+        return true;
+    int more = *room ? *room * 2 : 64;
+    void *t = realloc(*table, (size_t)more * size);
+    if (!t)
+        return false;
+    *table = t;
+    *room = more;
+    return true;
+}
 
 static const coercion_entry *find_coercion(uint32_t from, uint32_t to)
 {
@@ -1142,8 +1158,8 @@ typedef struct {
     int32_t refcon;
 } handler_entry;
 
-static handler_entry handlers[2][64];
-static int nhandlers[2];
+static handler_entry *handlers[2];
+static int nhandlers[2], handler_room[2];
 static uint8_t interaction = kAEInteractWithLocal;
 static gaddr current_event_desc;
 
@@ -1157,7 +1173,7 @@ int16_t tb_AEInstallEventHandler(int32_t event_class, int32_t event_id, gaddr hd
             handlers[s][i].refcon = refcon;
             return noErr;
         }
-    if (nhandlers[s] >= 64)
+    if (!table_room((void **)&handlers[s], nhandlers[s], &handler_room[s], sizeof handlers[s][0]))
         return memFullErr;
     handlers[s][nhandlers[s]++] = (handler_entry){ (uint32_t)event_class, (uint32_t)event_id, hdlr, refcon };
     return noErr;
@@ -1219,7 +1235,7 @@ int16_t tb_AEInstallCoercionHandler(int32_t from, int32_t to, gaddr hdlr, int32_
             coercions[s][i] = e;
             return noErr;
         }
-    if (ncoercions[s] >= 32)
+    if (!table_room((void **)&coercions[s], ncoercions[s], &coercion_room[s], sizeof e))
         return memFullErr;
     coercions[s][ncoercions[s]++] = e;
     return noErr;

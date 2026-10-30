@@ -178,7 +178,7 @@ int16_t tb_SlotVRemove(gaddr vtaskp, int16_t slot) { return tb_VRemove(vtaskp); 
  * there to send the interrupted code elsewhere when the interrupt
  * returns: MPW Shell's waits for the next tick in BRA.S *, and its VBL
  * task finds that PC on the stack and steps it past the loop. */
-static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0)
+static void interrupt_call_arg(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr arg)
 {
     cpu68k *c = g_cpu;
     uint32_t d[8], a[8];
@@ -194,6 +194,8 @@ static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0)
         cpu_push32(c, a[i]);
     for (int i = 3; i >= 0; i--)
         cpu_push32(c, d[i]);
+    if (arg)
+        cpu_push32(c, arg);
     c->d[0] = d0;
     c->a[0] = a0;
     c->a[1] = a1;
@@ -207,7 +209,16 @@ static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0)
         c->pc = back;
 }
 
+static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0) { interrupt_call_arg(fn, a0, a1, d0, 0); }
 static void interrupt_call(gaddr fn, gaddr a0, gaddr a1) { interrupt_call_d0(fn, a0, a1, 0); }
+
+/* A completion routine gets the parameter block in A0 and the result in
+ * D0; MacTCP's are C functions, void (*)(TCPiopb *), and take the block
+ * on the stack as well (QuickDNS Lite's TCPCreate completion). */
+static void call_completion(gaddr fn, gaddr pb, int16_t result)
+{
+    interrupt_call_arg(fn, pb, 0, (uint32_t)(int32_t)result, mactcp_pb(pb) ? pb : 0);
+}
 void time_interrupt_call(gaddr fn, gaddr a0, gaddr a1) { interrupt_call(fn, a0, a1); }
 
 /* Completion routines of asynchronous File and Device Manager calls: our
@@ -244,7 +255,7 @@ static void complete(gaddr pb, int16_t result)
     gaddr fn = rd32(pb + 12);        /* ioCompletion */
     if (fn) {
         completing++;
-        interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)result);
+        call_completion(fn, pb, result);
         completing--;
     }
 }
@@ -324,7 +335,7 @@ void io_complete_now(gaddr pb, int16_t result)
     }
     gaddr fn = rd32(pb + 12); /* ioCompletion */
     if (fn)
-        interrupt_call_d0(fn, pb, 0, (uint32_t)(int32_t)result);
+        call_completion(fn, pb, result);
 }
 
 static void run_completions(void)
