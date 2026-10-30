@@ -136,6 +136,46 @@ extension BlueBox {
             }
         }
 
+        /// A disposed handle's master pointer holds the next free one; in
+        /// 24-bit mode the "header" twelve bytes before that can be a locked
+        /// handle's master pointer, whose $80 reads as a relocatable block.
+        /// Calls on the disposed handle leave that handle alone (Pararena
+        /// unlocks a handle it has disposed).
+        @Test func disposedHandleLeavesTheNextMasterPointerAlone() {
+            boot24 {
+                let z = rd32(UInt32(LM_ApplZone))
+                tb_MoreMasters()
+                let a = tb_NewHandle(96, false, true)
+                let b = tb_NewHandle(16, false, true)
+                let c = tb_NewHandle(16, false, true)
+                let d = tb_NewHandle(16, false, true)
+                #expect(b == a + 4 && c == a + 8 && d == a + 12)
+                tb_HLock(a)
+                let pa = rd32(a)
+                #expect(pa >> 24 == 0x80)
+                tb_DisposeHandle(d)
+                tb_DisposeHandle(b)
+                #expect(rd32(b) == a + 12)  // the free list: b, then d
+                tb_HUnlock(b)
+                #expect(memErr() == -111)  // memWZErr
+                tb_HSetState(b, 0)
+                tb_HLock(b)
+                #expect(tb_GetHandleSize(b) == -111)
+                tb_DisposeHandle(b)  // disposed twice
+                #expect(memErr() == -111)
+                #expect(rd32(a) == pa && rd32(b) == a + 12)
+                #expect(mm_check_zone(z))
+                // A program's own copy of a master pointer still names the block.
+                let copy = tb_NewPtr(4, false, true)
+                wr32(copy, rd32(c))
+                #expect(tb_GetHandleSize(copy) == 16 && memErr() == 0)
+                tb_HUnlock(a)
+                tb_DisposeHandle(a)
+                tb_DisposeHandle(c)
+                #expect(mm_check_zone(z))
+            }
+        }
+
         /// A program whose SIZE resource doesn't say it is 32-bit clean
         /// asks for 24-bit addressing, and gets its partition under the
         /// screen.
