@@ -180,27 +180,57 @@ static inline void wr32(gaddr a, uint32_t v)
     memcpy(g_mem + a, &v, 4);
 }
 
-/* Bulk stores (a whole range checked against the code map). */
+/* Bulk stores (a whole range checked against the code map).  A range
+ * running past the top of the 32-bit space wraps round to 0, as the CPUs'
+ * addresses do (a size from the program can be anything; the arena ends
+ * at 4 GB). */
 void mem_code_range(gaddr a, uint32_t n);
+/* The bytes of a range below the top of the space: n unless it wraps. */
+static inline uint32_t mem_below_top(gaddr a, uint32_t n)
+{
+    uint32_t room = 0u - a;
+    return a && n > room ? room : n;
+}
+void mem_copy_wrapping(gaddr dst, gaddr src, uint32_t n);
 static inline void gmemcpy(gaddr dst, gaddr src, uint32_t n)
 {
+    if (mem_below_top(dst, n) < n || mem_below_top(src, n) < n) {
+        mem_copy_wrapping(dst, src, n);
+        return;
+    }
     if (g_code_map && n)
         mem_code_range(dst, n);
     memmove(g_mem + dst, g_mem + src, n);
 }
 static inline void gmemset(gaddr dst, int c, uint32_t n)
 {
+    uint32_t k = mem_below_top(dst, n);
+    if (k < n) {
+        gmemset(0, c, n - k);
+        n = k;
+    }
     if (g_code_map && n)
         mem_code_range(dst, n);
     memset(g_mem + dst, c, n);
 }
 static inline void gput(gaddr dst, const void *src, uint32_t n)
 {
+    uint32_t k = mem_below_top(dst, n);
+    if (k < n) {
+        gput(0, (const uint8_t *)src + k, n - k);
+        n = k;
+    }
     if (g_code_map && n)
         mem_code_range(dst, n);
     memcpy(g_mem + dst, src, n);
 }
-static inline void gget(void *dst, gaddr src, uint32_t n) { memcpy(dst, g_mem + src, n); }
+static inline void gget(void *dst, gaddr src, uint32_t n)
+{
+    uint32_t k = mem_below_top(src, n);
+    if (k < n)
+        memcpy((uint8_t *)dst + k, g_mem, n - k);
+    memcpy(dst, g_mem + src, k);
+}
 
 /* Pascal strings in guest memory. */
 static inline uint8_t pstr_len(gaddr s) { return rd8(s); }

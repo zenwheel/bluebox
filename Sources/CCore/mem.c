@@ -85,6 +85,25 @@ void mem_code_range(gaddr a, uint32_t n)
     }
 }
 
+/* A copy one of whose ranges wraps round the top of the space: a byte at
+ * a time, in the direction an overlap needs. */
+void mem_copy_wrapping(gaddr dst, gaddr src, uint32_t n)
+{
+    uint32_t k = mem_below_top(dst, n);
+    if (g_code_map && n) {
+        if (k)
+            mem_code_range(dst, k);
+        if (n - k)
+            mem_code_range(0, n - k);
+    }
+    if ((gaddr)(dst - src) < n) {
+        for (uint32_t i = n; i-- > 0;)
+            g_mem[(gaddr)(dst + i)] = g_mem[(gaddr)(src + i)];
+    } else {
+        for (uint32_t i = 0; i < n; i++)
+            g_mem[(gaddr)(dst + i)] = g_mem[(gaddr)(src + i)];
+    }
+}
 
 bool mem_init(void)
 {
