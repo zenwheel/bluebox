@@ -187,13 +187,13 @@ extension BlueBox {
         @Test func sizeResourceChoosesAndPartitionFits() throws {
             let dir = tempDir()
             defer { try? FileManager.default.removeItem(at: dir) }
-            func app(_ name: String, flags: UInt16?, ppc: Bool = false) -> String {
+            func app(_ name: String, flags: UInt16?, ppc: Bool = false, minimum: UInt32 = 0x80000) -> String {
                 let jt = cat(be16(0), be16(0x3F3C), be16(1), be16(0xA9F0))
                 var res = [
                     TestResource(type: "CODE", id: 0, data: cat(be32(40), be32(256), be32(8), be32(32), jt)),
                     TestResource(type: "CODE", id: 1, data: cat(be16(0), be16(1), be16(0xA9F4))),
                 ]
-                if let flags { res.append(TestResource(type: "SIZE", id: -1, data: cat(be16(Int(flags)), be32(0x80000), be32(0x80000)))) }
+                if let flags { res.append(TestResource(type: "SIZE", id: -1, data: cat(be16(Int(flags)), be32(minimum), be32(minimum)))) }
                 if ppc { res.append(TestResource(type: "cfrg", id: 0, data: [UInt8](repeating: 0, count: 32))) }
                 var fork = buildFork(res)
                 let path = dir.appendingPathComponent(name).path
@@ -210,6 +210,9 @@ extension BlueBox {
             #expect(machine_app_addressing(clean) == 32)
             #expect(machine_app_addressing(old) == 24)
             #expect(machine_app_addressing(app("Fat", flags: 0x5800, ppc: true)) == 32)
+            // A minimum partition no 24-bit Mac had room for: run in 32-bit mode.
+            #expect(machine_app_addressing(app("Big", flags: 0x0000, minimum: 16_000 * 1024)) == 32)
+            #expect(machine_app_addressing(app("Fits", flags: 0x0000, minimum: 6 * 1024 * 1024)) == 24)
             boot24 {
                 var err = [CChar](repeating: 0, count: 256)
                 #expect(machine_launch(clean, &err, err.count))  // chosen for it: 24-bit all the same
