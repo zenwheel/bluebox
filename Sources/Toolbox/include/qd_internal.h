@@ -255,6 +255,18 @@ extern const uint8_t qd_pat_black[8], qd_pat_white[8], qd_pat_gray[8], qd_pat_lt
 /* QDErr, QDError's answer (a low-memory word lowmem_gen.h lacks). */
 #define LM_QDErr_ADDR 0x0D6Eu
 
+/* Picture Utilities' survey of a picture as it is drawn (pictutil.c):
+ * while qd_survey is set, playback reports to it and shows no images. */
+typedef struct pict_survey pict_survey;
+extern pict_survey *qd_survey;
+void survey_op(pict_survey *s, int op);
+void survey_image(pict_survey *s, bool pixmap, int depth, const uint8_t *rgba, int w, int h);
+void survey_rgb(pict_survey *s, const uint16_t rgb[3]);
+void survey_comment(pict_survey *s, int kind);
+void survey_font(pict_survey *s, int pict_id);
+void survey_font_name(pict_survey *s, int pict_id, int sys_id, const uint8_t *name);
+void survey_text(pict_survey *s, gaddr port);
+
 /* Screen depth changes (qd_screen.c). */
 void qd_screen_port_opened(gaddr port);
 void qd_screen_port_closed(gaddr port);

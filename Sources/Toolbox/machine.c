@@ -766,7 +766,12 @@ int machine_app_addressing(const char *app_path)
         /* SIZE -1 (user-modified) over SIZE 0, as at launch; a program
          * from before MultiFinder has none, and was 24-bit. */
         const uint8_t *d = size && size->data_len >= 2 ? rsrc_data(mf.rsrc, &idx, size) : NULL;
-        if (code && !ppc && !(d && (d[1] & 0x80)))
+        /* One whose minimum partition is more than a 24-bit Mac could give
+         * it (the RAM below the screen, less the system heap) was run in
+         * 32-bit mode, whatever its flags say (Dream Wars asks for 16 MB
+         * and leaves the flag clear). */
+        uint32_t min = d && size->data_len >= 10 ? (uint32_t)d[6] << 24 | (uint32_t)d[7] << 16 | (uint32_t)d[8] << 8 | d[9] : 0;
+        if (code && !ppc && !(d && (d[1] & 0x80)) && min <= GA24_TOP - 0x00400000u)
             bits = 24;
         rsrc_index_free(&idx);
     }

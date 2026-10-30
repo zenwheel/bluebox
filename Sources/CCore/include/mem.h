@@ -37,10 +37,15 @@ enum {
      * a Mac II's with more RAM: RAM (the partition ending at GA24_TOP),
      * the screen where a video card's slot space was, the I/O space at
      * $F00000 (for the hardware a program touches directly), and the ROM
-     * above it.  A Mac II and the compact Macs have their own (mem.c). */
+     * above it.  A Mac II and the compact Macs have their own (mem.c).
+     * The screen has the megabyte a card had in 24-bit mode, so it is at
+     * most 8 bits deep at 1024 by 768, as a 24-bit Mac's was; the slot
+     * space after it is empty, and a program drawing straight to the
+     * screen past its bottom (Life does) writes there, not round the top
+     * of the 16 MB into low memory. */
     GA24_TOP         = 0x00B00000u,
     GA24_SCREEN      = 0x00B00000u,
-    GA24_SCREEN_SIZE = 0x00400000u,
+    GA24_SCREEN_SIZE = 0x00100000u,
     GA24_IO          = 0x00F00000u,
     GA24_ROM         = 0x00F80000u,
     GA24_ROM_SIZE    = 0x00080000u,
@@ -101,6 +106,7 @@ extern gaddr g_watch_lo, g_watch_len;
 extern void (*g_watch_fn)(gaddr a);
 static inline void watch_store(gaddr a)
 {
+    a = mem_strip(a); /* in 24-bit mode, whatever the top byte says */
     if (a - g_watch_lo < g_watch_len)
         g_watch_fn(a);
 }

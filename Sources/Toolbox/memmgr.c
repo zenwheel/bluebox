@@ -203,6 +203,26 @@ static gaddr zone_of(gaddr addr)
 }
 
 /* Validate a handle; returns its block, or 0 (empty) with *err set. */
+/* Is b a relocatable block, its own master pointer pointing back at it?
+ * A disposed handle's master pointer holds the next free one, and twelve
+ * bytes before that is no header, but in 24-bit mode a locked handle's
+ * master pointer there starts with $80 and reads as a relocatable block's
+ * use bits; writing that "header" damages the handle (Pararena unlocks a
+ * handle it has disposed). The master pointer is the block's, not h: a
+ * program may hand over its own copy of one. */
+static bool rel_block(gaddr b)
+{
+    if (b_use(b) != USE_REL)
+        return false;
+    gaddr z = zone_of(b);
+    if (!z)
+        return true; /* a heap Blue Box doesn't know: as it says */
+    if (b_loc(b) >= z_lim(z) - z)
+        return false;
+    gaddr v = rd32(z + b_loc(b));
+    return mem_strip(v) == b + HDR || (b + HDR <= 0x00FFFFFFu && (v & 0x00FFFFFFu) == b + HDR);
+}
+
 static gaddr handle_block(gaddr h, int16_t *err)
 {
     *err = noErr;
@@ -219,9 +239,9 @@ static gaddr handle_block(gaddr h, int16_t *err)
     /* The top byte may be the handle's flags, as programs of the 24-bit
      * days set them (RMaker locks its strings with BSET #7 and then asks
      * GetHandleSize), for a block below 16 MB, in 32-bit mode too. */
-    if (b_use(b) != USE_REL && (p >> 24) && (p & 0x00FFFFFFu) >= HDR)
+    if (!rel_block(b) && (p >> 24) && (p & 0x00FFFFFFu) >= HDR)
         b = (p & 0x00FFFFFFu) - HDR;
-    if (b_use(b) != USE_REL) {
+    if (!rel_block(b)) {
         *err = memWZErr;
         return 0;
     }
@@ -760,8 +780,8 @@ void tb_DisposeHandle(gaddr h)
     gaddr z = 0;
     if (p) {
         gaddr b = p - HDR;
-        if (b_use(b) != USE_REL) {
-            set_mem_err(memWZErr);
+        if (!rel_block(b)) {
+            set_mem_err(memWZErr); /* disposed already, or no handle */
             return;
         }
         z = zone_of(b);

@@ -56,8 +56,8 @@ extension BlueBox {
                 #expect(rd32(4 * 4) < 0x0100_0000)
                 var r: UInt32 = 0
                 #expect(tb_Gestalt(Int32(bitPattern: fourCC("addr")), &r) == 0 && r == 0x4)
-                // The screen is as deep as fits its 4 MB: 32 bits at 1024 by 768.
-                #expect(machine_screen_depth() == 32)
+                // The screen is as deep as fits a card's megabyte: 8 bits at 1024 by 768.
+                #expect(machine_screen_depth() == 8)
             }
             var r: UInt32 = 0
             #expect(tb_Gestalt(Int32(bitPattern: fourCC("addr")), &r) == 0 && r == 0x7)
@@ -85,6 +85,33 @@ extension BlueBox {
             var d0: UInt32 = 0
             tb_SwapMMUMode(&d0)
             #expect(d0 == 1 && g_cpu!.pointee.addr_mask == 0xFFFF_FFFF)
+            // The old mode alone comes back in D0, the rest of it cleared
+            // (Prince of Persia 2 counts a loop in D0's low word after it).
+            d0 = 0x0049_0001
+            tb_SwapMMUMode(&d0)
+            #expect(d0 == 1)
+        }
+
+        /// A window made in storage whose pointer has flags in the top byte
+        /// (a locked handle's block, as FileMaker Pro's Open dialog) and
+        /// closed by the stripped pointer leaves the window list.
+        @Test func windowsAreTheSameWhateverTheTopByte() {
+            boot24 {
+                launchTestApp()
+                _ = initToolbox()
+                let h = tb_NewHandle(Int32(WindowRecord_SIZEOF), false, true)
+                tb_HLock(h)
+                let storage = rd32(h)
+                #expect(storage >> 24 == 0x80)
+                let r = tb_NewPtr(8, false, true)
+                for (i, v) in [40, 40, 100, 200].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+                let first = rd32(UInt32(LM_WindowList))
+                let w = tb_NewWindow(storage, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+                #expect(w != 0 && rd32(UInt32(LM_WindowList)) == w)
+                tb_CloseWindow(w & 0x00FF_FFFF)
+                #expect(rd32(UInt32(LM_WindowList)) == first)
+                #expect(mm_heap_valid())
+            }
         }
 
         /// The flags are the master pointer's top byte: HLock sets bit 7
@@ -136,19 +163,59 @@ extension BlueBox {
             }
         }
 
+        /// A disposed handle's master pointer holds the next free one; in
+        /// 24-bit mode the "header" twelve bytes before that can be a locked
+        /// handle's master pointer, whose $80 reads as a relocatable block.
+        /// Calls on the disposed handle leave that handle alone (Pararena
+        /// unlocks a handle it has disposed).
+        @Test func disposedHandleLeavesTheNextMasterPointerAlone() {
+            boot24 {
+                let z = rd32(UInt32(LM_ApplZone))
+                tb_MoreMasters()
+                let a = tb_NewHandle(96, false, true)
+                let b = tb_NewHandle(16, false, true)
+                let c = tb_NewHandle(16, false, true)
+                let d = tb_NewHandle(16, false, true)
+                #expect(b == a + 4 && c == a + 8 && d == a + 12)
+                tb_HLock(a)
+                let pa = rd32(a)
+                #expect(pa >> 24 == 0x80)
+                tb_DisposeHandle(d)
+                tb_DisposeHandle(b)
+                #expect(rd32(b) == a + 12)  // the free list: b, then d
+                tb_HUnlock(b)
+                #expect(memErr() == -111)  // memWZErr
+                tb_HSetState(b, 0)
+                tb_HLock(b)
+                #expect(tb_GetHandleSize(b) == -111)
+                tb_DisposeHandle(b)  // disposed twice
+                #expect(memErr() == -111)
+                #expect(rd32(a) == pa && rd32(b) == a + 12)
+                #expect(mm_check_zone(z))
+                // A program's own copy of a master pointer still names the block.
+                let copy = tb_NewPtr(4, false, true)
+                wr32(copy, rd32(c))
+                #expect(tb_GetHandleSize(copy) == 16 && memErr() == 0)
+                tb_HUnlock(a)
+                tb_DisposeHandle(a)
+                tb_DisposeHandle(c)
+                #expect(mm_check_zone(z))
+            }
+        }
+
         /// A program whose SIZE resource doesn't say it is 32-bit clean
         /// asks for 24-bit addressing, and gets its partition under the
         /// screen.
         @Test func sizeResourceChoosesAndPartitionFits() throws {
             let dir = tempDir()
             defer { try? FileManager.default.removeItem(at: dir) }
-            func app(_ name: String, flags: UInt16?, ppc: Bool = false) -> String {
+            func app(_ name: String, flags: UInt16?, ppc: Bool = false, minimum: UInt32 = 0x80000) -> String {
                 let jt = cat(be16(0), be16(0x3F3C), be16(1), be16(0xA9F0))
                 var res = [
                     TestResource(type: "CODE", id: 0, data: cat(be32(40), be32(256), be32(8), be32(32), jt)),
                     TestResource(type: "CODE", id: 1, data: cat(be16(0), be16(1), be16(0xA9F4))),
                 ]
-                if let flags { res.append(TestResource(type: "SIZE", id: -1, data: cat(be16(Int(flags)), be32(0x80000), be32(0x80000)))) }
+                if let flags { res.append(TestResource(type: "SIZE", id: -1, data: cat(be16(Int(flags)), be32(minimum), be32(minimum)))) }
                 if ppc { res.append(TestResource(type: "cfrg", id: 0, data: [UInt8](repeating: 0, count: 32))) }
                 var fork = buildFork(res)
                 let path = dir.appendingPathComponent(name).path
@@ -165,6 +232,9 @@ extension BlueBox {
             #expect(machine_app_addressing(clean) == 32)
             #expect(machine_app_addressing(old) == 24)
             #expect(machine_app_addressing(app("Fat", flags: 0x5800, ppc: true)) == 32)
+            // A minimum partition no 24-bit Mac had room for: run in 32-bit mode.
+            #expect(machine_app_addressing(app("Big", flags: 0x0000, minimum: 16_000 * 1024)) == 32)
+            #expect(machine_app_addressing(app("Fits", flags: 0x0000, minimum: 6 * 1024 * 1024)) == 24)
             boot24 {
                 var err = [CChar](repeating: 0, count: 256)
                 #expect(machine_launch(clean, &err, err.count))  // chosen for it: 24-bit all the same
