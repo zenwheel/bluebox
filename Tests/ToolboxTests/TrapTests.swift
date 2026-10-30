@@ -624,5 +624,18 @@ extension BlueBox {
             #expect(rd32(UInt32(LM_CurrentA5)) >= 0x0100_0000)
             #expect(g_cpu!.pointee.a.7 >= 0x0100_0000)
         }
+
+        /// The heap MaxApplZone makes is the SIZE resource's preferred
+        /// partition less the stack and the A5 world; a partition smaller
+        /// than the zone already is leaves it as it is.
+        @Test func maxApplZoneKeepsToThePreferredPartition() throws {
+            launchTestApp(sizeFlags: 0x0080) // preferred 512K; A5 world 40 + 256
+            #expect(mm_appl_heap_size() == 0x80000 - rd32(UInt32(LM_DefltStack)) - 296)
+            let zone = rd32(UInt32(LM_ApplZone))
+            let lim = Zone_bkLim(zone)
+            tb_MaxApplZone()
+            #expect(Zone_bkLim(zone) == lim)
+            #expect(mm_check_zone(zone))
+        }
     }
 }

@@ -262,6 +262,11 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
                  above + below);
         return 0;
     }
+    /* The A5 world is in the partition too: the heap has the rest
+     * (1 when nothing is left: no more than the zone has already). */
+    uint32_t heap = mm_appl_heap_size();
+    if (heap)
+        mm_set_appl_heap_size(heap > above + below ? heap - above - below : 1);
     gaddr a5 = (top - above) & ~3u;
     /* CurStackBase is exactly A5 less the globals: MPW's runtime unpacks
      * DATA 0 from there up to A5 and stops only on reaching it. */

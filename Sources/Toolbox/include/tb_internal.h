@@ -62,6 +62,10 @@ static inline void set_res_err(int16_t e)
 void mm_init_zone(gaddr zone, gaddr limit, uint16_t more_masters);
 /* Make the application zone growable up to max_limit. */
 void mm_set_appl_growth(gaddr max_limit);
+/* The heap's share of the program's partition, which MaxApplZone grows
+ * the application zone to (0: all it can grow into). */
+void mm_set_appl_heap_size(uint32_t size);
+uint32_t mm_appl_heap_size(void);
 /* Allocate in a specific zone. */
 gaddr mm_new_handle_in(gaddr zone, uint32_t size, bool clear);
 gaddr mm_new_ptr_in(gaddr zone, uint32_t size, bool clear);

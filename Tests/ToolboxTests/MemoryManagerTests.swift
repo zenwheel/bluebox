@@ -31,6 +31,28 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// MaxApplZone grows the zone to the program's partition, not to
+        /// all the room it could grow into (a program making its own heap
+        /// of three quarters of the zone counted master pointers in a word,
+        /// which wrapped); past that the zone still grows on demand.
+        @Test func maxApplZoneGrowsToThePartition() {
+            defer { mm_set_appl_heap_size(0) }
+            mm_set_appl_heap_size(8 << 20)
+            tb_MaxApplZone()
+            let size = Zone_bkLim(appZone) - appZone
+            #expect(size <= 8 << 20 && size > 7 << 20)
+            #expect(rd32(UInt32(LM_HeapEnd)) == Zone_bkLim(appZone))
+            let p = tb_NewPtr(64 << 20, false, false)
+            #expect(p != 0)
+            tb_DisposePtr(p)
+            #expect(mm_check_zone(appZone))
+
+            mm_set_appl_heap_size(0) // no partition asked for: all the room
+            tb_MaxApplZone()
+            #expect(Zone_bkLim(appZone) > 0x5100_0000)
+            #expect(mm_check_zone(appZone))
+        }
+
         @Test func handlesAllocateResizeAndKeepContents() {
             let h = tb_NewHandle(100, false, false)
             #expect(h != 0)

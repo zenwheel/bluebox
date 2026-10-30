@@ -475,6 +475,7 @@ bool machine_boot(bool census)
     wr32(LM_ApplLimit, appl_limit);
     wr32(LM_HeapEnd, Zone_bkLim(GA_APPHEAP));
     mm_set_appl_growth(appl_limit);
+    mm_set_appl_heap_size(0); /* until a program's SIZE says */
     trap_autovectors();
     hardware_globals();
 
@@ -824,6 +825,11 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     if (!size)
         size = tb_Get1Resource((int32_t)fourcc("SIZE"), 0);
     g_app_size_flags = size && rd32(size) ? rd16(rd32(size)) : 0;
+    /* Its preferred partition, less the stack (seg_launch takes off the
+     * A5 world too): the heap MaxApplZone makes. */
+    uint32_t partition = size && rd32(size) && tb_GetHandleSize(size) >= 6 ? rd32(rd32(size) + 2) : 0;
+    uint32_t stack = rd32(LM_DefltStack);
+    mm_set_appl_heap_size(partition > stack ? partition - stack : 0);
     build_app_parms();
 
     /* A cdev file has no program: the Control Panel's host stands in. */
