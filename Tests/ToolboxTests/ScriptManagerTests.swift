@@ -61,6 +61,58 @@ extension BlueBox {
             #expect(tb_GetScriptManagerVariable(Self.smKeyScript) == 0)
         }
 
+        /// The keyboard script's 'KCHR', read from the System file.
+        func systemResource(_ type: String, _ id: Int16) -> UInt32 {
+            let saved = tb_CurResFile()
+            tb_UseResFile(Int16(bitPattern: rd16(UInt32(LM_SysMap))))
+            defer { tb_UseResFile(saved) }
+            return tb_Get1Resource(Int32(bitPattern: fourCC(type)), id)
+        }
+
+        func bytes(_ p: UInt32, _ n: Int) -> [UInt8] { (0..<n).map { rd8(p + UInt32($0)) } }
+
+        /// The keyboard layout is kept in a cache that smKCHRCache and
+        /// ExpandMem's emKeyCache point to, with room for Apple's U.S.
+        /// layout (1158 bytes), which Alpha copies over it at its start.
+        @Test func theKeyboardLayoutIsCached() {
+            launchTestApp()
+            let cache = UInt32(bitPattern: tb_GetScriptManagerVariable(38)) // smKCHRCache
+            #expect(cache != 0)
+            let em = rd32(0x2B6)
+            #expect(em != 0 && rd32(em + 0x0E) == cache)
+            let h = systemResource("KCHR", 0)
+            #expect(h != 0 && rd32(h) != 0)
+            let n = Int(tb_GetHandleSize(h))
+            #expect(bytes(cache, n) == bytes(rd32(h), n))
+            #expect(tb_GetPtrSize(cache) >= 1158)
+        }
+
+        /// Another keyboard script brings its own layout (its 'itlb' names
+        /// it), copied into the cache, which grows for a bigger one.
+        @Test func aKeyboardScriptsLayout() {
+            launchTestApp()
+            let saved = tb_CurResFile()
+            tb_UseResFile(Int16(bitPattern: rd16(UInt32(LM_SysMap))))
+            let itlb = tb_NewHandle(50, false, true)
+            wr16(rd32(itlb) + 16, 16384) // itlbKeys
+            let name = tb_NewPtr(2, false, true)
+            tb_AddResource(itlb, Int32(bitPattern: fourCC("itlb")), Self.smJapanese, name)
+            let kchr = tb_NewHandle(3000, false, true)
+            for i in 0..<3000 { wr8(rd32(kchr) + UInt32(i), UInt8(i % 251)) }
+            tb_AddResource(kchr, Int32(bitPattern: fourCC("KCHR")), 16384, name)
+            tb_UseResFile(saved)
+            tb_KeyScript(Self.smJapanese)
+            #expect(tb_GetScriptManagerVariable(Self.smKeyScript) == Int32(Self.smJapanese))
+            let cache = UInt32(bitPattern: tb_GetScriptManagerVariable(38))
+            #expect(cache != 0 && tb_GetPtrSize(cache) >= 3000)
+            #expect(bytes(cache, 3000) == (0..<3000).map { UInt8($0 % 251) })
+            #expect(rd32(rd32(0x2B6) + 0x0E) == cache)
+            tb_KeyScript(0)
+            let roman = systemResource("KCHR", 0)
+            let n = Int(tb_GetHandleSize(roman))
+            #expect(bytes(UInt32(bitPattern: tb_GetScriptManagerVariable(38)), n) == bytes(rd32(roman), n))
+        }
+
         /// With the Japanese bundle installed: its fonts, its first bytes,
         /// its character types and the keyboard script.
         @Test func japaneseInstalled() {

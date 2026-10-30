@@ -34,7 +34,7 @@ enum { smFirstByte = -1, smSingleByte = 0, smLastByte = 1 };
 enum {
     smVersion = 0, smMunged = 2, smEnabled = 4, smBidirect = 6, smFontForce = 8, smIntlForce = 10, smForced = 12,
     smDefault = 14, smSysScript = 18, smLastScript = 20, smKeyScript = 22, smSysRef = 24, smGenFlags = 30,
-    smCharPortion = 34, smDoubleByte = 36, smRegionCode = 40, smKeyDisableState = 42,
+    smCharPortion = 34, smDoubleByte = 36, smKCHRCache = 38, smRegionCode = 40, smKeyDisableState = 42,
 };
 
 /* KeyScript's codes below 0. */
@@ -72,6 +72,58 @@ static bool script_enabled(int script)
     return h != 0;
 }
 
+/* The keyboard script's layout: its 'itlb' names the 'KCHR' (itlbKeys),
+ * which the Script Manager keeps a copy of in the system heap.  The copy's
+ * address is smKCHRCache and ExpandMem's emKeyCache, which programs give
+ * KeyTranslate, or copy and replace with a layout of their own: Alpha
+ * saves it and copies its own 'KCHR' (1158 bytes, the size of Apple's
+ * U.S. one) over it at its start, so the cache has room for a full-sized
+ * layout whatever the System's is.  (With no cache there, Alpha copied
+ * low memory and went astray.) */
+#define LM_EXPAND_MEM 0x02B6
+#define EM_KEY_CACHE 0x0E
+#define KCHR_CACHE_ROOM 2048
+static gaddr kchr_cache;
+
+static void load_kchr(int script)
+{
+    int16_t saved = tb_CurResFile(), err = (int16_t)rd16(LM_ResErr);
+    uint8_t load = rd8(LM_ResLoad);
+    tb_UseResFile((int16_t)rd16(LM_SysMap));
+    tb_SetResLoad(true);
+    int16_t id = 0;
+    gaddr b = tb_Get1Resource((int32_t)fourcc("itlb"), (int16_t)script);
+    if (b && rd32(b) && tb_GetHandleSize(b) >= 18)
+        id = (int16_t)rd16(rd32(b) + 16);
+    gaddr h = tb_Get1Resource((int32_t)fourcc("KCHR"), id);
+    if (!h)
+        h = tb_Get1IndResource((int32_t)fourcc("KCHR"), 1);
+    tb_SetResLoad(load);
+    tb_UseResFile(saved);
+    wr16(LM_ResErr, (uint16_t)err);
+    uint32_t size = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
+    if (!size)
+        return;
+    if (kchr_cache && (uint32_t)tb_GetPtrSize(kchr_cache) < size) {
+        tb_DisposePtr(kchr_cache);
+        kchr_cache = 0;
+    }
+    if (!kchr_cache)
+        kchr_cache = mm_new_ptr_in(rd32(LM_SysZone), size > KCHR_CACHE_ROOM ? size : KCHR_CACHE_ROOM, true);
+    if (!kchr_cache)
+        return;
+    gmemcpy(kchr_cache, rd32(h), size);
+    sm_note_kchr_cache();
+}
+
+/* ExpandMem, once there is one, points to the layout too. */
+void sm_note_kchr_cache(void)
+{
+    gaddr em = rd32(LM_EXPAND_MEM);
+    if (em && kchr_cache && (uint32_t)tb_GetPtrSize(em) >= EM_KEY_CACHE + 4)
+        wr32(em + EM_KEY_CACHE, kchr_cache);
+}
+
 static bool double_byte(int script)
 {
     return script == smJapanese || script == smTradChinese || script == smKorean || script == smSimpChinese;
@@ -92,6 +144,8 @@ void scriptmgr_reset(void)
     if (!script_enabled(sm.sys_script))
         sm.sys_script = smRoman;
     sm.key_script = sm.last_script = sm.sys_script;
+    kchr_cache = 0;
+    load_kchr(sm.key_script);
 }
 
 int32_t tb_GetScriptManagerVariable(int16_t verb)
@@ -122,6 +176,7 @@ int32_t tb_GetScriptManagerVariable(int16_t verb)
                 return 0xFF;
         return 0;
     }
+    case smKCHRCache: return (int32_t)kchr_cache;
     case smRegionCode: return sm.region;
     case smKeyDisableState: return sm.key_disable;
     default: return 0;
@@ -224,6 +279,7 @@ static void set_key_script(int script)
     if (script != sm.key_script) {
         sm.last_script = sm.key_script;
         sm.key_script = (int16_t)script;
+        load_kchr(script);
     }
     sm.munged++;
 }
