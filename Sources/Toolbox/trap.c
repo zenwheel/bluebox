@@ -62,8 +62,12 @@ const char *native_name_at(int index) { return index >= 0 && (unsigned)index < n
 
 native_fn native_fn_at(int index) { return index >= 0 && (unsigned)index < native_count ? natives[index].fn : NULL; }
 
+/* In 24-bit mode an address's top byte is not part of it: a program may
+ * keep a routine's address with flags in (from a locked handle's master
+ * pointer) and patch a trap or a vector with it. */
 int native_index_for(uint32_t addr)
 {
+    addr = mem_strip(addr);
     if (addr < STUB_BASE || addr >= STUB_BASE + native_count * STUB_SIZE || (addr - STUB_BASE) % STUB_SIZE)
         return -1;
     return (int)((addr - STUB_BASE) / STUB_SIZE);

@@ -1508,7 +1508,7 @@ void tb_HiliteWindow(gaddr w, int8_t flag)
 
 static void bring_to_front(gaddr w)
 {
-    if (wlist() == w)
+    if (same_window(wlist(), w))
         return;
     unlink_window(w);
     link_behind(w, IN_FRONT);
@@ -1764,10 +1764,10 @@ int32_t wm_window_hit(gaddr w, uint32_t pt) { return call_wdef(w, wHit, (int32_t
 /* Whether a port is a window (in the window list). */
 static bool is_window(gaddr p)
 {
-    if (p && p == desk_window)
+    if (p && desk_window && same_window(p, desk_window))
         return true;
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
-        if (w == p)
+        if (same_window(w, p))
             return true;
     return false;
 }

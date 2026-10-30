@@ -634,7 +634,13 @@ static void hw_sound_pump(void)
 static gaddr tramp;
 
 static gaddr default_level1; /* the vector as the boot left it: nobody's handler */
-static bool program_code(gaddr a) { return a >= 0x1000 && a < GA_ROM && a != default_level1; }
+/* In 24-bit mode whatever the top byte (a handler in a locked handle's
+ * block, its master pointer's flags in the vector). */
+static bool program_code(gaddr a)
+{
+    a = mem_strip(a);
+    return a >= 0x1000 && a < GA_ROM && a != mem_strip(default_level1);
+}
 
 /* Call a handler that ends in RTE (a level 1 interrupt handler) from
  * interrupt-time code: the frame of the exception, the handler's RTE

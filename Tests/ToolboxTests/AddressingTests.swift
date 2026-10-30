@@ -192,6 +192,25 @@ extension BlueBox {
             }
         }
 
+        /// A window or a routine's address is the same with flags in its
+        /// top byte (a locked handle's master pointer copied): the window
+        /// is a window, and a trap patched with a stub's address so is
+        /// still the stub.
+        @Test func addressesWithFlagsNameTheSameThings() {
+            boot24 {
+                launchTestApp()
+                _ = initToolbox()
+                let r = tb_NewPtr(8, false, true)
+                for (i, v) in [40, 40, 100, 200].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+                let w = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+                #expect(tb_IsValidWindowPtr(w | 0x8000_0000) != 0)
+                let stub = tb_GetTrapAddress(0xA9F4, true, true)  // ExitToShell
+                #expect(native_index_for(stub) >= 0)
+                #expect(native_index_for(stub | 0x4000_0000) == native_index_for(stub))
+                tb_DisposeWindow(w)
+            }
+        }
+
         /// The flags are the master pointer's top byte: HLock sets bit 7
         /// there, and a lock set there directly (BSET #7,(A0)) keeps the
         /// block from moving.
