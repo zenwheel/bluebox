@@ -297,5 +297,45 @@ extension BlueBox {
             #expect(r == 0 || r == -3201)
             #expect(call("OTCloseProviderPriv", svc) == 0)
         }
+
+        /// Raw streams, configurations and the configuration library through the
+        /// glue's native client, native utility and configuration sets (Pascal
+        /// for the upper-case names, C for the others): each call leaves the
+        /// stack as it found it.
+        @Test func streamsAndConfigurationsFromGlue() {
+            start()
+            #expect(call("InitOpenTransportPriv", 1) == 0)
+            let e = block(4)
+            let s = call("OTStreamOpenPriv", cstr("echo"), 0, e)
+            #expect(s != 0 && rd32(e) == 0)
+            call("OTStreamSetBlocking", s)
+            #expect(call("OTStreamIsBlocking", s) == 1)
+            call("OTStreamSetNonBlocking", s)
+            #expect(call("OTStreamIoctl", s, 0x4102, cstr("timod")) == 0)
+            let name = block(32)
+            #expect(call("OTStreamIoctl", s, 0x4104, name) == 0 && cstring(at: name) == "timod")
+            #expect(call("OTStreamWrite", s, cstr("abc"), 3) == 3)
+            let buf = block(8)
+            #expect(call("OTStreamRead", s, buf, 8) == 3 && cstring(at: buf, max: 3) == "abc")
+            let fds = block(12)
+            wr16(fds + 4, 4); wr32(fds + 8, s) // POLLOUT
+            #expect(call("OTStreamPoll", fds, 1, 0) == 1)
+            #expect(call("OTStreamUseSyncIdleEvents", s, 1) == 0)
+            #expect(call("OTStreamClose", s) == 0)
+            let cfg = call("OTCfigNewConfiguration", cstr("tcp"))
+            #expect(cfg != 0 && call("OTConfigureChildren", cfg) == 0 && call("OTCfigNumberOfChildren", cfg) == 1)
+            let tcp = call("OTCreateStream", call("OTCreateConfiguration", cstr("tcp")), 0, e)
+            #expect(tcp != 0 && rd32(e) == 0)
+            #expect(call("OTStreamClose", tcp) == 0)
+            // OTConfigLib's port name, as the TCP/IP control panel shows it.
+            let ports = block(296)
+            if call("OTGetIndexedPort", ports, 0) == 1 {
+                let user = block(256)
+                _ = call("OTGetUserPortNameFromPortRef", rd32(ports), user)
+                #expect(rd8(user) > 0)
+            }
+            // A call of the configuration database, which is not here, says so.
+            #expect(err(call("OTGetConfigsCount")) == -3167)
+        }
     }
 }

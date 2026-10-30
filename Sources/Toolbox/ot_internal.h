@@ -14,12 +14,12 @@
 
 enum {
     kOTNoError = 0,
-    kOTBadAddressErr = -3150, kOTBadOptionErr = -3151, kOTBadReferenceErr = -3153, kOTNoAddressErr = -3154,
+    kOTBadAddressErr = -3150, kOTBadOptionErr = -3151, kOTAccessErr = -3152, kOTBadReferenceErr = -3153, kOTNoAddressErr = -3154,
     kOTOutStateErr = -3155, kOTBadSequenceErr = -3156, kOTLookErr = -3158, kOTBadDataErr = -3159,
     kOTBufferOverflowErr = -3160, kOTFlowErr = -3161, kOTNoDataErr = -3162, kOTNoDisconnectErr = -3163,
     kOTNoUDErrErr = -3164, kOTNoReleaseErr = -3166, kOTNotSupportedErr = -3167, kOTBadNameErr = -3170,
     kOTBadQLenErr = -3171, kOTAddressBusyErr = -3172, kOTCanceledErr = -3180, kOTNotFoundErr = -3201,
-    kOTOutOfMemoryErr = -3211, kOTDuplicateFoundErr = -3216,
+    kOTOutOfMemoryErr = -3211, kOTDuplicateFoundErr = -3216, kOTBadConfigurationErr = -3282,
     kETIMEDOUTErr = -3259, kECONNREFUSEDErr = -3260, kEHOSTDOWNErr = -3263, kEHOSTUNREACHErr = -3264,
     kENETUNREACHErr = -3249, kECONNRESETErr = -3253,
 };
@@ -49,11 +49,12 @@ enum { T_MORE = 0x0001, T_EXPEDITED = 0x0002, T_ACKNOWLEDGED = 0x0004, T_TIMEDOU
 
 #define MAX_PROVIDERS 64
 
-typedef enum { P_TCP, P_UDP, P_INET_SERVICES, P_DDP, P_ATP, P_ADSP, P_AT_SERVICES, P_NBP_MAPPER, P_PAP, P_ASP } provider_kind;
+typedef enum { P_TCP, P_UDP, P_INET_SERVICES, P_STREAM, P_DDP, P_ATP, P_ADSP, P_AT_SERVICES, P_NBP_MAPPER, P_PAP, P_ASP } provider_kind;
 #define OT_ATALK(p) ((p)->kind >= P_DDP)
 
 struct ot_atalk;   /* ot_appletalk.c's own state */
 struct ot_session; /* and ot_session.c's, for PAP and ASP */
+struct ot_stream;  /* and ot_streams.c's, for a raw stream's head */
 
 typedef struct {
     bool used;
@@ -76,6 +77,7 @@ typedef struct {
     int disc_reason;
     struct ot_atalk *at;
     struct ot_session *ss;
+    struct ot_stream *st;
     struct ot_optstore *opts; /* options negotiated (ot_options.c) */
     bool m68k;           /* opened by 68k code: its notifier is 68k code */
     int32_t cancel_err;  /* OTCancelSynchronousCalls: blocked calls return this */
@@ -86,6 +88,7 @@ typedef struct {
 extern provider ot_providers[MAX_PROVIDERS];
 
 int ot_new_provider(provider_kind kind);
+void ot_close_provider(provider *p);
 provider *ot_provider_of(gaddr ref);
 /* An event for the notifier, delivered at the next poll. */
 void ot_post(provider *p, uint32_t code, int32_t result, gaddr cookie);
@@ -228,5 +231,18 @@ extern const unsigned otu_export_count, otp_export_count, oto_export_count, oti_
     otx_export_count;
 gaddr ot_xti_errno_address(void);
 void ot_xti_reset(void);
+
+/* ot_streams.c: raw streams (P_STREAM providers) and state machines. */
+extern const ppc_export otst_exports[];
+extern const unsigned otst_export_count;
+void ot_stream_close(provider *p);
+int32_t ot_stream_ioctl(provider *p, uint32_t cmd, gaddr data);
+void ot_streams_reset(void);
+
+/* ot_config.c: configurations, configurators, control streams. */
+extern const ppc_export otf_exports[];
+extern const unsigned otf_export_count;
+gaddr ot_config_new(const char *path);
+void ot_config_reset(void);
 
 #endif

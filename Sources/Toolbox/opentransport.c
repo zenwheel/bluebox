@@ -102,6 +102,8 @@ static void close_provider(provider *p)
 {
     if (OT_ATALK(p))
         ota_close(p);
+    if (p->kind == P_STREAM)
+        ot_stream_close(p);
     if (p->fd >= 0)
         close(p->fd);
     if (p->pending_fd >= 0)
@@ -116,10 +118,14 @@ static void close_provider(provider *p)
     p->used = false;
 }
 
+void ot_close_provider(provider *p) { close_provider(p); }
+
 void opentransport_reset(void)
 {
     for (int i = 0; i < MAX_PROVIDERS; i++) {
         if (providers[i].used) {
+            if (providers[i].kind == P_STREAM)
+                ot_stream_close(&providers[i]);
             if (providers[i].fd >= 0)
                 close(providers[i].fd);
             if (providers[i].pending_fd >= 0)
@@ -136,6 +142,8 @@ void opentransport_reset(void)
     ot_ports_reset();
     ot_inet_reset();
     ot_68k_reset();
+    ot_streams_reset();
+    ot_config_reset();
 }
 
 /* ---- Notifiers ---- */
@@ -403,19 +411,6 @@ static void poll_provider(provider *p)
 
 static void ot_noErr(ppc_cpu *c) { RETURN(kOTNoError); }
 static void ot_void(ppc_cpu *c) { c->pc = c->lr; }
-
-/* OTCreateConfiguration(const char *path): the path, kept. */
-static void ot_CreateConfiguration(ppc_cpu *c)
-{
-    gaddr path = R(0);
-    uint32_t n = 0;
-    while (path && n < 255 && rd8(path + n))
-        n++;
-    gaddr cfg = tb_NewPtr((int32_t)n + 1, true, true);
-    if (cfg && path)
-        gmemcpy(cfg, path, n);
-    RETURN(cfg);
-}
 
 static void config_string(gaddr cfg, char s[256])
 {
@@ -1693,13 +1688,39 @@ static void ot_Free(ppc_cpu *c) /* (ptr, structType) */
 /* Any other Open Transport call: not supported. */
 void ot_unsupported(ppc_cpu *c) { RETURN((uint32_t)kOTNotSupportedErr); }
 
+/* OTIoctl(ref, cmd, data): a raw stream's head takes it (ot_streams.c).  An
+ * endpoint's stream is the host's socket: it says how much is waiting and
+ * takes a flush; the modules and drivers that would answer anything more
+ * aren't there (EINVAL, as STREAMS says for a command nobody knows). */
+static void ot_Ioctl(ppc_cpu *c)
+{
+    PROVIDER(p);
+    uint32_t cmd = R(1);
+    gaddr data = R(2);
+    int32_t r;
+    if (p->kind == P_STREAM) {
+        r = ot_stream_ioctl(p, cmd, data);
+    } else if (cmd == 0x4101) { /* I_NREAD: the messages waiting, the first's bytes */
+        int n = 0;
+        if (p->fd >= 0 && ioctl(p->fd, FIONREAD, &n) != 0)
+            n = 0;
+        if (data)
+            wr32(data, (uint32_t)n);
+        r = n > 0;
+    } else if (cmd == 0x4105 || cmd == 0x4F01) { /* I_FLUSH, I_OTGetMiscellaneousEvents */
+        r = kOTNoError;
+    } else {
+        r = -3221; /* kEINVALErr */
+    }
+    ot_complete(c, p, 0x21000005 /* kStreamIoctlEvent */, r, data);
+}
+
 const ppc_export ot_exports[] = {
     /* OTClientUtilLib */
     { "InitOpenTransport", ot_noErr }, { "InitOpenTransportPriv", ot_noErr },
     { "InitOpenTransportInContext", ot_noErr }, { "CloseOpenTransport", ot_void },
     { "CloseOpenTransportPriv", ot_void }, { "CloseOpenTransportInContext", ot_void },
-    { "OTExitPatchPriv", ot_void }, { "OTCreateConfiguration", ot_CreateConfiguration },
-    { "OTDestroyConfiguration", ot_void },
+    { "OTExitPatchPriv", ot_void },
     /* OTClientLib */
     { "OTOpenEndpoint", ot_OpenEndpoint }, { "OTOpenEndpointPriv", ot_OpenEndpoint },
     { "OTOpenEndpointInContext", ot_OpenEndpoint }, { "OTAsyncOpenEndpoint", ot_AsyncOpenEndpoint },
@@ -1748,6 +1769,6 @@ const ppc_export ot_exports[] = {
     { "OTDelay", ot_Delay }, { "OTBufferDataSize", ot_BufferDataSize }, { "OTReadBuffer", ot_ReadBuffer },
     { "OTAlloc", ot_Alloc }, { "OTAllocPriv", ot_Alloc },
     { "OTAllocInContext", ot_Alloc }, { "OTFree", ot_Free },
-    { "OTIoctl", ot_unsupported },
+    { "OTIoctl", ot_Ioctl },
 };
 const unsigned ot_export_count = sizeof ot_exports / sizeof ot_exports[0];
