@@ -522,7 +522,25 @@ extension BlueBox {
             #expect(g_cpu!.pointee.icount - before < 200_000) // a tick at most
         }
 
-        /// Quit All Applications to the system process quits this one.
+        /// Quit All Applications from another program (an installer or
+        /// updater making way: At Ease 2.0.3 Updater) leaves it running and
+        /// answers it, as the Process Manager does once the others quit.
+        @Test func quitAllFromAProgramIsAnswered() {
+            launchTestApp(sizeFlags: 0x0040) // takes high-level events
+            let evt = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            wr16(evt, 23)
+            wr32(evt + UInt32(EventRecord_message_off), fourCC("aevt"))
+            wr32(evt + UInt32(EventRecord_where_off), fourCC("quia"))
+            #expect(tb_PostHighLevelEvent(evt, psn(0, 1), 0, 0, 0, 0x8000) == 0) // receiverIDisPSN
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd16(e) == 23)
+            #expect(rd32(e + UInt32(EventRecord_message_off)) == fourCC("aevt"))
+            #expect(rd32(e + UInt32(EventRecord_where_off)) == fourCC("ansr"))
+            #expect(tb_GetNextEvent(0x0400, e) == 0) // and no Quit
+        }
+
+        /// Quit All Applications to the system process from the Finder
+        /// quits it (it then shuts down).
         @Test func quitAllToTheSystemProcess() {
             launchTestApp(sizeFlags: 0x0040) // takes high-level events
             g_is_finder = true
