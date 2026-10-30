@@ -41,7 +41,14 @@ mkdir -p "$work/logs" "$work/homes"
 walk_one() {
 	rel=$1
 	app=${2:-}
-	name=$(printf '%s%s' "$rel" "${app:+ $app}" | tr '/ ' '__')
+	key=$(printf '%s%s' "$rel" "${app:+ $app}")
+	name=$(printf '%s' "$key" | tr '/ ' '__')
+	# Paths the mapping makes the same ("sys7 v4-8/..." and "sys7_v4-8/...")
+	# would share a home and log, and parallel runs delete each other's
+	# copy: those names are kept apart by the path's checksum.
+	if [ -f "$work/ambiguous.txt" ] && grep -Fqx -- "$name" "$work/ambiguous.txt"; then
+		name=${name}_$(printf '%s' "$key" | cksum | cut -d ' ' -f 1)
+	fi
 	# A file name has at most 255 bytes: a long one shortened, kept apart
 	# from others by its checksum.
 	if [ "$(printf '%s' "$name" | wc -c)" -gt 200 ]; then
@@ -93,6 +100,9 @@ if [ $# -ge 5 ]; then
 	walk_one "$5"
 	exit 0
 fi
+
+# The names two or more paths map to (see walk_one).
+grep -v '^$' "$dir/census_list.txt" | tr '/ ' '__' | sort | uniq -d >"$work/ambiguous.txt"
 
 # Each path as an argument of its own (xargs -I would stop at the first
 # path over 255 bytes, leaving the rest unwalked).
