@@ -170,6 +170,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < isp_export_count; i++)
         if (!strcmp(isp_exports[i].name, name))
             return isp_exports[i].fn;
+    for (unsigned i = 0; i < nsp_export_count; i++)
+        if (!strcmp(nsp_exports[i].name, name))
+            return nsp_exports[i].fn;
     for (unsigned i = 0; i < carbon_export_count; i++)
         if (!strcmp(carbon_exports[i].name, name))
             return carbon_exports[i].fn;
@@ -656,6 +659,7 @@ static const char *const native_libraries[] = {
     "PrivateInterfaceLib", "ObjectSupportLib", "AppleScriptLib", "TranslationLib", "ControlStripLib",
     "WindowsLib", "MenusLib", "ControlsLib", "DialogsLib", "NavigationLib", "SoundLib", "SpeechLib",
     "InternetConfigLib", "ICAp;InternetConfigLib", "CodeFragmentMgr", "DisplayLib", "DrawSprocketLib", "InputSprocketLib",
+    "NetSprocketLib",
     "OTClientLib", "OTClientUtilLib", "OTInetClientLib", "OTUtilityLib", "OTXTILib", "OpenTransportLib",
     "OpenTptInternetLib", "OpenTptClientLib", "OpenTptUtilityLib", "OTATalkClientLib", "OTATalkSharedLib",
     "OpenTptAppleTalkLib", "OTNtvUtilLib", "OTNativeClientLib", "OTConfigLib",
@@ -1615,6 +1619,7 @@ bool cfm_launch(const char *app_path, char *err, size_t errlen)
 {
     cfm_reset();
     inputsprocket_reset();
+    netsprocket_reset();
     snprintf(app_dir, sizeof app_dir, "%s", app_path);
     snprintf(app_file, sizeof app_file, "%s", app_path);
     char *slash = strrchr(app_dir, '/');

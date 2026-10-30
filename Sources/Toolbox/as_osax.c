@@ -132,6 +132,9 @@ int as_ask(machine_script_dialog *d)
     return b;
 }
 
+/* Whether the host shows dialogs (not a headless run's). */
+bool as_dialogs_native(void) { return dialog_fn != NULL; }
+
 static as_obj *display_dialog(as_obj *direct, as_obj *params)
 {
     machine_script_dialog d;

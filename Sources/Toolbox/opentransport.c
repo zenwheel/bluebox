@@ -122,6 +122,7 @@ void ot_close_provider(provider *p) { close_provider(p); }
 
 void opentransport_reset(void)
 {
+    netsprocket_reset(); /* its endpoints are about to go */
     for (int i = 0; i < MAX_PROVIDERS; i++) {
         if (providers[i].used) {
             if (providers[i].kind == P_STREAM)
@@ -203,6 +204,7 @@ void opentransport_poll(void)
     }
     nevents = 0;
     delivering = false;
+    netsprocket_poll(); /* NetSprocket's games, on endpoints of their own */
 }
 
 /* ---- Addresses ---- */

@@ -139,6 +139,7 @@ as_obj *as_from_desc(uint32_t desc);
  * screen and errors); answered at once without one (as_osax.c). */
 #include "machine.h"
 int as_ask(machine_script_dialog *d);
+bool as_dialogs_native(void);
 /* The applet's own events while a script runs (quit). */
 extern bool as_quit_requested;
 

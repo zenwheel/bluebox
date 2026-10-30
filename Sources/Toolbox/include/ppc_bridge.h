@@ -107,6 +107,13 @@ extern const unsigned dsp_export_count;
 extern const ppc_export isp_exports[];
 extern const unsigned isp_export_count;
 void inputsprocket_reset(void);
+/* NetSprocket (netsprocket.c): its exports, the state a launch or Open
+ * Transport's reset starts without, and its connections run (Open
+ * Transport's poll calls it). */
+extern const ppc_export nsp_exports[];
+extern const unsigned nsp_export_count;
+void netsprocket_reset(void);
+void netsprocket_poll(void);
 /* Open Transport (opentransport.c). */
 extern const ppc_export ot_exports[];
 extern const unsigned ot_export_count;
