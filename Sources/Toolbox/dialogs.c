@@ -1868,3 +1868,35 @@ int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y)
     *y = (r.top + r.bottom) / 2 - px.bounds.top;
     return (type & itemDisable) || ControlRecord_contrlHilite(rd32(h)) == 255 ? 1 : 2;
 }
+
+/* For the screen walk, as dialog_button: whether item n is something a
+ * click may act on besides a push button (a control, a picture, an icon, a
+ * user item: buttons of the program's own drawing), 2 when shown and
+ * enabled, else 0; -1 past the last item.  Its title (a control's) and its
+ * rectangle on the screen. */
+int dialog_target(gaddr d, int n, char *title, size_t size, qrect *on_screen)
+{
+    if (n > item_count(d))
+        return -1;
+    int type = item_type(d, n);
+    gaddr h = item_handle(d, n);
+    qrect r = item_rect(d, n);
+    int kind = type & 0x7F;
+    title[0] = 0;
+    if ((type & itemDisable) || r.left >= 8192 || r.bottom - r.top < 4 || r.right - r.left < 4)
+        return 0;
+    if (kind & ctrlItem) {
+        if (!h || !rd32(h) || !ControlRecord_contrlVis(rd32(h)) || ControlRecord_contrlHilite(rd32(h)) == 255)
+            return 0;
+        gaddr t = rd32(h) + ControlRecord_contrlTitle_off;
+        uint8_t text[256];
+        gget(text, t + 1, rd8(t));
+        append_text(title, 0, size, text, rd8(t));
+    } else if (kind != userItem && kind != picItem && kind != iconItem) {
+        return 0;
+    }
+    pixdst px = qd_port_pixels(d);
+    *on_screen = (qrect){ (int16_t)(r.top - px.bounds.top), (int16_t)(r.left - px.bounds.left),
+                          (int16_t)(r.bottom - px.bounds.top), (int16_t)(r.right - px.bounds.left) };
+    return 2;
+}

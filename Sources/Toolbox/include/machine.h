@@ -665,6 +665,11 @@ void machine_set_code_check(int n);
  * "menu walk finished", or stuck in a dialog, or where the program or
  * Blue Box failed. */
 void machine_set_menu_walk(bool on);
+/* --walk-avoid: a step a walk with no menu bar (walking a program's screen)
+ * is not to take, as it said it at an earlier run of the same program
+ * (they go the same way each time) where it ended the program: "X,Y" a
+ * click there, "key NAME" a key.  NULL clears them. */
+void machine_walk_avoid(const char *step);
 
 /* A hard cap on instructions executed, also inside routines the Toolbox
  * calls back (filters, hooks); 0 for none.  For headless runs. */

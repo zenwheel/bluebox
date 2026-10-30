@@ -166,7 +166,7 @@ extension BlueBox {
             defer { machine_set_menu_walk(false) }
             #expect(machine_run(25_000_000) != RUN_HALTED) // the splash walked past
             _ = dialog([60, 60, 200, 300])
-            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(machine_run(1_000_000_000) == RUN_HALTED) // its screen walked too
             #expect(String(cString: machine_halt_reason()).hasPrefix("menu walk found no menu bar"))
         }
 
