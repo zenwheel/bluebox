@@ -128,7 +128,7 @@ int as_ask(machine_script_dialog *d)
              b ? d->buttons[b - 1] : "(gave up)", d->has_answer ? ", answer " : "", d->has_answer ? d->answer : "");
     else
         LOGF(LOG_UNIMPL | LOG_TRAPS, "AppleScript: choose from list \"%s\" -> item %d\n", msg, d->selected + 1);
-    machine_idle(); /* the user's answer takes time */
+    machine_idle_answered(); /* the user's answer takes time */
     return b;
 }
 

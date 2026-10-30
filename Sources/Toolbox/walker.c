@@ -15,9 +15,9 @@
  *
  * A program with no menu bar is nudged with keys and clicks, then has the
  * buttons of its window pressed (a program that is one window); one that
- * draws on meanwhile (a game) is walked too.  Else the walk ends "found no
- * menu bar", or "no menu bar or window" for one with nothing on the screen
- * (a background program).
+ * draws on meanwhile (a game) is walked too.  Else, half a minute from its
+ * start, the walk ends "found no menu bar", or "no menu bar or window" for
+ * one with nothing on the screen (a background program).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +34,11 @@
  * between polls of the keyboard). */
 enum { WAITS = 18, BUTTON_WAITS = 100 };
 static const uint64_t SETTLE = 300000000, WARM_UP = 3000000000; /* ns */
+/* The least time from the start before a program is found to have no
+ * menu bar: one still starting behind a window of its own (MegaSeg's
+ * launch after its notice, a map generated behind a progress bar) may
+ * take longer than its nudging. */
+static const uint64_t PATIENCE = 30000000000; /* ns */
 
 static bool walking;
 static int menu_i, item_n;  /* the next item to try */
@@ -68,11 +73,16 @@ static struct {
 } pressed_in[NWINDOWS];
 static int npressed_in;
 static unsigned pressed; /* buttons pressed so */
-/* The screen of a program with no menu bar halfway through its nudging,
- * to tell one that goes on drawing (a game) from one stuck on a still
- * screen. */
+static int button_waits;  /* steps waiting for a dimmed one */
+/* The screen of a program with no menu bar at the last step, from halfway
+ * through its first nudging on, and whether it changed from one step to
+ * the next since: to tell one that goes on drawing (a game, or one
+ * answering its keys and clicks on a screen of its own) from one stuck on
+ * a still screen. */
 static uint8_t *screen_then;
 static int screen_w, screen_h;
+static bool screen_moved;
+static gaddr front_then; /* the window in front at the last step */
 
 void machine_set_menu_walk(bool on)
 {
@@ -84,8 +94,11 @@ void machine_set_menu_walk(bool on)
     chosen = dialogs = left = pressed = 0;
     left_open = 0;
     npressed_in = 0;
+    button_waits = 0;
     free(screen_then);
     screen_then = NULL;
+    screen_moved = false;
+    front_then = 0;
     snprintf(last, sizeof last, "the start");
 }
 
@@ -108,6 +121,20 @@ static bool begun(void) { return chosen || pressed; }
 static bool declines(const char *text)
 {
     return strcasestr(text, "cancel") || strcasestr(text, "decline") || strcasestr(text, "disagree");
+}
+
+/* Whether window w has a button of its own that quits (dimmed or not):
+ * its Cancel then only cancels (HDBackup's, while it asks for a disk with
+ * its Quit dimmed), and is pressed at the start as any other. */
+static bool has_quit(gaddr w, bool dialog)
+{
+    char text[64];
+    int x, y, b;
+    for (int i = 1; i <= 64 && (b = dialog ? dialog_button(w, i, text, sizeof text, &x, &y)
+                                           : window_button(w, i, text, sizeof text, &x, &y)) >= 0; i++)
+        if (b && (strcasestr(text, "quit") || strcasestr(text, "exit")))
+            return true;
+    return false;
 }
 
 static void key(int ch, int code, unsigned modifiers)
@@ -176,7 +203,8 @@ static uint8_t *screen_now(void)
 }
 
 /* Whether the screen changed since screen_then over more than a caret's
- * blink or a cursor: a box of 64 by 64 pixels at least. */
+ * blink or a cursor (a box of 64 by 64 pixels at least); it is then the
+ * screen now. */
 static bool screen_moved_on(void)
 {
     int w = screen_w, h = screen_h;
@@ -196,15 +224,18 @@ static bool screen_moved_on(void)
             }
         moved = bottom - top >= 64 && right - left >= 64;
     }
-    free(now);
+    free(screen_then);
+    screen_then = now;
     return moved;
 }
 
 /* The front window's next button not yet pressed, pressed (true); false
  * when there is none left.  A dialog's are its button items, another
  * window's its push button controls.  Those that would end the run are
- * passed over, and at the start, Cancel and Decline. */
-static bool press_a_button(void)
+ * passed over, and at the start, Cancel and Decline (unless the window
+ * has a Quit of its own).  *dimmed says whether one that may be pressed
+ * later is dimmed for now. */
+static bool press_a_button(bool *dimmed)
 {
     gaddr w = tb_FrontWindow();
     if (!w || !WindowRecord_visible(w))
@@ -232,11 +263,15 @@ static bool press_a_button(void)
         pressed_in[at].sig = sig;
         pressed_in[at].clicked = 0;
     }
+    bool starting = !begun() && !has_quit(w, dialog);
     for (int i = 1; i <= 64 && (b = dialog ? dialog_button(w, i, text, sizeof text, &x, &y)
                                            : window_button(w, i, text, sizeof text, &x, &y)) >= 0; i++) {
-        if (b != 2 || (pressed_in[at].clicked & 1ull << (i - 1)) || passed_over(text) ||
-            (!begun() && declines(text)))
+        if (!b || (pressed_in[at].clicked & 1ull << (i - 1)) || passed_over(text) || (starting && declines(text)))
             continue;
+        if (b == 1) {
+            *dimmed = true;
+            continue;
+        }
         pressed_in[at].clicked |= 1ull << (i - 1);
         pressed++;
         snprintf(last, sizeof last, "button \"%s\"", text);
@@ -336,7 +371,7 @@ void walker_idle(uint64_t icount)
              * installer's progress, whose Stop would cut it short.) */
             char text[64], what[96];
             int x, y, b;
-            bool modal = dialog_modal(d), dimmed = false;
+            bool modal = dialog_modal(d), dimmed = false, starting = !begun() && !has_quit(d, true);
             for (int i = 1; modal && i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++) {
                 if (!b || (open_dialogs[at].clicked & 1ull << (i - 1)))
                     continue;
@@ -344,7 +379,7 @@ void walker_idle(uint64_t icount)
                     open_dialogs[at].quits = true;
                     continue;
                 }
-                if (!begun() && declines(text))
+                if (starting && declines(text))
                     continue;
                 if (b == 1) {
                     dimmed = true;
@@ -361,8 +396,11 @@ void walker_idle(uint64_t icount)
                 return;
             /* Still there: a modeless window most likely, which the menus
              * get past; a modal one ends the walk at the next step's turn,
-             * as nothing else will change. */
-            if (left_open && !begun()) {
+             * as nothing else will change.  (A modeless one after another
+             * at the start is walked past too: the splash, then a
+             * program's palettes, Fusion's, or its licence, Terrain
+             * Builder's.) */
+            if (left_open && !begun() && modal) {
                 stays_up(at);
                 return;
             }
@@ -382,16 +420,30 @@ void walker_idle(uint64_t icount)
         if (now - started_at < WARM_UP)
             return;
         bool game = machine_screen_mode_wanted() != NULL;
-        /* Halfway through the nudging: a screen drawn late, once (a
-         * notice), is not taken for one that goes on drawing. */
-        if (waits == WAITS / 2 && !screen_then)
-            screen_then = screen_now();
+        /* The screen at each step from halfway through the first nudging
+         * (a screen drawn late, once, as a notice, is not taken for one
+         * that goes on drawing), and between them, whether it changed: a
+         * game's title answering a key may come back to where it was
+         * (Age of Empires' main menu).  Not a window coming or going,
+         * nor a modal dialog drawn anew (MediaPresenter's, put up again
+         * and again as it asks for a name). */
+        if (screen_then || waits == WAITS / 2) {
+            gaddr front = tb_FrontWindow();
+            if (screen_moved_on() && front == front_then && !(d && dialog_modal(d)))
+                screen_moved = true;
+            front_then = front;
+        }
         if (nudge())
             return;
-        if (press_a_button()) {
+        bool dimmed = false;
+        if (press_a_button(&dimmed)) {
             waits = WAITS; /* nudged enough: the buttons now, a step apart */
             return;
         }
+        /* A button dimmed for now: a licence's Accept while it counts
+         * down (Terrain Builder's). */
+        if (dimmed && button_waits++ < BUTTON_WAITS)
+            return;
         if (pressed) {
             no_menu_bar("the program is a window, its buttons pressed");
             return;
@@ -399,7 +451,7 @@ void walker_idle(uint64_t icount)
         /* A game with no menus, in a window or the whole screen, given
          * keys and clicks: walked if it went on drawing, not one stuck on
          * a still screen. */
-        if ((game || tb_FrontWindow()) && screen_moved_on()) {
+        if ((game || tb_FrontWindow()) && screen_moved) {
             no_menu_bar(game ? "the program has the whole screen, it drew on as keys and clicks were given"
                              : "the program has no menus, it drew on as keys and clicks were given");
             return;
@@ -416,10 +468,24 @@ void walker_idle(uint64_t icount)
                 return;
             }
         }
+        /* Perhaps still starting: its window's buttons and its screen are
+         * looked at again at each step until PATIENCE has passed, and it
+         * is nudged again (a game's title screens one after another, each
+         * waiting for a key: Nanosaur 1.1.7's). */
+        if (now - started_at < PATIENCE) {
+            waits = 0;
+            return;
+        }
         /* Nothing on the screen of its own: a background program (a
          * server, a helper waiting for Apple events), or one that never got
          * as far as its first window. */
         bool windowless = !tb_FrontWindow() && !game;
+        /* One whose SIZE says it runs only in the background (Syslogd)
+         * has nothing to show: it ran on, and that was its walk. */
+        if (windowless && (g_app_size_flags & 0x0400)) {
+            no_menu_bar("the program is background-only, it ran on");
+            return;
+        }
         printf("walk: no menu bar appeared%s\n", windowless ? ", nor a window" : "");
         fflush(stdout);
         walking = false;

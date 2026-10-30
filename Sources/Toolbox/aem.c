@@ -243,6 +243,21 @@ void machine_send_apple_event(uint32_t cls, uint32_t id, const char *const *file
     queue_event(cls, id, files, nfiles, text, reply, ctx);
 }
 
+/* The Process Manager's answer to Quit All Applications from a program,
+ * once the others have quit: an 'ansr' with no error, which the program
+ * waits for. */
+static void queue_quit_all_answer(void)
+{
+    uint32_t len;
+    uint8_t *flat = aem_build_flat(T("aevt"), T("ansr"), NULL, 0, NULL, false, &len);
+    uint32_t cap = len;
+    uint8_t err[2] = { 0, 0 };
+    host_entry(&flat, &len, &cap, T("errn"), T("shor"), err, 2);
+    put32(flat + 8, 1); /* that parameter */
+    aem_queue_flat(flat, len, NULL, NULL);
+    free(flat);
+}
+
 /* A raw high-level event between processes: a header, then the message.
  *   'BHLE', class, ID, refCon, posting options, the sender's process ID
  *   and signature (4 bytes each), a receipt's result (2), 0 (2), the
@@ -2506,11 +2521,17 @@ int16_t tb_PostHighLevelEvent(gaddr evt, gaddr receiver_id, int32_t refcon, gadd
     }
     /* To the system process ({0, kSystemProcess}): Quit All Applications,
      * which the Finder's Shut Down and Restart post.  The Process Manager
-     * sends each application Quit; here the other programs are runs of
-     * their own, so this one is told to quit (the Finder then shuts down). */
+     * sends each application but the sender Quit; here the other programs
+     * are runs of their own, so the Finder is told to quit (it then shuts
+     * down).  Another program (an installer or updater making way: At Ease
+     * 2.0.3 Updater) goes on, and is answered when all have quit. */
     if (atype == T("psn ") && a0 == 0 && a1 == 1) {
-        if (e.cls == T("aevt") && e.id == T("quia"))
-            machine_send_quit();
+        if (e.cls == T("aevt") && e.id == T("quia")) {
+            if (g_is_finder)
+                machine_send_quit();
+            else
+                queue_quit_all_answer();
+        }
         return noErr;
     }
     if (!self) {

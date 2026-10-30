@@ -345,7 +345,7 @@ static int ask(machine_alert *a)
     int r = 0;
     if (!dialog_host_alert(a, &r)) {
         LOGF(LOG_UNIMPL, "Navigation alert: %s\n", a->message);
-        machine_idle(); /* headless: the user's answer is the wait for input */
+        machine_idle_answered(); /* headless: the user's answer is the wait for input */
     }
     return r > 0 ? r : a->default_item;
 }

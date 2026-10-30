@@ -298,6 +298,7 @@ bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
 void machine_idle_for(int32_t sleep); /* the same, the clock moving on no more than sleep ticks */
+void machine_idle_answered(void); /* the wait for a headless alert's answer: no walk step */
 void time_reset(void);
 /* Layers and Open Transport's tasks (vam.c): a new run; the tasks due. */
 void vam_reset(void);

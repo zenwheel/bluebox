@@ -12,9 +12,9 @@
 #   last step: a menu item or, with no menu bar, a button; items chosen)
 #   and <work dir>/report.txt (the failures by kind, most first; a program
 #   with no menu bar that was walked as a window of buttons or as a game
-#   drawing on ends "menu walk finished" too, one with nothing on the
-#   screen "menu walk found no menu bar or window"); each run's output is
-#   kept in <work dir>/logs/.
+#   drawing on, or that runs only in the background, ends "menu walk
+#   finished" too, one with nothing on the screen "menu walk found no menu
+#   bar or window"); each run's output is kept in <work dir>/logs/.
 #   HEAPCHECK=n checks the heaps every nth call (default 1; 0 for none),
 #   CODECHECK=n checks a PowerPC program's code for changes every nth
 #   call (default 0, none),

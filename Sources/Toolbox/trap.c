@@ -596,6 +596,24 @@ bool machine_waiting_for_input(void) { return g_cpu && g_cpu->icount - last_idle
 
 void machine_idle(void) { machine_idle_for(-1); }
 
+/* The wait for the user's answer to an alert that headless answers itself
+ * (its default button): time passes as for any wait, but the menu walk
+ * takes no step, as the alert is in front of everything and the window
+ * behind (a dialog the program is between ModalDialog calls in: Moose
+ * Frazer's) is not the program's to take input from now. */
+static bool answering;
+static unsigned answered; /* answers in a row, no other wait between */
+
+void machine_idle_answered(void)
+{
+    /* A program that only puts up alert after alert, whatever the answer,
+     * would never be walked to its end: after a hundred in a row the
+     * walk's steps come again. */
+    answering = ++answered < 100;
+    machine_idle_for(-1);
+    answering = false;
+}
+
 /* The same for WaitNextEvent's sleep, in ticks (negative: as long as the
  * script lets it): the clock moves on no further than the program asked
  * to sleep, so a program doing its work between null events (the Finder
@@ -608,7 +626,10 @@ void machine_idle_for(int32_t sleep)
     last_idle = c->icount;
     c->icount += 1000;
     uint32_t presses = ev_press_count();
-    walker_idle(c->icount);
+    if (!answering) {
+        answered = 0;
+        walker_idle(c->icount);
+    }
     if (c->halted)
         return;
     /* A click the walk just gave is the program's to see: the clock moving
@@ -618,8 +639,14 @@ void machine_idle_for(int32_t sleep)
         return;
     /* Waiting: scripted input comes now, or the clock moves on to it. */
     uint64_t next = events_script_next_at();
-    if (sleep >= 0) {
-        uint64_t slept = c->icount + (uint64_t)(sleep ? sleep : 1) * 166667u; /* a tick at 10 MIPS */
+    if (sleep == 0) {
+        /* No sleep: WaitNextEvent returns at once, as on a Mac, the clock
+         * moved on by the call's own time only, not a tick: a program
+         * counting its null events (ApplLoader quits after 3000 of them)
+         * would otherwise wait most of a minute. */
+        next = 0;
+    } else if (sleep > 0) {
+        uint64_t slept = c->icount + (uint64_t)sleep * 166667u; /* a tick at 10 MIPS */
         if (!next || slept < next)
             next = slept;
         /* The menu walk's next step is input too and ends the sleep there:
