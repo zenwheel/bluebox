@@ -110,6 +110,7 @@ const lowmem_info lowmem_table[] = {
     {"JUnknown574", 0x0574u, 4u},
     {"JADBProc", 0x06B8u, 4u},
     {"JFLUSH", 0x06F4u, 4u},
+    {"JLg2Phys", 0x06FCu, 4u},
     {"JResUnknown1", 0x0700u, 4u},
     {"JResUnknown2", 0x0714u, 4u},
     {"JHideCursor", 0x0800u, 4u},

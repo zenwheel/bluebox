@@ -1351,3 +1351,11 @@
         type: Fixed
     dispatcher: MatrixDispatch
     selector: 0x10
+
+# jLg2Phys, the File Manager's vector to its logical-to-physical block
+# mapping (MapFBlock with the volume's offset), which disk image drivers
+# (Disk Copy's .HDI) call to find where an image file lies on the disk.
+- lowmem:
+    name: JLg2Phys
+    type: ProcPtr
+    address: 0x6FC

@@ -22,7 +22,10 @@ static int16_t cd_control(gaddr pb, bool async)
     int16_t r = disk_icon_control(pb, true);
     return r == -1 ? -17 /* controlErr */ : r;
 }
-static const native_driver cd_driver = { ".AppleCD", CD_UNIT, NULL, NULL, cd_control, cd_status, NULL, NULL, NULL };
+/* Its volumes are locked: the blocks of files mapped on them read, not written. */
+static int16_t cd_read(gaddr pb, bool async) { return fm_block_io(pb, false); }
+static int16_t cd_write(gaddr pb, bool async) { return -44; /* wPrErr */ }
+static const native_driver cd_driver = { ".AppleCD", CD_UNIT, NULL, NULL, cd_control, cd_status, cd_read, cd_write, NULL };
 
 static const native_driver *const drivers[] = {
     &cd_driver, &disk_driver, &sony_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],

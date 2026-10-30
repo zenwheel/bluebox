@@ -110,6 +110,7 @@
 #define LM_JUnknown574 0x0574u /* ProcPtr, 4 bytes */
 #define LM_JADBProc 0x06B8u /* ProcPtr, 4 bytes */
 #define LM_JFLUSH 0x06F4u /* VoidUPP, 4 bytes */
+#define LM_JLg2Phys 0x06FCu /* ProcPtr, 4 bytes */
 #define LM_JResUnknown1 0x0700u /* VoidUPP, 4 bytes */
 #define LM_JResUnknown2 0x0714u /* VoidUPP, 4 bytes */
 #define LM_JHideCursor 0x0800u /* ProcPtr, 4 bytes */

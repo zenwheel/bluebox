@@ -957,6 +957,8 @@ void trap_init(void)
     wr32(LM_JFLUSH, noop);
     wr32(LM_JResUnknown1, noop);
     wr32(LM_JResUnknown2, noop);
+    /* The File Manager's block mapping, which disk image drivers call. */
+    wr32(LM_JLg2Phys, native_register(fm_lg2phys_native, "Lg2Phys", 0));
 
     /* Jump vectors to ROM routines that are also traps, which programs
      * call directly (StarGuardian calls FMSwapFont through JSwapFont):

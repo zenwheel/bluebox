@@ -9524,6 +9524,47 @@ static void ppcglue_InvalMenuBar(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_NewRoutineDescriptor(ppc_cpu *c)
+{
+    gaddr a_proc = (gaddr)c->gpr[3];
+    uint32_t a_info = (uint32_t)c->gpr[4];
+    uint8_t a_isa = (uint8_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_NewRoutineDescriptor(a_proc, a_info, a_isa);
+    c->pc = c->lr;
+}
+
+static void ppcglue_DisposeRoutineDescriptor(ppc_cpu *c)
+{
+    gaddr a_ptr = (gaddr)c->gpr[3];
+    tb_DisposeRoutineDescriptor(a_ptr);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewFatRoutineDescriptor(ppc_cpu *c)
+{
+    gaddr a_m68k = (gaddr)c->gpr[3];
+    gaddr a_ppc = (gaddr)c->gpr[4];
+    uint32_t a_info = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_NewFatRoutineDescriptor(a_m68k, a_ppc, a_info);
+    c->pc = c->lr;
+}
+
+static void ppcglue_SaveMixedModeState(ppc_cpu *c)
+{
+    gaddr a_statep = (gaddr)c->gpr[3];
+    uint32_t a_vers = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_SaveMixedModeState(a_statep, a_vers);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RestoreMixedModeState(ppc_cpu *c)
+{
+    gaddr a_statep = (gaddr)c->gpr[3];
+    uint32_t a_vers = (uint32_t)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RestoreMixedModeState(a_statep, a_vers);
+    c->pc = c->lr;
+}
+
 static void ppcglue_NavServicesCanRun(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int8_t)tb_NavServicesCanRun();
@@ -37275,74 +37316,6 @@ static void ppctrap_InitApplZone(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_NewRoutineDescriptor(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x0u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(1, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA59));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_DisposeRoutineDescriptor(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0x1u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xAA59));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewFatRoutineDescriptor(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x2u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xAA59));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_SaveMixedModeState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x3u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA59));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RestoreMixedModeState(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x4u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAA59));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_HandToHand(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40045,6 +40018,8 @@ static void ppclm_get_AuxWinHead(ppc_cpu *c) { c->gpr[3] = rd32(0xCD0); c->pc = 
 static void ppclm_set_AuxWinHead(ppc_cpu *c) { wr32(0xCD0, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_DeskCPat(ppc_cpu *c) { c->gpr[3] = rd32(0xCD8); c->pc = c->lr; }
 static void ppclm_set_DeskCPat(ppc_cpu *c) { wr32(0xCD8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
+static void ppclm_get_JLg2Phys(ppc_cpu *c) { c->gpr[3] = rd32(0x6FC); c->pc = c->lr; }
+static void ppclm_set_JLg2Phys(ppc_cpu *c) { wr32(0x6FC, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_SoundGlue(ppc_cpu *c) { c->gpr[3] = rd32(0xAE8); c->pc = c->lr; }
 static void ppclm_set_SoundGlue(ppc_cpu *c) { wr32(0xAE8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 const ppc_export ppc_exports[] = {
@@ -40601,7 +40576,7 @@ const ppc_export ppc_exports[] = {
     {"DisposePixPat", ppcglue_DisposePixPat},
     {"DisposePtr", ppcglue_DisposePtr},
     {"DisposeRgn", ppcglue_DisposeRgn},
-    {"DisposeRoutineDescriptor", ppctrap_DisposeRoutineDescriptor},
+    {"DisposeRoutineDescriptor", ppcglue_DisposeRoutineDescriptor},
     {"DisposeScreenBuffer", ppcglue_DisposeScreenBuffer},
     {"DisposeSpeechChannel", ppcglue_DisposeSpeechChannel},
     {"DisposeSprite", ppcglue_DisposeSprite},
@@ -41928,6 +41903,7 @@ const ppc_export ppc_exports[] = {
     {"LMGetJHideCursor", ppclm_get_JHideCursor},
     {"LMGetJIODone", ppclm_get_JIODone},
     {"LMGetJInitCrsr", ppclm_get_JInitCrsr},
+    {"LMGetJLg2Phys", ppclm_get_JLg2Phys},
     {"LMGetJResUnknown1", ppclm_get_JResUnknown1},
     {"LMGetJResUnknown2", ppclm_get_JResUnknown2},
     {"LMGetJScrnAddr", ppclm_get_JScrnAddr},
@@ -42162,6 +42138,7 @@ const ppc_export ppc_exports[] = {
     {"LMSetJHideCursor", ppclm_set_JHideCursor},
     {"LMSetJIODone", ppclm_set_JIODone},
     {"LMSetJInitCrsr", ppclm_set_JInitCrsr},
+    {"LMSetJLg2Phys", ppclm_set_JLg2Phys},
     {"LMSetJResUnknown1", ppclm_set_JResUnknown1},
     {"LMSetJResUnknown2", ppclm_set_JResUnknown2},
     {"LMSetJScrnAddr", ppclm_set_JScrnAddr},
@@ -42473,7 +42450,7 @@ const ppc_export ppc_exports[] = {
     {"NewDrag", ppcglue_NewDrag},
     {"NewEmptyHandle", ppcglue_NewEmptyHandle},
     {"NewEmptyHandleSys", ppcglue_NewEmptyHandleSys},
-    {"NewFatRoutineDescriptor", ppctrap_NewFatRoutineDescriptor},
+    {"NewFatRoutineDescriptor", ppcglue_NewFatRoutineDescriptor},
     {"NewFeaturesDialog", ppcglue_NewFeaturesDialog},
     {"NewGDevice", ppcglue_NewGDevice},
     {"NewGWorld", ppcglue_NewGWorld},
@@ -42511,7 +42488,7 @@ const ppc_export ppc_exports[] = {
     {"NewPublisherDialog", ppcglue_NewPublisherDialog},
     {"NewPublisherExpDialog", ppctrap_NewPublisherExpDialog},
     {"NewRgn", ppcglue_NewRgn},
-    {"NewRoutineDescriptor", ppctrap_NewRoutineDescriptor},
+    {"NewRoutineDescriptor", ppcglue_NewRoutineDescriptor},
     {"NewScreenBuffer", ppcglue_NewScreenBuffer},
     {"NewSection", ppctrap_NewSection},
     {"NewServiceWindow", ppcglue_NewServiceWindow},
@@ -43287,7 +43264,7 @@ const ppc_export ppc_exports[] = {
     {"RestoreDeviceClut", ppcglue_RestoreDeviceClut},
     {"RestoreEntries", ppcglue_RestoreEntries},
     {"RestoreFore", ppcglue_RestoreFore},
-    {"RestoreMixedModeState", ppctrap_RestoreMixedModeState},
+    {"RestoreMixedModeState", ppcglue_RestoreMixedModeState},
     {"RetrievePictInfo", ppcglue_RetrievePictInfo},
     {"RevealDataBrowserItem", ppcglue_RevealDataBrowserItem},
     {"ReverseKeyboardFocus", ppcglue_ReverseKeyboardFocus},
@@ -43429,7 +43406,7 @@ const ppc_export ppc_exports[] = {
     {"SaveBack", ppcglue_SaveBack},
     {"SaveEntries", ppcglue_SaveEntries},
     {"SaveFore", ppcglue_SaveFore},
-    {"SaveMixedModeState", ppctrap_SaveMixedModeState},
+    {"SaveMixedModeState", ppcglue_SaveMixedModeState},
     {"SaveOld", ppcglue_SaveOld},
     {"ScaleMatrix", ppcglue_ScaleMatrix},
     {"ScaleMovieSegment", ppcglue_ScaleMovieSegment},
