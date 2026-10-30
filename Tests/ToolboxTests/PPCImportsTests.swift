@@ -247,6 +247,66 @@ extension BlueBox {
             #expect(reason.hasSuffix(": weak Q3IsInitialized from NoSuchLib, not there"))
         }
 
+        /// Mac OS 8.5 and 9's own libraries are there for a program that
+        /// links to them weakly: QuickEditor and Earthcast take the Dialog
+        /// Manager's 8.5 calls from MacDialogsLib once Appearance 1.1 is
+        /// there, and called nil when it bound them to 0.  A routine they
+        /// lack is still 0.
+        @Test func weakImportsFromMacOS9LibrariesBind() {
+            bootMachine()
+            for (library, symbol) in [("MacDialogsLib", "SetDialogTimeout"), ("MacDialogsLib", "AppendDialogItemList"),
+                                      ("ColorPickerLib", "PickColor"), ("LocalesLib", "LocaleRefFromLangOrRegionCode"),
+                                      ("Math64Lib", "S64Add"), ("UnicodeUtilitiesLib", "UCCompareText"),
+                                      ("ATSUnicodeLib", "ATSUCreateStyle")] {
+                cfm_reset()
+                _ = cfm_ppc_cpu()
+                let toc = cfm_prepare_container(importContainer(symbol, cls: 2, library: library, weak: true))
+                #expect(toc != 0 && rd32(toc) != 0, "\(symbol) from \(library)")
+            }
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            let toc = cfm_prepare_container(importContainer("NoSuchDialogCall", cls: 2, library: "MacDialogsLib", weak: true))
+            #expect(toc != 0 && rd32(toc) == 0)
+        }
+
+        /// OpenGLMemory, installed with OpenGL: Tomb Raider Chronicles
+        /// calls glmSetMode first thing.  Blocks come from the heap the
+        /// mode names, are counted, realloc keeps their contents, and the
+        /// mode can't change once one is out.
+        @Test func openGLMemoryAllocates() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            let toc = cfm_prepare_container(importContainer("glmSetMode", cls: 2, library: "OpenGLMemory", weak: true))
+            #expect(toc != 0)
+            if hostgl_available() { #expect(rd32(toc) != 0) }
+            glm_reset() // nothing out from another test
+            svcCall("glmSetMode", 3)                              // GLM_APPLICATION_HEAP_MODE
+            #expect(svcCall("glmGetError") == 0)
+            svcCall("glmSetMode", 9)
+            #expect(svcCall("glmGetError") == 1)                  // GLM_INVALID_ENUM, cleared once read
+            #expect(svcCall("glmGetError") == 0)
+            let p = svcCall("glmCalloc", 4, 25)
+            #expect(p != 0 && rd32(p) == 0 && rd32(p + 96) == 0)
+            #expect(svcCall("glmGetInteger", 3) == 100)           // GLM_CURRENT_MEMORY
+            svcCall("glmSetUInt", p, 4, 2, 1, 0xDEAD_BEEF)        // 4 a row, 2 rows, 1 skipped between
+            #expect(rd32(p) == 0xDEAD_BEEF && rd32(p + 12) == 0xDEAD_BEEF && rd32(p + 16) == 0)
+            #expect(rd32(p + 20) == 0xDEAD_BEEF && rd32(p + 32) == 0xDEAD_BEEF && rd32(p + 36) == 0)
+            let q = svcCall("glmRealloc", p, 400)
+            #expect(q != 0 && rd32(q) == 0xDEAD_BEEF && rd32(q + 32) == 0xDEAD_BEEF)
+            #expect(svcCall("glmGetInteger", 3) == 400 && svcCall("glmGetInteger", 4) >= 400)
+            svcCall("glmSetMode", 2)
+            #expect(svcCall("glmGetError") == 3)                  // GLM_INVALID_OPERATION: blocks are out
+            let v = svcCall("glmVecAlloc", 33)
+            #expect(v != 0 && v & 15 == 0)
+            svcCall("glmFree", q)
+            svcCall("glmVecFree", v)
+            #expect(svcCall("glmGetInteger", 3) == 0)
+            svcCall("glmFree", 0x1234)
+            #expect(svcCall("glmGetError") == 2)                  // GLM_INVALID_VALUE: not one of GLM's
+            glm_reset()
+        }
+
         /// A strong import from a library that isn't anywhere (a NOVA
         /// saverlet's "NOVA Library (PPC)", inside NOVA itself) stops,
         /// when called, naming the library rather than the routine.

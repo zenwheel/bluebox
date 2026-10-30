@@ -278,6 +278,10 @@ static void (*export_fn(const char *name))(ppc_cpu *)
         for (unsigned i = 0; i < agl_export_count; i++)
             if (!strcmp(agl_exports[i].name, name))
                 return agl_exports[i].fn;
+    if (name[0] == 'g' && name[1] == 'l' && name[2] == 'm')
+        for (unsigned i = 0; i < glm_export_count; i++)
+            if (!strcmp(glm_exports[i].name, name))
+                return glm_exports[i].fn;
     if (name[0] == 'g' && name[1] == 'l')
         for (unsigned i = 0; i < gl_export_count; i++)
             if (!strcmp(gl_exports[i].name, name))
@@ -659,6 +663,14 @@ static const char *const native_libraries[] = {
     "DriverLoaderLib", "KeychainLib", "FoldersLib", "FileSigningLib", "UTCUtils", "QTStreamLib",
     "Apple;Carbon;Multimedia", "Apple;Carbon;Networking", /* CarbonLib's other names */
     "QuickTimeVRLib",
+    /* Mac OS 8.5 and 9's own, which programs (and CarbonLib) link to
+     * weakly: the Dialog Manager's 8.5 calls (QuickEditor's
+     * SetDialogTimeout), the Color Picker, ATSUI, locales, Math64, the
+     * Unicode utilities, FontSync, the dictionary, language analysis,
+     * speech recognition and network services managers, and DebugLib. */
+    "MacDialogsLib", "ColorPickerLib", "ATSUnicodeLib", "LocalesLib", "Math64Lib", "UnicodeUtilitiesLib",
+    "UnicodeUtilitiesCoreLib", "FontSyncLib", "DictionaryMgrLib", "LanguageAnalysisMgrLib", "SpeechRecognitionLib",
+    "NSLPPCLib", "DebugLib",
 };
 
 /* Apple libraries left unloaded even where an installer put them: the
@@ -674,8 +686,9 @@ static bool core_library(const char *name)
 
 static bool is_native_library(const char *name)
 {
-    /* Apple's OpenGL, where the host has one to draw with (opengl.c). */
-    if (!strcmp(name, "OpenGLLibrary") || !strcmp(name, "OpenGLUtility"))
+    /* Apple's OpenGL, where the host has one to draw with (opengl.c),
+     * and the memory manager installed with it (glm.c). */
+    if (!strcmp(name, "OpenGLLibrary") || !strcmp(name, "OpenGLUtility") || !strcmp(name, "OpenGLMemory"))
         return hostgl_available();
     if (qd3d_library(name)) /* QuickDraw 3D, where the host can render it */
         return true;

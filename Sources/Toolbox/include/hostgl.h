@@ -41,6 +41,11 @@ void hostgl_glyph_list(uint32_t list, int width, int height, int row_bytes, floa
 /* The gl and glu exports (opengl.c), empty without a host OpenGL. */
 extern const ppc_export gl_exports[];
 extern const unsigned gl_export_count;
+/* OpenGLMemory's exports (glm.c), and their state let go of with a
+ * program's memory. */
+extern const ppc_export glm_exports[];
+extern const unsigned glm_export_count;
+void glm_reset(void);
 /* The AGL exports (agl.c). */
 extern const ppc_export agl_exports[];
 extern const unsigned agl_export_count;
