@@ -1157,6 +1157,17 @@ static int32_t video_call(mhlr *h, qtc_call *k)
 {
     uint32_t *a = k->a;
     switch (k->what) {
+    case 0x0101: /* QuickTime 2's GetVideoMediaGraphicsMode(*mode, *opColor): MediaGetGraphicsMode */
+        if (a[0])
+            wr32(a[0], (uint32_t)h->mode);
+        if (a[1])
+            put_rgb(a[1], h->op);
+        return noErr;
+    case 0x0102: /* SetVideoMediaGraphicsMode(mode, opColor) */
+        h->mode = (int32_t)a[0];
+        for (int i = 0; a[1] && i < 3; i++)
+            h->op[i] = rd16(a[1] + 2 * (uint32_t)i);
+        return noErr;
     case 0x0105: /* ResetStatistics */
         h->frames_drawn = 0;
         h->stalls = 0;
@@ -1959,6 +1970,23 @@ static int32_t base_call(mhlr *h, qtc_call *k)
     return qtcBadSelector;
 }
 
+/* The sound media's own calls, QuickTime 2's names for MediaGetSoundBalance
+ * and MediaSetSoundBalance. */
+static int32_t sound_call(mhlr *h, qtc_call *k)
+{
+    uint32_t *a = k->a;
+    switch (k->what) {
+    case 0x0101: /* GetSoundMediaBalance(*balance) */
+        if (a[0])
+            wr16(a[0], (uint16_t)h->balance);
+        return noErr;
+    case 0x0102: /* SetSoundMediaBalance(balance) */
+        h->balance = (int16_t)a[0];
+        return noErr;
+    }
+    return qtcBadSelector;
+}
+
 static int32_t mh_call(qtc_call *k)
 {
     mhlr *h = k->self;
@@ -1998,6 +2026,8 @@ static int32_t mh_call(qtc_call *k)
         return sprite_call(h, k);
     if (!strcmp(fam, "VideoMedia"))
         return video_call(h, k);
+    if (!strcmp(fam, "SoundMedia"))
+        return sound_call(h, k);
     if (!strcmp(fam, "TC"))
         return tc_call(h, k);
     if (!strcmp(fam, "MusicMedia"))
@@ -2010,7 +2040,7 @@ static int32_t mh_call(qtc_call *k)
 #define MH(sub, name, fam) { 0x6D686C72, sub, 0x6170706C, 0, name, NULL, 0x00040000, { "Media", fam }, sizeof(mhlr), mh_call, 0 }
 static qtc_class handlers[] = {
     MH(0x76696465, "Apple Video Media Handler", "VideoMedia"),   /* 'vide' */
-    MH(0x736F756E, "Apple Sound Media Handler", NULL),           /* 'soun' */
+    MH(0x736F756E, "Apple Sound Media Handler", "SoundMedia"),   /* 'soun' */
     MH(0x74657874, "Apple Text Media Handler", "TextMedia"),     /* 'text' */
     MH(0x73707274, "Apple Sprite Media Handler", "SpriteMedia"), /* 'sprt' */
     MH(0x6D757369, "Apple Music Media Handler", "MusicMedia"),   /* 'musi' */
