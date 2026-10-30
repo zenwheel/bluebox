@@ -719,6 +719,30 @@ extension BlueBox {
             #expect(tb_Alert(128, 0) == 3)
         }
 
+        /// Without a host, the same alert straight back (no other wait
+        /// for input between: MidiPhone's "No response from the modem",
+        /// whose default is Try Again) gets Cancel, as a person would
+        /// answer, then the default again; after a wait, the default.
+        @Test func withoutAHostARepeatedAlertGetsAnotherAnswer() {
+            launchTestApp(Self.alertResources())
+            machine_set_alert_handler(nil, nil)
+            machine_set_instruction_limit(0)
+            #expect(tb_Alert(128, 0) == 1)
+            #expect(tb_Alert(128, 0) == 2)
+            #expect(tb_Alert(128, 0) == 1)
+            machine_idle()
+            #expect(tb_Alert(128, 0) == 1)
+            tb_ParamText(guestString("Other"), 0, 0, 0)
+            #expect(tb_Alert(128, 0) == 1) // another message: another alert
+            let hit = tb_NewPtr(2, false, true)
+            let param = tb_NewPtr(24, false, true)
+            wr32(param + 6, 0xFFFF_FFFF)
+            wr32(param + 10, 0xFFFF_FFFF)
+            wr16(param + 18, 1)
+            #expect(dialog_standard_alert(2, guestString("Disk full"), 0, param, hit) == 0 && rd16(hit) == 1)
+            #expect(dialog_standard_alert(2, guestString("Disk full"), 0, param, hit) == 0 && rd16(hit) == 2)
+        }
+
         @Test func stagesWithoutABoxReturnMinusOne() {
             launchTestApp(Self.alertResources(stages: 0x0000))
             install()
