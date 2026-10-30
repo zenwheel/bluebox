@@ -53,7 +53,7 @@ static void unlink_pos(q3group *gr, q3pos *p)
 
 static void group_empty(q3group *gr, uint32_t type)
 {
-    for (q3pos *p = gr->first, *n; p; p = n) {
+    for (q3pos *p = gr ? gr->first : NULL, *n; p; p = n) {
         n = p->next;
         q3obj *o = q3_get(p->obj);
         if (type && !(o && q3_type_is(o->type, type)))
@@ -166,6 +166,10 @@ static bool group_duplicate(q3obj *to, const q3obj *from)
     q3group *src = from->data, *gr = calloc(1, sizeof *gr);
     if (!gr)
         return false;
+    if (!src) {
+        to->data = gr;
+        return true;
+    }
     gr->state = src->state;
     gr->has_bounds = src->has_bounds;
     memcpy(gr->bounds, src->bounds, sizeof gr->bounds);
@@ -200,16 +204,23 @@ static void group_submit(q3obj *o, q3view *v)
         q3v_pop(v);
 }
 
-static gaddr new_group(uint32_t type)
+q3group *q3_group_data_new(void)
 {
     q3group *gr = calloc(1, sizeof *gr);
+    if (gr)
+        gr->state = kQ3DisplayGroupStateMaskIsDrawn | kQ3DisplayGroupStateMaskIsPicked | kQ3DisplayGroupStateMaskIsWritten |
+                    kQ3DisplayGroupStateMaskUseBoundingBox | kQ3DisplayGroupStateMaskUseBoundingSphere;
+    return gr;
+}
+
+static gaddr new_group(uint32_t type)
+{
+    q3group *gr = q3_group_data_new();
     q3obj *o = gr ? q3_new(type, gr) : NULL;
     if (!o) {
         free(gr);
         return 0;
     }
-    gr->state = kQ3DisplayGroupStateMaskIsDrawn | kQ3DisplayGroupStateMaskIsPicked | kQ3DisplayGroupStateMaskIsWritten |
-                kQ3DisplayGroupStateMaskUseBoundingBox | kQ3DisplayGroupStateMaskUseBoundingSphere;
     return o->g;
 }
 

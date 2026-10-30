@@ -97,6 +97,8 @@ typedef struct {
     float bounds[7];     /* min, max, isEmpty */
 } q3group;
 q3group *q3_group_of(gaddr g);
+/* A new group's own data (empty, a display group's state as made). */
+q3group *q3_group_data_new(void);
 void q3_group_classes(void);
 gaddr q3_group_add(gaddr group, gaddr obj);
 

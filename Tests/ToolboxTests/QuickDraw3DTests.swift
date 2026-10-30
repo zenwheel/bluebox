@@ -220,6 +220,28 @@ extension BlueBox {
             }
         }
 
+        /// An object made from a built-in group class's handle (as
+        /// Interiors makes its groups) is a working group.
+        @Test func groupMadeFromItsClass() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            #expect(Q.call("Q3Initialize") == 1)
+            let cls = Q.call("Q3XObjectHierarchy_FindClassByType", [Self.type("grup")])
+            #expect(cls != 0)
+            let group = Q.call("Q3XObjectHierarchy_NewObject", [cls, 0])
+            #expect(group != 0)
+            let light = Q.call("Q3DirectionalLight_New", [Self.data([1, Float(1), Float(1), Float(1), Float(1), 0,
+                                                                     Float(0), Float(0), Float(-1)])])
+            #expect(Q.call("Q3Group_AddObject", [group, light]) != 0)
+            let count = tb_NewPtr(4, false, true)
+            #expect(Q.call("Q3Group_CountObjects", [group, count]) == 1 && rd32(count) == 1)
+            let copy = Q.call("Q3Object_Duplicate", [group])
+            #expect(Q.call("Q3Group_CountObjects", [copy, count]) == 1 && rd32(count) == 1)
+            #expect(Q.call("Q3Group_EmptyObjects", [group]) == 1)
+            #expect(Q.call("Q3Group_CountObjects", [group, count]) == 1 && rd32(count) == 0)
+            for obj in [light, group, copy] { Q.call("Q3Object_Dispose", [obj]) }
+        }
+
         /// A window point pick finds the trimesh under the point, not
         /// beside it.
         @Test func picksWhatIsUnderThePoint() {
