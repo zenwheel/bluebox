@@ -49,6 +49,9 @@ enum { TRAILER = 12 }; /* the zone's last block, in both formats */
  * Trek demo sized its cache from 256 MB to nothing. */
 uint32_t g_mem_report_cap = 1u << 27;
 static gaddr appl_max_limit; /* 0 = application zone does not grow */
+/* The heap's share of the partition the program's SIZE resource asks for
+ * (0 = none asked): what MaxApplZone grows the zone to. */
+static uint32_t appl_heap_size;
 
 /* ---------------------------------------------------------------------- */
 /* Block helpers */
@@ -351,15 +354,18 @@ void mm_init_zone(gaddr z, gaddr limit, uint16_t more_masters)
 }
 
 void mm_set_appl_growth(gaddr max_limit) { appl_max_limit = max_limit; }
+void mm_set_appl_heap_size(uint32_t size) { appl_heap_size = size; }
+uint32_t mm_appl_heap_size(void) { return appl_heap_size; }
 
-/* Grow the application zone so that at least `need` more bytes exist at the top. */
-static bool grow_zone(gaddr z, uint32_t need)
+/* Grow the application zone so that at least `need` more bytes exist at
+ * the top: a megabyte more for what comes next, or (exact) just that. */
+static bool grow_zone_by(gaddr z, uint32_t need, bool exact)
 {
     if (z != appl_zone() || !appl_max_limit)
         return false;
     gaddr lim = z_lim(z);
     uint64_t want = (uint64_t)need + (1u << 20);
-    want = (want + 0xFFFF) & ~(uint64_t)0xFFFF;
+    want = exact ? need & ~3u : (want + 0xFFFF) & ~(uint64_t)0xFFFF;
     gaddr limit = rd32(LM_ApplLimit);
     if (limit > appl_max_limit || limit == 0)
         limit = appl_max_limit;
@@ -417,6 +423,8 @@ static bool grow_zone(gaddr z, uint32_t need)
     LOGF(LOG_MEM, "mm: application zone grown to %08X\n", newlim);
     return true;
 }
+
+static bool grow_zone(gaddr z, uint32_t need) { return grow_zone_by(z, need, false); }
 
 /* ---------------------------------------------------------------------- */
 /* Allocation */
@@ -1224,14 +1232,25 @@ void tb_SetApplLimit(gaddr newlimit)
     set_mem_err(noErr);
 }
 
+/* MaxApplZone grows the zone to the program's partition, as the Process
+ * Manager had made it, not to everything the zone could grow into: that
+ * is still there on demand.  Programs size their own heaps from the zone
+ * MaxApplZone leaves them (Grades and Photomatica make one of three
+ * quarters of it, with a master pointer for every 256 bytes in a word:
+ * from a zone of nearly 2 GB the count wrapped, NewHandle failed in the
+ * new zone and they called Debugger, or with the I/O space in the zone
+ * the block wasn't there and they made their heap at address 0). */
 void tb_MaxApplZone(void)
 {
     gaddr z = appl_zone();
     gaddr limit = rd32(LM_ApplLimit);
     if (appl_max_limit && limit > appl_max_limit)
         limit = appl_max_limit;
+    bool partition = appl_heap_size && (uint64_t)z + appl_heap_size < limit;
+    if (partition)
+        limit = (z + appl_heap_size) & ~3u;
     if (limit > z_lim(z) + TRAILER)
-        grow_zone(z, limit - TRAILER - z_lim(z));
+        grow_zone_by(z, limit - TRAILER - z_lim(z), partition);
     set_mem_err(noErr);
 }
 
