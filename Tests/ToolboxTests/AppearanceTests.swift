@@ -607,6 +607,34 @@ extension BlueBox {
             #expect(rd32(rd32(n) + 6) == mdef0)
         }
 
+        /// CalcMenuSize asks a menu's own MDEF for its size (mSizeMsg), reading
+        /// the MDEF back in first if it was purged: SoundEdit 16 locks its
+        /// MDEF, calls CalcMenuSize and then jumps through the handle.
+        @Test func calcMenuSizeAsksTheMenusMDEF() {
+            let custom = cat(be16(142), be16(0), be16(0), be16(129), be16(0), be32(0xFFFF_FFFF),
+                             [4], Array("Wave".utf8), [4], Array("Show".utf8), [0, 0, 0, 0], [0])
+            // movea.l 16(sp),a0; movea.l (a0),a0; cmpi.w #2,20(sp); bne.s +12;
+            // move.w #123,2(a0); move.w #45,4(a0); movea.l (sp)+,a0; lea 18(sp),sp; jmp (a0)
+            let mdef: [UInt8] = [0x20, 0x6F, 0x00, 0x10, 0x20, 0x50, 0x0C, 0x6F, 0x00, 0x02, 0x00, 0x14,
+                                 0x66, 0x0C, 0x31, 0x7C, 0x00, 0x7B, 0x00, 0x02, 0x31, 0x7C, 0x00, 0x2D,
+                                 0x00, 0x04, 0x20, 0x5F, 0x4F, 0xEF, 0x00, 0x12, 0x4E, 0xD0]
+            launchTestApp([TestResource(type: "MENU", id: 142, data: custom),
+                           TestResource(type: "MDEF", id: 129, data: mdef)])
+            _ = initToolbox()
+            let m = tb_GetMenu(142)
+            #expect(m != 0 && rd16(rd32(m) + 2) == 123 && rd16(rd32(m) + 4) == 45)
+            let proc = rd32(rd32(m) + 6)
+            wr16(rd32(m) + 2, 0)
+            tb_EmptyHandle(proc)
+            #expect(rd32(proc) == 0)
+            tb_CalcMenuSize(m)
+            #expect(rd32(proc) != 0 && rd16(rd32(m) + 2) == 123)
+            // A plain menu is measured by the standard MDEF, as before.
+            let plain = tb_NewMenu(143, pstr("Edit"))
+            tb_AppendMenu(plain, pstr("Undo"))
+            #expect(rd16(rd32(plain) + 2) >= 40 && rd16(rd32(plain) + 4) == 16)
+        }
+
         @Test func xmnuResourcesApply() {
             // MENU 131: two items; 'xmnu' 131: the second with command 'quit', Command-Option.
             let menu = cat(be16(131), be16(0), be16(0), be32(0), be32(0xFFFF_FFFF),

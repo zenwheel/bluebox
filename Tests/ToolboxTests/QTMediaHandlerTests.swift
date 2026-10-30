@@ -127,6 +127,75 @@ extension BlueBox {
             tb_DisposeMovie(movie)
         }
 
+        /// QuickTime 2's names for the media handlers' calls, which
+        /// QuickTimeLib still exports (Sparkle imports AddTextSample): the
+        /// text calls reach the text handler; the video and sound media's
+        /// graphics mode and balance are the handlers' own.
+        @Test func quickTime2MediaHandlerNames() {
+            qtMachine()
+            let movie = UInt32(bitPattern: tb_NewMovie(1))
+            let M = Int32(bitPattern: movie)
+            let track = tb_NewMovieTrack(M, 100 << 16, 20 << 16, 0)
+            let media = tb_NewTrackMedia(track, Int32(bitPattern: fourCC("text")), 600, 0, 0)
+            let mh = UInt32(bitPattern: tb_GetMediaHandler(media))
+            let time = tb_NewPtr(4, false, true)
+            let black = tb_NewPtr(6, false, true)
+            #expect(qtCall("AddTextSample", [mh, cString("Caption one"), 11, 0, 12, 0, black, 0, 0, 0, 0, 0, 0, 0,
+                                             0, 600, time]) == 0)
+            #expect(qtCall("AddHiliteSample", [mh, 0, 7, 0, 300, time]) == 0 && rd32(time) == 600)
+            #expect(tb_GetMediaSampleCount(media) == 2)
+            #expect(tb_InsertMediaIntoTrack(track, 0, 0, tb_GetMediaDuration(media), 0x10000) == 0)
+            let found = tb_NewPtr(12, false, true)
+            #expect(qtCall("FindNextText", [mh, cString("one"), 3, 0, 0, found, found + 4, found + 8]) == 0)
+            #expect(rd32(found + 8) == 8)
+            #expect(qtCall("HiliteTextSample", [mh, 0, 0, 3, 0]) == 0)
+            #expect(qtCall("SetTextProc", [mh, 0, 0]) == 0)
+            for name in ["AddTESample", "SetTextSampleData"] { #expect(cfm_export_fn(name) != nil, "\(name)") }
+            tb_DisposeMovie(movie)
+
+            let vmovie = tb_NewMovie(0)
+            let vtrack = tb_NewMovieTrack(vmovie, 0, 0, 0)
+            let video = UInt32(bitPattern: tb_GetMediaHandler(tb_NewTrackMedia(vtrack, Int32(bitPattern: fourCC("vide")), 600, 0, 0)))
+            let op = tb_NewPtr(6, false, true)
+            wr16(op, 0x1111); wr16(op + 2, 0x2222); wr16(op + 4, 0x3333)
+            #expect(qtCall("SetVideoMediaGraphicsMode", [video, 0x24, op]) == 0)
+            let mode = tb_NewPtr(4, false, true), back = tb_NewPtr(6, false, true)
+            #expect(qtCall("GetVideoMediaGraphicsMode", [video, mode, back]) == 0)
+            #expect(rd32(mode) == 0x24 && rd16(back + 2) == 0x2222)
+            let strack = tb_NewMovieTrack(vmovie, 0, 0, 0x100)
+            let sound = UInt32(bitPattern: tb_GetMediaHandler(tb_NewTrackMedia(strack, Int32(bitPattern: fourCC("soun")), 22050, 0, 0)))
+            #expect(qtCall("SetSoundMediaBalance", [sound, 0xFFC0]) == 0)
+            let balance = tb_NewPtr(2, false, true)
+            #expect(qtCall("GetSoundMediaBalance", [sound, balance]) == 0 && rd16(balance) == 0xFFC0)
+            #expect(qtCall("MediaGetSoundBalance", [sound, balance]) == 0 && rd16(balance) == 0xFFC0)
+            tb_DisposeMovie(UInt32(bitPattern: vmovie))
+        }
+
+        nonisolated(unsafe) static var movieErrors: [(Int16, UInt32)] = []
+
+        /// SetMoviesErrorProc's procedure hears each Movie Toolbox error with
+        /// its refcon, until it is taken away.
+        @Test func moviesErrorProc() {
+            qtMachine()
+            Self.movieErrors = []
+            let proc = native_register({ c, _ in
+                guard let c else { return }
+                let ret = cpu_pop32(c)
+                let refcon = cpu_pop32(c)
+                let err = Int16(bitPattern: cpu_pop16(c))
+                QTMediaHandlers.movieErrors.append((err, refcon))
+                cpu_push32(c, ret)
+            }, "test movies error proc", 0)
+            tb_SetMoviesErrorProc(Int32(bitPattern: proc), 0x1234)
+            let movie = tb_NewMovie(0)
+            #expect(tb_GetMovieIndTrack(movie, 3) == 0)
+            #expect(Self.movieErrors.count == 1 && Self.movieErrors[0].0 == -2009 && Self.movieErrors[0].1 == 0x1234)
+            tb_SetMoviesErrorProc(0, 0)
+            _ = tb_GetMovieIndTrack(movie, 3)
+            #expect(Self.movieErrors.count == 1)
+            tb_DisposeMovie(UInt32(bitPattern: movie))
+        }
+
         /// Timecode: a sample's frame number seen as a time, drop frame or not.
         @Test func timecodeMediaHandler() {
             qtMachine()

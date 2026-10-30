@@ -29204,6 +29204,16 @@ static void glue_SetMovieVolume(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_SetMoviesErrorProc(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_refcon = (int32_t)cpu_pop32(c);
+    int32_t a_errProc = (int32_t)cpu_pop32(c);
+    tb_SetMoviesErrorProc(a_errProc, a_refcon);
+    cpu_push32(c, ret);
+}
+
 static void glue_SetOSDefault(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -36347,7 +36357,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0xECu, "DisposeCallBack", CONV_STACK, 4, 0, glue_DisposeCallBack},
     {0xAAAA, (int32_t)0xEDu, "GetCallBackType", CONV_STACK, 4, 2, glue_GetCallBackType},
     {0xAAAA, (int32_t)0xEEu, "GetCallBackTimeBase", CONV_STACK, 4, 4, glue_GetCallBackTimeBase},
-    {0xAAAA, (int32_t)0xEFu, "SetMoviesErrorProc", CONV_STACK, 8, 0, 0},
+    {0xAAAA, (int32_t)0xEFu, "SetMoviesErrorProc", CONV_STACK, 8, 0, glue_SetMoviesErrorProc},
     {0xAAAA, (int32_t)0xF0u, "NewMovieFromFile", CONV_STACK, 20, 2, glue_NewMovieFromFile},
     {0xAAAA, (int32_t)0xF1u, "NewMovieFromHandle", CONV_STACK, 14, 2, glue_NewMovieFromHandle},
     {0xAAAA, (int32_t)0xF2u, "PlayMoviePreview", CONV_STACK, 12, 0, glue_PlayMoviePreview},

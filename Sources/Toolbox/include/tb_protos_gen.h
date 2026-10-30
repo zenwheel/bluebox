@@ -2743,6 +2743,7 @@ void tb_SetMovieTimeScale(int32_t theMovie, int32_t timeScale);
 void tb_SetMovieTimeValue(int32_t theMovie, int32_t newtime);
 void tb_SetMovieVideoOutput(int32_t theMovie, int32_t vout);
 void tb_SetMovieVolume(int32_t theMovie, int16_t volume);
+void tb_SetMoviesErrorProc(int32_t errProc, int32_t refcon);
 void tb_SetOSDefault(gaddr paramBlock);
 void tb_SetOrigin(int16_t h, int16_t v);
 void tb_SetOutlinePreferred(int8_t _outline_perferred_p);

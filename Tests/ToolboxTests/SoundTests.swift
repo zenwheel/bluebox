@@ -210,6 +210,42 @@ extension BlueBox {
             #expect(tb_SndDisposeChannel(chan, 1) == 0)
         }
 
+        /// SndChannelStatus fills an SCStatus: scChannelBusy at offset 12 and
+        /// scChannelPaused at 14 (AmoebArena refilled its music queue while
+        /// the busy flag, read from the wrong place, said idle), and the
+        /// channel's initialization options as scChannelAttributes.
+        @Test func channelStatusLayout() {
+            launchTestApp()
+            install()
+            defer { machine_set_sound_handler(nil, nil) }
+            let chanp = tb_NewPtr(4, false, true)
+            #expect(tb_SndNewChannel(chanp, 5, 0x80, 0) == 0)    // initMono
+            let chan = rd32(chanp)
+            let status = tb_NewPtr(24, false, true)
+            gmemset(status, 0xFF, 24)
+            #expect(tb_SndChannelStatus(chan, 24, status) == 0)
+            #expect(rd8(status + 12) == 0 && rd8(status + 14) == 0 && rd32(status + 8) == 0 && rd32(status + 16) == 0x80)
+            let data = Self.snd(samples: 4450)                   // about 0.2 s
+            let h = tb_NewHandle(Int32(data.count), false, false)
+            for (i, b) in data.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+            #expect(tb_SndPlay(chan, h, 1) == 0)
+            #expect(tb_SndChannelStatus(chan, 24, status) == 0)
+            #expect(rd8(status + 12) == 1 && rd8(status + 8) == 0)
+            let cmd = tb_NewPtr(8, false, true)
+            wr16(cmd, 11)                                        // pauseCmd
+            #expect(tb_SndDoImmediate(chan, cmd) == 0)
+            #expect(tb_SndChannelStatus(chan, 24, status) == 0 && rd8(status + 14) == 1)
+            wr16(cmd, 12)                                        // resumeCmd
+            #expect(tb_SndDoImmediate(chan, cmd) == 0)
+            machine_skip_time(250_000_000)
+            #expect(tb_SndChannelStatus(chan, 24, status) == 0)
+            #expect(rd8(status + 12) == 0 && rd8(status + 14) == 0)
+            // A short buffer gets only what fits.
+            gmemset(status, 0xEE, 24)
+            #expect(tb_SndChannelStatus(chan, 13, status) == 0 && rd8(status + 12) == 0 && rd8(status + 13) == 0xEE)
+            #expect(tb_SndDisposeChannel(chan, 1) == 0)
+        }
+
         nonisolated(unsafe) static var modified: [(cmd: UInt16, p1: Int16, p2: UInt32)] = []
 
         /// FUNCTION Modifier(chan; VAR cmd; mod): BOOLEAN.  It halves
