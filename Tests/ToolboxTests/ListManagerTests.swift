@@ -56,6 +56,28 @@ extension BlueBox {
             #expect(tb_GetHandleSize(cells) == 5)
         }
 
+        /// A column added to a list with no rows leaves it without cells
+        /// (MacFlash adds one, then a row for each card); a row added to a
+        /// list with no columns brings one.
+        @Test func addingToAnEmptyList() {
+            launchTestApp()
+            _ = initToolbox()
+            let w = tb_NewWindow(0, rect(50, 50, 300, 300), 0, 1, 0, 0xFFFF_FFFF, 1, 0)
+            tb_SetPort(w)
+            let list = tb_LNew(rect(10, 10, 110, 150), rect(0, 0, 0, 0), 0, 0, w, 1, 0, 0, 1)
+            func size(_ l: UInt32) -> (UInt16, UInt16) {
+                let b = rd32(l) + UInt32(ListRec_dataBounds_off)
+                return (rd16(b + 4), rd16(b + 6))
+            }
+            #expect(tb_LAddColumn(1, 0, list) == 0)
+            #expect(size(list) == (0, 1)) // no rows, one column
+            #expect(tb_LAddRow(1, 0, list) == 0)
+            #expect(size(list) == (1, 1))
+            let other = tb_LNew(rect(10, 10, 110, 150), rect(0, 0, 0, 0), 0, 0, w, 1, 0, 0, 1)
+            #expect(tb_LAddRow(2, 0, other) == 0)
+            #expect(size(other) == (2, 1))
+        }
+
         @Test func rowsCellsAndData() {
             let (_, list) = makeList()
             #expect(tb_LAddRow(3, 0, list) == 0)

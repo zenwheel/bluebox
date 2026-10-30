@@ -501,11 +501,11 @@ static int16_t add_lines(gaddr list, int count, int at, bool rows)
     grid_load(list, &g);
     n.rows = g.rows + (rows ? count : 0);
     n.cols = g.cols + (rows ? 0 : count);
-    /* A list with no columns gains one when rows are added, and vice versa. */
+    /* A list with no columns gains one when rows are added; columns
+     * added to a list with no rows leave it without cells (MacFlash adds
+     * a column to an empty list, then a row for each card it lists). */
     if (rows && n.cols == 0)
         n.cols = 1;
-    if (!rows && n.rows == 0)
-        n.rows = 1;
     n.c = calloc((size_t)(n.rows * n.cols ? n.rows * n.cols : 1), sizeof *n.c);
     int k = at - lo;
     for (int r = 0; r < g.rows; r++)
