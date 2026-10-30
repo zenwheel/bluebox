@@ -110,6 +110,20 @@ static bool declines(const char *text)
     return strcasestr(text, "cancel") || strcasestr(text, "decline") || strcasestr(text, "disagree");
 }
 
+/* Whether window w has a button of its own that quits (dimmed or not):
+ * its Cancel then only cancels (HDBackup's, while it asks for a disk with
+ * its Quit dimmed), and is pressed at the start as any other. */
+static bool has_quit(gaddr w, bool dialog)
+{
+    char text[64];
+    int x, y, b;
+    for (int i = 1; i <= 64 && (b = dialog ? dialog_button(w, i, text, sizeof text, &x, &y)
+                                           : window_button(w, i, text, sizeof text, &x, &y)) >= 0; i++)
+        if (b && (strcasestr(text, "quit") || strcasestr(text, "exit")))
+            return true;
+    return false;
+}
+
 static void key(int ch, int code, unsigned modifiers)
 {
     machine_post_key(ch, code, modifiers, 1, 0);
@@ -203,7 +217,8 @@ static bool screen_moved_on(void)
 /* The front window's next button not yet pressed, pressed (true); false
  * when there is none left.  A dialog's are its button items, another
  * window's its push button controls.  Those that would end the run are
- * passed over, and at the start, Cancel and Decline. */
+ * passed over, and at the start, Cancel and Decline (unless the window
+ * has a Quit of its own). */
 static bool press_a_button(void)
 {
     gaddr w = tb_FrontWindow();
@@ -232,10 +247,11 @@ static bool press_a_button(void)
         pressed_in[at].sig = sig;
         pressed_in[at].clicked = 0;
     }
+    bool starting = !begun() && !has_quit(w, dialog);
     for (int i = 1; i <= 64 && (b = dialog ? dialog_button(w, i, text, sizeof text, &x, &y)
                                            : window_button(w, i, text, sizeof text, &x, &y)) >= 0; i++) {
         if (b != 2 || (pressed_in[at].clicked & 1ull << (i - 1)) || passed_over(text) ||
-            (!begun() && declines(text)))
+            (starting && declines(text)))
             continue;
         pressed_in[at].clicked |= 1ull << (i - 1);
         pressed++;
@@ -336,7 +352,7 @@ void walker_idle(uint64_t icount)
              * installer's progress, whose Stop would cut it short.) */
             char text[64], what[96];
             int x, y, b;
-            bool modal = dialog_modal(d), dimmed = false;
+            bool modal = dialog_modal(d), dimmed = false, starting = !begun() && !has_quit(d, true);
             for (int i = 1; modal && i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++) {
                 if (!b || (open_dialogs[at].clicked & 1ull << (i - 1)))
                     continue;
@@ -344,7 +360,7 @@ void walker_idle(uint64_t icount)
                     open_dialogs[at].quits = true;
                     continue;
                 }
-                if (!begun() && declines(text))
+                if (starting && declines(text))
                     continue;
                 if (b == 1) {
                     dimmed = true;
