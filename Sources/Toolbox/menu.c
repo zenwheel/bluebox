@@ -242,10 +242,58 @@ static uint32_t items_end(gaddr mh)
 static int16_t system_font_width(const uint8_t *s, int n);
 void menu_apply_xmnu(gaddr mh, int16_t id);
 
+void mdef0_native(cpu68k *c, uint16_t tw);
+static void call_mdef(gaddr mh, int16_t msg, qrect r, uint32_t hit, gaddr which);
+
+/* The menu's definition, loaded: the Menu Manager reads a purged MDEF back
+ * in before each call, and programs that call their MDEF themselves count
+ * on it being there after a Menu Manager call (SoundEdit 16 locks its
+ * MDEF, calls CalcMenuSize, then jumps through the handle). */
+static gaddr menu_proc(gaddr mh)
+{
+    gaddr proc = MenuInfo_menuProc(menu_ptr(mh));
+    if (proc && !rd32(proc))
+        tb_LoadResource(proc);
+    return proc;
+}
+
+/* Whether the menu is drawn by our MDEF 0 rather than one of its own. */
+static bool standard_mdef(gaddr mh)
+{
+    gaddr proc = menu_proc(mh);
+    if (!proc || !rd32(proc) || rd16(rd32(proc)) != CPU_NATIVE_OP)
+        return false;
+    return native_fn_at(rd16(rd32(proc) + 2)) == mdef0_native;
+}
+
+static void standard_size(gaddr mh);
+static void with_wmgr_port(gaddr *saved);
+
+/* The size comes from the menu's definition (mSizeMsg); ours measures the
+ * items. */
 void tb_CalcMenuSize(gaddr mh)
 {
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
+    gaddr proc = menu_proc(mh);
+    if (proc && rd32(proc) && !standard_mdef(mh)) {
+        display_menus_changed();
+        /* It measures in the Window Manager's port, in the system font. */
+        gaddr saved = qd_port();
+        if (rd32(LM_WMgrPort))
+            with_wmgr_port(&saved);
+        gaddr which = tb_NewPtr(2, false, true);
+        call_mdef(mh, mSizeMsg, (qrect){ 0, 0, 0, 0 }, 0, which);
+        tb_DisposePtr(which);
+        if (saved)
+            tb_SetPort(saved);
+        return;
+    }
+    standard_size(mh);
+}
+
+static void standard_size(gaddr mh)
+{
     display_menus_changed();
     int items = tb_CountMItems(mh);
     int w = 0;
@@ -1081,8 +1129,9 @@ void menu_standard_mdef(int16_t msg, gaddr mh, gaddr rect, uint32_t hit, gaddr w
         wr16(which, (uint16_t)item);
         break;
     }
-    case mSizeMsg:
-        tb_CalcMenuSize(mh);
+    case mSizeMsg: /* not CalcMenuSize: a program's MDEF may pass its own messages on to ours */
+        if (mh && rd32(mh))
+            standard_size(mh);
         break;
     default:
         break;
@@ -1091,20 +1140,24 @@ void menu_standard_mdef(int16_t msg, gaddr mh, gaddr rect, uint32_t hit, gaddr w
 
 static void call_mdef(gaddr mh, int16_t msg, qrect r, uint32_t hit, gaddr which)
 {
-    gaddr proc = MenuInfo_menuProc(menu_ptr(mh));
+    gaddr proc = menu_proc(mh);
     if (!proc || !rd32(proc))
         return;
     gaddr rect = tb_NewPtr(8, false, false);
     qrect_put(rect, r);
     cpu68k *c = g_cpu;
+    uint32_t sp = c->a[7];
     cpu_push16(c, (uint16_t)msg);
     cpu_push32(c, mh);
     cpu_push32(c, rect);
     cpu_push32(c, hit);
     cpu_push32(c, which);
+    /* Locked while it runs, then as the program had it. */
+    int8_t state = tb_HGetState(proc);
     tb_HLock(proc);
     guest_call_defproc(rd32(proc));
-    tb_HUnlock(proc);
+    tb_HSetState(proc, state);
+    c->a[7] = sp; /* whatever it took off */
     tb_DisposePtr(rect);
 }
 
@@ -1132,7 +1185,7 @@ int menu_bar_titles_end(void)
  * the menu's definition, whichever it is. */
 void menu_call_def(gaddr mh, int16_t msg, gaddr rect, uint32_t hit, gaddr which)
 {
-    gaddr proc = MenuInfo_menuProc(menu_ptr(mh));
+    gaddr proc = menu_proc(mh);
     if (!proc || !rd32(proc))
         return;
     cpu68k *c = g_cpu;
@@ -1141,9 +1194,10 @@ void menu_call_def(gaddr mh, int16_t msg, gaddr rect, uint32_t hit, gaddr which)
     cpu_push32(c, rect);
     cpu_push32(c, hit);
     cpu_push32(c, which);
+    int8_t state = tb_HGetState(proc);
     tb_HLock(proc);
     guest_call_defproc(rd32(proc));
-    tb_HUnlock(proc);
+    tb_HSetState(proc, state);
 }
 
 /* ---------------------------------------------------------------------- */
