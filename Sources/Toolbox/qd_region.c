@@ -505,7 +505,13 @@ void tb_RectRgn(gaddr rh, gaddr rect)
 
 void tb_OffsetRgn(gaddr rh, int16_t dh, int16_t dv)
 {
-    /* Offsetting only moves coordinates: patch the guest data in place. */
+    /* Offsetting only moves coordinates: patch the guest data in place.
+     * A NIL region (or one whose block is gone) is left alone: QuickDraw
+     * would offset whatever low memory location 0 points at, and Wedgies
+     * offsets four regions it hasn't made yet when its setup window first
+     * draws, which wrote into the system heap. */
+    if (!rh || !rd32(rh))
+        return;
     gaddr p = rd32(rh);
     uint16_t size = rd16(p);
     qrect b = qrect_get(p + 2);
@@ -602,6 +608,8 @@ int8_t tb_EqualRgn(gaddr r1, gaddr r2)
 
 int8_t tb_EmptyRgn(gaddr rh)
 {
+    if (!rh || !rd32(rh))
+        return 1;
     gaddr p = rd32(rh);
     return qrect_empty(qrect_get(p + 2));
 }

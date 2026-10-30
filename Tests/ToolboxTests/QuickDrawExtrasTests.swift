@@ -461,6 +461,29 @@ extension BlueBox {
             let box = rd32(rgn) + 2
             #expect(rd16(box) == 1 && rd16(box + 2) == 4 && rd16(box + 4) == 3 && rd16(box + 6) == 8)
         }
+
+        /// Offsetting or mapping a NIL region, or one whose block is gone,
+        /// writes nothing: Wedgies offsets four regions it hasn't made yet,
+        /// and through location 0 the second one landed in the system heap.
+        @Test func nilRegionIsLeftAlone() {
+            launchTestApp()
+            _ = initToolbox()
+            let low = (0..<16).map { rd8(UInt32($0)) }
+            let empty = tb_NewEmptyHandle(false)
+            for rh in [0, empty] {
+                tb_OffsetRgn(rh, -88, -175)
+                tb_OffsetRgn(rh, -88, -199)
+                tb_MapRgn(rh, rect(0, 0, 10, 10), rect(0, 0, 20, 20))
+                #expect(tb_EmptyRgn(rh) != 0)
+            }
+            #expect((0..<16).map { rd8(UInt32($0)) } == low)
+            // A real region still moves.
+            let rgn = tb_NewRgn()
+            tb_SetRectRgn(rgn, 10, 20, 30, 40)
+            tb_OffsetRgn(rgn, 1, 2)
+            let box = rd32(rgn) + 2
+            #expect(rd16(box) == 22 && rd16(box + 2) == 11 && rd16(box + 4) == 42 && rd16(box + 6) == 31)
+        }
     }
 
     @Suite struct International {

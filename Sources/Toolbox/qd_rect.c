@@ -150,6 +150,8 @@ void tb_ScalePt(gaddr pt, gaddr srcr, gaddr dstr)
 void tb_MapRgn(gaddr rh, gaddr srcr, gaddr dstr)
 {
     /* Scale each coordinate of the guest region data in place. */
+    if (!rh || !rd32(rh))
+        return; /* as OffsetRgn: nothing to scale, no low memory written */
     qrect s = qrect_get(srcr), d = qrect_get(dstr);
     gaddr p = rd32(rh);
     uint16_t size = rd16(p);
