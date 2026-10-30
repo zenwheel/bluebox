@@ -1095,4 +1095,17 @@ void trap_autovectors(void)
     wr16(rte, 0x4E73); /* RTE */
     for (unsigned v = 32; v < 48; v++)
         wr32(v * 4, rte);
+    /* MacJmp ($120), the debugger's entry: a Mac with no debugger
+     * installed had its ROM's MicroBug there, never nil, and the flags
+     * (MacJmpFlag, or MacJmp's top byte in 24-bit mode) clear.  Here it
+     * is a JMP in the system heap to Debugger, which stops the run as
+     * entering a debugger would.  AMP 68K, starting, reads its song
+     * window's fields through nil: a nonzero byte at $122 (the window's
+     * busy flag) is what made it leave them alone. */
+    gaddr dbg = mm_new_ptr_in(rd32(LM_SysZone), 6, false);
+    if (!dbg)
+        return;
+    wr16(dbg, 0x4EF9); /* JMP */
+    wr32(dbg + 2, rd32(TB_TRAP_TABLE + 0x1FFu * 4)); /* Debugger ($A9FF) */
+    wr32(0x0120, dbg);
 }
