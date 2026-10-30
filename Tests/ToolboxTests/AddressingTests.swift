@@ -85,6 +85,11 @@ extension BlueBox {
             var d0: UInt32 = 0
             tb_SwapMMUMode(&d0)
             #expect(d0 == 1 && g_cpu!.pointee.addr_mask == 0xFFFF_FFFF)
+            // The old mode alone comes back in D0, the rest of it cleared
+            // (Prince of Persia 2 counts a loop in D0's low word after it).
+            d0 = 0x0049_0001
+            tb_SwapMMUMode(&d0)
+            #expect(d0 == 1)
         }
 
         /// The flags are the master pointer's top byte: HLock sets bit 7

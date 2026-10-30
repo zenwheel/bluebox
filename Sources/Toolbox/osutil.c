@@ -139,7 +139,9 @@ void tb_SwapMMUMode(uint32_t *bp)
         wr8(LM_MMU32Bit, to32);
         g_cpu->addr_mask = to32 ? 0xFFFFFFFFu : 0x00FFFFFFu;
     }
-    *bp = (*bp & 0xFFFFFF00u) | was;
+    /* The old mode alone, the rest of D0 cleared: Prince of Persia 2 counts
+     * a loop in D0's low word after the call and tests the whole of it. */
+    *bp = was;
 }
 
 /* Translate24To32 ($A091, D0 in and out): in 24-bit mode an address's
