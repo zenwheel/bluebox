@@ -15,6 +15,7 @@
 #include "carbon_events.h"
 #include "machine.h"
 #include "qd_internal.h"
+#include "filemgr_internal.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -29,6 +30,7 @@ typedef struct {
     uint32_t where;
     uint16_t modifiers;
     bool menubar; /* a press in the menu bar for a host menu, not yet seen by Button */
+    bool mounted; /* a disk-inserted event whose disk the File Manager was asked to mount */
 } event;
 
 #define QSIZE 64
@@ -601,6 +603,43 @@ static event null_event(void)
     return e;
 }
 
+/* Disk-inserted events (a driver's, posted for a disk it serves): the
+ * disk is mounted before a program sees the event, the result in the
+ * message's high word, the drive's number in its low word, as
+ * GetNextEvent did; one the program doesn't ask for still mounts, as the
+ * Finder would have mounted it. */
+static void mount_inserted(void)
+{
+    static bool busy;
+    if (busy)
+        return;
+    busy = true;
+    for (;;) {
+        pthread_mutex_lock(&lock);
+        int found = -1;
+        for (int i = qhead; i != qtail && found < 0; i = (i + 1) % QSIZE)
+            if (queue[i].what == diskEvt && !queue[i].mounted) {
+                queue[i].mounted = true;
+                if (!(queue[i].message >> 16))
+                    found = i;
+            }
+        int16_t drive = found >= 0 ? (int16_t)(queue[found].message & 0xFFFF) : 0;
+        pthread_mutex_unlock(&lock);
+        if (found < 0)
+            break;
+        int16_t err = drivevol_disk_inserted(drive);
+        pthread_mutex_lock(&lock);
+        for (int i = qhead; i != qtail; i = (i + 1) % QSIZE)
+            if (queue[i].what == diskEvt && queue[i].message == (uint16_t)drive) {
+                queue[i].message = (uint32_t)(uint16_t)err << 16 | (uint16_t)drive;
+                qversion++;
+                break;
+            }
+        pthread_mutex_unlock(&lock);
+    }
+    busy = false;
+}
+
 /* Take (or peek at) the next event matching mask. */
 static void note_poll(void);
 
@@ -617,6 +656,8 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     if (!os_only)
         drag_host_pump();
     appearance_poll(); /* the host's highlight and accent colours */
+    if (!os_only)
+        mount_inserted();
     pthread_mutex_lock(&lock);
     event e = null_event();
     bool found = false;

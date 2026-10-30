@@ -139,6 +139,7 @@ static void ppc_ExitToShell(ppc_cpu *c)
 {
     stdclib_terminate();
     rm_update_all();
+    fm_flush_disks(); /* a program's disks written back through their drivers */
     cpu_halt(g_cpu, "ExitToShell");
     ppc_halt(c, "ExitToShell");
 }
@@ -1554,6 +1555,7 @@ static void main_returned(ppc_cpu *c)
 {
     stdclib_terminate();
     rm_update_all();
+    fm_flush_disks(); /* a program's disks written back through their drivers */
     cpu_halt(g_cpu, "ExitToShell (main returned)");
     ppc_halt(c, "ExitToShell (main returned)");
 }

@@ -1256,7 +1256,18 @@ int16_t tb_FSGetVolumeInfo(int16_t volume, uint32_t volumeIndex, gaddr actualVol
         }
         uint64_t total, avail;
         host_space(root, &total, &avail);
-        const uint32_t block = 4096;
+        uint32_t block = 4096;
+        /* A disk on a program's drive: its own size, and its dates, kind and
+         * lock as its master directory block had them. */
+        fm_disk_info disk;
+        bool is_disk = fm_disk_info_of(vref, &disk);
+        if (is_disk) {
+            block = disk.block_size ? disk.block_size : 512;
+            total = (uint64_t)disk.total_blocks * block;
+            avail = (uint64_t)(disk.locked ? disk.free_blocks : drivevol_free_blocks(vref)) * block;
+            created = disk.create_date;
+            modified = disk.modify_date;
+        }
         if (whichInfo & 0x0001)
             put_utc(info + FSVolumeInfo_createDate_off, created);
         if (whichInfo & 0x0002)
@@ -1289,10 +1300,10 @@ int16_t tb_FSGetVolumeInfo(int16_t volume, uint32_t volumeIndex, gaddr actualVol
         if (whichInfo & 0x1000)
             gmemset(info + FSVolumeInfo_finderInfo_off, 0, 32);
         if (whichInfo & 0x2000)
-            wr16(info + FSVolumeInfo_flags_off, vref == -1 ? 0 : 0x8080); /* mounted folders are locked */
+            wr16(info + FSVolumeInfo_flags_off, vref == -1 || (is_disk && !disk.locked) ? 0 : 0x8080); /* mounted folders are locked */
         if (whichInfo & 0x4000) {
             wr16(info + FSVolumeInfo_filesystemID_off, 0);
-            wr16(info + FSVolumeInfo_signature_off, 0x482B); /* 'H+' */
+            wr16(info + FSVolumeInfo_signature_off, is_disk ? disk.signature : 0x482B); /* 'H+' */
         }
         if (whichInfo & 0x8000) {
             wr16(info + FSVolumeInfo_driveNumber_off, (uint16_t)drive);

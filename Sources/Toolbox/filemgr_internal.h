@@ -91,6 +91,37 @@ bool fm_volume(uint32_t index, int16_t vref, int16_t *vref_out, char *root, size
                int16_t *drive, int16_t *driver);
 void fm_flush_volume(void);
 
+/* A disk on a drive a program's driver serves, as its master directory
+ * block described it when it was mounted. */
+typedef struct {
+    uint16_t signature, attributes;
+    uint32_t create_date, modify_date, backup_date;
+    uint32_t block_size, total_blocks, free_blocks, first_block, clump_size, write_count;
+    uint8_t finder_info[32];
+    bool locked; /* write-protected, locked, or a kind Blue Box can't write back */
+} fm_disk_info;
+/* Mount a folder holding such a disk's files as its volume (a VCB at the
+ * end of the queue); its vRefNum. */
+int16_t fm_mount_disk(const char *root, const uint8_t *name, int16_t drive, int16_t dref, const fm_disk_info *info,
+                      int16_t *vref);
+/* The startup disk's folder. */
+const char *fm_volume_root(void);
+/* A mounted disk's description (false for other volumes). */
+bool fm_disk_info_of(int16_t vref, fm_disk_info *out);
+/* Every writable disk's open files and blocks written back. */
+int16_t fm_flush_disks(void);
+/* A host name's Mac name, as the File Manager shows it (Str31). */
+void fm_mac_name(const char *host, uint8_t out[32]);
+
+/* Disks on drives programs serve (drivevol.c). */
+void drivevol_reset(void);
+int16_t drivevol_mount(int16_t drive, gaddr pb);
+int16_t drivevol_write_back(int16_t vref);
+uint32_t drivevol_free_blocks(int16_t vref);
+void drivevol_forget(int16_t vref);
+int16_t drivevol_eject(int16_t drive);
+int16_t drivevol_disk_inserted(int16_t drive);
+
 /* Folder Manager: a folder type's host folder (made if create). */
 int16_t fm_find_folder(uint32_t type, bool create, char *out, size_t outsize);
 int16_t fm_find_folder_on(int16_t vref, uint32_t type, bool create, char *out, size_t outsize);

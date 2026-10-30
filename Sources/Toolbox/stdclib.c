@@ -816,6 +816,7 @@ static void halt_program(ppc_cpu *c, int32_t status, const char *how)
         wr32(exit_status_block, (uint32_t)status);
     sc_console_flush();
     rm_update_all();
+    fm_flush_disks(); /* a program's disks written back through their drivers */
     cpu_halt(g_cpu, "ExitToShell (%s %d)", how, (int)status);
     ppc_halt(c, "ExitToShell (%s %d)", how, (int)status);
 }

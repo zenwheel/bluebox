@@ -39,7 +39,7 @@ enum {
     dirFulErr = -33, dskFulErr = -34, nsvErr = -35, ioErrF = -36, bdNamErr = -37, fnOpnErr = -38, eofErr = -39,
     posErr = -40, tmfoErr = -42, fnfErrF = -43, wPrErr = -44, fLckdErr = -45, fBsyErr = -47, dupFNErr = -48,
     opWrErr = -49, rfNumErr = -51, permErr = -54, wrPermErr = -61, dirNFErr = -120, tmwdoErr = -121, badMovErr = -122,
-    wrgVolTypErr = -123, controlErr = -17, statusErr = -18, notOpenErr = -28,
+    wrgVolTypErr = -123, controlErr = -17, statusErr = -18, notOpenErr = -28, volOnLinErr = -55,
 };
 enum { fsAtMark = 0, fsFromStart, fsFromLEOF, fsFromMark };
 enum { fsCurPerm = 0, fsRdPerm, fsWrPerm, fsRdWrPerm, fsRdWrShPerm };
@@ -84,14 +84,19 @@ static char vol_name[32]; /* MacRoman */
 
 /* Further volumes: folders mounted as volumes of their own (a CD or disk
  * the application came on, whose programs look for their files at its
- * root).  Directory IDs stay global; a mounted root's ID is reported as 2
- * on its volume, and 2 (or no directory) on its refnum means that root. */
-#define MAX_MOUNTS 8
+ * root), and the disks on drives a program's driver serves, mounted from
+ * a folder their files were copied out to (drivevol.c).  Directory IDs
+ * stay global; a mounted root's ID is reported as 2 on its volume, and 2
+ * (or no directory) on its refnum means that root. */
+#define MAX_MOUNTS 16
 typedef struct {
     int16_t vref;
     char name[32]; /* MacRoman, Pascal */
     char root[PATH_MAX];
     int32_t root_id;
+    int16_t drive, dref; /* its drive and the drive's driver */
+    bool disk;           /* a disk on a program's drive: info says what its MDB did */
+    fm_disk_info info;
 } mount;
 static mount mounts[MAX_MOUNTS];
 static int nmounts;
@@ -137,12 +142,14 @@ static mount *mount_of_vref(int16_t vref)
 }
 
 /* A drive number (a positive vRefNum) names the volume in that drive: the
- * main one's is BOOT_DRIVE, each mounted one's the next.  The floppy drive
+ * main one's is BOOT_DRIVE, each mounted one's its own.  The floppy drive
  * (1) holds none of Blue Box's volumes. */
 static mount *mount_of_drive(int16_t drive)
 {
-    int i = drive - BOOT_DRIVE - 1;
-    return i >= 0 && i < nmounts ? &mounts[i] : NULL;
+    for (int i = 0; i < nmounts; i++)
+        if (mounts[i].drive == drive)
+            return &mounts[i];
+    return NULL;
 }
 
 static mount *mount_of_id(int32_t id)
@@ -550,6 +557,8 @@ static bool under(const char *path, const char *dir)
     return !strncmp(path, dir, n) && (path[n] == '/' || path[n] == 0);
 }
 
+static mount *mount_of_path(const char *host);
+
 static void parent_of(const char *path, char *out, size_t outsize)
 {
     snprintf(out, outsize, "%s", path);
@@ -579,8 +588,17 @@ void fm_grant(const char *path, bool tree)
 }
 
 /* Changes are allowed on the volume, inside granted folders, and to
- * granted files and their neighbours. */
+ * granted files and their neighbours; not on a locked disk. */
+static bool granted(const char *path);
 static bool writable(const char *path)
+{
+    mount *m = mount_of_path(path);
+    if (m && m->disk && m->info.locked)
+        return false;
+    return granted(path);
+}
+
+static bool granted(const char *path)
 {
     if (on_volume(path))
         return true;
@@ -602,7 +620,7 @@ static bool writable(const char *path)
 /* Visible: what can be changed, and the folders leading to it. */
 static bool visible(const char *path)
 {
-    if (writable(path))
+    if (granted(path))
         return true;
     for (int i = 0; i < ngrants; i++)
         if (under(grants[i].path, path))
@@ -885,6 +903,8 @@ static void host_pname(uint8_t out[32], const char *host)
     out[0] = (uint8_t)host_to_mac(base, out + 1);
 }
 
+void fm_mac_name(const char *host, uint8_t out[32]) { host_pname(out, host); }
+
 static void put_name(gaddr namep, const char *host)
 {
     if (!namep)
@@ -908,6 +928,44 @@ static void put_name(gaddr namep, const char *host)
  * FCB's offset in the table; the Resource Manager's files are included. */
 
 static gaddr fcb_table, the_vcb;
+
+/* A mounted volume's control block, at the end of the queue: a folder's
+ * is locked, as a CD is; a disk's says what its master directory block
+ * does. */
+static void add_vcb(const mount *m)
+{
+    gaddr mv = mm_new_ptr_in(rd32(LM_SysZone), VCB_SIZEOF, true);
+    if (!mv || !the_vcb)
+        return;
+    gmemcpy(mv, the_vcb, VCB_SIZEOF);
+    wr32(mv, 0);
+    uint32_t vc, vm;
+    host_times(m->root, &vc, &vm);
+    wr32(mv + VCB_vcbCrDate_off, vc);
+    wr32(mv + VCB_vcbLsMod_off, vm);
+    wr16(mv + VCB_vcbAtrb_off, 0x8080); /* locked */
+    if (m->disk) {
+        const fm_disk_info *in = &m->info;
+        wr16(mv + VCB_vcbSigWord_off, in->signature);
+        wr32(mv + VCB_vcbCrDate_off, in->create_date);
+        wr32(mv + VCB_vcbLsMod_off, in->modify_date);
+        wr16(mv + VCB_vcbAtrb_off, (uint16_t)(in->locked ? 0x8080 : 0));
+        wr16(mv + VCB_vcbNmAlBlks_off, (uint16_t)in->total_blocks);
+        wr32(mv + VCB_vcbAlBlkSiz_off, in->block_size);
+        wr32(mv + VCB_vcbClpSiz_off, in->clump_size);
+        wr16(mv + VCB_vcbFreeBks_off, (uint16_t)in->free_blocks);
+    }
+    gput(mv + VCB_vcbVN_off, m->name, (uint32_t)m->name[0] + 1);
+    wr16(mv + VCB_vcbDrvNum_off, (uint16_t)m->drive);
+    wr16(mv + VCB_vcbDRefNum_off, (uint16_t)m->dref);
+    wr16(mv + VCB_vcbVRefNum_off, (uint16_t)m->vref);
+    gaddr last = rd32(LM_VCBQHdr + 6);
+    if (last)
+        wr32(last, mv); /* qLink */
+    else
+        wr32(LM_VCBQHdr + 2, mv);
+    wr32(LM_VCBQHdr + 6, mv);
+}
 
 static void guest_tables_init(void)
 {
@@ -933,26 +991,10 @@ static void guest_tables_init(void)
     wr16(v + VCB_vcbVRefNum_off, (uint16_t)VREF);
     wr16(LM_VCBQHdr, 0);
     wr32(LM_VCBQHdr + 2, v);
+    wr32(LM_VCBQHdr + 6, v);
     /* The mounted volumes follow, each its own VCB on its own drive. */
-    gaddr last = v;
-    for (int i = 0; i < nmounts; i++) {
-        gaddr mv = mm_new_ptr_in(zone, VCB_SIZEOF, true);
-        if (!mv)
-            break;
-        gmemcpy(mv, v, VCB_SIZEOF);
-        wr32(mv, 0);
-        host_times(mounts[i].root, &vc, &vm);
-        wr32(mv + VCB_vcbCrDate_off, vc);
-        wr32(mv + VCB_vcbLsMod_off, vm);
-        wr16(mv + VCB_vcbAtrb_off, 0x8080); /* locked */
-        gput(mv + VCB_vcbVN_off, mounts[i].name, (uint32_t)mounts[i].name[0] + 1);
-        wr16(mv + VCB_vcbDrvNum_off, (uint16_t)(BOOT_DRIVE + 1 + i));
-        wr16(mv + VCB_vcbDRefNum_off, (uint16_t)(-1 - CD_UNIT));
-        wr16(mv + VCB_vcbVRefNum_off, (uint16_t)mounts[i].vref);
-        wr32(last, mv); /* qLink */
-        last = mv;
-    }
-    wr32(LM_VCBQHdr + 6, last);
+    for (int i = 0; i < nmounts; i++)
+        add_vcb(&mounts[i]);
     wr32(LM_DefVCBPtr, v);
     /* The drive queue: drive 1 is the internal floppy drive, empty unless
      * a floppy image was given (backup programs and disk tools look for it
@@ -975,8 +1017,8 @@ static void guest_tables_init(void)
         wr8(dq + 2, 1);
         gaddr e = dq + 4;
         wr16(e + DrvQEl_qType_off, 1); /* dQDrvSz2 is valid */
-        wr16(e + DrvQEl_dQDrive_off, (uint16_t)(BOOT_DRIVE + 1 + i));
-        wr16(e + DrvQEl_dQRefNum_off, (uint16_t)(i < 0 ? -1 - DISK_DRIVER_UNIT : -1 - CD_UNIT));
+        wr16(e + DrvQEl_dQDrive_off, (uint16_t)(i < 0 ? BOOT_DRIVE : mounts[i].drive));
+        wr16(e + DrvQEl_dQRefNum_off, (uint16_t)(i < 0 ? -1 - DISK_DRIVER_UNIT : mounts[i].dref));
         wr16(e + DrvQEl_dQDrvSz_off, 0); /* 2 GB in 512-byte blocks */
         wr16(e + DrvQEl_dQDrvSz2_off, 0x40);
         if (rd32(LM_DrvQHdr + 6))
@@ -1076,6 +1118,7 @@ void fm_init(const char *app_dir)
     if (realpath(system_folder_path(), sys) && !on_volume(sys))
         fm_grant(sys, true); /* set elsewhere (machine_set_system_folder) */
     /* Folders mounted as volumes of their own (machine_mount_folder). */
+    drivevol_reset();
     nmounts = 0;
     for (int i = 0; i < npending && nmounts < MAX_MOUNTS; i++) {
         mount *m = &mounts[nmounts];
@@ -1083,6 +1126,9 @@ void fm_init(const char *app_dir)
             continue;
         fm_grant(m->root, true);
         m->vref = (int16_t)(-2 - nmounts);
+        m->drive = (int16_t)(BOOT_DRIVE + 1 + nmounts);
+        m->dref = (int16_t)(-1 - CD_UNIT);
+        m->disk = false;
         m->root_id = dir_id_for(rel_of(m->root));
         uint8_t mac[64];
         size_t n = utf8_to_macroman(pending_name[i][0] ? pending_name[i] : strrchr(m->root, '/') + 1, mac, 27);
@@ -1802,11 +1848,20 @@ int16_t tb_PBFlushFile(gaddr pb, bool async)
     return rm_fork_of(rn, &data, &len) ? noErr : rfNumErr;
 }
 
+static bool vinfo_volume(int16_t idx, int16_t vref, gaddr namep, mount **m);
+
+/* FlushVol: open files written out, and a program's disk written back
+ * through its driver. */
 int16_t tb_PBFlushVol(gaddr pb, bool async)
 {
     for (int i = 0; i < MAX_FCBS; i++)
         if (fcbs[i].used)
             save_fork(&fcbs[i]);
+    mount *m;
+    gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
+    if (vinfo_volume(namep && rd8(namep) ? -1 : 0, (int16_t)rd16(pb + IOParam_ioVRefNum_off), namep, &m) && m &&
+        m->disk)
+        return drivevol_write_back(m->vref);
     return noErr;
 }
 
@@ -2314,6 +2369,48 @@ static void volume_counts(const char *root, uint32_t *files, uint32_t *dirs)
     *dirs = last_dirs;
 }
 
+/* A disk's volume information, from its master directory block as it was
+ * mounted; its free space follows its files when it can be written. */
+static void disk_vinfo(gaddr pb, const mount *m, bool hfs)
+{
+    const fm_disk_info *in = &m->info;
+    uint32_t free_blocks = in->locked ? in->free_blocks : drivevol_free_blocks(m->vref);
+    wr32(pb + VolumeParam_ioVCrDate_off, in->create_date);
+    wr32(pb + HVolumeParam_ioVLsMod_off, in->modify_date);
+    wr16(pb + VolumeParam_ioVAtrb_off, (uint16_t)((in->attributes & ~0x8080) | (in->locked ? 0x8080 : 0)));
+    wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries(m->root));
+    wr16(pb + HVolumeParam_ioVBitMap_off, in->signature == 0xD2D7 ? 0 : 3);
+    wr16(pb + HVolumeParam_ioVAllocPtr_off, 0);
+    /* An HFS Plus disk's blocks, counted in bigger ones (as Mac OS 8.1 on
+     * reports them to calls made for HFS). */
+    uint32_t bs = in->block_size, total = in->total_blocks;
+    while (total > 0xFFFF) {
+        total = (total + 1) / 2;
+        free_blocks /= 2;
+        bs *= 2;
+    }
+    wr16(pb + VolumeParam_ioVNmAlBlks_off, (uint16_t)total);
+    wr32(pb + VolumeParam_ioVAlBlkSiz_off, bs);
+    wr32(pb + VolumeParam_ioVClpSiz_off, in->clump_size);
+    wr16(pb + VolumeParam_ioAlBlSt_off, (uint16_t)in->first_block);
+    wr32(pb + HVolumeParam_ioVNxtCNID_off, (uint32_t)ndirs + 0x20000);
+    wr16(pb + VolumeParam_ioVFrBlk_off, (uint16_t)(free_blocks > total ? total : free_blocks));
+    if (hfs) {
+        wr16(pb + HVolumeParam_ioVSigWord_off, in->signature);
+        wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)m->drive);
+        wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)m->dref);
+        wr16(pb + HVolumeParam_ioVFSID_off, 0);
+        wr32(pb + HVolumeParam_ioVBkUp_off, in->backup_date);
+        wr16(pb + HVolumeParam_ioVSeqNum_off, 0);
+        wr32(pb + HVolumeParam_ioVWrCnt_off, in->write_count);
+        uint32_t files, dirs;
+        volume_counts(m->root, &files, &dirs);
+        wr32(pb + HVolumeParam_ioVFilCnt_off, files);
+        wr32(pb + HVolumeParam_ioVDirCnt_off, dirs);
+        gput(pb + HVolumeParam_ioVFndrInfo_off, in->finder_info, 32);
+    }
+}
+
 static int16_t get_vinfo(gaddr pb, bool hfs)
 {
     int16_t idx = (int16_t)rd16(pb + VolumeParam_ioVolIndex_off);
@@ -2332,6 +2429,10 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     wr32(pb + VolumeParam_ioVCrDate_off, vc);
     wr32(pb + HVolumeParam_ioVLsMod_off, vm);
     wr16(pb + VolumeParam_ioVAtrb_off, m ? 0x8080 : 0); /* mounted: locked, as a CD is */
+    if (m && m->disk) {
+        disk_vinfo(pb, m, hfs);
+        return noErr;
+    }
     wr16(pb + VolumeParam_ioVNmFls_off, (uint16_t)count_entries(root));
     wr16(pb + HVolumeParam_ioVBitMap_off, 0);
     wr16(pb + HVolumeParam_ioVAllocPtr_off, 0);
@@ -2344,8 +2445,8 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     wr16(pb + VolumeParam_ioVFrBlk_off, 0xC000);
     if (hfs) {
         wr16(pb + HVolumeParam_ioVSigWord_off, 0x4244);
-        wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? BOOT_DRIVE + 1 + (m - mounts) : BOOT_DRIVE));
-        wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)(m ? -1 - CD_UNIT : -1 - DISK_DRIVER_UNIT));
+        wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? m->drive : BOOT_DRIVE));
+        wr16(pb + HVolumeParam_ioVDRefNum_off, (uint16_t)(m ? m->dref : -1 - DISK_DRIVER_UNIT));
         wr16(pb + HVolumeParam_ioVFSID_off, 0);
         wr32(pb + HVolumeParam_ioVBkUp_off, 0);
         wr16(pb + HVolumeParam_ioVSeqNum_off, 0);
@@ -3325,21 +3426,106 @@ int16_t tb_PBAllocate(gaddr pb, bool async)
     return err;
 }
 
-/* There is one volume, and it stays mounted. */
-int16_t tb_PBMountVol(gaddr pb) { return -56; /* nsDrvErr: no such drive */ }
+/* MountVol: the disk in a drive mounted.  The startup disk and the
+ * folders Blue Box mounts are mounted already; a disk on a drive a program
+ * serves (a disk image's driver, as Disk Copy and self-mounting images
+ * install) is read through its driver (drivevol.c). */
+int16_t tb_PBMountVol(gaddr pb)
+{
+    int16_t drive = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    if (drive == BOOT_DRIVE)
+        return volOnLinErr;
+    for (int i = 0; i < nmounts; i++)
+        if (mounts[i].drive == drive)
+            return volOnLinErr;
+    return drivevol_mount(drive, pb);
+}
+
+static int16_t new_vref(void)
+{
+    for (int16_t v = -2;; v--)
+        if (!mount_of_vref(v))
+            return v;
+}
+
+int16_t fm_mount_disk(const char *root, const uint8_t *name, int16_t drive, int16_t dref, const fm_disk_info *info,
+                      int16_t *vref)
+{
+    if (nmounts >= MAX_MOUNTS)
+        return memFullErr;
+    mount *m = &mounts[nmounts];
+    memset(m, 0, sizeof *m);
+    if (!realpath(root, m->root))
+        return ioErrF;
+    fm_grant(m->root, true);
+    m->vref = new_vref();
+    m->root_id = dir_id_for(rel_of(m->root));
+    int n = name[0] > 27 ? 27 : name[0];
+    m->name[0] = (char)n;
+    memcpy(m->name + 1, name + 1, (size_t)n);
+    m->drive = drive;
+    m->dref = dref;
+    m->disk = true;
+    m->info = *info;
+    nmounts++;
+    add_vcb(m);
+    *vref = m->vref;
+    LOGF(LOG_TRAPS, "  mounted %.*s (vRefNum %d) on drive %d from %s\n", n, m->name + 1, m->vref, drive, m->root);
+    return noErr;
+}
+
+const char *fm_volume_root(void) { return root_path[0] ? root_path : disk_path(); }
+
+bool fm_disk_info_of(int16_t vref, fm_disk_info *out)
+{
+    mount *m = mount_of_vref(vref);
+    if (!m || !m->disk)
+        return false;
+    *out = m->info;
+    return true;
+}
+
+/* Open forks on a volume written out (all of them for the startup disk's). */
+static bool flush_forks_under(const char *root)
+{
+    bool open = false;
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && !fcbs[i].claimed && (!root || under(fcbs[i].path, root))) {
+            save_fork(&fcbs[i]);
+            open = true;
+        }
+    return open;
+}
+
+int16_t fm_flush_disks(void)
+{
+    int16_t err = noErr;
+    for (int i = 0; i < nmounts; i++)
+        if (mounts[i].disk && !mounts[i].info.locked) {
+            flush_forks_under(mounts[i].root);
+            int16_t r = drivevol_write_back(mounts[i].vref);
+            if (r && !err)
+                err = r;
+        }
+    return err;
+}
 
 /* A mounted volume (a folder mounted as one: a CD's or disk image's
  * contents) can be put away: its VCB leaves the queue, its drive has no
  * disk in it any more, and its refnum names nothing (the Finder's Eject
  * and Put Away).  The main volume, the startup disk, cannot, and nor can a
- * volume with files open on it. */
-static int16_t unmount(gaddr pb)
+ * volume with files open on it.  A program's disk is written back through
+ * its driver first; ejected, its driver is told to eject it; put offline
+ * (or ejected with files open) it stays mounted, its files all here. */
+enum { UNMOUNT, EJECT, OFFLINE };
+
+static int16_t unmount(gaddr pb, int kind)
 {
     int16_t vref = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
     gaddr namep = rd32(pb + IOParam_ioNamePtr_off);
     mount *m = NULL;
     /* A drive number names the volume on that drive (the main one's is
-     * BOOT_DRIVE, each mounted one's the next); the floppy drive's disk
+     * BOOT_DRIVE, each mounted one's its own); the floppy drive's disk
      * leaves its drive. */
     if (vref == FLOPPY_DRIVE && !(namep && rd8(namep)))
         return sony_eject();
@@ -3353,6 +3539,8 @@ static int16_t unmount(gaddr pb)
              * ejected, which a mounted volume's may be. */
             for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
                 if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive) {
+                    if (kind == EJECT && !driver_is_native((int16_t)rd16(e + DrvQEl_dQRefNum_off)))
+                        return drivevol_eject(drive);
                     wr8(e - 3, 0);
                     return drive == BOOT_DRIVE ? fBsyErr : noErr;
                 }
@@ -3362,15 +3550,31 @@ static int16_t unmount(gaddr pb)
     if (!vinfo_volume(namep && rd8(namep) ? -1 : 0, vref, namep, &m))
         return nsvErr;
     if (!m)
-        return fBsyErr; /* the startup disk */
+        return kind == UNMOUNT ? fBsyErr : noErr; /* the startup disk */
+    bool open = false;
     for (int i = 0; i < MAX_FCBS; i++)
         if (fcbs[i].used && under(fcbs[i].path, m->root))
-            return fBsyErr;
+            open = true;
+    if (open && kind == UNMOUNT)
+        return fBsyErr;
+    int16_t drive = m->drive;
+    if (m->disk) {
+        flush_forks_under(m->root);
+        int16_t err = drivevol_write_back(m->vref);
+        if (err)
+            LOGF(LOG_TRAPS, "  writing volume %d back: %d\n", m->vref, err);
+        if (kind == OFFLINE || (open && kind == EJECT)) {
+            if (kind == EJECT)
+                drivevol_eject(drive);
+            return noErr;
+        }
+    } else if (open) {
+        return fBsyErr;
+    }
     gaddr prev = 0;
     for (gaddr v = rd32(LM_VCBQHdr + 2); v; prev = v, v = rd32(v)) {
         if ((int16_t)rd16(v + VCB_vcbVRefNum_off) != m->vref)
             continue;
-        int16_t drive = (int16_t)rd16(v + VCB_vcbDrvNum_off);
         if (prev)
             wr32(prev, rd32(v));
         else
@@ -3379,35 +3583,45 @@ static int16_t unmount(gaddr pb)
             wr32(LM_VCBQHdr + 6, prev);
         if (rd32(LM_DefVCBPtr) == v)
             wr32(LM_DefVCBPtr, rd32(LM_VCBQHdr + 2));
-        for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
-            if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive)
-                wr8(e - 3, 0); /* no disk in place */
+        if (!m->disk)
+            for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e))
+                if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == drive)
+                    wr8(e - 3, 0); /* no disk in place */
         break;
     }
     if (default_vref == m->vref) {
         default_vref = VREF;
         default_dir = ROOT_ID;
     }
+    bool disk = m->disk;
+    int16_t gone = m->vref;
     int i = (int)(m - mounts);
     memmove(&mounts[i], &mounts[i + 1], (size_t)(nmounts - i - 1) * sizeof *mounts);
     nmounts--;
+    if (disk) {
+        drivevol_forget(gone);
+        if (kind == EJECT)
+            drivevol_eject(drive);
+    }
     return noErr;
 }
 
-int16_t tb_PBUnmountVol(gaddr pb) { return unmount(pb); }
-int16_t tb_PBEject(gaddr pb) { return unmount(pb); }
-int16_t tb_PBOffLine(gaddr pb) { return unmount(pb); }
+int16_t tb_PBUnmountVol(gaddr pb) { return unmount(pb, UNMOUNT); }
+int16_t tb_PBEject(gaddr pb) { return unmount(pb, EJECT); }
+int16_t tb_PBOffLine(gaddr pb) { return unmount(pb, OFFLINE); }
 
-/* DiskEject(drive): the floppy drive ejects its disk; the others are fixed
- * disks, which don't eject. */
+/* DiskEject(drive): the floppy drive ejects its disk; Blue Box's other
+ * drives are fixed disks, which don't eject; a program's driver is asked to
+ * eject its disk. */
 int16_t tb_DiskEject(int16_t rn)
 {
     if (rn == FLOPPY_DRIVE)
         return sony_eject();
     for (gaddr e = rd32(LM_DrvQHdr + 2); e; e = rd32(e + DrvQEl_qLink_off))
         if ((int16_t)rd16(e + DrvQEl_dQDrive_off) == rn)
-            return -17; /* controlErr */
-    return -56;         /* nsDrvErr */
+            return driver_is_native((int16_t)rd16(e + DrvQEl_dQRefNum_off)) ? -17 /* controlErr */
+                                                                             : drivevol_eject(rn);
+    return -56; /* nsDrvErr */
 }
 
 /* Opening with deny modes (AppleShare): the read and write access bits
@@ -4659,8 +4873,8 @@ bool fm_volume(uint32_t index, int16_t vref, int16_t *vref_out, char *root, size
     snprintf(root, rootsize, "%s", m ? m->root : root_path);
     const char *n = m ? m->name : vol_name;
     memcpy(name, n, (size_t)(uint8_t)n[0] + 1);
-    *drive = (int16_t)(m ? BOOT_DRIVE + 1 + (m - mounts) : BOOT_DRIVE);
-    *driver = (int16_t)(m ? -1 - CD_UNIT : -1 - DISK_DRIVER_UNIT);
+    *drive = (int16_t)(m ? m->drive : BOOT_DRIVE);
+    *driver = (int16_t)(m ? m->dref : -1 - DISK_DRIVER_UNIT);
     return true;
 }
 

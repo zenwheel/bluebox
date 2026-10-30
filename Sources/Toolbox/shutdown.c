@@ -53,6 +53,7 @@ static void shut_down(bool restart)
     run_stage(sdOnBootVolUnmount);
     run_stage(restart ? sdOnRestart : sdOnPowerOff);
     rm_update_all();
+    fm_flush_disks(); /* a program's disks written back through their drivers */
     fm_flush_dirty();
     cpu_halt(g_cpu, restart ? "ShutDwnStart (restart)" : "ShutDwnPower (shut down)");
 }

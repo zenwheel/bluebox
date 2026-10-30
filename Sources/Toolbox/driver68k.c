@@ -481,6 +481,15 @@ static int16_t submit(gaddr e, gaddr pb, bool async, int kind)
     static const uint16_t trap[] = { [DRIVER_CONTROL] = 0xA004, [DRIVER_STATUS] = 0xA005, [DRIVER_READ] = 0xA002,
                                      [DRIVER_WRITE] = 0xA003 };
     gaddr q = e + DCtlEntry_dCtlQHdr_off;
+    /* A read or write's position, where a block device's driver looks for
+     * it: from the start, or from where the last one left off. */
+    if (kind == DRIVER_READ || kind == DRIVER_WRITE) {
+        uint16_t mode = rd16(pb + IOParam_ioPosMode_off) & 3;
+        if (mode == 1)
+            wr32(e + DCtlEntry_dCtlPosition_off, rd32(pb + IOParam_ioPosOffset_off));
+        else if (mode == 3)
+            wr32(e + DCtlEntry_dCtlPosition_off, rd32(e + DCtlEntry_dCtlPosition_off) + rd32(pb + IOParam_ioPosOffset_off));
+    }
     wr16(pb + IOParam_ioTrap_off, (uint16_t)(trap[kind] | (async ? 0x0400 : 0)));
     wr16(pb + IOParam_ioResult_off, ioInProgress);
     bool idle = !rd32(q + 2);
