@@ -197,6 +197,7 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
 static void raw_ExitToShell(cpu68k *c, uint16_t tw)
 {
     rm_update_all();
+    fm_flush_disks(); /* a program's disks written back through their drivers */
     cpu_halt(c, "ExitToShell");
 }
 
@@ -211,6 +212,7 @@ static void raw_Chain(cpu68k *c, uint16_t tw)
 static void app_returned(cpu68k *c, uint16_t tw)
 {
     rm_update_all();
+    fm_flush_disks(); /* a program's disks written back through their drivers */
     cpu_halt(c, "ExitToShell (main returned)");
 }
 

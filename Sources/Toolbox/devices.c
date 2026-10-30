@@ -1,7 +1,6 @@
 /*
  * The Device Manager's installation and immediate calls, the drive queue,
- * slot retraces, deferred user functions, the Disk Initialization Package's
- * extended calls, the Extensions Manager's notification calls and the
+ * slot retraces, deferred user functions, the Extensions Manager's notification calls and the
  * File Transfer Manager's System 7.5 calls: what InterfaceLib had for them.
  */
 #include <string.h>
@@ -120,42 +119,7 @@ int16_t tb_DeferUserFn(gaddr userFunction, gaddr argument)
     return noErr;
 }
 
-/* ---- The Disk Initialization Package's extended calls ---- */
-
-/* A drive's driver asked to format it (Control 6): no drive of Blue Box's
- * is a disk that can be formatted or written block by block, and the
- * driver says so. */
-static int16_t format_drive(int16_t drvNum)
-{
-    gaddr e = find_drive(drvNum);
-    if (!e)
-        return noDriveErr;
-    gaddr pb = tb_NewPtr(CntrlParam_SIZEOF, false, true);
-    if (!pb)
-        return memFullErr;
-    wr16(pb + IOParam_ioRefNum_off, rd16(e + DrvQEl_dQRefNum_off));
-    wr16(pb + IOParam_ioVRefNum_off, (uint16_t)drvNum);
-    wr16(pb + CntrlParam_csCode_off, 6); /* formatCode */
-    int16_t r = tb_PBControl(pb, false);
-    tb_DisposePtr(pb);
-    return r;
-}
-
-int16_t tb_DIXFormat(int16_t drvNum, int8_t fmtFlag, uint32_t fmtArg, gaddr actSize)
-{
-    int16_t r = format_drive(drvNum);
-    if (actSize)
-        wr32(actSize, 0);
-    return r;
-}
-
-int16_t tb_DIXZero(int16_t drvNum, gaddr volName, int16_t fsid, int16_t mediaStatus, int16_t volTypeSelector,
-                   uint32_t volSize, gaddr extendedInfoPtr)
-{
-    return format_drive(drvNum);
-}
-
-int16_t tb_DIReformat(int16_t drvNum, int16_t fsid, gaddr volName, gaddr msgText) { return format_drive(drvNum); }
+/* ---- The Disk Initialization Package's extended calls: drivevol.c ---- */
 
 /* The C glue: dizero's name a C string, dibadmount's point by address. */
 int16_t tb_dizero(int16_t drvnum, gaddr volName)

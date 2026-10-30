@@ -250,6 +250,7 @@ void quicktime_reset(void);
 /* Mouse button and location into low memory (events.c). */
 void events_sync_lowmem(void);
 void fm_flush_dirty(void); /* open forks written out (filemgr.c) */
+int16_t fm_flush_disks(void); /* and the disks on programs' drives, through their drivers */
 /* The mouse and modifiers now (events.c); the window under a global point (wm.c). */
 bool ev_still_down(void);
 uint32_t ev_mouse_global(void);
@@ -639,6 +640,7 @@ void drag_host_pump(void); /* drags from the host, at the program's event calls 
 uint32_t qd_screen_row_bytes(void);
 int qd_screen_depth(void);
 bool driver_refnum(int16_t refnum);
+bool driver_is_native(int16_t refnum); /* one of Blue Box's own, answered in C */
 int16_t driver_call(gaddr pb, bool async, int kind);
 /* MacTCP (mactcp.c): the .IPP driver, its Domain Name Resolver, and the
  * polling that moves its streams on at interrupt time. */

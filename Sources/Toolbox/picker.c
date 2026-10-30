@@ -1,7 +1,7 @@
 /*
- * Disk Initialization (Pack2) and the Color Picker (Pack12).
+ * The Color Picker (Pack12); Disk Initialization (Pack2) is drivevol.c's.
  *
- * There are no disks to initialize.  GetColor asks the host for a colour
+ * GetColor asks the host for a colour
  * (a colour panel) and the colour-model conversions are done here.
  */
 #include <math.h>
@@ -9,15 +9,6 @@
 #include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
-
-/* ---- Pack2 ---- */
-
-void tb_DILoad(void) {}
-void tb_DIUnload(void) {}
-int16_t tb_DIBadMount(uint32_t pt, int32_t evtmess) { return -59; /* nothing to format: ioErr-like refusal */ }
-int16_t tb_DIFormat(int16_t dn) { return -64; /* noDriveErr */ }
-int16_t tb_DIVerify(int16_t dn) { return -64; }
-int16_t tb_DIZero(int16_t dn, gaddr vname) { return -64; }
 
 /* ---- Pack12 ---- */
 

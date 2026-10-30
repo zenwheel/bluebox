@@ -318,6 +318,7 @@ int16_t tb_LaunchApplication(gaddr pb)
         if (g_is_finder)
             return noErr;
         rm_update_all();
+        fm_flush_disks(); /* a program's disks written back through their drivers */
         cpu_halt(g_cpu, "ExitToShell (launched %s)", path);
         return noErr;
     }
@@ -339,6 +340,7 @@ int16_t tb_LaunchApplication(gaddr pb)
      * run beside it. */
     if (!(flags & 0x4000) && !g_is_finder) { /* launchContinue */
         rm_update_all();
+        fm_flush_disks(); /* a program's disks written back through their drivers */
         cpu_halt(g_cpu, "ExitToShell (launched %s)", path);
     }
     return noErr;

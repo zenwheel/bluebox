@@ -96,7 +96,7 @@ Each Toolbox routine is an ordinary C function. Calling-convention glue is gener
 
 - **ForkStore** is an abstraction with three backends:
   - AppleDouble: read and write. This is the source of truth.
-  - HFS/HFS+ disk images: read-only. Supports DiskCopy 4.2, raw `.dsk`/`.img`, NDIF/UDIF (including ADC compression) and hybrid ISOs.
+  - HFS/HFS+ disk images: read (HFS, HFS+, MFS). Supports DiskCopy 4.2, raw `.dsk`/`.img`, NDIF/UDIF (including ADC compression) and hybrid ISOs. HFS volumes are also written (`hfs_build`), for disks on drives programs serve and for initializing disks.
   - xattr resource fork: read-only, used only by import/heal.
 - **Writes** are atomic: write a temp file, then rename.
 - **Catalog (SQLite, WAL mode):**
@@ -397,6 +397,8 @@ the trap census.
 **Exit:** a TeachText `.sit` archive downloaded from Macintosh Garden imports, installs and runs on macOS. HFS floppy images mount read-only.
 
 **Status (2026-10-12):** the import pipeline was pulled forward and works. `bluebox import` and `bluebox run` take MacBinary, StuffIt (1.x, 5, `.sea`), Compact Pro and BinHex files (archives through `unar`). They also take DiskCopy 4.2, Disk Copy 6 NDIF (raw and ADC), raw HFS and partitioned CD images, recursing through nesting (e.g. MacBinary → StuffIt → disk image). Still to do: HFS+, MFS, UDIF `.dmg`, `.moof` flux images. (Linux parity moved to M12, after everything else.)
+
+**Status (2026-10-30), disks programs serve:** a disk on a drive a program's own driver serves (Disk Copy's `.HDI`, a self-mounting image's) is mounted as the File Manager does it: PBMountVol (and a disk-inserted event, mounted before the program sees it with the result in its high word) reads the master directory block and the volume through the driver (PBRead to its refNum, with dCtlPosition set as the Device Manager sets it), ForkStore reads the HFS, HFS+ or MFS volume, and its files are copied out to a folder (Mounted Disks, beside Macintosh HD) mounted as the volume with the drive's number and driver in its VCB and volume information. An HFS disk that isn't write-protected or locked is written back through the driver (only the sectors that changed) on PBFlushVol, PBUnmountVol, PBEject and when the program ends; PBEject and DiskEject tell the driver to eject (Control 7). The Disk Initialization Package works on these drives: DIBadMount answers Eject (headless, nothing is initialized unasked), DIFormat/DIVerify/DIXFormat call the driver, DIZero/DIXZero/DIReformat write an empty HFS volume. ForkStore's `hfs_extract` is shared with the import pipeline. Self-mounting images now mount their volumes (AppleScript 1.8.3, Apple DVD Player 2.7, Authoring Support 1.1.2, AirPort 2.0.4); Mac OS 9.2.1 Update and Ultralingua Dictionaries fail their own checksum before mounting (their verification stops early: to look into, with the `.HDI` driver). Still to do: writing back HFS+ and MFS disks (they mount locked); the catalog's order for names with accented letters (sorted by upper-cased MacRoman, not HFS's own table); Disk Copy 6's Mount Image, which sends itself an Apple event its own code fills in and fails with -1701 (AE internals).
 
 ### M2b: The Blue Box shell (launcher, library and settings)
 
