@@ -74,11 +74,15 @@ static struct {
 static int npressed_in;
 static unsigned pressed; /* buttons pressed so */
 static int button_waits;  /* steps waiting for a dimmed one */
-/* The screen of a program with no menu bar halfway through its nudging,
- * to tell one that goes on drawing (a game) from one stuck on a still
- * screen. */
+/* The screen of a program with no menu bar at the last step, from halfway
+ * through its first nudging on, and whether it changed from one step to
+ * the next since: to tell one that goes on drawing (a game, or one
+ * answering its keys and clicks on a screen of its own) from one stuck on
+ * a still screen. */
 static uint8_t *screen_then;
 static int screen_w, screen_h;
+static bool screen_moved;
+static gaddr front_then; /* the window in front at the last step */
 
 void machine_set_menu_walk(bool on)
 {
@@ -93,6 +97,8 @@ void machine_set_menu_walk(bool on)
     button_waits = 0;
     free(screen_then);
     screen_then = NULL;
+    screen_moved = false;
+    front_then = 0;
     snprintf(last, sizeof last, "the start");
 }
 
@@ -197,7 +203,8 @@ static uint8_t *screen_now(void)
 }
 
 /* Whether the screen changed since screen_then over more than a caret's
- * blink or a cursor: a box of 64 by 64 pixels at least. */
+ * blink or a cursor (a box of 64 by 64 pixels at least); it is then the
+ * screen now. */
 static bool screen_moved_on(void)
 {
     int w = screen_w, h = screen_h;
@@ -217,7 +224,8 @@ static bool screen_moved_on(void)
             }
         moved = bottom - top >= 64 && right - left >= 64;
     }
-    free(now);
+    free(screen_then);
+    screen_then = now;
     return moved;
 }
 
@@ -412,10 +420,19 @@ void walker_idle(uint64_t icount)
         if (now - started_at < WARM_UP)
             return;
         bool game = machine_screen_mode_wanted() != NULL;
-        /* Halfway through the nudging: a screen drawn late, once (a
-         * notice), is not taken for one that goes on drawing. */
-        if (waits == WAITS / 2 && !screen_then)
-            screen_then = screen_now();
+        /* The screen at each step from halfway through the first nudging
+         * (a screen drawn late, once, as a notice, is not taken for one
+         * that goes on drawing), and between them, whether it changed: a
+         * game's title answering a key may come back to where it was
+         * (Age of Empires' main menu).  Not a window coming or going,
+         * nor a modal dialog drawn anew (MediaPresenter's, put up again
+         * and again as it asks for a name). */
+        if (screen_then || waits == WAITS / 2) {
+            gaddr front = tb_FrontWindow();
+            if (screen_moved_on() && front == front_then && !(d && dialog_modal(d)))
+                screen_moved = true;
+            front_then = front;
+        }
         if (nudge())
             return;
         bool dimmed = false;
@@ -433,9 +450,8 @@ void walker_idle(uint64_t icount)
         }
         /* A game with no menus, in a window or the whole screen, given
          * keys and clicks: walked if it went on drawing, not one stuck on
-         * a still screen, nor one in a modal dialog it puts up again and
-         * again (MediaPresenter's, asking for a name). */
-        if ((game || tb_FrontWindow()) && !(d && dialog_modal(d)) && screen_moved_on()) {
+         * a still screen. */
+        if ((game || tb_FrontWindow()) && screen_moved) {
             no_menu_bar(game ? "the program has the whole screen, it drew on as keys and clicks were given"
                              : "the program has no menus, it drew on as keys and clicks were given");
             return;

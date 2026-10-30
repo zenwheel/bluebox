@@ -260,6 +260,37 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()).hasPrefix("menu walk found no menu bar"))
         }
 
+        /// A program drawing at the walk's keys and clicks is walked as a
+        /// game even when its screen comes back to where it was between
+        /// rounds of nudging (Age of Empires' main menu): its screen is
+        /// looked at each step.
+        @Test func aScreenAnsweringInputIsAGame() throws {
+            let dir = try launch(cat(
+                be16(0x4267),                 // loop: CLR.W -(SP)
+                be16(0x3F3C), be16(0x000A),   // MOVE.W #mDownMask+keyDownMask,-(SP)
+                be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+                be16(0xA970),                 // _GetNextEvent
+                be16(0x4A1F),                 // TST.B (SP)+
+                be16(0x67F0),                 // BEQ loop
+                be16(0x486D), be16(0xFFD0),   // PEA box(A5)
+                be16(0x0C6D), be16(1), be16(0xFFE0), // CMPI.W #mouseDown,event.what(A5)
+                be16(0x6704),                 // BEQ erase
+                be16(0xA8A2),                 // _PaintRect: a key paints the box
+                be16(0x60E0),                 // BRA loop
+                be16(0xA8A3),                 // erase: _EraseRect: a click erases it
+                be16(0x60DC)))                // BRA loop
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            let w = tb_NewWindow(0, rect([50, 50, 250, 350]), title("Game"), 1, 1, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            let box = rd32(UInt32(LM_CurrentA5)) - 0x30
+            for (i, v) in [0, 0, 100, 200].enumerated() { wr16(box + UInt32(i * 2), UInt16(v)) }
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "menu walk finished")
+        }
+
         /// A window's only button dimmed for now (a licence's Agree while
         /// it counts down, Terrain Builder's) is waited for and pressed
         /// once it is active.
