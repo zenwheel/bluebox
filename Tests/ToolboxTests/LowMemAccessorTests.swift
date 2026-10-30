@@ -31,6 +31,18 @@ extension BlueBox {
             #expect(ilCall("LMGetAt2MenuBottom", []) == 0x1234)
         }
 
+        @Test func macJmpIsADebuggerEntryNotNil() {
+            // As on a Mac with no debugger installed (its ROM's MicroBug):
+            // an entry, no flags in the top byte, and a nonzero byte at
+            // $122, which AMP 68K reads through a nil window as its busy flag.
+            let entry = ilCall("LMGetMacJmp", [])
+            #expect(entry == rd32(0x120) && entry != 0)
+            #expect(rd8(0x120) & 0x80 == 0 && rd8(0xBFF) & 0x80 == 0)
+            #expect(rd8(0x122) != 0)
+            // a JMP to Debugger
+            #expect(rd16(entry) == 0x4EF9 && rd32(entry + 2) == rd32(UInt32(TB_TRAP_TABLE) + 0x1FF * 4))
+        }
+
         @Test func addressesAndRecords() {
             // An array or a record comes back as its address in low memory...
             #expect(ilCall("LMGetBootTmp8", []) == 0xB36)
