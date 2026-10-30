@@ -392,6 +392,101 @@ extension BlueBox {
             #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2, from the other file, ran
         }
 
+        /// A segment whose entries in the jump table overlap another
+        /// segment's unloaded ones leaves those alone, so they still load
+        /// their own segment (a Director projector's player lays its jump
+        /// table over the stub's, and XMain calls XInit again after
+        /// unloading it through its jump table entry).
+        @Test func loadSegLeavesAnotherSegmentsUnloadedEntries() throws {
+            bootMachine()
+            let jt = cat(
+                be16(0), be16(0x3F3C), be16(1), be16(0xA9F0),     // entry 0: seg 1, offset 0
+                be16(0), be16(0x3F3C), be16(2), be16(0xA9F0),     // entry 1: seg 2, offset 0
+                be16(0), be16(0x3F3C), be16(3), be16(0xA9F0))     // entry 2: seg 3, offset 0
+            let code0 = cat(be32(56), be32(256), be32(24), be32(32), jt)
+            let code1 = cat(
+                be16(0), be16(1),
+                be16(0x7400),                                     // MOVEQ #0,D2
+                be16(0x4EAD), be16(50),                           // JSR 50(A5): entry 2, CODE 3
+                be16(0x486D), be16(50),                           // PEA 50(A5): entry 2's JMP
+                be16(0xA9F1),                                     // _UnloadSeg
+                be16(0x4EAD), be16(42),                           // JSR 42(A5): entry 1, CODE 2
+                be16(0x4EAD), be16(50),                           // JSR 50(A5): CODE 3 again
+                be16(0xA9F4))                                     // _ExitToShell
+            // CODE 2's header claims entries 1 and 2; entry 2 is CODE 3's.
+            let code2 = cat(be16(8), be16(2), be16(0x7209), be16(0x4E75)) // MOVEQ #9,D1; RTS
+            let code3 = cat(be16(16), be16(1), be16(0x5282), be16(0x4E75)) // ADDQ.L #1,D2; RTS
+            var fork = buildFork([
+                TestResource(type: "CODE", id: 0, data: code0),
+                TestResource(type: "CODE", id: 1, data: code1),
+                TestResource(type: "CODE", id: 2, data: code2),
+                TestResource(type: "CODE", id: 3, data: code3),
+            ])
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let path = dir.appendingPathComponent("Overlap").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+
+            #expect(machine_launch(path, &err, err.count))
+            #expect(machine_run(10_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.1 == 9)  // CODE 2 ran
+            #expect(g_cpu!.pointee.d.2 == 2)  // and CODE 3 twice, loaded again
+            let a5 = rd32(UInt32(LM_CurrentA5))
+            #expect(rd16(a5 + 48) == 3)       // entry 2 is CODE 3's JMP
+        }
+
+        /// UnloadSeg given a jump table entry still in its unloaded form does
+        /// nothing: the segment wasn't loaded through it (HyperCard's
+        /// standalones unload so segments they never called), and one the
+        /// program got and locked itself stays so.
+        @Test func unloadSegLeavesASegmentNotLoadedThroughItsEntry() throws {
+            bootMachine()
+            let jt = cat(
+                be16(0), be16(0x3F3C), be16(1), be16(0xA9F0),     // entry 0: seg 1, offset 0
+                be16(0), be16(0x3F3C), be16(2), be16(0xA9F0))     // entry 1: seg 2, offset 0
+            let code0 = cat(be32(48), be32(256), be32(16), be32(32), jt)
+            let code1 = cat(
+                be16(0), be16(1),
+                be16(0x594F),                                     // SUBQ.W #4,SP
+                be16(0x2F3C), be16(0x434F), be16(0x4445),         // MOVE.L #'CODE',-(SP)
+                be16(0x3F3C), be16(2),                            // MOVE.W #2,-(SP)
+                be16(0xA9A0),                                     // _GetResource
+                be16(0x205F),                                     // MOVEA.L (SP)+,A0
+                be16(0x2608),                                     // MOVE.L A0,D3
+                be16(0xA029),                                     // _HLock
+                be16(0x486D), be16(42),                           // PEA 42(A5): entry 1
+                be16(0xA9F1),                                     // _UnloadSeg
+                be16(0xA9F4))                                     // _ExitToShell
+            let code2 = cat(be16(8), be16(1), be16(0x7209), be16(0x4E75)) // MOVEQ #9,D1; RTS
+            var fork = buildFork([
+                TestResource(type: "CODE", id: 0, data: code0),
+                TestResource(type: "CODE", id: 1, data: code1),
+                TestResource(type: "CODE", id: 2, data: code2),
+            ])
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let path = dir.appendingPathComponent("Locker").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+
+            #expect(machine_launch(path, &err, err.count))
+            #expect(machine_run(10_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            let h = g_cpu!.pointee.d.3
+            #expect(h != 0)
+            #expect(UInt8(bitPattern: tb_HGetState(h)) & 0xC0 == 0x80)  // still locked, not purgeable
+        }
+
         /// A program in a 24-bit partition that sets a segment's master
         /// pointer flags itself (Dungeon of Doom locks it so in its LoadSeg
         /// patch) still has its jump table point at the code.

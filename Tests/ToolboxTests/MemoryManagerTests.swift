@@ -221,6 +221,27 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// A zone's allocPtr that a program set itself, not at a block's
+        /// start (HyperCard's standalones point it 8 bytes before the data
+        /// of a handle they have just disposed of), isn't searched from:
+        /// read as a header, what is there looked like damage, and every
+        /// allocation compacted the heap, moving the unlocked code the
+        /// program was about to return into.
+        @Test func allocPtrAProgramSetIsNotTrusted() {
+            let h = tb_NewHandle(256, false, false)
+            let keep = tb_NewHandle(32, false, false)
+            let data = rd32(h)
+            let where_ = rd32(keep)
+            tb_DisposeHandle(h)
+            wr32(appZone + UInt32(Zone_allocPtr_off), data - 8)
+            let n = tb_NewHandle(10, false, false)
+            #expect(n != 0 && memErr() == 0)
+            #expect(rd32(keep) == where_)  // no compaction moved it
+            #expect(mm_check_zone(appZone))
+            tb_DisposeHandle(n)
+            tb_DisposeHandle(keep)
+        }
+
         /// A zone made with InitZone inside a block of the application zone
         /// (NCSA Mosaic's text fields): its handles belong to it, and resizing
         /// one leaves the application zone alone.
