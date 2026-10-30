@@ -59,13 +59,35 @@
 enum { newMovieActive = 1 };
 
 static int16_t movies_error, sticky_error;
+static gaddr error_proc; /* SetMoviesErrorProc's */
+static uint32_t error_refcon;
+static bool in_error_proc;
 
 int16_t qt_set_error(int16_t err)
 {
     movies_error = err;
     if (err && !sticky_error)
         sticky_error = err;
+    /* The program's error procedure hears each error as it happens:
+     * PROCEDURE (theErr: OSErr; refcon: LONGINT).  Not again from within
+     * itself, should it call the Movie Toolbox. */
+    if (err && error_proc && !in_error_proc && g_cpu) {
+        in_error_proc = true;
+        uint32_t sp = g_cpu->a[7];
+        cpu_push16(g_cpu, (uint16_t)err);
+        cpu_push32(g_cpu, error_refcon);
+        guest_call(error_proc);
+        g_cpu->a[7] = sp;
+        in_error_proc = false;
+    }
     return err;
+}
+
+/* SetMoviesErrorProc(errProc, refcon): nil for none. */
+void tb_SetMoviesErrorProc(int32_t proc, int32_t refcon)
+{
+    error_proc = (gaddr)proc;
+    error_refcon = (uint32_t)refcon;
 }
 
 static int16_t set_error(int16_t err) { return qt_set_error(err); }
@@ -3397,6 +3419,8 @@ void quicktime_reset(void)
     mc_component = 0;
     do_actions_stub = 0;
     movies_error = sticky_error = 0;
+    error_proc = 0;
+    in_error_proc = false;
     qt_movies_reset();
     qt_callbacks_reset();
     qt_util_reset();

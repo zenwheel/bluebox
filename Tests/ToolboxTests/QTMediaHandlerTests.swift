@@ -171,6 +171,31 @@ extension BlueBox {
             tb_DisposeMovie(UInt32(bitPattern: vmovie))
         }
 
+        nonisolated(unsafe) static var movieErrors: [(Int16, UInt32)] = []
+
+        /// SetMoviesErrorProc's procedure hears each Movie Toolbox error with
+        /// its refcon, until it is taken away.
+        @Test func moviesErrorProc() {
+            qtMachine()
+            Self.movieErrors = []
+            let proc = native_register({ c, _ in
+                guard let c else { return }
+                let ret = cpu_pop32(c)
+                let refcon = cpu_pop32(c)
+                let err = Int16(bitPattern: cpu_pop16(c))
+                QTMediaHandlers.movieErrors.append((err, refcon))
+                cpu_push32(c, ret)
+            }, "test movies error proc", 0)
+            tb_SetMoviesErrorProc(Int32(bitPattern: proc), 0x1234)
+            let movie = tb_NewMovie(0)
+            #expect(tb_GetMovieIndTrack(movie, 3) == 0)
+            #expect(Self.movieErrors.count == 1 && Self.movieErrors[0].0 == -2009 && Self.movieErrors[0].1 == 0x1234)
+            tb_SetMoviesErrorProc(0, 0)
+            _ = tb_GetMovieIndTrack(movie, 3)
+            #expect(Self.movieErrors.count == 1)
+            tb_DisposeMovie(UInt32(bitPattern: movie))
+        }
+
         /// Timecode: a sample's frame number seen as a time, drop frame or not.
         @Test func timecodeMediaHandler() {
             qtMachine()

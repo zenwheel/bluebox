@@ -31149,6 +31149,14 @@ static void ppcglue_GetMoviesStickyError(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_SetMoviesErrorProc(ppc_cpu *c)
+{
+    int32_t a_errProc = (int32_t)c->gpr[3];
+    int32_t a_refcon = (int32_t)c->gpr[4];
+    tb_SetMoviesErrorProc(a_errProc, a_refcon);
+    c->pc = c->lr;
+}
+
 static void ppcglue_PrePrerollMovie(ppc_cpu *c)
 {
     int32_t a_m = (int32_t)c->gpr[3];
@@ -39452,17 +39460,6 @@ static void ppctrap_GetScaledBatteryInfo(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_SetMoviesErrorProc(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_set(0, 0xEFu);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xAAAA));
-    ppc_trap_end();
-    c->pc = c->lr;
-}
-
 static void ppctrap_AddMovieExecuteWiredActionsProc(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -43663,7 +43660,7 @@ const ppc_export ppc_exports[] = {
     {"SetMovieTimeValue", ppcglue_SetMovieTimeValue},
     {"SetMovieVideoOutput", ppcglue_SetMovieVideoOutput},
     {"SetMovieVolume", ppcglue_SetMovieVolume},
-    {"SetMoviesErrorProc", ppctrap_SetMoviesErrorProc},
+    {"SetMoviesErrorProc", ppcglue_SetMoviesErrorProc},
     {"SetOSDefault", ppcglue_SetOSDefault},
     {"SetOSTrapAddress", ppcglue_SetOSTrapAddress},
     {"SetOrigin", ppcglue_SetOrigin},
