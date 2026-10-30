@@ -94,6 +94,27 @@ extension BlueBox {
             #expect(svcCall("FSPathMakeRef", folderBuf, ref, isDir) == 0 && rd8(isDir) == 1)
         }
 
+        /// CarbonLib's GetProcessBundleLocation and CopyProcessName: the
+        /// application's own file and name (WordStars asks for its file).
+        @Test func processBundleLocationAndName() {
+            launchTestApp()
+            let folderPath = svcString(svcCall("CFURLCopyFileSystemPath", svcCall("CFBundleCopyBundleURL", svcCall("CFBundleGetMainBundle")), 0))
+            let psn = svcPtr(8), ref = svcPtr(80), outp = svcPtr(512), name = svcPtr(4)
+            wr32(psn, 0)
+            wr32(psn + 4, 2) // kCurrentProcess
+            #expect(svcCall("GetProcessBundleLocation", psn, ref) == 0)
+            #expect(svcCall("FSRefMakePath", ref, outp, 512) == 0)
+            let posix = folderPath + "/Test App"
+            #expect(String(decoding: svcBytes(outp, posix.utf8.count), as: UTF8.self) == posix)
+            #expect(svcCall("CopyProcessName", psn, name) == 0)
+            #expect(svcString(rd32(name)) == "Test App")
+            #expect(svcCall("GetCurrentProcess", psn) == 0)
+            wr32(psn + 4, rd32(psn + 4) + 0x77) // nobody
+            #expect(svcStatus(svcCall("GetProcessBundleLocation", psn, ref)) == -600)
+            #expect(svcStatus(svcCall("CopyProcessName", psn, name)) == -600)
+            #expect(svcStatus(svcCall("GetProcessBundleLocation", 0, ref)) == -50)
+        }
+
         @Test func textOrderAndIdentity() {
             bootMachine()
             let a = svcPStr("apple"), b = svcPStr("Banana"), a2 = svcPStr("APPLE")

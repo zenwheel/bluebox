@@ -9,6 +9,8 @@
  * comes from the growable application heap.
  */
 #include <stdlib.h>
+#include <limits.h>
+#include <string.h>
 #include <unistd.h>
 #include "machine.h"
 #include "tb_internal.h"
@@ -158,6 +160,44 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
     if (spec && g_app_path[0])
         fm_spec_for_path(g_app_path, spec);
     return noErr;
+}
+
+void hfs_make_fsref(gaddr ref, const char *path); /* hfsplus.c */
+
+/* GetProcessBundleLocation (CarbonLib): the FSRef of the process's
+ * application file.  The Finder and the other runs have none here. */
+int16_t process_bundle_location(gaddr psn, gaddr ref)
+{
+    machine_ae_process other;
+    if (!psn || !ref)
+        return paramErr;
+    if (is_us(psn)) {
+        char full[PATH_MAX];
+        if (!g_app_path[0] || !realpath(g_app_path, full)) /* by the path the File Manager knows it by */
+            return fnfErr;
+        hfs_make_fsref(ref, full);
+        return noErr;
+    }
+    return is_finder(psn) || other_run(psn, &other) ? fnfErr : procNotFound;
+}
+
+/* A process's name as GetProcessInformation gives it (a Pascal string,
+ * Mac Roman, into name[256]), for CopyProcessName (CarbonLib). */
+int16_t process_name(gaddr psn, uint8_t *name)
+{
+    machine_ae_process other;
+    name[0] = 0;
+    if (!psn)
+        return paramErr;
+    if (is_us(psn)) {
+        gget(name, LM_CurApName, (uint32_t)rd8(LM_CurApName) + 1);
+        return noErr;
+    }
+    if (is_finder(psn)) {
+        memcpy(name, "\006Finder", 7);
+        return noErr;
+    }
+    return other_run(psn, &other) ? noErr : procNotFound;
 }
 
 int16_t tb_SameProcess(gaddr a, gaddr b, gaddr same_out)

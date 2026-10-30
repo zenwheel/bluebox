@@ -4,7 +4,8 @@
  * chain and fork-named files, the File Manager's POSIX paths, the Alias
  * Manager's NoUI calls, the Script Manager's ordering of text, Type Select,
  * the Text Services Manager's properties and documents, the Debugging
- * calls, Apple Help, the Interface Builder runtime and Device Control.
+ * calls, the Process Manager's bundle location and names, Apple Help, the
+ * Interface Builder runtime and Device Control.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -399,6 +400,36 @@ int16_t tb_SoundManagerGetInfo(int32_t selector, gaddr infoPtr) { return infoPtr
 int16_t tb_SoundManagerSetInfo(int32_t selector, gaddr infoPtr) { return infoPtr ? siUnknownInfoType : paramErr; }
 
 /* ---------------------------------------------------------------------- */
+/* Processes.h: CarbonLib's GetProcessBundleLocation and CopyProcessName
+ * (process.c knows the processes). */
+
+int16_t process_bundle_location(gaddr psn, gaddr ref);
+int16_t process_name(gaddr psn, uint8_t *name);
+/* carbon_cfstring.c */
+gaddr cfstr_new(gaddr alloc, const uint16_t *u, uint32_t n, bool mutable_);
+bool cf_decode(uint32_t enc, const uint8_t *b, size_t n, uint16_t **out, uint32_t *nout);
+
+static void pm_GetProcessBundleLocation(ppc_cpu *c) { RETERR(process_bundle_location(A(0), A(1))); }
+
+static void pm_CopyProcessName(ppc_cpu *c)
+{
+    uint8_t name[256];
+    if (!A(1))
+        RETERR(paramErr);
+    wr32(A(1), 0);
+    int16_t err = process_name(A(0), name);
+    if (err)
+        RETERR(err);
+    uint16_t *u = NULL;
+    uint32_t n = 0;
+    if (!cf_decode(0 /* Mac Roman */, name + 1, name[0], &u, &n))
+        RETERR(paramErr);
+    wr32(A(1), cfstr_new(0, u, n, false));
+    free(u);
+    RETERR(noErr);
+}
+
+/* ---------------------------------------------------------------------- */
 /* AppleHelp.h: no Help Viewer, no help books. */
 
 enum { kAHInternalErr = -10790 };
@@ -453,6 +484,7 @@ const ppc_export rest_misc_exports[] = {
     { "AHSearch", ah_AHSearch },
     { "AEReplaceDescData", ae_AEReplaceDescData },
     { "CheckAllHeaps", mem_CheckAllHeaps },
+    { "CopyProcessName", pm_CopyProcessName },
     { "CreateMenuBarFromNib", ib_FromNib2 },
     { "CreateMenuFromNib", ib_FromNib2 },
     { "CreateNibReference", ib_CreateNibReference },
@@ -469,6 +501,7 @@ const ppc_export rest_misc_exports[] = {
     { "GetCollectionRetainCount", co_GetCollectionRetainCount },
     { "GetGrowZone", mem_GetGrowZone },
     { "GetNextResourceFile", r_GetNextResourceFile },
+    { "GetProcessBundleLocation", pm_GetProcessBundleLocation },
     { "GetTSMTEDialogDocumentID", te_GetTSMTEDialogDocumentID },
     { "GetTSMTEDialogTSMTERecHandle", te_GetTSMTEDialogTSMTERecHandle },
     { "GetTextServiceProperty", ts_GetTextServiceProperty },
