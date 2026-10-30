@@ -18,7 +18,8 @@
  *   SCC      the 8530's two channels with its register-pointer protocol,
  *            polled; channel A is the modem port and B the printer port,
  *            each on Blue Box's serial port (serial.c).
- *   IWM      the floppy chip with no drive on it.
+ *   IWM      the floppy chip, with the machine's internal drive on it
+ *            and no disk in the drive.
  *
  * The devices are interpreted: a JIT's loads and stores don't reach them,
  * so a machine chosen by name runs without the JIT.
@@ -39,15 +40,15 @@
 
 static const hw_profile profiles[] = {
     { "quadra", "Macintosh Quadra 800", 35, 68040, true, true, 4, 4, 0x3FFF, 0xFC00, 0x077D, 0x0710,
-      0, 0, 0, false, false, true, 0x50F00000u, 0x50F04000u, 0x50F04000u, 0x50F16000u },
+      0, 0, 0, false, false, true, 0x50F00000u, 0x50F04000u, 0x50F04000u, 0x50F16000u, true },
     { "macii", "Macintosh II", 6, 68020, true, true, 5, 5, 0x3FFF, 0xF400, 0x0178, 0x0608,
-      640, 480, 8, false, false, true, 0x50F00000u, 0x50F04000u, 0x50F04000u, 0x50F16000u },
+      640, 480, 8, false, false, true, 0x50F00000u, 0x50F04000u, 0x50F04000u, 0x50F16000u, false },
     { "plus", "Macintosh Plus", 4, 68000, false, false, 3, 3, 0x7FFF, 0xC000, 0x0075, 0x0608,
-      512, 342, 1, true, true, false, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu },
+      512, 342, 1, true, true, false, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu, false },
     { "se", "Macintosh SE", 5, 68000, false, false, 5, 5, 0x7FFF, 0xC400, 0x0276, 0x0608,
-      512, 342, 1, true, true, true, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu },
+      512, 342, 1, true, true, true, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu, false },
     { "classic", "Macintosh Classic", 17, 68000, false, false, 5, 5, 0x7FFF, 0xE400, 0x0376, 0x0608,
-      512, 342, 1, true, true, true, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu },
+      512, 342, 1, true, true, true, 0x00EFE1FEu, 0x009FFFF8u, 0x00BFFFF9u, 0x00DFE1FFu, true },
 };
 enum { NPROFILES = sizeof profiles / sizeof profiles[0] };
 
@@ -463,25 +464,82 @@ static uint32_t scc_access(gaddr a, bool write, uint8_t v)
 }
 
 /* ------------------------------------------------------------------ */
-/* The IWM: the chip with no drive on it */
+/* The IWM and the machine's internal floppy drive, with no disk in it */
 
-static struct { uint8_t state; uint8_t mode; } iwm; /* state: bit n of the 16 switch positions */
+/* state: bit n of the 8 switch pairs (CA0-CA2, LSTRB, ENABLE, SELECT, Q6, Q7) */
+static struct { uint8_t state; uint8_t mode; } iwm;
+static struct { int track; bool dir_out, motor; } drive; /* the internal drive */
+
+/* The drive's status line for the register CA2-CA0 and SEL (VIA port A
+ * bit 5) choose, as a Sony drive answers: there, double-sided (and on a
+ * SuperDrive, saying so and in GCR mode), with no disk, so not ready.
+ * Nothing else is plugged in: drive 2 and a drive not enabled leave the
+ * line high. */
+static bool drive_sense(void)
+{
+    if (!(iwm.state & 0x10) || (iwm.state & 0x20))
+        return true;
+    int reg = (iwm.state & 7) | ((via.ora & 0x20) ? 8 : 0);
+    switch (reg) {
+    case 0x0: return drive.dir_out;  /* DIRTN: stepping outward */
+    case 0x1: return true;           /* /STEP: no step under way */
+    case 0x2: return !drive.motor;   /* /MOTORON */
+    case 0x3: return false;          /* EJECT: not ejecting */
+    case 0x4: return true;           /* RDDATA0: nothing under the head */
+    case 0x5: return machine->superdrive; /* a 1.44 MB SuperDrive */
+    case 0x6: return machine->superdrive; /* it reads MFM */
+    case 0x7: return true;           /* SIDES: double-sided */
+    case 0x8: return false;          /* /DRVIN: the drive is there */
+    case 0x9: return true;           /* /CSTIN: no disk in place */
+    case 0xA: return true;           /* /WRTPRT: (no disk to protect) */
+    case 0xB: return drive.track != 0; /* /TK0 */
+    case 0xC: return true;           /* /TACH: no pulses, the motor still */
+    case 0xD: return true;           /* RDDATA1 */
+    case 0xE: return false;          /* MFM mode: off, in GCR */
+    default: return true;            /* /READY: not ready, no disk */
+    }
+}
+
+/* LSTRB raised: the drive acts on the command CA0-CA2 and SEL select,
+ * with CA2 the value. */
+static void drive_command(void)
+{
+    if (!(iwm.state & 0x10) || (iwm.state & 0x20))
+        return;
+    bool ca2 = iwm.state & 4;
+    switch ((iwm.state & 3) | ((via.ora & 0x20) ? 4 : 0)) {
+    case 0: drive.dir_out = ca2; break;     /* direction */
+    case 1:                                 /* step */
+        if (!ca2)
+            drive.track += drive.dir_out ? -1 : 1;
+        if (drive.track < 0)
+            drive.track = 0;
+        if (drive.track > 79)
+            drive.track = 79;
+        break;
+    case 2: drive.motor = !ca2; break;      /* motor on, off */
+    default: break;                         /* eject: there is no disk */
+    }
+}
 
 static uint32_t iwm_access(gaddr a, bool write, uint8_t v)
 {
     int sw = (int)((a >> 9) & 15);
+    bool strobe = sw == 7 && !(iwm.state & 0x08);
     if (sw & 1)
         iwm.state |= (uint8_t)(1 << (sw >> 1));
     else
         iwm.state &= (uint8_t)~(1 << (sw >> 1));
+    if (strobe)
+        drive_command();
     bool q6 = iwm.state & 0x40 ? 1 : 0, q7 = iwm.state & 0x80 ? 1 : 0;
     if (write) {
         if (q6 && q7)
             iwm.mode = v & 0x1F;
         return 0;
     }
-    if (!q7 && q6) /* status register: sense line high (no disk), mode, motor */
-        return (uint32_t)(0x80 | (iwm.mode & 0x1F) | ((iwm.state & 0x10) ? 0x20 : 0));
+    if (!q7 && q6) /* status register: the sense line, mode, drive enabled */
+        return (uint32_t)((drive_sense() ? 0x80 : 0) | (iwm.mode & 0x1F) | ((iwm.state & 0x10) ? 0x20 : 0));
     if (q7 && !q6) /* write handshake: ready, underrun clear */
         return 0xC0;
     return 0xFF; /* read data: nothing under the head */
@@ -704,6 +762,7 @@ void hw_boot(void)
     memset(&via, 0, sizeof via);
     memset(scc, 0, sizeof scc);
     memset(&iwm, 0, sizeof iwm);
+    memset(&drive, 0, sizeof drive);
     memset(spare_regs, 0, sizeof spare_regs);
     scc_reset_channel(&scc[0]);
     scc_reset_channel(&scc[1]);
