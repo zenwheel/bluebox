@@ -86,6 +86,30 @@ extension BlueBox {
             #expect(tb_EventAvail(8, ev) != 0) // the walk's Return, its first step
         }
 
+        /// A scripted snapshot is no input: a program waiting for events
+        /// (SmallTalk's one poll before it loads its Prelude) does not
+        /// have the clock moved on to it, so the snapshot shows what the
+        /// program drew by then; a key after it still does.
+        @Test func aSnapshotDoesNotPullTheClock() throws {
+            let dir = try launch(cat(be16(0xA9F4))) // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            machine_set_instruction_limit(0)
+            let png = dir.appendingPathComponent("snap.png").path
+            let now = g_cpu!.pointee.icount
+            while events_script_next_at() != 0 { events_script_pump(events_script_next_at()) } // none left over
+            machine_script_add_snap(now + 5_000_000, png)
+            #expect(events_script_next_at() == 0)
+            machine_idle()
+            #expect(g_cpu!.pointee.icount < now + 5_000_000)
+            #expect(!FileManager.default.fileExists(atPath: png))
+            machine_script_add(now + 9_000_000, 0, 0x61, 0, 0) // "a"
+            #expect(events_script_next_at() == now + 9_000_000)
+            machine_idle()
+            #expect(g_cpu!.pointee.icount >= now + 9_000_000)
+            #expect(FileManager.default.fileExists(atPath: png)) // taken on the way
+            tb_FlushEvents(-1, 0)
+        }
+
         /// A program that only puts up alert after alert is still walked:
         /// after a hundred answers in a row the walk's steps come again
         /// (MacTools Deluxe's Secure).
