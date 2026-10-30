@@ -32,6 +32,8 @@
 #include "m68k.h"
 #include "tb_internal.h"
 
+#define LM_ASC_BASE 0x0CC0 /* ASCBase */
+
 /* ------------------------------------------------------------------ */
 /* Machine profiles */
 
@@ -741,6 +743,12 @@ void hw_boot(void)
     wr32(LM_SCCRd, m->scc_rd);
     wr32(LM_SCCWr, m->scc_wr);
     wr32(LM_IWM, m->iwm);
+    /* ASCBase ($CC0): the Apple Sound Chip, as the ROM set it.  Programs
+     * read its registers there: HyperCard 1.0.1 waits after a beep while
+     * the chip's mode byte (+$801) says it is playing, and with ASCBase
+     * left 0 read low memory there instead and waited for ever. */
+    if (!m->compact_io)
+        wr32(LM_ASC_BASE, (m->via & ~0x1FFFu) + 0x14000);
     wr16(LM_ROM85, m->rom85);
     /* HWCfgFlags and CPUFlag are machine.c's, from the processor run. */
     wr16(GA_ROM + 8, m->rom_version);

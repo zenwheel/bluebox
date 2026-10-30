@@ -41,6 +41,10 @@ extension BlueBox {
             #expect(rd32(UInt32(LM_SCCRd)) == 0x50F0_4000)
             #expect(rd32(UInt32(LM_IWM)) == 0x50F1_6000)
             #expect(rd16(UInt32(LM_ROM85)) == 0x3FFF)
+            // ASCBase: the Apple Sound Chip, its mode byte 0 (not playing),
+            // which HyperCard 1.0.1 waits on after a beep.
+            #expect(rd32(0x0CC0) == 0x50F1_4000)
+            #expect(hwRead(0x50F1_4801) == 0)
         }
 
         /// A 68k program reads and writes the VIA with ordinary instructions.
@@ -257,6 +261,7 @@ extension BlueBox {
                 #expect(rd32(UInt32(LM_SCCWr)) == 0xBFFFF9)
                 #expect(rd32(UInt32(LM_IWM)) == 0xDFE1FF)
                 #expect(rd16(UInt32(LM_ROM85)) == 0x7FFF)
+                #expect(rd32(0x0CC0) == 0) // no Apple Sound Chip
                 var v: UInt32 = 0
                 #expect(tb_Gestalt(Int32(bitPattern: fourCC("mach")), &v) == 0 && v == 4)
                 #expect(tb_Gestalt(Int32(bitPattern: fourCC("proc")), &v) == 0 && v == 1)
