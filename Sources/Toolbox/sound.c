@@ -78,6 +78,8 @@ typedef struct {
     gaddr file_buffer;   /* SndStartFilePlay: the sound read from a file */
     gaddr file_completion;
     bool file_playing;
+    uint64_t file_start, file_end; /* ns: when the file's sound plays, for SndChannelStatus */
+    int32_t init;        /* SndNewChannel's initialization options (scChannelAttributes) */
     uint32_t rate_mult;  /* rateMultiplierCmd's UnsignedFixed, 0x00010000 = as recorded */
     bool sustained;      /* freqCmd's tone is sounding: it gives way to the next sound */
 } channel;
@@ -474,7 +476,16 @@ static void exec(channel *c, sndcmd cmd, gaddr result_cmd)
         }
         break;
     case soundCmd: c->sound_header = (gaddr)cmd.p2; break;
-    case bufferCmd: if (cmd.p2) play_header(c, (gaddr)cmd.p2); break;
+    case bufferCmd:
+        if (cmd.p2) {
+            uint64_t start = c->busy_until > now_ns() ? c->busy_until : now_ns();
+            play_header(c, (gaddr)cmd.p2);
+            if (c->file_playing && (gaddr)cmd.p2 == c->file_buffer) {
+                c->file_start = start;
+                c->file_end = c->busy_until;
+            }
+        }
+        break;
     case availableCmd: if (result_cmd) wr16(result_cmd + 2, 1); break;
     case versionCmd: if (result_cmd) wr32(result_cmd + 4, 0x00030000); break;
     case getRateCmd: if (cmd.p2) wr32((gaddr)cmd.p2, 0x00010000); break;
@@ -715,8 +726,10 @@ int16_t tb_SndNewChannel(gaddr chanpp, int16_t synth, int32_t init, gaddr userro
     wr32(chan + SndChannel_callBack_off, userroutinep);
     wr32(chan + SndChannel_firstMod_off, 0);
     wr16(chan + SndChannel_qLength_off, 128);
-    if (!add(chan, owned))
+    channel *c = add(chan, owned);
+    if (!c)
         return notEnoughHardwareErr;
+    c->init = init;
     return noErr;
 }
 
@@ -893,14 +906,27 @@ int16_t tb_SndChannelStatus(gaddr chan, int16_t length, gaddr statusp)
     /* At most an SCStatus (24 bytes), whatever length the caller claims. */
     if (length > 24)
         length = 24;
-    if (length > 0)
-        gmemset(statusp, 0, (uint32_t)length);
     pump(c);
     bool busy = c->head != c->tail || now_ns() < c->busy_until || c->db;
-    if (length >= 16) {
-        wr8(statusp + 8, busy ? 1 : 0);     /* scChannelBusy */
-        wr8(statusp + 10, c->paused ? 1 : 0); /* scChannelPaused */
+    /* SCStatus: scStartTime, scEndTime, scCurrentTime (seconds, unsigned
+     * Fixed, for a sound from SndStartFilePlay), scChannelBusy at 12,
+     * scChannelDisposed, scChannelPaused, scUnused, scChannelAttributes at
+     * 16, scCPULoad at 20.  AmoebArena queues its music again whenever the
+     * channel says it isn't busy. */
+    uint8_t st[24] = { 0 };
+    if (c->file_playing && c->file_end > c->file_start) {
+        uint64_t t = now_ns(), len = c->file_end - c->file_start;
+        uint64_t at = t < c->file_start ? 0 : t - c->file_start > len ? len : t - c->file_start;
+        uint32_t end = (uint32_t)((double)len / 1e9 * 65536.0), cur = (uint32_t)((double)at / 1e9 * 65536.0);
+        st[4] = (uint8_t)(end >> 24), st[5] = (uint8_t)(end >> 16), st[6] = (uint8_t)(end >> 8), st[7] = (uint8_t)end;
+        st[8] = (uint8_t)(cur >> 24), st[9] = (uint8_t)(cur >> 16), st[10] = (uint8_t)(cur >> 8), st[11] = (uint8_t)cur;
     }
+    st[12] = busy ? 1 : 0;
+    st[14] = c->paused ? 1 : 0;
+    uint32_t attr = (uint32_t)c->init;
+    st[16] = (uint8_t)(attr >> 24), st[17] = (uint8_t)(attr >> 16), st[18] = (uint8_t)(attr >> 8), st[19] = (uint8_t)attr;
+    if (length > 0)
+        gput(statusp, st, (uint32_t)length);
     return noErr;
 }
 
