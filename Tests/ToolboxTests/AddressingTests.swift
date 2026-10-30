@@ -114,6 +114,33 @@ extension BlueBox {
             }
         }
 
+        /// A nil window is no window: in a 24-bit run low memory's bytes
+        /// where its windowDefProc would be reach into the application
+        /// zone, and DrawGrowIcon(nil) ran the zone's header as a WDEF
+        /// (ScanPaint, MacroPaint; DisposeDialog(nil) in QIF Convert).
+        @Test func nilWindowIsNoWindow() {
+            boot24 {
+                launchTestApp()
+                _ = initToolbox()
+                let low = (0..<0x100).map { rd8(UInt32($0)) }
+                let pc = g_cpu!.pointee.pc
+                tb_DrawGrowIcon(0)
+                tb_MoveWindow(0, 20, 40, 1)
+                tb_SizeWindow(0, 100, 100, 1)
+                tb_ShowWindow(0)
+                tb_HideWindow(0)
+                tb_SelectWindow(0)
+                tb_SetWRefCon(0, 0x1234)
+                #expect(tb_GetWRefCon(0) == 0)
+                tb_CloseWindow(0)
+                tb_DisposeWindow(0)
+                tb_DisposeDialog(0)
+                #expect(g_cpu!.pointee.pc == pc)
+                #expect((0..<0x100).map { rd8(UInt32($0)) } == low)
+                #expect(mm_heap_valid())
+            }
+        }
+
         /// The flags are the master pointer's top byte: HLock sets bit 7
         /// there, and a lock set there directly (BSET #7,(A0)) keeps the
         /// block from moving.

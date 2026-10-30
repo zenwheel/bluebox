@@ -145,6 +145,14 @@ static qrect global_content(gaddr w)
 
 static int32_t call_wdef(gaddr w, int16_t msg, int32_t param)
 {
+    /* A nil window is none: its "defproc" would be low memory's bytes at
+     * $8E, a ROM vector's halves.  In a 32-bit run those name nothing and
+     * read as nil; in a 24-bit one they reach into the application zone,
+     * and DrawGrowIcon(nil) ran its header as code (ScanPaint, MacroPaint
+     * and Megalomania call it with no window open; QIF Convert, Shanghai
+     * II and TypingHelper dispose of a nil dialog, Stratego moves one). */
+    if (!w)
+        return 0;
     gaddr h = WindowRecord_windowDefProc(w);
     if (!h || !rd32(h))
         return 0;
@@ -1398,7 +1406,11 @@ static void close_window(gaddr w, bool keep_parts)
     hrgn_free(&s);
 }
 
-void tb_CloseWindow(gaddr w) { close_window(w, false); }
+void tb_CloseWindow(gaddr w)
+{
+    if (w)
+        close_window(w, false);
+}
 
 /* Windows that DisposeWindow frees stay whole (record, regions, port) until
  * a few more have been disposed, as freed memory on a Mac stays as it was
@@ -1420,6 +1432,8 @@ static bool in_window_list(gaddr w)
 
 void tb_DisposeWindow(gaddr w)
 {
+    if (!w)
+        return;
     for (int i = 0; i < ndisposed; i++)
         if (disposed[i] == w) { /* disposed again: it was in use after all */
             disposed[i] = disposed[--ndisposed];
@@ -1443,6 +1457,8 @@ void tb_DisposeWindow(gaddr w)
 
 void tb_ShowWindow(gaddr w)
 {
+    if (!w)
+        return;
     if (wvisible(w))
         return;
     WindowRecord_set_visible(w, 1);
@@ -1453,6 +1469,8 @@ void tb_ShowWindow(gaddr w)
 
 void tb_HideWindow(gaddr w)
 {
+    if (!w)
+        return;
     if (!wvisible(w))
         return;
     hrgn s;
@@ -1467,6 +1485,8 @@ void tb_HideWindow(gaddr w)
 
 void tb_ShowHide(gaddr w, int8_t flag)
 {
+    if (!w)
+        return;
     /* Like Show/HideWindow but without changing the highlighting. */
     if ((wvisible(w) != 0) == (flag != 0))
         return;
@@ -1480,7 +1500,11 @@ void tb_ShowHide(gaddr w, int8_t flag)
     took_front();
 }
 
-void tb_HiliteWindow(gaddr w, int8_t flag) { set_hilite(w, flag != 0); }
+void tb_HiliteWindow(gaddr w, int8_t flag)
+{
+    if (w)
+        set_hilite(w, flag != 0);
+}
 
 static void bring_to_front(gaddr w)
 {
@@ -1493,12 +1517,16 @@ static void bring_to_front(gaddr w)
 
 void tb_BringToFront(gaddr w)
 {
+    if (!w)
+        return;
     bring_to_front(w);
     took_front();
 }
 
 void tb_SelectWindow(gaddr w)
 {
+    if (!w)
+        return;
     bring_to_front(w);
     update_active();
 }
@@ -1532,6 +1560,8 @@ gaddr tb_FrontWindow(void) { return first_visible(); }
 
 void tb_DrawGrowIcon(gaddr w)
 {
+    if (!w)
+        return;
     gaddr saved = qd_port();
     tb_SetPort(w);
     call_wdef(w, wDrawGIcon, 0);
@@ -1543,6 +1573,8 @@ void tb_DrawGrowIcon(gaddr w)
 
 void tb_SetWTitle(gaddr w, gaddr t)
 {
+    if (!w)
+        return;
     gaddr h = WindowRecord_titleHandle(w);
     uint32_t n = (uint32_t)rd8(t) + 1;
     tb_SetHandleSize(h, (int32_t)n);
@@ -1565,14 +1597,24 @@ void tb_SetWTitle(gaddr w, gaddr t)
 
 void tb_GetWTitle(gaddr w, gaddr t)
 {
+    if (!w)
+        return;
     gaddr h = WindowRecord_titleHandle(w);
     gmemcpy(t, rd32(h), (uint32_t)rd8(rd32(h)) + 1);
 }
 
-void tb_SetWRefCon(gaddr w, int32_t data) { WindowRecord_set_refCon(w, data); }
-int32_t tb_GetWRefCon(gaddr w) { return WindowRecord_refCon(w); }
-void tb_SetWindowPic(gaddr w, gaddr p) { WindowRecord_set_windowPic(w, p); }
-gaddr tb_GetWindowPic(gaddr w) { return WindowRecord_windowPic(w); }
+void tb_SetWRefCon(gaddr w, int32_t data)
+{
+    if (w)
+        WindowRecord_set_refCon(w, data);
+}
+int32_t tb_GetWRefCon(gaddr w) { return w ? WindowRecord_refCon(w) : 0; }
+void tb_SetWindowPic(gaddr w, gaddr p)
+{
+    if (w)
+        WindowRecord_set_windowPic(w, p);
+}
+gaddr tb_GetWindowPic(gaddr w) { return w ? WindowRecord_windowPic(w) : 0; }
 
 /* ---------------------------------------------------------------------- */
 /* Finding windows */
@@ -1764,6 +1806,8 @@ static int update_dh, update_dv; /* and its port's origin then */
 
 void tb_BeginUpdate(gaddr w)
 {
+    if (!w)
+        return;
     /* visRgn := visRgn ∩ updateRgn (local); the old visRgn is saved. */
     gaddr save = rd32(LM_SaveVisRgn);
     if (!save) {
@@ -1793,6 +1837,8 @@ void tb_BeginUpdate(gaddr w)
  * (Netscape Navigator). */
 void tb_EndUpdate(gaddr w)
 {
+    if (!w)
+        return;
     gaddr save = rd32(LM_SaveVisRgn);
     if (!save)
         return;
@@ -1931,6 +1977,8 @@ static void copy_screen(const hrgn *rgn, int dh, int dv)
 
 void tb_MoveWindow(gaddr w, int16_t h, int16_t v, int8_t front)
 {
+    if (!w)
+        return;
     /* As the Window Manager did: what showed of the window moves with it as
      * pixels, its pending update moves too, and only what that leaves
      * uncovered (where it was, and the parts of it that were hidden) is
@@ -1978,6 +2026,8 @@ void tb_MoveWindow(gaddr w, int16_t h, int16_t v, int8_t front)
 
 void tb_SizeWindow(gaddr w, int16_t width, int16_t height, int8_t flag)
 {
+    if (!w)
+        return;
     hrgn old;
     hrgn_init(&old);
     rgn_read(WindowRecord_strucRgn(w), &old);
@@ -2079,6 +2129,8 @@ int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int1
 
 void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
 {
+    if (!wp)
+        return;
     int nx, ny;
     if (complete_action(wp, MACHINE_ACTION_MOVE, &nx, &ny)) {
         tb_MoveWindow(wp, (int16_t)nx, (int16_t)ny, 0);
@@ -2116,6 +2168,8 @@ void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
 
 int32_t tb_GrowWindow(gaddr w, uint32_t startp, gaddr rp)
 {
+    if (!w)
+        return 0;
     int nw, nh;
     if (complete_action(w, MACHINE_ACTION_RESIZE, &nw, &nh)) {
         qrect lim = qrect_get(rp);
@@ -2201,6 +2255,8 @@ static int8_t track_box(gaddr w, uint32_t p, int part)
 
 int8_t tb_TrackGoAway(gaddr w, uint32_t p)
 {
+    if (!w)
+        return 0;
     if (complete_action(w, MACHINE_ACTION_CLOSE, NULL, NULL))
         return 1;
     return track_box(w, p, wInGoAway);
@@ -2208,6 +2264,8 @@ int8_t tb_TrackGoAway(gaddr w, uint32_t p)
 
 int8_t tb_TrackBox(gaddr wp, uint32_t pt, int16_t part)
 {
+    if (!wp)
+        return 0;
     if (complete_action(wp, MACHINE_ACTION_ZOOM, NULL, NULL))
         return 1;
     return track_box(wp, pt, part == inZoomIn ? wInZoomIn : wInZoomOut);
@@ -2215,6 +2273,8 @@ int8_t tb_TrackBox(gaddr wp, uint32_t pt, int16_t part)
 
 void tb_ZoomWindow(gaddr wp, int16_t part, int8_t front)
 {
+    if (!wp)
+        return;
     /* As the Window Manager did, with the WStateData in the dataHandle:
      * zooming out keeps the current place as the user state and goes to
      * the standard state; zooming in goes back to the user state. */
@@ -2277,6 +2337,8 @@ void tb_ClipAbove(gaddr w)
  * between its old and new content, is repainted. */
 void tb_SaveOld(gaddr w)
 {
+    if (!w)
+        return;
     rgn_read(WindowRecord_strucRgn(w), &old_struc);
     rgn_read(WindowRecord_contRgn(w), &old_cont);
     old_window = w;
@@ -2284,6 +2346,8 @@ void tb_SaveOld(gaddr w)
 
 void tb_DrawNew(gaddr w, int8_t flag)
 {
+    if (!w)
+        return;
     (void)flag;
     if (w != old_window) {
         repaint_rgn_of(w);
@@ -2347,6 +2411,8 @@ int8_t tb_GetAuxWin(gaddr w, gaddr hp)
 
 void tb_SetWinColor(gaddr w, gaddr ctab)
 {
+    if (!w)
+        return;
     gaddr h = aux_of(w);
     if (!h) {
         h = tb_NewHandle(AUX_SIZE, false, true);

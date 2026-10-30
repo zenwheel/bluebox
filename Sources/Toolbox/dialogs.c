@@ -692,6 +692,8 @@ gaddr tb_GetNewDialog(int16_t id, gaddr dst, gaddr behind) { return dialog_from_
 
 void tb_CloseDialog(gaddr d)
 {
+    if (!d)
+        return; /* no dialog (QIF Convert disposes of a nil one) */
     ap_forget_dialog(d);
     gaddr te = edit_te(d);
     if (te) {
