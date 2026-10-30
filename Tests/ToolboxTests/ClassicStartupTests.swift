@@ -177,17 +177,12 @@ extension BlueBox {
             let buf = tb_NewPtr(2048, false, true)
             #expect(readBlocks(drive: 1, offset: 5 * 512, count: 1024, into: buf) == 0)
             #expect(rd8(buf) == 5 && rd8(buf + 511) == 5 && rd8(buf + 512) == 6 && rd8(buf + 1023) == 6)
-            // the drive of its own in the queue reads the same
-            var found: Int16 = 0
-            var e = rd32(UInt32(LM_DrvQHdr) + 2)
-            while e != 0 {
-                if rd16(e + UInt32(DrvQEl_dQDrive_off)) > 1 && rd16(e + UInt32(DrvQEl_dQRefNum_off)) == 0xFFFB {
-                    found = Int16(bitPattern: rd16(e + UInt32(DrvQEl_dQDrive_off)))
-                }
-                e = rd32(e)
-            }
-            #expect(found > 1)
-            #expect(readBlocks(drive: found, offset: 799 * 512, count: 512, into: buf) == 0 && rd8(buf) == UInt8(799 & 0xFF))
+            // drive 1 is the floppy drive's element, first in the queue, with the disk in place
+            let e = rd32(UInt32(LM_DrvQHdr) + 2)
+            #expect(rd16(e + UInt32(DrvQEl_dQDrive_off)) == 1 && rd16(e + UInt32(DrvQEl_dQRefNum_off)) == 0xFFFB)
+            #expect(rd8(e - 3) == 1 && rd8(e - 2) == 1)
+            #expect(rd16(e + UInt32(DrvQEl_dQDrvSz_off)) == 800)
+            #expect(readBlocks(drive: 1, offset: 799 * 512, count: 512, into: buf) == 0 && rd8(buf) == UInt8(799 & 0xFF))
             // past the end, and not whole sectors: paramErr
             #expect(readBlocks(drive: 1, offset: 800 * 512, count: 512, into: buf) == -50)
             #expect(readBlocks(drive: 1, offset: 100, count: 512, into: buf) == -50)
@@ -197,6 +192,45 @@ extension BlueBox {
             launchTestApp()
             let buf = tb_NewPtr(512, false, true)
             #expect(readBlocks(drive: 1, offset: 0, count: 512, into: buf) == -65)
+        }
+
+        /// Without a disk the internal floppy drive is still there, as on
+        /// a Mac: drive 1 in the queue, a SuperDrive with nothing in it, and
+        /// no volume on it.  The startup disk's volume is on drive 5.
+        @Test func theFloppyDriveIsThereEmpty() {
+            launchTestApp()
+            let e = rd32(UInt32(LM_DrvQHdr) + 2)
+            #expect(rd16(e + UInt32(DrvQEl_dQDrive_off)) == 1 && rd16(e + UInt32(DrvQEl_dQRefNum_off)) == 0xFFFB)
+            #expect(rd8(e - 3) == 0 && rd8(e - 2) == 1) // no disk in place; installed
+            // its status: installed, empty, two-sided
+            let pb = tb_NewPtr(Int32(CntrlParam_SIZEOF) + 22, false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -5))
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), 1)
+            wr16(pb + UInt32(CntrlParam_csCode_off), 8)
+            #expect(tb_PBStatus(pb, false) == 0)
+            let st = pb + UInt32(CntrlParam_csParam_off)
+            #expect(rd8(st + UInt32(DrvSts_diskInPlace_off)) == 0 && rd8(st + UInt32(DrvSts_installed_off)) == 1)
+            #expect(rd8(st + UInt32(DrvSts_sides_off)) == 0xFF && rd16(st + UInt32(DrvSts_dQDrive_off)) == 1)
+            // a SuperDrive; its icon; nothing to eject or verify
+            wr16(pb + UInt32(CntrlParam_csCode_off), 23)
+            #expect(tb_PBControl(pb, false) == 0 && rd32(st) == 4)
+            wr16(pb + UInt32(CntrlParam_csCode_off), 21)
+            #expect(tb_PBControl(pb, false) == 0 && rd32(st) != 0)
+            wr16(pb + UInt32(CntrlParam_csCode_off), 7)
+            #expect(tb_PBControl(pb, false) == -65)
+            wr16(pb + UInt32(CntrlParam_csCode_off), 5)
+            #expect(tb_PBControl(pb, false) == -65)
+            // no drive 2
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), 2)
+            wr16(pb + UInt32(CntrlParam_csCode_off), 23)
+            #expect(tb_PBControl(pb, false) == -56)
+            // GetVInfo by drive number: none on drive 1, the startup disk on 5
+            let vp = tb_NewPtr(Int32(HVolumeParam_SIZEOF), false, true)
+            wr16(vp + UInt32(IOParam_ioVRefNum_off), 1)
+            #expect(tb_PBGetVInfo(vp, false) == -35)
+            wr16(vp + UInt32(IOParam_ioVRefNum_off), 5)
+            #expect(tb_PBHGetVInfo(vp, false) == 0 && rd16(vp + UInt32(HVolumeParam_ioVDrvInfo_off)) == 5)
+            #expect(tb_DiskEject(1) == -65)
         }
 
         /// A Disk Copy 4.2 image has the tag bytes the protection looks at.

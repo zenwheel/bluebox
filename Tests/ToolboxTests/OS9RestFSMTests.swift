@@ -93,7 +93,8 @@ extension BlueBox {
             #expect(main != 0 && main == rd32(UInt32(LM_DefVCBPtr)))
             let id = Int16(bitPattern: rd16(vref))
             #expect(errs("UTLocateVCBByRefNum", [UInt32(UInt16(bitPattern: id)), vref, vcb]) == 0 && rd32(vcb) == main)
-            #expect(errs("UTLocateVCBByRefNum", [1, vref, vcb]) == 0 && rd32(vcb) == main) // the drive's number
+            #expect(errs("UTLocateVCBByRefNum", [5, vref, vcb]) == 0 && rd32(vcb) == main) // the drive's number
+            #expect(errs("UTLocateVCBByRefNum", [1, vref, vcb]) == -35)                    // the floppy drive: none
             #expect(errs("UTLocateVCBByRefNum", [UInt32(UInt16(bitPattern: -999)), vref, vcb]) == -35)
             #expect(errs("UTLocateVCBByRefNum", [77, vref, vcb]) == -35)
             // by name, and the case does not matter
@@ -153,12 +154,12 @@ extension BlueBox {
             let v = rd32(vcbp)
             guestPString("Plug-in Disk", at: v + 44)
             wr32(v + 10, 0x1234)
-            #expect(errs("UTAddNewVCB", [5, vref, v]) == 0)
+            #expect(errs("UTAddNewVCB", [9, vref, v]) == 0)
             let id = rd16(vref)
             #expect(Int16(bitPattern: id) < -1)
             let got = Rest.ptr(4), got2 = Rest.ptr(2)
             #expect(errs("UTLocateVCBByRefNum", [UInt32(id), got2, got]) == 0 && rd32(got) == v)
-            #expect(errs("UTLocateVCBByRefNum", [5, got2, got]) == 0 && rd32(got) == v) // by its drive
+            #expect(errs("UTLocateVCBByRefNum", [9, got2, got]) == 0 && rd32(got) == v) // by its drive
             #expect(errs("UTCheckVolRefNum", [UInt32(id)]) == 0 && errs("UTCheckVolModifiable", [UInt32(id)]) == 0)
             // the same name and date is the same volume
             #expect(errs("UTAllocateVCB", [len, vcbp, 0]) == 0)
@@ -255,7 +256,7 @@ extension BlueBox {
             // a volume reference, a drive number
             wr16(pb + UInt32(IOParam_ioVRefNum_off), rd16(vref))
             #expect(errs("UTDetermineVol", [pb, status, more, vref, vcb]) == 0 && rd16(status) == 2 && rd32(vcb) == main)
-            wr16(pb + UInt32(IOParam_ioVRefNum_off), 1)
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), 5)
             #expect(errs("UTDetermineVol", [pb, status, more, vref, vcb]) == 0 && rd16(status) == 4)
             wr16(pb + UInt32(IOParam_ioVRefNum_off), 0xFFFF - 998) // an unknown volume
             #expect(errs("UTDetermineVol", [pb, status, more, vref, vcb]) == -35 && rd16(status) == 0)

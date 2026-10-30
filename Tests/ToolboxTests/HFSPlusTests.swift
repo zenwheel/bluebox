@@ -337,7 +337,7 @@ extension BlueBox {
             #expect(uniString(name) == "Macintosh HD")
             #expect(rd16(info + UInt32(FSVolumeInfo_signature_off)) == 0x482B) // 'H+'
             #expect(get64(info + UInt32(FSVolumeInfo_totalBytes_off)) > 0)
-            #expect(rd16(info + UInt32(FSVolumeInfo_driveNumber_off)) == 1)
+            #expect(rd16(info + UInt32(FSVolumeInfo_driveNumber_off)) == 5) // the startup disk's drive
             #expect(nodeID(root) == 2)
             #expect(tb_FSGetVolumeInfo(-1, 0, actual, 0, 0, 0, 0) == 0) // by refnum
             #expect(tb_FSGetVolumeInfo(0, 9, actual, 0, 0, 0, 0) == nsvErr)

@@ -129,9 +129,10 @@ extension BlueBox {
             #expect(rd16(0x1D2) > 0)                     // UnitNtryCnt
             #expect(rd8(0x1F8) == 0xA8)                  // SPValid: parameter RAM valid
             #expect(Int16(bitPattern: rd16(0x9DC)) == -1) // PaintWhite
-            // The drive queue holds the volume as drive 1.
+            // The drive queue: the floppy drive as drive 1, then the volume's.
             let drive = rd32(0x308 + 2)
-            #expect(drive != 0 && rd16(drive + 6) == 1)
+            #expect(drive != 0 && rd16(drive + 6) == 1 && rd16(drive + 8) == 0xFFFB)
+            #expect(rd32(drive) != 0 && rd16(rd32(drive) + 6) == 5 && Int16(bitPattern: rd16(rd32(drive) + 8)) == -33)
             let scrap = rd32(0x96C)                      // ScrapName
             #expect(scrap != 0 && rd8(scrap) == 14)
         }
