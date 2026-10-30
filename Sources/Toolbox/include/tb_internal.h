@@ -656,6 +656,10 @@ extern const native_driver sound_driver;
 extern const native_driver disk_driver;
 int16_t disk_icon_control(gaddr pb, bool removable);
 int16_t disk_drive_status(gaddr pb);
+/* The blocks of files jLg2Phys mapped, which the volumes' drivers read and
+ * write (filemgr.c). */
+void fm_lg2phys_native(cpu68k *c, uint16_t tw);
+int16_t fm_block_io(gaddr pb, bool write);
 void disk_driver_reset(void);
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
 extern const native_driver mpp_driver, atp_driver, xpp_driver, dsp_driver;

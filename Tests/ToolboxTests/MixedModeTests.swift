@@ -8,7 +8,8 @@ extension BlueBox {
     /// Mixed Mode's calling conventions beyond the plain stack and register
     /// ones: the special cases (TextEdit's hooks, the menu bar hook,
     /// GetNextEvent's filter), dispatched routines and their selectors,
-    /// condition-code results and _MixedModeDispatch.
+    /// condition-code results and _MixedModeDispatch; and jLg2Phys, which
+    /// disk image drivers call to find a file's blocks on its disk.
     @Suite(.serialized) struct MixedMode {
         func bytes(_ b: [UInt8]) -> UInt32 {
             let p = tb_NewPtr(Int32(max(b.count, 1)), false, true)
@@ -250,6 +251,72 @@ extension BlueBox {
             let state = bytes([UInt8](repeating: 0, count: 16))
             #expect(tb_SaveMixedModeState(state, 1) == 0 && tb_RestoreMixedModeState(state, 1) == 0)
             #expect(tb_SaveMixedModeState(state, 2) == -50 && tb_RestoreMixedModeState(state, 2) == -50)
+        }
+
+        // MARK: jLg2Phys
+
+        /// A file's blocks: jLg2Phys gives the run where its fork lies on the
+        /// drive, and the volume's driver reads and writes the file there;
+        /// past the end of file it reads zeros.  Blocks no file was mapped
+        /// to, and positions past the fork, are errors.
+        @Test func logicalToPhysical() throws {
+            let dir = launchTestApp()
+            let content = (0..<3000).map { UInt8(truncatingIfNeeded: $0 * 7 + 1) }
+            let path = dir.appendingPathComponent("Image.img").path
+            try Data(content).write(to: URL(fileURLWithPath: path))
+            let spec = tb_NewPtr(80, false, true), ref = tb_NewPtr(2, false, true)
+            fm_spec_for_path(path, spec)
+            #expect(tb_FSpOpenDF(spec, 3, ref) == 0)
+            let rn = rd16(ref)
+            let stack = tb_NewPtr(65536, false, true)
+            g_cpu!.pointee.a.7 = stack + 65536 - 64
+            g_cpu!.pointee.halted = false
+            func lg2phys(_ pos: UInt32, _ want: UInt32) -> Int16 {
+                g_cpu!.pointee.d.1 = UInt32(rn)
+                g_cpu!.pointee.d.5 = pos
+                g_cpu!.pointee.d.4 = want
+                g_cpu!.pointee.a.1 = rd32(UInt32(LM_FCBSPtr))
+                g_cpu!.pointee.a.2 = rd32(UInt32(LM_VCBQHdr) + 2)
+                guest_call_regs(rd32(UInt32(LM_JLg2Phys)))
+                return Int16(truncatingIfNeeded: g_cpu!.pointee.d.0)
+            }
+            #expect(lg2phys(600, 100_000) == 0)
+            let first = g_cpu!.pointee.d.3 - 1
+            #expect(g_cpu!.pointee.d.6 == 3072 - 600)
+            #expect(lg2phys(600, 100) == 0 && g_cpu!.pointee.d.3 == first + 1 && g_cpu!.pointee.d.6 == 100)
+            #expect(lg2phys(3072, 1) == -39) // eofErr
+
+            let buf = tb_NewPtr(1024, false, true)
+            func io(_ block: UInt32, _ count: UInt32, write: Bool = false) -> Int16 {
+                let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+                wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -33))
+                wr16(pb + UInt32(IOParam_ioVRefNum_off), 1)
+                wr32(pb + UInt32(IOParam_ioBuffer_off), buf)
+                wr32(pb + UInt32(IOParam_ioReqCount_off), count)
+                wr16(pb + UInt32(IOParam_ioPosMode_off), 1)
+                wr32(pb + UInt32(IOParam_ioPosOffset_off), block * 512)
+                return write ? tb_PBWrite(pb, false) : tb_PBRead(pb, false)
+            }
+            #expect(io(first, 1024) == 0)
+            #expect((0..<1024).map { rd8(buf + UInt32($0)) } == Array(content[0..<1024]))
+            #expect(io(first + 5, 512) == 0)
+            #expect((0..<440).map { rd8(buf + UInt32($0)) } == Array(content[2560..<3000]))
+            #expect((440..<512).allSatisfy { rd8(buf + UInt32($0)) == 0 })
+            #expect(io(0, 512) == -36) // ioErr: no file there
+            // A block written reaches the file.
+            for i in 0..<512 { wr8(buf + UInt32(i), 0xEE) }
+            #expect(io(first + 2, 512, write: true) == 0)
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true), data = tb_NewPtr(16, false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), rn)
+            wr32(pb + UInt32(IOParam_ioBuffer_off), data)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 4)
+            wr16(pb + UInt32(IOParam_ioPosMode_off), 1)
+            wr32(pb + UInt32(IOParam_ioPosOffset_off), 1022)
+            #expect(tb_PBRead(pb, false) == 0)
+            #expect((0..<4).map { rd8(data + UInt32($0)) } == [content[1022], content[1023], 0xEE, 0xEE])
+            #expect(tb_PBClose(pb, false) == 0)
+            let saved = try [UInt8](Data(contentsOf: URL(fileURLWithPath: path)))
+            #expect(saved.count == 3000 && saved[1024] == 0xEE && saved[1536] == content[1536])
         }
     }
 }

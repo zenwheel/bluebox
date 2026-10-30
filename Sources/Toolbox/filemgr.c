@@ -211,6 +211,7 @@ typedef struct {
 } fcb;
 
 static fcb fcbs[MAX_FCBS];
+static void block_maps_reset(void);
 
 static int16_t fcb_refnum(int i) { return (int16_t)(2 + (FCB_FIRST + i) * 94); }
 static fcb *fcb_for(int16_t rn)
@@ -1047,6 +1048,7 @@ void fm_init(const char *app_dir)
         free(fcbs[i].buf);
     memset(fcbs, 0, sizeof fcbs);
     dt_reset();
+    block_maps_reset();
     char app[PATH_MAX];
     if (!realpath(app_dir, app))
         snprintf(app, sizeof app, "%s", app_dir);
@@ -1537,6 +1539,177 @@ static int16_t pb_write(gaddr pb, bool async)
     wr32(pb + IOParam_ioActCount_off, n);
     wr32(pb + IOParam_ioPosOffset_off, f->pos);
     return noErr;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Files as disk blocks.  jLg2Phys (MapFBlock with the volume's offset)
+ * tells where a file's bytes lie on its volume's disk: disk image drivers
+ * (Disk Copy's .HDI, which the self-mounting images carry too) map the
+ * image file so and then read its blocks from the volume's driver.  The
+ * volumes here are host folders, so a file asked about is given a run of
+ * blocks of its own on the drive, contiguous, past the 512 MB the volume
+ * itself might use, and the disk drivers read and write those blocks in
+ * the file. */
+
+enum { MAX_BLOCK_MAPS = 32, BLOCK_MAP_BASE = 0x100000, BLOCK_MAP_END = 0x400000 /* the 2 GB drive */,
+       BLOCK_MAP_ALIGN = 2048 };
+static struct {
+    char path[PATH_MAX];
+    bool rsrc;
+    uint32_t first, count; /* in 512-byte blocks */
+} block_maps[MAX_BLOCK_MAPS];
+static int nblock_maps;
+
+static bool file_open(const char *path, bool rsrc)
+{
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && !fcbs[i].claimed && fcbs[i].rsrc == rsrc && !strcmp(fcbs[i].path, path))
+            return true;
+    return false;
+}
+
+static bool block_range_free(uint32_t first, uint32_t count)
+{
+    for (int i = 0; i < nblock_maps; i++)
+        if (first < block_maps[i].first + block_maps[i].count && block_maps[i].first < first + count)
+            return false;
+    return true;
+}
+
+/* The blocks of a file's fork, at least `blocks` of them: its run, or a new
+ * one (a fork that grew past its run moves). */
+static int block_map_for(const char *path, bool rsrc, uint32_t blocks)
+{
+    int found = -1;
+    for (int i = 0; i < nblock_maps; i++)
+        if (block_maps[i].rsrc == rsrc && !strcmp(block_maps[i].path, path))
+            found = i;
+    if (found >= 0 && block_maps[found].count >= blocks)
+        return found;
+    if (found >= 0)
+        block_maps[found] = block_maps[--nblock_maps];
+    uint32_t count = (blocks + BLOCK_MAP_ALIGN - 1) / BLOCK_MAP_ALIGN * BLOCK_MAP_ALIGN;
+    if (!count)
+        count = BLOCK_MAP_ALIGN;
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass) /* full: let go of the runs of files no longer open */
+            for (int i = nblock_maps - 1; i >= 0; i--)
+                if (!file_open(block_maps[i].path, block_maps[i].rsrc))
+                    block_maps[i] = block_maps[--nblock_maps];
+        if (nblock_maps >= MAX_BLOCK_MAPS)
+            continue;
+        /* the first gap that holds it: at the start, or after a run */
+        for (int i = -1; i < nblock_maps; i++) {
+            uint32_t first = i < 0 ? BLOCK_MAP_BASE : block_maps[i].first + block_maps[i].count;
+            if ((uint64_t)first + count > BLOCK_MAP_END || !block_range_free(first, count))
+                continue;
+            int m = nblock_maps++;
+            snprintf(block_maps[m].path, sizeof block_maps[m].path, "%s", path);
+            block_maps[m].rsrc = rsrc;
+            block_maps[m].first = first;
+            block_maps[m].count = count;
+            return m;
+        }
+    }
+    return -1;
+}
+
+/* jLg2Phys: (A1,D1.W) the FCB, A2 the VCB, D5 the position in the fork, D4
+ * the bytes wanted.  Out: D0 the result, D3 the first block, D6 the bytes
+ * that follow it on the disk (up to D4); other registers kept. */
+void fm_lg2phys_native(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    int16_t rn = (int16_t)c->d[1];
+    uint32_t pos = c->d[5], want = c->d[4];
+    fcb *f = fcb_for(rn);
+    int16_t err = noErr;
+    if (!f || f->claimed) {
+        err = rfNumErr;
+    } else {
+        uint32_t peof = (f->len + 511) & ~511u; /* the fork's physical length */
+        int m = pos < peof ? block_map_for(f->path, f->rsrc, peof / 512) : -1;
+        if (pos >= peof)
+            err = eofErr;
+        else if (m < 0)
+            err = dskFulErr;
+        else {
+            c->d[3] = block_maps[m].first + pos / 512;
+            c->d[6] = want < peof - pos ? want : peof - pos;
+            LOGF(LOG_TRAPS, "  Lg2Phys refnum %d position %u: block %u, %u bytes\n", rn, pos, c->d[3], c->d[6]);
+        }
+    }
+    c->d[0] = (uint32_t)(int32_t)err;
+    c->sr = (uint16_t)((c->sr & ~0x0Fu) | (err ? 0x08 : 0x04)); /* as TST.W D0 */
+}
+
+/* A read or write of a volume's drive (its driver's Prime): the blocks of
+ * the file mapped there.  Blocks no file was mapped to are not ours to
+ * give. */
+static uint32_t block_mark;
+
+static void block_maps_reset(void)
+{
+    nblock_maps = 0;
+    block_mark = 0;
+}
+
+int16_t fm_block_io(gaddr pb, bool write)
+{
+    gaddr buf = rd32(pb + IOParam_ioBuffer_off);
+    uint32_t count = rd32(pb + IOParam_ioReqCount_off);
+    int mode = rd16(pb + IOParam_ioPosMode_off) & 3;
+    uint32_t off = mode == 0 ? block_mark : rd32(pb + IOParam_ioPosOffset_off);
+    if (mode == 3)
+        off = BLOCK_MAP_END * 512u + rd32(pb + IOParam_ioPosOffset_off); /* from the drive's end */
+    wr32(pb + IOParam_ioActCount_off, 0);
+    if (count % 512 || off % 512)
+        return paramErr;
+    uint32_t block = off / 512, n = count / 512;
+    int m = -1;
+    for (int i = 0; i < nblock_maps; i++)
+        if (block >= block_maps[i].first && block + n <= block_maps[i].first + block_maps[i].count)
+            m = i;
+    if (m < 0)
+        return ioErrF;
+    uint32_t at = (block - block_maps[m].first) * 512;
+    fcb *f = NULL, tmp;
+    for (int i = 0; i < MAX_FCBS && !f; i++)
+        if (fcbs[i].used && !fcbs[i].claimed && fcbs[i].rsrc == block_maps[m].rsrc &&
+            !strcmp(fcbs[i].path, block_maps[m].path))
+            f = &fcbs[i];
+    if (!f) { /* closed since: the fork from the disk */
+        memset(&tmp, 0, sizeof tmp);
+        snprintf(tmp.path, sizeof tmp.path, "%s", block_maps[m].path);
+        tmp.rsrc = block_maps[m].rsrc;
+        if (load_fork(&tmp))
+            return ioErrF;
+        f = &tmp;
+    }
+    LOGF(LOG_TRAPS, "  block %s %u bytes at block %u: %s offset %u\n", write ? "write" : "read", count, block,
+         block_maps[m].path, at);
+    /* Bytes past the end of the fork: zeros read, writes dropped (the
+     * disk's blocks past the logical end of file). */
+    uint32_t have = at < f->len ? f->len - at : 0;
+    if (have > count)
+        have = count;
+    if (write) {
+        gget(f->buf + at, buf, have);
+        if (have)
+            f->dirty = any_dirty = true;
+    } else {
+        gput(buf, f->buf + at, have);
+        gmemset(buf + have, 0, count - have);
+    }
+    int16_t err = noErr;
+    if (f == &tmp) {
+        err = save_fork(&tmp);
+        free(tmp.buf);
+    }
+    block_mark = off + count;
+    wr32(pb + IOParam_ioActCount_off, count);
+    wr32(pb + IOParam_ioPosOffset_off, block_mark);
+    return err;
 }
 
 int16_t tb_PBGetEOF(gaddr pb, bool async)

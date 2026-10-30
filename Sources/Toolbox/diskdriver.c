@@ -1,8 +1,8 @@
 /*
  * The main volume's disk driver (reference number -33, SCSI ID 0's, the drive the
  * Macintosh HD volume is on): what the Finder asks a disk's driver for to
- * draw it (the drive and media icons, the drive's kind) and the drive's
- * status.  The mounted volumes' drives are the CD driver's; it answers
+ * draw it (the drive and media icons, the drive's kind), the drive's
+ * status, and the blocks of the files jLg2Phys mapped on it (filemgr.c).  The mounted volumes' drives are the CD driver's; it answers
  * the same icon calls through disk_icon_control.
  */
 #include "tb_internal.h"
@@ -80,4 +80,9 @@ static int16_t disk_control(gaddr pb, bool async)
 
 static int16_t disk_status(gaddr pb, bool async) { return disk_drive_status(pb); }
 
-const native_driver disk_driver = { ".BlueBoxDisk", DISK_UNIT, NULL, NULL, disk_control, disk_status, NULL, NULL, NULL };
+/* Blocks: those of the files jLg2Phys placed on the drive. */
+static int16_t disk_read(gaddr pb, bool async) { return fm_block_io(pb, false); }
+static int16_t disk_write(gaddr pb, bool async) { return fm_block_io(pb, true); }
+
+const native_driver disk_driver = { ".BlueBoxDisk", DISK_UNIT, NULL, NULL, disk_control, disk_status, disk_read, disk_write,
+                                    NULL };

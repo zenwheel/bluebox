@@ -40018,6 +40018,8 @@ static void ppclm_get_AuxWinHead(ppc_cpu *c) { c->gpr[3] = rd32(0xCD0); c->pc = 
 static void ppclm_set_AuxWinHead(ppc_cpu *c) { wr32(0xCD0, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_DeskCPat(ppc_cpu *c) { c->gpr[3] = rd32(0xCD8); c->pc = c->lr; }
 static void ppclm_set_DeskCPat(ppc_cpu *c) { wr32(0xCD8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
+static void ppclm_get_JLg2Phys(ppc_cpu *c) { c->gpr[3] = rd32(0x6FC); c->pc = c->lr; }
+static void ppclm_set_JLg2Phys(ppc_cpu *c) { wr32(0x6FC, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 static void ppclm_get_SoundGlue(ppc_cpu *c) { c->gpr[3] = rd32(0xAE8); c->pc = c->lr; }
 static void ppclm_set_SoundGlue(ppc_cpu *c) { wr32(0xAE8, (uint32_t)c->gpr[3]); c->pc = c->lr; }
 const ppc_export ppc_exports[] = {
@@ -41901,6 +41903,7 @@ const ppc_export ppc_exports[] = {
     {"LMGetJHideCursor", ppclm_get_JHideCursor},
     {"LMGetJIODone", ppclm_get_JIODone},
     {"LMGetJInitCrsr", ppclm_get_JInitCrsr},
+    {"LMGetJLg2Phys", ppclm_get_JLg2Phys},
     {"LMGetJResUnknown1", ppclm_get_JResUnknown1},
     {"LMGetJResUnknown2", ppclm_get_JResUnknown2},
     {"LMGetJScrnAddr", ppclm_get_JScrnAddr},
@@ -42135,6 +42138,7 @@ const ppc_export ppc_exports[] = {
     {"LMSetJHideCursor", ppclm_set_JHideCursor},
     {"LMSetJIODone", ppclm_set_JIODone},
     {"LMSetJInitCrsr", ppclm_set_JInitCrsr},
+    {"LMSetJLg2Phys", ppclm_set_JLg2Phys},
     {"LMSetJResUnknown1", ppclm_set_JResUnknown1},
     {"LMSetJResUnknown2", ppclm_set_JResUnknown2},
     {"LMSetJScrnAddr", ppclm_set_JScrnAddr},
