@@ -221,6 +221,32 @@ extension BlueBox {
             #expect(rd32(container + 140) == 0)  // the code resource itself unchanged
         }
 
+        /// Pattern-initialized data is unpacked; pattern data that does not
+        /// decode (ListenDo!'s has an opcode 6) makes the fragment damaged
+        /// rather than leaving the rest of its section zero.
+        @Test func patternDataThatDoesNotDecodeIsDamage() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
+            func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
+            func container(_ pattern: [UInt8]) -> UInt32 {
+                func section(_ total: UInt32, _ packed: UInt32, _ off: UInt32, _ kind: UInt8) -> [UInt8] {
+                    be32(UInt32(bitPattern: -1)) + be32(0) + be32(total) + be32(total) + be32(packed) + be32(off) + [kind, 1, 0, 0]
+                }
+                var loader = be32(1) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+                loader += be32(0) + be32(0) + be32(0) + be32(56) + be32(56) + be32(56) + be32(0) + be32(0)
+                var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(3) + be16(2) + be32(0)
+                pef += section(8, 8, 124, 0) + section(12, UInt32(pattern.count), 132, 2) + section(UInt32(loader.count), UInt32(loader.count), 148, 4)
+                pef += be32(0x6000_0000) + be32(0x6000_0000) + pattern + [UInt8](repeating: 0, count: 16 - pattern.count) + loader
+                return bytes(pef)
+            }
+            // Four zeros, then the block 11 22 33 44 twice (its repeat count before it).
+            let good = cfm_prepare_container(container([0x04, 0x44, 0x01, 0x11, 0x22, 0x33, 0x44]))
+            #expect(good != 0 && rd32(good + 4) == 0x1122_3344 && rd32(good + 8) == 0x1122_3344)
+            #expect(cfm_prepare_container(container([0x04, 0xC8, 0x11, 0x22, 0x33, 0x44])) == 0)
+        }
+
         /// A call through a missing weak import (a transition vector of 0)
         /// stops naming the import, found from the cross-TOC glue's slot.
         @Test func nilCallNamesTheWeakImport() {
