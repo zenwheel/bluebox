@@ -34,6 +34,35 @@ extension BlueBox {
             return tb_PBControl(pb, false)
         }
 
+        /// MacTCP's completion routines are C functions taking the
+        /// parameter block on the stack (QuickDNS Lite's TCPCreate one),
+        /// not only in A0 as the File Manager's do.
+        @Test func completionGetsTheBlockOnTheStack() {
+            launchTestApp()
+            setStack()
+            let pb = tb_NewPtr(128, false, true), cs = pb + 32
+            let name = tb_NewPtr(8, false, true)
+            guestPString(".IPP", at: name)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            #expect(tb_PBOpen(pb, false) == 0)
+            let got = tb_NewPtr(4, false, true)
+            // MOVE.L 4(SP),got; RTS
+            let words: [UInt16] = [0x23EF, 0x0004, UInt16(got >> 16), UInt16(got & 0xFFFF), 0x4E75]
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            wr32(pb + UInt32(IOParam_ioCompletion_off), code)
+            let rcv = tb_NewPtr(8192, false, true)
+            wr32(cs + UInt32(TCPCreatePB_rcvBuff_off), rcv)
+            wr32(cs + UInt32(TCPCreatePB_rcvBuffLen_off), 8192)
+            wr16(pb + UInt32(CntrlParam_csCode_off), 30) // TCPCreate
+            let sp = g_cpu!.pointee.a.7
+            #expect(pb_call_done(pb, tb_PBControl(pb, true), true) == 0)
+            #expect(rd32(got) == pb)
+            #expect(g_cpu!.pointee.a.7 == sp)
+            wr32(pb + UInt32(IOParam_ioCompletion_off), 0)
+            #expect(control(pb, 42) == 0) // TCPRelease
+        }
+
         @Test func tcpStreamTalksToTheHost() {
             launchTestApp()
             setStack()
