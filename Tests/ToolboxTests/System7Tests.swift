@@ -703,6 +703,22 @@ extension BlueBox {
             #expect(tb_Alert(128, 0) == 2)
         }
 
+        /// Without a host the answer is a click on a button: when the
+        /// default item is not one (SpaceInvader's nag, a hidden text
+        /// first), the first button.
+        @Test func withoutAHostAButtonIsChosen() {
+            func item(_ type: UInt8, _ text: String) -> [UInt8] {
+                var d = cat(be32(0), be16(0), be16(0), be16(20), be16(60), [type, UInt8(text.utf8.count)], Array(text.utf8))
+                if text.utf8.count % 2 == 1 { d.append(0) }
+                return d
+            }
+            let ditl = cat(be16(2), item(0x88, ""), item(8, "Please register."), item(4, "OK"))
+            let alrt = cat(be16(40), be16(40), be16(140), be16(340), be16(128), be16(0x5555))
+            launchTestApp([TestResource(type: "ALRT", id: 128, data: alrt), TestResource(type: "DITL", id: 128, data: ditl)])
+            machine_set_alert_handler(nil, nil)
+            #expect(tb_Alert(128, 0) == 3)
+        }
+
         @Test func stagesWithoutABoxReturnMinusOne() {
             launchTestApp(Self.alertResources(stages: 0x0000))
             install()

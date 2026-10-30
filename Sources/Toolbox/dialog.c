@@ -273,6 +273,14 @@ static int16_t run_alert(int16_t id, int kind)
     } else {
         LOGF(LOG_UNIMPL, "alert %d: %s\n", id, a.message);
         machine_idle_answered(); /* headless: the user's answer is the wait for input */
+        /* The user's answer is a click on a button: when the default item
+         * is none (SpaceInvader's nag has a hidden text first, and puts
+         * itself up again for anything but its OK), the first button. */
+        bool is_button = false;
+        for (int i = 0; i < a.nbuttons; i++)
+            is_button |= a.buttons[i].item == default_item;
+        if (!is_button && a.nbuttons)
+            result = a.buttons[0].item;
     }
     return result;
 }
