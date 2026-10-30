@@ -145,26 +145,7 @@ extension BlueBox {
         /// made in a buffer of its own) is a target where it lands: the
         /// program's own test of the click (no PtInRect) finds it there.
         @Test func textCopiedToTheScreenIsClicked() throws {
-            let dir = try walk.launch(cat(
-                be16(0x4267),                 // loop: CLR.W -(SP)
-                be16(0x3F3C), be16(2),        // MOVE.W #mDownMask,-(SP)
-                be16(0x486D), be16(0xFFE0),   // PEA event(A5)
-                be16(0xA970),                 // _GetNextEvent
-                be16(0x4A1F),                 // TST.B (SP)+
-                be16(0x67F0),                 // BEQ loop
-                be16(0x486D), be16(0xFFEA),   // PEA where(A5)
-                be16(0xA871),                 // _GlobalToLocal
-                be16(0x302D), be16(0xFFEA),   // MOVE.W where.v(A5),D0
-                be16(0xB06D), be16(0xFFD0),   // CMP.W top(A5),D0
-                be16(0x6DE0),                 // BLT loop
-                be16(0xB06D), be16(0xFFD4),   // CMP.W bottom(A5),D0
-                be16(0x6CDA),                 // BGE loop
-                be16(0x302D), be16(0xFFEC),   // MOVE.W where.h(A5),D0
-                be16(0xB06D), be16(0xFFD2),   // CMP.W left(A5),D0
-                be16(0x6DD0),                 // BLT loop
-                be16(0xB06D), be16(0xFFD6),   // CMP.W right(A5),D0
-                be16(0x6CCA),                 // BGE loop
-                be16(0xA9F4)))                // _ExitToShell
+            let dir = try walk.launch(untilAClickInBox)
             defer { try? FileManager.default.removeItem(at: dir) }
             let w = window()
             put([70, 140, 110, 220], at: 0x30)
@@ -185,6 +166,45 @@ extension BlueBox {
             #expect(machine_run(1_000_000_000) == RUN_HALTED)
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
         }
+
+        /// A box painted on the window that nothing tells of (no picture,
+        /// no text, no hit test), the program's button: found in the
+        /// screen's pixels as a patch standing out from its background,
+        /// the walk's last resort.
+        @Test func aPatchOnTheScreenIsClicked() throws {
+            let dir = try walk.launch(untilAClickInBox)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = window()
+            put([100, 200, 130, 280], at: 0x30)
+            tb_PaintRect(walk.rect([100, 200, 130, 280]))
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(2_000_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+
+        /// A program that quits at a click inside the rect at A5-$30,
+        /// compared in its own code (no PtInRect).
+        let untilAClickInBox = cat(
+            be16(0x4267),                 // loop: CLR.W -(SP)
+            be16(0x3F3C), be16(2),        // MOVE.W #mDownMask,-(SP)
+            be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+            be16(0xA970),                 // _GetNextEvent
+            be16(0x4A1F),                 // TST.B (SP)+
+            be16(0x67F0),                 // BEQ loop
+            be16(0x486D), be16(0xFFEA),   // PEA where(A5)
+            be16(0xA871),                 // _GlobalToLocal
+            be16(0x302D), be16(0xFFEA),   // MOVE.W where.v(A5),D0
+            be16(0xB06D), be16(0xFFD0),   // CMP.W top(A5),D0
+            be16(0x6DE0),                 // BLT loop
+            be16(0xB06D), be16(0xFFD4),   // CMP.W bottom(A5),D0
+            be16(0x6CDA),                 // BGE loop
+            be16(0x302D), be16(0xFFEC),   // MOVE.W where.h(A5),D0
+            be16(0xB06D), be16(0xFFD2),   // CMP.W left(A5),D0
+            be16(0x6DD0),                 // BLT loop
+            be16(0xB06D), be16(0xFFD6),   // CMP.W right(A5),D0
+            be16(0x6CCA),                 // BGE loop
+            be16(0xA9F4))                 // _ExitToShell
 
         /// A program that paints only at a stroke of the mouse (a paint
         /// program's: Saw's): a click does nothing, a drag across its

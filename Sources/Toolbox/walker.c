@@ -199,8 +199,9 @@ enum { THUMB_W = 32, THUMB_H = 24, THUMB_SIZE = THUMB_W * THUMB_H * 3, NSCREENS 
 enum { NHASH = 4096, NCALLS = 1 << 16, SCREEN_STEPS = 300 };
 static const uint64_t SCREEN_TIME = 90000000000; /* ns */
 /* Kinds of target, in the order they are tried. */
-enum { T_CONTROL, T_HIT, T_HOVER, T_SHAPE, T_DRAWN, T_TEXT, T_KINDS };
-static const char *const target_kinds[T_KINDS] = { "control", "hit test", "hover", "button", "picture", "text" };
+enum { T_CONTROL, T_HIT, T_HOVER, T_SHAPE, T_DRAWN, T_TEXT, T_PATCH, T_KINDS };
+static const char *const target_kinds[T_KINDS] = { "control", "hit test", "hover",  "button",
+                                                   "picture", "text",     "patch" };
 static struct {
     qrect r;        /* on the screen */
     int16_t x, y;   /* where a click goes */
@@ -256,7 +257,7 @@ static bool moved_from[NSCREENS]; /* a step on the screen was productive */
  * changed, code run that had not run: targets at where it is (a program
  * that tests the mouse itself: Evolutionary War's planets). */
 enum { SWEEP_W = 16, SWEEP_H = 12, SWEEP_GAP = 200000 /* instructions */ };
-static bool swept[NSCREENS], dragged[NSCREENS];
+static bool swept[NSCREENS], dragged[NSCREENS], patched[NSCREENS];
 static int sweep_steps; /* steps the sweep under way has left */
 static uint32_t usual_cursor;
 
@@ -647,7 +648,7 @@ static int screen_of(const uint8_t *t)
     memcpy(thumbs[nscreens], t, THUMB_SIZE);
     keys_tried[nscreens] = 0;
     moved_from[nscreens] = false;
-    swept[nscreens] = dragged[nscreens] = false;
+    swept[nscreens] = dragged[nscreens] = patched[nscreens] = false;
     memset(clicked_on[nscreens], 0, sizeof clicked_on[nscreens]);
     return nscreens++;
 }
@@ -695,6 +696,7 @@ static void add_window_targets(int s)
 }
 
 static bool inside(int x, int y, qrect r) { return x >= r.left && x < r.right && y >= r.top && y < r.bottom; }
+static long area(qrect r) { return (long)(r.bottom - r.top) * (r.right - r.left); }
 
 /* Target i's label: its own, or the text drawn inside it. */
 static const char *target_label(int i)
@@ -717,16 +719,17 @@ static int next_target(int s, bool last_resort)
     for (int k = 0; k < T_KINDS; k++)
         for (int i = 0; i < ntargets; i++) {
             if (targets[i].screen != s || targets[i].kind != k || targets[i].tried ||
-                ((k == T_HOVER || k >= T_DRAWN) && clicked_on[s][k] >= PER_KIND))
+                ((k == T_HOVER || k >= T_DRAWN) && clicked_on[s][k] >= (k == T_PATCH ? 48 : PER_KIND)))
                 continue;
             char at[24];
             snprintf(at, sizeof at, "%d,%d", targets[i].x, targets[i].y);
             if (!last_resort && declines(target_label(i)))
                 continue;
             bool skip = passed_over(target_label(i)) || avoid(at);
+            /* (Not inside one much bigger: a hit test of a whole panel.) */
             for (int j = 0; !skip && j < ntargets; j++)
                 skip = j != i && targets[j].tried && targets[j].screen == s &&
-                       inside(targets[i].x, targets[i].y, targets[j].r);
+                       inside(targets[i].x, targets[i].y, targets[j].r) && area(targets[j].r) <= 4 * area(targets[i].r);
             if (skip) {
                 targets[i].tried = true;
                 continue;
@@ -795,6 +798,143 @@ static void acting(int s)
     acted_on = s;
     calls_then = ncall_sites;
     screen_moved_on();
+}
+
+/* The last resort on a screen nothing else moved on: what stands out on it
+ * (a word, a bar, a shape on a plain background, as a button of the
+ * program's own drawing that nothing told of: Slabbers' Play, Space
+ * Junkie's bars), found in the pixels of the front window (the screen, with
+ * none) cut into cells: patches of cells unlike the most common one, then
+ * (for a picture behind them) patches of cells of one colour, each bigger
+ * than a speck and smaller than a sixteenth of the whole; the biggest
+ * PATCHES of them become targets of screen s. */
+enum { CELL = 8, PATCHES = 24 };
+typedef struct {
+    qrect r;
+    int cells;
+} patch;
+
+/* The patches of cells of the same class[] (-1: none) into found[], the
+ * biggest kept; class[] is used up. */
+static void patches_of(int16_t *class, int gw, int gh, int *queue, qrect a, patch *found, int *nfound)
+{
+    for (int start = 0; start < gw * gh; start++) {
+        int16_t k = class[start];
+        if (k < 0)
+            continue;
+        int n = 0, head = 0, top = gh, left = gw, bottom = 0, right = 0;
+        queue[n++] = start;
+        class[start] = -1;
+        while (head < n) {
+            int c = queue[head++], cx = c % gw, cy = c / gw;
+            top = cy < top ? cy : top, bottom = cy + 1 > bottom ? cy + 1 : bottom;
+            left = cx < left ? cx : left, right = cx + 1 > right ? cx + 1 : right;
+            int next[4] = { cx > 0 ? c - 1 : -1, cx < gw - 1 ? c + 1 : -1, cy > 0 ? c - gw : -1,
+                            cy < gh - 1 ? c + gw : -1 };
+            for (int i = 0; i < 4; i++)
+                if (next[i] >= 0 && class[next[i]] == k) {
+                    class[next[i]] = -1;
+                    queue[n++] = next[i];
+                }
+        }
+        if (n < 2 || 16 * (bottom - top) * (right - left) > gw * gh)
+            continue;
+        int at = *nfound < PATCHES ? (*nfound)++ : -1;
+        if (at < 0) { /* full: the smallest goes */
+            at = 0;
+            for (int i = 1; i < PATCHES; i++)
+                if (found[i].cells < found[at].cells)
+                    at = i;
+            if (found[at].cells >= n)
+                continue;
+        }
+        found[at].cells = n;
+        found[at].r = (qrect){ (int16_t)(a.top + top * CELL), (int16_t)(a.left + left * CELL),
+                               (int16_t)(a.top + bottom * CELL), (int16_t)(a.left + right * CELL) };
+    }
+}
+
+static void add_patches(patch *found, int nfound, int s)
+{
+    for (int i = 0; i < nfound; i++) /* the biggest first */
+        for (int j = i + 1; j < nfound; j++)
+            if (found[j].cells > found[i].cells) {
+                patch t = found[i];
+                found[i] = found[j];
+                found[j] = t;
+            }
+    for (int i = 0; i < nfound; i++) {
+        qrect r = found[i].r;
+        add_target(T_PATCH, r, (r.left + r.right) / 2, (r.top + r.bottom) / 2, s, NULL);
+    }
+}
+
+static void find_patches(int s)
+{
+    int w = 0, h = 0;
+    qrect a = walked_area(&w, &h);
+    a.top = a.top < 0 ? 0 : a.top, a.left = a.left < 0 ? 0 : a.left;
+    a.bottom = a.bottom > h ? (int16_t)h : a.bottom, a.right = a.right > w ? (int16_t)w : a.right;
+    int gw = (a.right - a.left) / CELL, gh = (a.bottom - a.top) / CELL;
+    if (gw < 4 || gh < 4)
+        return;
+    uint8_t *px = malloc((size_t)w * (size_t)h * 4);
+    uint8_t *avg = malloc((size_t)gw * (size_t)gh * 3);
+    int16_t *class = malloc((size_t)gw * (size_t)gh * sizeof *class);
+    int *queue = malloc((size_t)gw * (size_t)gh * sizeof *queue);
+    if (!px || !avg || !class || !queue) {
+        free(px), free(avg), free(class), free(queue);
+        return;
+    }
+    machine_screen_rgba(0, 0, w, h, px);
+    static unsigned count[512];
+    memset(count, 0, sizeof count);
+    for (int c = 0; c < gw * gh; c++) {
+        int cx = c % gw, cy = c / gw;
+        unsigned sum[3] = { 0, 0, 0 };
+        for (int y = 0; y < CELL; y++)
+            for (int x = 0; x < CELL; x++)
+                for (int k = 0; k < 3; k++)
+                    sum[k] += px[((size_t)(a.top + cy * CELL + y) * (size_t)w + (size_t)(a.left + cx * CELL + x)) * 4 +
+                                 (size_t)k];
+        for (int k = 0; k < 3; k++)
+            avg[c * 3 + k] = (uint8_t)(sum[k] / (CELL * CELL));
+        class[c] = (int16_t)((avg[c * 3] >> 5) << 6 | (avg[c * 3 + 1] >> 5) << 3 | avg[c * 3 + 2] >> 5);
+        count[class[c]]++;
+    }
+    int background = 0;
+    for (int k = 1; k < 512; k++)
+        if (count[k] > count[background])
+            background = k;
+    uint8_t bg[3] = { 0, 0, 0 };
+    for (int c = 0; c < gw * gh; c++)
+        if (class[c] == background) {
+            memcpy(bg, avg + c * 3, 3);
+            break;
+        }
+    patch found[PATCHES];
+    int nfound = 0;
+    /* Cells that stand out from the background, whatever their colour. */
+    int16_t *fg = malloc((size_t)gw * (size_t)gh * sizeof *fg);
+    if (fg) {
+        for (int c = 0; c < gw * gh; c++) {
+            bool out = false;
+            for (int k = 0; k < 3; k++)
+                out |= abs((int)avg[c * 3 + k] - (int)bg[k]) > 48;
+            fg[c] = out ? 0 : -1;
+        }
+        patches_of(fg, gw, gh, queue, a, found, &nfound);
+        free(fg);
+    }
+    add_patches(found, nfound, s);
+    /* Then cells of one colour, not the background's. */
+    nfound = 0;
+    for (int c = 0; c < gw * gh; c++)
+        if (class[c] == background)
+            class[c] = -1;
+    patches_of(class, gw, gh, queue, a, found, &nfound);
+    add_patches(found, nfound, s);
+    free(px), free(avg), free(class), free(queue);
 }
 
 /* Whether screen s has keys left to give, those avoided passed over. */
@@ -873,6 +1013,11 @@ static bool screen_step(uint64_t now)
         acting(s);
         drag();
         return true;
+    }
+    if (i < 0 && !keys_left(s) && !patched[s]) {
+        patched[s] = true;
+        find_patches(s);
+        i = next_target(s, false);
     }
     if (i < 0 && !keys_left(s))
         i = next_target(s, true);
