@@ -2902,6 +2902,49 @@ static void ppcglue_RestoreEntries(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_DisposePictInfo(ppc_cpu *c)
+{
+    int32_t a_arg0 = (int32_t)c->gpr[3];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_DisposePictInfo(a_arg0);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RecordPictInfo(ppc_cpu *c)
+{
+    int32_t a_arg0 = (int32_t)c->gpr[3];
+    gaddr a_arg1 = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RecordPictInfo(a_arg0, a_arg1);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RecordPixMapInfo(ppc_cpu *c)
+{
+    int32_t a_arg0 = (int32_t)c->gpr[3];
+    gaddr a_arg1 = (gaddr)c->gpr[4];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RecordPixMapInfo(a_arg0, a_arg1);
+    c->pc = c->lr;
+}
+
+static void ppcglue_RetrievePictInfo(ppc_cpu *c)
+{
+    int32_t a_arg0 = (int32_t)c->gpr[3];
+    gaddr a_arg1 = (gaddr)c->gpr[4];
+    int16_t a_arg2 = (int16_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_RetrievePictInfo(a_arg0, a_arg1, a_arg2);
+    c->pc = c->lr;
+}
+
+static void ppcglue_NewPictInfo(ppc_cpu *c)
+{
+    gaddr a_arg0 = (gaddr)c->gpr[3];
+    int16_t a_arg1 = (int16_t)c->gpr[4];
+    int16_t a_arg2 = (int16_t)c->gpr[5];
+    int16_t a_arg3 = (int16_t)c->gpr[6];
+    int16_t a_arg4 = (int16_t)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_NewPictInfo(a_arg0, a_arg1, a_arg2, a_arg3, a_arg4);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetPictInfo(ppc_cpu *c)
 {
     gaddr a_arg0 = (gaddr)c->gpr[3];
@@ -36323,79 +36366,6 @@ static void ppctrap_StringToNum(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_DisposePictInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x206u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap((uint16_t)(0xA831));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RecordPictInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x403u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA831));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RecordPixMapInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x404u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap((uint16_t)(0xA831));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_RetrievePictInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x505u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA831));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_NewPictInfo(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_set(0, 0x602u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(2, c->gpr[4]);
-    ppc_trap_push(2, c->gpr[5]);
-    ppc_trap_push(2, c->gpr[6]);
-    ppc_trap_push(2, c->gpr[7]);
-    ppc_trap((uint16_t)(0xA831));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetDiskFragment(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -40626,7 +40596,7 @@ const ppc_export ppc_exports[] = {
     {"DisposeMovieEditState", ppcglue_DisposeMovieEditState},
     {"DisposeMovieTrack", ppcglue_DisposeMovieTrack},
     {"DisposePalette", ppcglue_DisposePalette},
-    {"DisposePictInfo", ppctrap_DisposePictInfo},
+    {"DisposePictInfo", ppcglue_DisposePictInfo},
     {"DisposePixMap", ppcglue_DisposePixMap},
     {"DisposePixPat", ppcglue_DisposePixPat},
     {"DisposePtr", ppcglue_DisposePtr},
@@ -42531,7 +42501,7 @@ const ppc_export ppc_exports[] = {
     {"NewMovieFromUserProc", ppcglue_NewMovieFromUserProc},
     {"NewMovieTrack", ppcglue_NewMovieTrack},
     {"NewPalette", ppcglue_NewPalette},
-    {"NewPictInfo", ppctrap_NewPictInfo},
+    {"NewPictInfo", ppcglue_NewPictInfo},
     {"NewPixMap", ppcglue_NewPixMap},
     {"NewPixPat", ppcglue_NewPixPat},
     {"NewPtr", ppcglue_NewPtr},
@@ -43253,8 +43223,8 @@ const ppc_export ppc_exports[] = {
     {"RealColor", ppcglue_RealColor},
     {"RealFont", ppcglue_RealFont},
     {"ReallocateHandle", ppcglue_ReallocateHandle},
-    {"RecordPictInfo", ppctrap_RecordPictInfo},
-    {"RecordPixMapInfo", ppctrap_RecordPixMapInfo},
+    {"RecordPictInfo", ppcglue_RecordPictInfo},
+    {"RecordPixMapInfo", ppcglue_RecordPixMapInfo},
     {"RecoverHandle", ppcglue_RecoverHandle},
     {"RecoverHandleSys", ppcglue_RecoverHandleSys},
     {"RectInIconID", ppcglue_RectInIconID},
@@ -43318,7 +43288,7 @@ const ppc_export ppc_exports[] = {
     {"RestoreEntries", ppcglue_RestoreEntries},
     {"RestoreFore", ppcglue_RestoreFore},
     {"RestoreMixedModeState", ppctrap_RestoreMixedModeState},
-    {"RetrievePictInfo", ppctrap_RetrievePictInfo},
+    {"RetrievePictInfo", ppcglue_RetrievePictInfo},
     {"RevealDataBrowserItem", ppcglue_RevealDataBrowserItem},
     {"ReverseKeyboardFocus", ppcglue_ReverseKeyboardFocus},
     {"RmvTime", ppcglue_RmvTime},

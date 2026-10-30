@@ -470,6 +470,12 @@ static void bits_op(reader *r, const mapping *m, int op)
         read_region(r, m, &mask);
     image img;
     decode_pixels(r, &pi, packed || direct, &img);
+    if (qd_survey) {
+        survey_image(qd_survey, pi.is_pixmap, pi.is_pixmap ? pi.pixel_size : 1, img.rgba, img.w, img.h);
+        free(img.rgba);
+        hrgn_free(&mask);
+        return;
+    }
     /* Source rect relative to the image's own bounds. */
     src = (qrect){ (int16_t)(src.top - pi.bounds.top), (int16_t)(src.left - pi.bounds.left),
                    (int16_t)(src.bottom - pi.bounds.top), (int16_t)(src.right - pi.bounds.left) };
@@ -488,6 +494,8 @@ static gaddr pixpat(reader *r, uint8_t pat[8])
         gaddr c = tb_NewPtr(6, false, false);
         for (int i = 0; i < 3; i++)
             wr16(c + (uint32_t)i * 2, (uint16_t)r16(r));
+        if (qd_survey)
+            survey_rgb(qd_survey, (const uint16_t[3]){ rd16(c), rd16(c + 2), rd16(c + 4) });
         gaddr pp = tb_NewPixPat();
         tb_MakeRGBPat(pp, c);
         gput(rd32(pp) + PixPat_pat1Data_off, pat, 8);
@@ -507,6 +515,11 @@ static gaddr pixpat(reader *r, uint8_t pat[8])
     read_ctable(r, &pi);
     image img;
     decode_pixels(r, &pi, true, &img);
+    if (qd_survey && img.rgba)
+        for (int i = 0; i < img.w * img.h; i++)
+            survey_rgb(qd_survey, (const uint16_t[3]){ (uint16_t)(img.rgba[i * 4] * 0x101),
+                                                       (uint16_t)(img.rgba[i * 4 + 1] * 0x101),
+                                                       (uint16_t)(img.rgba[i * 4 + 2] * 0x101) });
     gaddr pp = 0;
     if (img.w > 0 && img.h > 0 && img.w <= 256 && img.h <= 256) {
         /* Kept as a 32-bit pattern of the decoded colours. */
@@ -648,6 +661,20 @@ static void play_comment(reader *r, int kind, int n)
     tb_DisposeHandle(h);
 }
 
+/* An old-style colour (blackColor, redColor ...) as RGB. */
+static const uint16_t *old_color_rgb(int32_t c)
+{
+    static const struct { int32_t c; uint16_t rgb[3]; } colors[] = {
+        { 33, { 0, 0, 0 } },          { 30, { 0xFFFF, 0xFFFF, 0xFFFF } }, { 205, { 0xDD6B, 0x08C2, 0x06A2 } },
+        { 341, { 0, 0x8000, 0x11B0 } }, { 409, { 0, 0, 0xD400 } },         { 273, { 0x0241, 0xAB54, 0xEAFF } },
+        { 137, { 0xF2D7, 0x0856, 0x84EC } }, { 69, { 0xFC00, 0xF37D, 0x052F } },
+    };
+    for (size_t i = 0; i < sizeof colors / sizeof *colors; i++)
+        if (colors[i].c == c)
+            return colors[i].rgb;
+    return colors[0].rgb;
+}
+
 static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
 {
     last_shapes ls;
@@ -683,6 +710,8 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
                 fallback = false;
         }
         gaddr before = r->p;
+        if (qd_survey)
+            survey_op(qd_survey, op);
         qd_fill_pixpat = ls.fill_pp; /* fill verbs use the picture's colour pattern */
         switch (op) {
         case 0x00: break;
@@ -699,7 +728,13 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
             break;
         }
         case 0x02: { uint8_t p[8]; for (int i = 0; i < 8; i++) p[i] = (uint8_t)r8(r); set_pat(tb_BackPat, p); break; }
-        case 0x03: tb_TextFont((int16_t)r16(r)); break;
+        case 0x03: {
+            int f = r16(r);
+            if (qd_survey)
+                survey_font(qd_survey, f);
+            tb_TextFont((int16_t)f);
+            break;
+        }
         case 0x04: tb_TextFace((int16_t)r8(r)); break;
         case 0x05: tb_TextMode((int16_t)r16(r)); break;
         case 0x06: r32(r); break;
@@ -710,8 +745,13 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x0B: ls.ov_h = scale_v(m, r16(r)); ls.ov_w = scale_h(m, r16(r)); break;
         case 0x0C: { int dh = r16(r), dv = r16(r); m->src.left += dh; m->src.right += dh; m->src.top += dv; m->src.bottom += dv; break; }
         case 0x0D: tb_TextSize((int16_t)scale_v(m, r16(r))); break;
-        case 0x0E: tb_ForeColor((int32_t)r32(r)); break;
-        case 0x0F: tb_BackColor((int32_t)r32(r)); break;
+        case 0x0E: case 0x0F: {
+            int32_t c = (int32_t)r32(r);
+            if (qd_survey)
+                survey_rgb(qd_survey, old_color_rgb(c));
+            (op == 0x0E ? tb_ForeColor : tb_BackColor)(c);
+            break;
+        }
         case 0x10: skip(r, 8); break;
         case 0x11: r->v2 ? (void)r16(r) : (void)r8(r); break;
         case 0x12:
@@ -728,6 +768,8 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x15: case 0x16: r16(r); break;
         case 0x1A: case 0x1B: case 0x1D: case 0x1F: {
             uint16_t c[3] = { (uint16_t)r16(r), (uint16_t)r16(r), (uint16_t)r16(r) };
+            if (qd_survey && (op == 0x1A || op == 0x1B))
+                survey_rgb(qd_survey, c);
             if ((op == 0x1A || op == 0x1B) && qd_port_is_color(qd_port())) {
                 /* RGBFgCol, RGBBkCol: the colour itself in a colour port */
                 gaddr rgb = tb_NewPtr(6, false, false);
@@ -760,6 +802,8 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
             text_v = pt_v(p);
             tb_MoveTo((int16_t)map_h(m, text_h), (int16_t)map_v(m, text_v));
             draw_text_op(port, r, r8(r));
+            if (qd_survey)
+                survey_text(qd_survey, port);
             break;
         }
         case 0x29: case 0x2A: case 0x2B: {
@@ -767,6 +811,8 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
             if (op != 0x29) text_v += r8(r);
             tb_MoveTo((int16_t)map_h(m, text_h), (int16_t)map_v(m, text_v));
             draw_text_op(port, r, r8(r));
+            if (qd_survey)
+                survey_text(qd_survey, port);
             break;
         }
         case 0x2C: {
@@ -781,6 +827,11 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
             gaddr num = tb_NewPtr(2, false, true);
             tb_GetFNum(name, num);
             int fid = (int16_t)rd16(num);
+            if (qd_survey) {
+                uint8_t pname[256];
+                gget(pname, name, (uint32_t)nl + 1);
+                survey_font_name(qd_survey, old_id, fid ? fid : old_id, pname);
+            }
             /* Later txFont opcodes use the old ID; ours may differ. */
             if (fid != old_id && fid)
                 tb_TextFont((int16_t)fid);
@@ -812,9 +863,17 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
         case 0x90: case 0x91: case 0x98: case 0x99: case 0x9A: case 0x9B:
             bits_op(r, m, op);
             break;
-        case 0xA0: tb_PicComment((int16_t)r16(r), 0, 0); break;
+        case 0xA0: {
+            int kind = r16(r);
+            if (qd_survey)
+                survey_comment(qd_survey, kind);
+            tb_PicComment((int16_t)kind, 0, 0);
+            break;
+        }
         case 0xA1: {
             int kind = r16(r), n = (uint16_t)r16(r);
+            if (qd_survey)
+                survey_comment(qd_survey, kind);
             play_comment(r, kind, n);
             break;
         }
@@ -828,7 +887,12 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
                 qrect src = qrect_get(q + 52);
                 uint32_t matte = rd32(q + 38), mask = rd32(q + 64);
                 gaddr desc = q + 68 + matte + mask;
-                if (matte < len && mask < len && desc + 86 <= q + len && desc + rd32(desc) <= q + len) {
+                if (qd_survey && matte < len && mask < len && desc + 86 <= q + len) {
+                    /* The image's depth as QuickDraw has it: 24 is 32, 33 to 40 grays. */
+                    int d = (int16_t)rd16(desc + 82);
+                    survey_image(qd_survey, true, d == 24 ? 32 : d > 32 ? d - 32 : d > 0 ? d : 32, NULL, 0, 0);
+                    fallback = true; /* as QuickTime would have drawn it */
+                } else if (matte < len && mask < len && desc + 86 <= q + len && desc + rd32(desc) <= q + len) {
                     double sx = (int32_t)rd32(mx) / 65536.0, sy = (int32_t)rd32(mx + 16) / 65536.0;
                     double tx = (int32_t)rd32(mx + 24) / 65536.0, ty = (int32_t)rd32(mx + 28) / 65536.0;
                     qrect at = { (int16_t)(src.top * sy + ty), (int16_t)(src.left * sx + tx),
@@ -1005,37 +1069,6 @@ void tb_StdComment(int16_t kind, int16_t size, gaddr data)
 /* Pictures are read and written whole here, so these only move bytes. */
 void tb_StdGetPic(gaddr dp, int16_t bc) { gmemset(dp, 0, (uint32_t)(bc > 0 ? bc : 0)); }
 void tb_StdPutPic(gaddr sp, int16_t bc) {}
-
-/* ---------------------------------------------------------------------- */
-/* Picture Utilities (Pack15): the frame and resolution; no survey of the
- * colours, fonts or comments inside. */
-
-int16_t tb_GetPictInfo(gaddr pic, gaddr info, int16_t verb, int16_t colors, int16_t method, int16_t version)
-{
-    gmemset(info, 0, PictInfo_SIZEOF);
-    if (!pic || !rd32(pic))
-        return -11000; /* pictInfoVersionErr-like: no picture */
-    gaddr p = rd32(pic);
-    gmemcpy(info + PictInfo_sourceRect_off, p + 2, 8);
-    wr16(info + PictInfo_version_off, (uint16_t)(rd16(p + 10) == 0x0011 ? 2 : 1));
-    wr32(info + PictInfo_hRes_off, 72u << 16);
-    wr32(info + PictInfo_vRes_off, 72u << 16);
-    wr16(info + PictInfo_depth_off, 1);
-    return noErr;
-}
-
-int16_t tb_GetPixMapInfo(gaddr pm, gaddr info, int16_t verb, int16_t colors, int16_t method, int16_t version)
-{
-    gmemset(info, 0, PictInfo_SIZEOF);
-    if (!pm || !rd32(pm))
-        return -11000;
-    gaddr p = rd32(pm);
-    gmemcpy(info + PictInfo_sourceRect_off, p + PixMap_bounds_off, 8);
-    wr32(info + PictInfo_hRes_off, 72u << 16);
-    wr32(info + PictInfo_vRes_off, 72u << 16);
-    wr16(info + PictInfo_depth_off, (uint16_t)PixMap_pixelSize(p));
-    return noErr;
-}
 
 /* ---------------------------------------------------------------------- */
 /* bluebox inspect: a picture drawn for the host, at its frame's size. */

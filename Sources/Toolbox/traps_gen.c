@@ -6680,6 +6680,16 @@ static void glue_DisposePalette(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_DisposePictInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_arg0 = (int32_t)cpu_pop32(c);
+    int16_t r = tb_DisposePictInfo(a_arg0);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_DisposePixMap(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -20353,6 +20363,20 @@ static void glue_NewPalette(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_NewPictInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_arg4 = (int16_t)cpu_pop16(c);
+    int16_t a_arg3 = (int16_t)cpu_pop16(c);
+    int16_t a_arg2 = (int16_t)cpu_pop16(c);
+    int16_t a_arg1 = (int16_t)cpu_pop16(c);
+    gaddr a_arg0 = (gaddr)cpu_pop32(c);
+    int16_t r = tb_NewPictInfo(a_arg0, a_arg1, a_arg2, a_arg3, a_arg4);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_NewPixMap(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -24550,6 +24574,28 @@ static void glue_ReallocateHandle(cpu68k *c, uint16_t trapword)
     c->d[0] = (uint32_t)(int32_t)(int16_t)rd16(LM_MemErr);
 }
 
+static void glue_RecordPictInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    int32_t a_arg0 = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RecordPictInfo(a_arg0, a_arg1);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_RecordPixMapInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    int32_t a_arg0 = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RecordPixMapInfo(a_arg0, a_arg1);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_RecoverHandle(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -25163,6 +25209,18 @@ static void glue_RestoreFore(cpu68k *c, uint16_t trapword)
     uint32_t ret = cpu_pop32(c);
     gaddr a_arg0 = (gaddr)cpu_pop32(c);
     tb_RestoreFore(a_arg0);
+    cpu_push32(c, ret);
+}
+
+static void glue_RetrievePictInfo(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int16_t a_arg2 = (int16_t)cpu_pop16(c);
+    gaddr a_arg1 = (gaddr)cpu_pop32(c);
+    int32_t a_arg0 = (int32_t)cpu_pop32(c);
+    int16_t r = tb_RetrievePictInfo(a_arg0, a_arg1, a_arg2);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -35812,11 +35870,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA830, (int32_t)0xB01u, "HMShowBalloon", CONV_STACK, 22, 2, glue_HMShowBalloon},
     {0xA830, (int32_t)0xE05u, "HMShowMenuBalloon", CONV_STACK, 28, 2, glue_HMShowMenuBalloon},
     {0xA830, (int32_t)0x1306u, "HMGetIndHelpMsg", CONV_STACK, 38, 2, glue_HMGetIndHelpMsg},
-    {0xA831, (int32_t)0x206u, "DisposePictInfo", CONV_STACK, 4, 2, 0},
-    {0xA831, (int32_t)0x403u, "RecordPictInfo", CONV_STACK, 8, 2, 0},
-    {0xA831, (int32_t)0x404u, "RecordPixMapInfo", CONV_STACK, 8, 2, 0},
-    {0xA831, (int32_t)0x505u, "RetrievePictInfo", CONV_STACK, 10, 2, 0},
-    {0xA831, (int32_t)0x602u, "NewPictInfo", CONV_STACK, 12, 2, 0},
+    {0xA831, (int32_t)0x206u, "DisposePictInfo", CONV_STACK, 4, 2, glue_DisposePictInfo},
+    {0xA831, (int32_t)0x403u, "RecordPictInfo", CONV_STACK, 8, 2, glue_RecordPictInfo},
+    {0xA831, (int32_t)0x404u, "RecordPixMapInfo", CONV_STACK, 8, 2, glue_RecordPixMapInfo},
+    {0xA831, (int32_t)0x505u, "RetrievePictInfo", CONV_STACK, 10, 2, glue_RetrievePictInfo},
+    {0xA831, (int32_t)0x602u, "NewPictInfo", CONV_STACK, 12, 2, glue_NewPictInfo},
     {0xA831, (int32_t)0x800u, "GetPictInfo", CONV_STACK, 16, 2, glue_GetPictInfo},
     {0xA831, (int32_t)0x801u, "GetPixMapInfo", CONV_STACK, 16, 2, glue_GetPixMapInfo},
     {0xA9E9, (int32_t)0x0u, "DIBadMount", CONV_STACK, 8, 2, glue_DIBadMount},
