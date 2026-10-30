@@ -98,6 +98,7 @@ int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y); /* 
 bool ctl_push_button(gaddr ch, bool custom);
 void walker_idle(uint64_t now);
 uint64_t walker_next_in(void); /* ns to the walk's next step; 0: due, or no walk */
+void walker_note_drawn(gaddr port, int top, int left, int bottom, int right); /* a picture drawn into a port */
 
 /* ---- Resource Manager internals ---- */
 

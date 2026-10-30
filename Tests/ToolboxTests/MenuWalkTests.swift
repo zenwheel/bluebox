@@ -193,6 +193,49 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
         }
 
+        /// A program that quits at a click inside the rect at rect(A5) of
+        /// its window, the current port.
+        let untilAPicture = cat(
+            be16(0x4267),                 // loop: CLR.W -(SP)
+            be16(0x3F3C), be16(2),        // MOVE.W #mDownMask,-(SP)
+            be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+            be16(0xA970),                 // _GetNextEvent
+            be16(0x4A1F),                 // TST.B (SP)+
+            be16(0x67F0),                 // BEQ loop
+            be16(0x486D), be16(0xFFEA),   // PEA event.where(A5)
+            be16(0xA871),                 // _GlobalToLocal
+            be16(0x554F),                 // SUBQ #2,SP
+            be16(0x2F2D), be16(0xFFEA),   // MOVE.L event.where(A5),-(SP)
+            be16(0x486D), be16(0xFFD0),   // PEA rect(A5)
+            be16(0xA8AD),                 // _PtInRect
+            be16(0x4A1F),                 // TST.B (SP)+
+            be16(0x67DA),                 // BEQ loop: a click beside it
+            be16(0xA9F4))                 // _ExitToShell
+
+        /// A window with no menu bar whose buttons are pictures it draws
+        /// (copied from off screen, AutoEye's "Manual" and "Automatic"):
+        /// the walk clicks them, not its background.
+        @Test func aWindowOfPicturesHasThemClicked() throws {
+            let dir = try launch(untilAPicture)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            let w = tb_NewWindow(0, rect([50, 50, 250, 450]), 0, 1, 1, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            let bits = tb_NewPtr(14, false, true)
+            wr32(bits, tb_NewPtr(64 * 200, false, true))
+            wr16(bits + 4, 64)
+            gmemcpy(bits + 6, rect([0, 0, 200, 400]), 8)
+            // The background, then the picture button.
+            tb_CopyBits(bits, w + 2, rect([0, 0, 200, 400]), rect([0, 0, 200, 400]), 0, 0)
+            let button = rect([150, 300, 180, 380])
+            tb_CopyBits(bits, w + 2, rect([0, 0, 30, 80]), button, 0, 0)
+            gmemcpy(rd32(UInt32(LM_CurrentA5)) - 48, button, 8)
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+
         /// At the start a window's Cancel is passed over, as it may quit,
         /// but not when the window has a Quit button of its own, dimmed or
         /// not (HDBackup's while it asks for a disk): Cancel is pressed.

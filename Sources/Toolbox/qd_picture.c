@@ -952,6 +952,8 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
     if (!pic || !rd32(pic) || !dst)
         return;
     gaddr port = qd_port();
+    qrect at = qrect_get(dst);
+    walker_note_drawn(port, at.top, at.left, at.bottom, at.right);
     int8_t state = tb_HGetState(pic);
     tb_HLock(pic);
     gaddr p = rd32(pic);
