@@ -103,6 +103,14 @@ bool ctl_push_button(gaddr ch, bool custom);
 void walker_idle(uint64_t now);
 uint64_t walker_next_in(void); /* ns to the walk's next step; 0: due, or no walk */
 void walker_note_drawn(gaddr port, int top, int left, int bottom, int right); /* a picture drawn into a port */
+/* For the screen walk: a rectangle a point was tested against (PtInRect,
+ * PtInRgn's box, with a point inside it to click), text drawn, and a
+ * Toolbox call's site (new code run). */
+void walker_note_hit(gaddr port, int top, int left, int bottom, int right, int x, int y, uint32_t pt);
+void walker_note_text(gaddr port, int top, int left, int bottom, int right, const uint8_t *text, int len);
+void walker_note_call(uint32_t pc, uint32_t what);
+void walker_note_cursor(gaddr data); /* a cursor set: its image */
+void walker_note_shape(gaddr port, int top, int left, int bottom, int right); /* a round rectangle: a button */
 
 /* ---- Resource Manager internals ---- */
 
@@ -379,6 +387,14 @@ void sound_host_midi(int id, const machine_midi_event *events, int n);
 /* MACHINE_APPEARANCE_*: how the standard definition procedures draw. */
 extern int g_appearance;
 #include "qd_internal.h"
+/* The screen walk's targets in a window: a dialog's items besides push
+ * buttons (dialogs.c), any control of another window (controls.c). */
+int dialog_target(gaddr d, int n, char *title, size_t size, qrect *on_screen);
+int window_control(gaddr w, int n, char *title, size_t size, qrect *on_screen);
+/* For the screen walk: pixels copied from one buffer (base address,
+ * bounds, rectangle) to another, carrying what was drawn there. */
+bool walker_watching(void);
+void walker_note_copy(gaddr src, qrect src_bounds, qrect src_r, gaddr dst, qrect dst_bounds, qrect dst_r);
 /* A compressed picture's image ($8200 opcode), drawn at dst in the current port. */
 bool icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mask);
 

@@ -422,6 +422,7 @@ void icon_plot(icon_img *img, qrect r, int16_t align, int16_t transform)
             p[0] = p[1] = p[2] = 0x88;
     }
     qd_draw_rgba(img->px, img->w, img->h, dst);
+    walker_note_drawn(qd_port(), dst.top, dst.left, dst.bottom, dst.right);
 }
 
 int16_t tb_PlotIconSuite(gaddr rect, int16_t align, int16_t transform, gaddr suite)

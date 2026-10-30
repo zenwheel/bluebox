@@ -367,6 +367,7 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
         }
         hrgn_free(&clip);
         tb_HSetState(s.handle, st);
+        walker_note_text(port, base - s.ascent, start, base + s.descent, x, text, len);
         if (qd_rec_active(port)) {
             int family, size, face;
             port_font(port, &family, &size, &face);

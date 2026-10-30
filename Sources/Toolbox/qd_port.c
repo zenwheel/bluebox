@@ -977,6 +977,7 @@ void tb_SetCursor(gaddr cp)
 {
     if (cp)
         set_image(cp, cp + 32, cp + 64);
+    walker_note_cursor(cp);
 }
 
 /* CCrsr: its black-and-white version (crsr1Data, crsrMask, crsrHotSpot),

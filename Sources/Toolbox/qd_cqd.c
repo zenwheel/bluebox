@@ -640,6 +640,8 @@ void tb_PlotCIcon(gaddr rect, gaddr icon)
     if (!rgba)
         return;
     qd_draw_rgba(rgba, w, h, qrect_get(rect));
+    qrect at = qrect_get(rect);
+    walker_note_drawn(qd_port(), at.top, at.left, at.bottom, at.right);
     free(rgba);
 }
 
@@ -662,8 +664,10 @@ gaddr tb_GetCCursor(int16_t id)
 void cursor_set_color(gaddr c);
 void tb_SetCCursor(gaddr c)
 {
-    if (c && rd32(c))
+    if (c && rd32(c)) {
         cursor_set_color(c);
+        walker_note_cursor(rd32(c) + 20);
+    }
 }
 void tb_DisposeCCursor(gaddr c)
 {

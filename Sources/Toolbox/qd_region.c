@@ -569,12 +569,37 @@ void tb_UnionRgn(gaddr s1, gaddr s2, gaddr dest) { rgn_op_trap(s1, s2, dest, RGN
 void tb_DiffRgn(gaddr s1, gaddr s2, gaddr dest) { rgn_op_trap(s1, s2, dest, RGN_DIFF); }
 void tb_XorRgn(gaddr s1, gaddr s2, gaddr dest) { rgn_op_trap(s1, s2, dest, RGN_XOR); }
 
+/* For the screen walk, a region a point was tested against (a button of
+ * the program's own shape): its box, and a point inside it to click, the
+ * middle if it is in the region, else the middle of its largest band's
+ * first run. */
+static void note_region_hit(const hrgn *r, uint32_t p)
+{
+    if (hrgn_empty(r))
+        return;
+    qrect b = hrgn_bbox(r);
+    int x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2;
+    if (!hrgn_contains(r, x, y)) {
+        int best = -1;
+        for (int i = 0; i < r->nbands; i++)
+            if (r->bands[i].n >= 2 &&
+                (best < 0 || r->bands[i].bottom - r->bands[i].top > r->bands[best].bottom - r->bands[best].top))
+                best = i;
+        if (best < 0)
+            return;
+        x = (r->bands[best].x[0] + r->bands[best].x[1]) / 2;
+        y = (r->bands[best].top + r->bands[best].bottom) / 2;
+    }
+    walker_note_hit(qd_port(), b.top, b.left, b.bottom, b.right, x, y, p);
+}
+
 int8_t tb_PtInRgn(uint32_t p, gaddr rh)
 {
     hrgn r;
     hrgn_init(&r);
     rgn_read(rh, &r);
     bool in = hrgn_contains(&r, pt_h(p), pt_v(p));
+    note_region_hit(&r, p);
     hrgn_free(&r);
     return in;
 }

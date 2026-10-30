@@ -687,6 +687,8 @@ static void verb_rrect(int verb, gaddr r, int ow, int oh, gaddr pat)
 
 static void rrect_entry(int verb, gaddr r, int ow, int oh, gaddr pat)
 {
+    qrect q = qrect_get(r);
+    walker_note_shape(qd_port(), q.top, q.left, q.bottom, q.right);
     gaddr proc = bottleneck(QDProcs_rRectProc_off);
     if (!proc) {
         verb_rrect(verb, r, ow, oh, pat);
@@ -1600,6 +1602,10 @@ static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, 
     if (into_port) {
         qrect dr = qrect_get(dst_rect);
         walker_note_drawn(port, dr.top, dr.left, dr.bottom, dr.right);
+    }
+    if (walker_watching()) {
+        pixdst s = bits_at(resolve_bits(src_bitmap)), d = bits_at(db);
+        walker_note_copy(s.base, s.bounds, qrect_get(src_rect), d.base, d.bounds, qrect_get(dst_rect));
     }
     if (into_port && qd_rec_active(port) && !qd_rec_suppressed())
         record_copy(src_bitmap, src_rect, dst_rect);

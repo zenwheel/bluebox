@@ -70,6 +70,9 @@ func usage() -> Never {
                  dialogs they open, and says each step (for finding what breaks;
                  BLUEBOX_HEAPCHECK=n also checks the heaps after every nth call,
                  BLUEBOX_CODECHECK=n its PowerPC code for changes)
+          --walk-avoid S  a step the walk of a program with no menu bar is not to
+                 take ("X,Y" a click there, "key NAME" a key): one that ended
+                 the program at an earlier run (scripts/walk-corpus.sh)
       --realtime a headless run's clock follows real time, not the instructions
                      run (for networked programs talking to other copies)
           --screen-window  show the whole classic screen in one window instead of
@@ -441,6 +444,10 @@ func runCommand(_ args: [String]) {
         case "--headless": headless = true
         case "--realtime": machine_set_realtime(true)
         case "--walk-menus": machine_set_menu_walk(true)
+        case "--walk-avoid":
+            i += 1
+            guard i < args.count else { usage() }
+            machine_walk_avoid(args[i])
         case "--screen-window": screenWindow = true
         case "--fonts":
             i += 1

@@ -496,6 +496,7 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
         if (n >= 0 && natives[n].fn != dispatch_native)
             census_note(op, -1, entry != unimpl_stub);
         LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
+        walker_note_call(c->op_pc, op);
         if (!(op & 0x0400))
             cpu_push32(c, c->pc);
         if (n >= 0) {
@@ -554,6 +555,7 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
     if (n >= 0 && natives[n].fn != dispatch_native)
         census_note(op, -1, entry != unimpl_stub);
     LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
+    walker_note_call(c->op_pc, op);
     if (n >= 0) {
         if (!mm_debug_before_call(trap_name(op))) {
             cpu_halt(c, "heap damaged before %s", trap_name(op));

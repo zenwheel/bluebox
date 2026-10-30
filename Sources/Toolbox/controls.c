@@ -2187,3 +2187,31 @@ int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y)
     *y = (r.top + r.bottom) / 2 - px.bounds.top;
     return chilite(ch) == 255 ? 1 : 2;
 }
+
+/* For the screen walk: control n of a window that is no dialog, any kind
+ * (2: shown and active, 0: hidden or dimmed; -1 past the last), with its
+ * title and its rectangle on the screen. */
+int window_control(gaddr w, int n, char *title, size_t size, qrect *on_screen)
+{
+    gaddr ch = WindowRecord_controlList(w);
+    for (int i = 1; ch && rd32(ch) && i < n; i++)
+        ch = ControlRecord_nextControl(cp(ch));
+    if (!ch || !rd32(ch))
+        return -1;
+    qrect r = crect(ch);
+    title[0] = 0;
+    if (!ControlRecord_contrlVis(cp(ch)) || chilite(ch) == 255 || r.left >= 8192 || r.bottom - r.top < 4 ||
+        r.right - r.left < 4)
+        return 0;
+    gaddr t = cp(ch) + ControlRecord_contrlTitle_off;
+    size_t len = rd8(t);
+    if (len >= size)
+        len = size - 1;
+    for (size_t k = 0; k < len; k++)
+        title[k] = (char)rd8(t + 1 + (gaddr)k);
+    title[len] = 0;
+    pixdst px = qd_port_pixels(w);
+    *on_screen = (qrect){ (int16_t)(r.top - px.bounds.top), (int16_t)(r.left - px.bounds.left),
+                          (int16_t)(r.bottom - px.bounds.top), (int16_t)(r.right - px.bounds.left) };
+    return 2;
+}

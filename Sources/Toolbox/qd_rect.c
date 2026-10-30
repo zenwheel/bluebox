@@ -49,6 +49,7 @@ int8_t tb_PtInRect(uint32_t p, gaddr r)
 {
     qrect q = qrect_get(r);
     int16_t h = pt_h(p), v = pt_v(p);
+    walker_note_hit(qd_port(), q.top, q.left, q.bottom, q.right, (q.left + q.right) / 2, (q.top + q.bottom) / 2, p);
     return h >= q.left && h < q.right && v >= q.top && v < q.bottom;
 }
 
