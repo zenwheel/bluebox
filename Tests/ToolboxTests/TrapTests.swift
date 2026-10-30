@@ -442,8 +442,9 @@ extension BlueBox {
         }
 
         /// UnloadSeg given a jump table entry still in its unloaded form does
-        /// nothing: the segment wasn't loaded through it, and a program that
-        /// got and locked it itself (HyperCard's standalones) keeps it so.
+        /// nothing: the segment wasn't loaded through it (HyperCard's
+        /// standalones unload so segments they never called), and one the
+        /// program got and locked itself stays so.
         @Test func unloadSegLeavesASegmentNotLoadedThroughItsEntry() throws {
             bootMachine()
             let jt = cat(

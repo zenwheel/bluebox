@@ -138,12 +138,44 @@ static uint32_t phys_for(uint32_t logical)
 
 /* The zone's allocPtr is the rover: allocation searches from it (next
  * fit), as the Memory Manager did, rather than from the zone's start.  It
- * must always be a block start, so whatever merges blocks moves it back. */
-static void rover_merged(gaddr z, gaddr b, uint32_t ps)
+ * must always be a block start, so whatever merges blocks moves it back.
+ * A program may set it itself: HyperCard's standalones point it at a
+ * handle's block they have just disposed of, 8 bytes before its data as
+ * a 24-bit header would be, which in a 32-bit zone is inside the header;
+ * a search from there reads data as headers.  So the rover is trusted
+ * only while it is what Blue Box last left there, and otherwise the
+ * search starts at the zone's first block. */
+enum { MAX_ROVERS = 80 }; /* the system and application zones, and programs' own */
+static struct { gaddr z, r; } rovers[MAX_ROVERS];
+static unsigned next_rover;
+
+static void set_rover(gaddr z, gaddr r)
+{
+    Zone_set_allocPtr(z, r);
+    unsigned i = 0;
+    while (i < MAX_ROVERS && rovers[i].z != z)
+        i++;
+    if (i == MAX_ROVERS)
+        i = next_rover++ % MAX_ROVERS;
+    rovers[i].z = z;
+    rovers[i].r = r;
+}
+
+/* The rover, or 0 when the zone's allocPtr is not the one Blue Box set. */
+static gaddr get_rover(gaddr z)
 {
     gaddr r = Zone_allocPtr(z);
+    for (unsigned i = 0; i < MAX_ROVERS; i++)
+        if (rovers[i].z == z)
+            return rovers[i].r == r ? r : 0;
+    return 0;
+}
+
+static void rover_merged(gaddr z, gaddr b, uint32_t ps)
+{
+    gaddr r = get_rover(z);
     if (r > b && r < b + ps)
-        Zone_set_allocPtr(z, b);
+        set_rover(z, b);
 }
 
 /* Merge b with any free blocks that follow it (b must be free). */
@@ -259,7 +291,7 @@ void mm_init_zone(gaddr z, gaddr limit, uint16_t more_masters)
     b_set(first, USE_FREE, 0, 0, lim - first, 0);
     write_trailer(lim);
     Zone_set_zcbFree(z, (int32_t)(lim - first));
-    Zone_set_allocPtr(z, first);
+    set_rover(z, first);
     Zone_set_purgePtr(z, first);
 }
 
@@ -307,14 +339,12 @@ static bool grow_zone(gaddr z, uint32_t need)
 static gaddr find_free(gaddr z, uint32_t psize)
 {
     gaddr lim = z_lim(z), first = z_first(z);
-    gaddr start = Zone_allocPtr(z);
+    gaddr start = get_rover(z);
     if (start < first || start >= lim)
         start = first;
     /* From the rover to the end, then from the start up to the rover. */
     for (int pass = 0; pass < 2; pass++) {
-        gaddr end = pass ? Zone_allocPtr(z) : lim;
-        if (pass && (end < first || end >= lim))
-            end = lim;
+        gaddr end = pass ? start : lim;
         for (gaddr b = pass ? first : start; b < end; b = b_next(b)) {
             if (b_psize(b) < HDR) { /* a smashed header: no way past it */
                 LOGF(LOG_MEM, "mm: zone %08X damaged at block %08X\n", z, b);
@@ -324,7 +354,7 @@ static gaddr find_free(gaddr z, uint32_t psize)
                 continue;
             coalesce(z, b);
             if (b_psize(b) >= psize) {
-                Zone_set_allocPtr(z, b);
+                set_rover(z, b);
                 return b;
             }
         }
@@ -338,7 +368,7 @@ static gaddr find_free(gaddr z, uint32_t psize)
  * largest free block afterwards. */
 static uint32_t compact(gaddr z)
 {
-    Zone_set_allocPtr(z, 0); /* blocks move */
+    set_rover(z, 0); /* blocks move */
     gaddr lim = z_lim(z);
     gaddr dst = 0; /* start of the free run being filled, or 0 */
     uint32_t largest = 0;

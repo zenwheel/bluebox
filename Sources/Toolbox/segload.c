@@ -146,8 +146,8 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
      * zone is full): the segment its entry names.  An entry still in its
      * unloaded form names a segment not loaded through the jump table,
      * so there is nothing to unload: getting the CODE resource would read
-     * it in only to make it purgeable, and HyperCard's standalones unload
-     * so segments they keep locked themselves, whose code then moved. */
+     * it in only to make it purgeable (HyperCard's standalones unload so
+     * segments they never called, CODE 4's 28K each time). */
     if (addr >= jt && addr < jt + jtsize) {
         gaddr e = jt + (addr - jt) / 8 * 8;
         if (rd16(e + 2) != JMP_ABS_L)
