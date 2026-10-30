@@ -192,5 +192,38 @@ extension BlueBox {
             #expect(machine_run(400_000_000) == RUN_HALTED)
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
         }
+
+        /// A program with nothing on the screen yet is given half a
+        /// minute from its start (MegaSeg's launch takes more than its
+        /// nudging) before the walk ends "no menu bar or window".
+        @Test func aSlowStartIsWaitedFor() throws {
+            let dir = try launch(waiting)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(200_000_000) != RUN_HALTED) // 20 s
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()).hasPrefix("menu walk found no menu bar or window"))
+        }
+
+        /// A window's only button dimmed for now (a licence's Agree while
+        /// it counts down, Terrain Builder's) is waited for and pressed
+        /// once it is active.
+        @Test func aDimmedButtonIsWaitedFor() throws {
+            let dir = try launch(untilAButton)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            let w = tb_NewWindow(0, rect([50, 50, 150, 250]), title("Licence"), 1, 1, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            let agree = tb_NewControl(w, rect([10, 10, 30, 80]), title("Agree"), 1, 0, 0, 1, 0, 0)
+            tb_HiliteControl(agree, 255) // dimmed
+            wr32(rd32(UInt32(LM_CurrentA5)) - 8, w)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(350_000_000) != RUN_HALTED) // past the half minute
+            tb_HiliteControl(agree, 0)
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
     }
 }

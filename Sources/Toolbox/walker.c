@@ -15,9 +15,9 @@
  *
  * A program with no menu bar is nudged with keys and clicks, then has the
  * buttons of its window pressed (a program that is one window); one that
- * draws on meanwhile (a game) is walked too.  Else the walk ends "found no
- * menu bar", or "no menu bar or window" for one with nothing on the screen
- * (a background program).
+ * draws on meanwhile (a game) is walked too.  Else, half a minute from its
+ * start, the walk ends "found no menu bar", or "no menu bar or window" for
+ * one with nothing on the screen (a background program).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +34,11 @@
  * between polls of the keyboard). */
 enum { WAITS = 18, BUTTON_WAITS = 100 };
 static const uint64_t SETTLE = 300000000, WARM_UP = 3000000000; /* ns */
+/* The least time from the start before a program is found to have no
+ * menu bar: one still starting behind a window of its own (MegaSeg's
+ * launch after its notice, a map generated behind a progress bar) may
+ * take longer than its nudging. */
+static const uint64_t PATIENCE = 30000000000; /* ns */
 
 static bool walking;
 static int menu_i, item_n;  /* the next item to try */
@@ -68,6 +73,7 @@ static struct {
 } pressed_in[NWINDOWS];
 static int npressed_in;
 static unsigned pressed; /* buttons pressed so */
+static int button_waits;  /* steps waiting for a dimmed one */
 /* The screen of a program with no menu bar halfway through its nudging,
  * to tell one that goes on drawing (a game) from one stuck on a still
  * screen. */
@@ -84,6 +90,7 @@ void machine_set_menu_walk(bool on)
     chosen = dialogs = left = pressed = 0;
     left_open = 0;
     npressed_in = 0;
+    button_waits = 0;
     free(screen_then);
     screen_then = NULL;
     snprintf(last, sizeof last, "the start");
@@ -218,8 +225,9 @@ static bool screen_moved_on(void)
  * when there is none left.  A dialog's are its button items, another
  * window's its push button controls.  Those that would end the run are
  * passed over, and at the start, Cancel and Decline (unless the window
- * has a Quit of its own). */
-static bool press_a_button(void)
+ * has a Quit of its own).  *dimmed says whether one that may be pressed
+ * later is dimmed for now. */
+static bool press_a_button(bool *dimmed)
 {
     gaddr w = tb_FrontWindow();
     if (!w || !WindowRecord_visible(w))
@@ -250,9 +258,12 @@ static bool press_a_button(void)
     bool starting = !begun() && !has_quit(w, dialog);
     for (int i = 1; i <= 64 && (b = dialog ? dialog_button(w, i, text, sizeof text, &x, &y)
                                            : window_button(w, i, text, sizeof text, &x, &y)) >= 0; i++) {
-        if (b != 2 || (pressed_in[at].clicked & 1ull << (i - 1)) || passed_over(text) ||
-            (starting && declines(text)))
+        if (!b || (pressed_in[at].clicked & 1ull << (i - 1)) || passed_over(text) || (starting && declines(text)))
             continue;
+        if (b == 1) {
+            *dimmed = true;
+            continue;
+        }
         pressed_in[at].clicked |= 1ull << (i - 1);
         pressed++;
         snprintf(last, sizeof last, "button \"%s\"", text);
@@ -407,10 +418,15 @@ void walker_idle(uint64_t icount)
             screen_then = screen_now();
         if (nudge())
             return;
-        if (press_a_button()) {
+        bool dimmed = false;
+        if (press_a_button(&dimmed)) {
             waits = WAITS; /* nudged enough: the buttons now, a step apart */
             return;
         }
+        /* A button dimmed for now: a licence's Accept while it counts
+         * down (Terrain Builder's). */
+        if (dimmed && button_waits++ < BUTTON_WAITS)
+            return;
         if (pressed) {
             no_menu_bar("the program is a window, its buttons pressed");
             return;
@@ -435,6 +451,10 @@ void walker_idle(uint64_t icount)
                 return;
             }
         }
+        /* Perhaps still starting: its window's buttons and its screen are
+         * looked at again at each step until PATIENCE has passed. */
+        if (now - started_at < PATIENCE)
+            return;
         /* Nothing on the screen of its own: a background program (a
          * server, a helper waiting for Apple events), or one that never got
          * as far as its first window. */
