@@ -141,6 +141,57 @@ extension BlueBox {
             }
         }
 
+        /// A 24-bit run's zones have the 24-bit Memory Manager's 8-byte
+        /// block headers (use in the top two bits, size correction in the
+        /// low nibble of the first byte, the size in the low 24 bits, then
+        /// the relative handle or the zone), and a walk by them, as
+        /// Brickles' sound driver makes one, goes from the zone's first
+        /// block to its trailer through every block.
+        @Test func heapBlocksHave24BitHeaders() {
+            boot24 {
+                let z = rd32(UInt32(LM_ApplZone))
+                let p = tb_NewPtr(10, false, true)
+                #expect(rd32(p - 8) >> 30 == 1)
+                #expect(rd32(p - 8) & 0x00FF_FFFF == 20 && (rd32(p - 8) >> 24) & 0x0F == 2)
+                #expect(rd32(p - 4) == z && tb_GetPtrSize(p) == 10)
+                let h = tb_NewHandle(37, false, true)
+                let d = rd32(h)
+                #expect(rd32(d - 8) >> 30 == 2 && rd32(d - 8) & 0x00FF_FFFF == 48)
+                #expect(rd32(d - 4) == h - z && tb_GetHandleSize(h) == 37)
+                #expect(tb_RecoverHandle(d, false) == h)
+                tb_HLock(h)
+                #expect(rd32(h) == d | 0x8000_0000 && rd32(d - 8) >> 30 == 2)  // the flags aren't in the header
+                tb_HUnlock(h)
+                let small = tb_NewHandle(0, false, true)
+                #expect(rd32(rd32(small) - 8) & 0x00FF_FFFF == 12)  // the smallest block
+                tb_SetHandleSize(h, 5000)
+                tb_DisposePtr(p)
+                _ = tb_CompactMem(0x7FFF_FFFF, false)
+                #expect(tb_GetHandleSize(h) == 5000 && mm_check_zone(z))
+                // Walked by the headers alone.
+                let lim = rd32(z)
+                var b = z + 52, n = 0, sawHandle = false
+                while b < lim && n < 100_000 {
+                    let size = rd32(b) & 0x00FF_FFFF
+                    #expect(size >= 12)
+                    if size < 12 { break }
+                    if rd32(b) >> 30 == 2 && rd32(b + 4) == h - z {
+                        sawHandle = true
+                        #expect(b + 8 == rd32(h) && size - 8 - ((rd32(b) >> 24) & 0x0F) == 5000)
+                    }
+                    b += size
+                    n += 1
+                }
+                #expect(b == lim && sawHandle)
+                #expect(rd32(lim) & 0x00FF_FFFF == 12)  // the trailer
+                // A zone of the program's own is made the same way.
+                let area = tb_NewPtr(8 * 1024, false, true)
+                mm_init_zone(area, area + 8 * 1024, 4)
+                #expect(rd32(area + 52) >> 30 == 0 && rd32(area + 52) & 0x00FF_FFFF == rd32(area) - (area + 52))
+                #expect(mm_check_zone(area))
+            }
+        }
+
         /// The flags are the master pointer's top byte: HLock sets bit 7
         /// there, and a lock set there directly (BSET #7,(A0)) keeps the
         /// block from moving.
