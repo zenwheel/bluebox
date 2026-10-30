@@ -361,8 +361,11 @@ void walker_idle(uint64_t icount)
                 return;
             /* Still there: a modeless window most likely, which the menus
              * get past; a modal one ends the walk at the next step's turn,
-             * as nothing else will change. */
-            if (left_open && !begun()) {
+             * as nothing else will change.  (A modeless one after another
+             * at the start is walked past too: the splash, then a
+             * program's palettes, Fusion's, or its licence, Terrain
+             * Builder's.) */
+            if (left_open && !begun() && modal) {
                 stays_up(at);
                 return;
             }

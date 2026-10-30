@@ -100,6 +100,33 @@ extension BlueBox {
             return tb_NewDialog(0, rect(r), tb_NewPtr(2, false, true), 1, 0, 0xFFFF_FFFF, 0, 0, items)
         }
 
+        /// A program waiting in GetNextEvent for ever.
+        let waiting = cat(
+            be16(0x4267),                 // loop: CLR.W -(SP)
+            be16(0x3F3C), be16(0xFFFF),   // MOVE.W #everyEvent,-(SP)
+            be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+            be16(0xA970),                 // _GetNextEvent
+            be16(0x544F),                 // ADDQ #2,SP
+            be16(0x60F0))                 // BRA loop
+
+        /// A modeless dialog with no items at the start, after another
+        /// walked past (a splash), is walked past too, as a program's
+        /// palettes or its licence are (Fusion's, Terrain Builder's): only
+        /// a modal one that stays ends the walk "stuck in a dialog".
+        @Test func aModelessDialogAfterASplashIsWalkedPast() throws {
+            let dir = try launch(waiting)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            _ = dialog([50, 50, 150, 250])
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(25_000_000) != RUN_HALTED) // the splash walked past
+            _ = dialog([60, 60, 200, 300])
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()).hasPrefix("menu walk found no menu bar"))
+        }
+
         /// A program that is one window of buttons, with no menu bar
         /// (Disinfectant 1.6): the walk presses its button, which here
         /// ends the program.
