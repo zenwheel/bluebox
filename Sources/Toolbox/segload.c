@@ -247,10 +247,13 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
      * the heap under them: such programs keep flags in the top byte of
      * addresses, or clear it.  Cribbage 2.5 clears one byte too many of a
      * local array, the top byte of its saved frame pointer, and returned
-     * to address 0 when that byte wasn't already 0. */
+     * to address 0 when that byte wasn't already 0.  In 32-bit mode only
+     * when its partition fits there too: a Mac put a bigger one above
+     * 16 MB, and Dream Wars, asking for 16 MB, was left 11 and its
+     * NewGWorld failed. */
     gaddr top = GA_A5WORLD_TOP;
-    if ((g_mem_24bit || !(g_app_size_flags & 0x0080)) &&
-        (uint64_t)above + below + GA_STACK_24 < GA_A5WORLD_TOP_24 - GA_APPHEAP) {
+    uint64_t room = (uint64_t)above + below + GA_STACK_24 + (g_mem_24bit ? 0 : mm_appl_heap_size());
+    if ((g_mem_24bit || !(g_app_size_flags & 0x0080)) && room < GA_A5WORLD_TOP_24 - GA_APPHEAP) {
         gaddr limit = (((GA_A5WORLD_TOP_24 - above) & ~3u) - below - GA_STACK_24) & ~3u; /* whole longs */
         if (Zone_bkLim(rd32(LM_ApplZone)) < limit) {
             top = GA_A5WORLD_TOP_24;
