@@ -339,6 +339,17 @@ extension BlueBox {
                 #expect(a5 < UInt32(GA24_TOP) && a5 > 0x0040_0000)
                 #expect(rd32(UInt32(LM_ApplLimit)) < a5)
             }
+            // In 32-bit mode one not 32-bit clean has its partition below
+            // 16 MB when it fits there, and above when it doesn't (Dream
+            // Wars asks for 16 MB).
+            bootMachine()
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(dirty, &err, err.count))
+            #expect(rd32(UInt32(LM_CurrentA5)) < 0x0100_0000)
+            bootMachine()
+            #expect(machine_launch(app("Big2", flags: 0x0000, minimum: 16_000 * 1024), &err, err.count))
+            #expect(rd32(UInt32(LM_CurrentA5)) > 0x0100_0000)
+            bootMachine()
         }
     }
 }
