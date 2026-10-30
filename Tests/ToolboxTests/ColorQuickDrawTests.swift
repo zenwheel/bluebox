@@ -80,6 +80,37 @@ extension BlueBox {
             #expect(mm_check_zone(zone))
         }
 
+        /// A port's own pattern the program disposes of itself (read back
+        /// from the port before its first BackPixPat, as Rune Cast does) is
+        /// not disposed of again by CloseCPort, whose handle has by then
+        /// gone to a block of the program's; BackPat makes a new one.
+        @Test func ownPixPatDisposedByTheProgramIsNotDisposedAgain() {
+            launchTestApp()
+            _ = initToolbox()
+            let zone = rd32(UInt32(LM_ApplZone))
+            let saved = tb_NewPtr(4, false, true)
+            tb_GetPort(saved)
+            let port = tb_NewPtr(108, true, true)
+            tb_OpenCPort(port)
+            let bkOff: UInt32 = 32
+            let own = rd32(port + bkOff)
+            tb_DisposePixPat(own)
+            let mine = tb_NewHandle(54, false, true)
+            #expect(mine == own) // the master pointer is the next one given out
+            let pat = tb_NewPixPat()
+            tb_BackPixPat(pat)
+            let white = tb_NewPtr(8, true, true)
+            tb_BackPat(white)
+            let fresh = rd32(port + bkOff)
+            #expect(fresh != 0 && fresh != mine && fresh != pat && rd32(fresh) != 0)
+            tb_SetPort(rd32(saved))
+            tb_CloseCPort(port)
+            #expect(rd32(mine) != 0 && tb_GetHandleSize(mine) == 54)
+            tb_DisposePixPat(pat)
+            tb_DisposeHandle(mine)
+            #expect(mm_check_zone(zone))
+        }
+
         /// At depth 0 the rectangle is global, only to choose the screen: the
         /// world starts at 0,0 (Squark draws at 0,0 into a world made from
         /// its window's global rectangle).  A given depth keeps the rectangle.

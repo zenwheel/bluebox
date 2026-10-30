@@ -279,6 +279,18 @@ void qd_port_pats_reset(void)
     nown_pats = 0;
 }
 
+/* A port's own pattern the program disposed of itself (Rune Cast reads
+ * its background pattern back from the port and disposes of it before
+ * BackPixPat): no longer the port's to dispose of, or CloseCPort would
+ * dispose of whatever handle has its master pointer by then. */
+void qd_port_pixpat_disposed(gaddr pp)
+{
+    for (size_t i = 0; pp && i < nown_pats; i++)
+        for (int k = 0; k < 3; k++)
+            if (own_pats[i].pp[k] == pp)
+                own_pats[i].pp[k] = 0;
+}
+
 static struct port_pats *port_pats_of(gaddr port)
 {
     for (size_t i = 0; port && i < nown_pats; i++)
@@ -294,6 +306,8 @@ static gaddr own_pixpat(gaddr port, uint32_t off)
     struct port_pats *o = port_pats_of(port);
     for (int i = 0; o && i < 3; i++)
         if (own_offs[i] == off) {
+            if (!o->pp[i]) /* the program disposed of it: a new one, its pattern set next */
+                o->pp[i] = qd_pixpat_for(qd_pat_black);
             wr32(port + off, o->pp[i]);
             return o->pp[i];
         }
