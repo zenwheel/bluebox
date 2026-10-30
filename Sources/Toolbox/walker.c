@@ -480,6 +480,12 @@ void walker_idle(uint64_t icount)
          * server, a helper waiting for Apple events), or one that never got
          * as far as its first window. */
         bool windowless = !tb_FrontWindow() && !game;
+        /* One whose SIZE says it runs only in the background (Syslogd)
+         * has nothing to show: it ran on, and that was its walk. */
+        if (windowless && (g_app_size_flags & 0x0400)) {
+            no_menu_bar("the program is background-only, it ran on");
+            return;
+        }
         printf("walk: no menu bar appeared%s\n", windowless ? ", nor a window" : "");
         fflush(stdout);
         walking = false;

@@ -291,6 +291,20 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()) == "menu walk finished")
         }
 
+        /// A program whose SIZE says it runs only in the background (a
+        /// server: Syslogd) has nothing on the screen by design: its walk
+        /// ends finished, not "no menu bar or window".
+        @Test func aBackgroundOnlyProgramIsWalked() throws {
+            let dir = try launch(waiting)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            g_app_size_flags = 0x1480 // canBackground, onlyBackground, 32-bit clean
+            defer { g_app_size_flags = 0 }
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "menu walk finished")
+        }
+
         /// A window's only button dimmed for now (a licence's Agree while
         /// it counts down, Terrain Builder's) is waited for and pressed
         /// once it is active.
