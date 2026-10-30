@@ -453,9 +453,13 @@ void walker_idle(uint64_t icount)
             }
         }
         /* Perhaps still starting: its window's buttons and its screen are
-         * looked at again at each step until PATIENCE has passed. */
-        if (now - started_at < PATIENCE)
+         * looked at again at each step until PATIENCE has passed, and it
+         * is nudged again (a game's title screens one after another, each
+         * waiting for a key: Nanosaur 1.1.7's). */
+        if (now - started_at < PATIENCE) {
+            waits = 0;
             return;
+        }
         /* Nothing on the screen of its own: a background program (a
          * server, a helper waiting for Apple events), or one that never got
          * as far as its first window. */

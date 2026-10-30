@@ -206,6 +206,28 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()).hasPrefix("menu walk found no menu bar or window"))
         }
 
+        /// While a program is given time to start it is nudged again: one
+        /// that wants more keys than a round of nudging gives (a game's
+        /// title screens one after another, Nanosaur 1.1.7's) gets them.
+        @Test func moreKeysComeWhileWaiting() throws {
+            let dir = try launch(cat(
+                be16(0x7E14),                 // MOVEQ #20,D7
+                be16(0x4267),                 // loop: CLR.W -(SP)
+                be16(0x3F3C), be16(8),        // MOVE.W #keyDownMask,-(SP)
+                be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+                be16(0xA970),                 // _GetNextEvent
+                be16(0x4A1F),                 // TST.B (SP)+
+                be16(0x67F0),                 // BEQ loop
+                be16(0x5347),                 // SUBQ.W #1,D7
+                be16(0x66EC),                 // BNE loop
+                be16(0xA9F4)))                // _ExitToShell after 20 keys
+            defer { try? FileManager.default.removeItem(at: dir) }
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+
         /// A modal dialog the program stays in is not a game drawing on,
         /// whatever changes on the screen (MediaPresenter's, put up again
         /// and again as it asks for a name).
