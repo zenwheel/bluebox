@@ -948,6 +948,21 @@ extension BlueBox {
             machine_menu_tracking_end()
             #expect(select.wait(2) == 0)
         }
+
+        /// An item the app deleted as the menu bar was clicked (Internet
+        /// Bolo Buddy's item for a window it has closed) is not chosen,
+        /// though its enable bit is still set.
+        @Test func deletedItemsAreNotChosen() {
+            launchTestApp()
+            setUpMenus()
+            let file = tb_GetMenuHandle(2)
+            tb_DeleteMenuItem(file, 4)                   // Close goes; items 1-3 are left
+            let select = menuSelectInBackground()
+            machine_menu_tracking_begin()
+            machine_choose_menu(2, 4)
+            machine_menu_tracking_end()
+            #expect(select.wait(2) == 0)
+        }
     }
 }
 

@@ -1292,8 +1292,11 @@ static void restore_bits(qrect r, uint32_t *buf)
     free(buf);
 }
 
-/* A choice made in the host's menu bar: valid only if still enabled now
- * that the app has had its chance to adjust its menus. */
+/* A choice made in the host's menu bar: valid only if still there and
+ * enabled now that the app has had its chance to adjust its menus.  (An
+ * item deleted then leaves its enable bit behind: Internet Bolo Buddy's
+ * Spy menu drops a closed window's item at the click, and taking the
+ * choice anyway had it select the window it had disposed of.) */
 static int32_t host_choice(void)
 {
     int32_t c = display_take_menu_choice();
@@ -1301,7 +1304,7 @@ static int32_t host_choice(void)
         return -1;
     int16_t id = (int16_t)(c >> 16), item = (int16_t)(c & 0xFFFF);
     gaddr mh = tb_GetMenuHandle(id);
-    if (!mh || !item_enabled(mh, item))
+    if (!mh || item < 1 || item > tb_CountMItems(mh) || !item_enabled(mh, item))
         return 0;
     tb_HiliteMenu(id);
     return c;
