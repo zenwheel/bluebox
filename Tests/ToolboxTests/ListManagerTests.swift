@@ -36,6 +36,26 @@ extension BlueBox {
             return (w, list)
         }
 
+        /// A list whose data handle is gone (a list disposed under the
+        /// program) or whose offsets run past its data takes no cell data
+        /// and leaves the host's memory alone.
+        @Test func cellDataWithoutItsHandle() {
+            let (_, list) = makeList()
+            #expect(tb_LAddRow(1, 0, list) == 0)
+            let cells = rd32(rd32(list) + UInt32(ListRec_cells_off))
+            wr32(rd32(list) + UInt32(ListRec_cells_off), 0)
+            let (p, n) = text("a long enough cell for the size to wrap round, more than a hundred and nine bytes of it ......")
+            tb_LSetCell(p, n, pt(0, 0), list)
+            wr32(rd32(list) + UInt32(ListRec_cells_off), cells)
+            let (q, m) = text("short")
+            tb_LSetCell(q, m, pt(0, 0), list)
+            #expect(cell(list, 0) == "short")
+            // An offset past the data's end.
+            wr16(rd32(list) + UInt32(ListRec_cellArray_off) + 2, 0x7000)
+            tb_LSetCell(p, n, pt(0, 0), list)
+            #expect(tb_GetHandleSize(cells) == 5)
+        }
+
         @Test func rowsCellsAndData() {
             let (_, list) = makeList()
             #expect(tb_LAddRow(3, 0, list) == 0)
