@@ -29,6 +29,14 @@ typedef struct {
     const q3schema *elem;
 } q3field;
 
+/* A count's product (rows by row bytes ...): all ones when it overflows,
+ * more than any copy takes. */
+static inline uint32_t q3_mul(uint32_t a, uint32_t b)
+{
+    uint64_t n = (uint64_t)a * b;
+    return n > 0xFFFFFFFFu ? 0xFFFFFFFFu : (uint32_t)n;
+}
+
 struct q3schema {
     uint32_t words;
     int nf;

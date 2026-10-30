@@ -417,6 +417,22 @@ extension BlueBox {
             let lr = rd32(lh)
             #expect(t.rectOf(lr + UInt32(ListRec_dataBounds_off)) == [0, 0, 4, 2])
             #expect(rd16(lr + UInt32(ListRec_cellSize_off)) == 16 && rd16(lr + UInt32(ListRec_cellSize_off) + 2) == 50)
+            // A list of the program's own in place of the box's (iView
+            // MediaPro disposes of the old one first), cells set in it.
+            let w = tb_GetControlOwner(list)
+            let mine = tb_LNew(t.rect(0, 0, 50, 85), t.rect(0, 0, 0, 1), 0, 0, w, 0, 0, 0, 1)
+            tb_LDispose(lh)
+            let given = t.ptr()
+            wr32(given, mine)
+            #expect(tb_SetControlData(list, 0, Int32(bitPattern: fourCC("lhan")), 4, given) == 0)
+            #expect(data(list, "lhan") == be32(mine))
+            let cellText = t.pstr("cell")
+            #expect(tb_LAddRow(1, 0, mine) == 0)
+            tb_LSetCell(cellText + 1, 4, 0, mine)
+            let back = t.ptr(8), len = t.ptr(2)
+            wr16(len, 8)
+            tb_LGetCell(back, len, 0, mine)
+            #expect(rd16(len) == 4 && rd8(back) == UInt8(ascii: "c"))
         }
 
         /// A scrolling text box: its 'TEXT' in a TERec; the plain one with

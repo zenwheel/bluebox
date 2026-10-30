@@ -94,13 +94,15 @@ static const q3schema txpm_s = { 8, 1, obj0_f };
 static const q3schema txmm_s = { 134, 1, obj0_f };
 static const q3field txcp_f[] = { { 0, QF_OBJ, NULL, NULL }, { 2, QF_OBJ, NULL, NULL } };
 static const q3schema txcp_s = { 8, 2, txcp_f };
-static uint32_t mask_bytes(const uint32_t *s, const uint32_t *p) { return s[12] * s[13]; }
+/* A mask is read only when its state says it is used: the program may
+ * leave a disabled one uninitialised (Eyes^3, HexaSuper). */
+static uint32_t mask_bytes(const uint32_t *s, const uint32_t *p) { return s[15] ? q3_mul(s[12], s[13]) : 0; }
 static const q3field dctx_f[] = { { 10, QF_BYTES, mask_bytes, NULL } };
 static const q3schema dctx_s = { 17, 1, dctx_f };
 static const q3schema dmac_s = { 21, 1, dctx_f };
 static const q3schema dpxp_s = { 25, 1, dctx_f };
 static const q3schema rddr_s = { 6, 0, NULL };
-static uint32_t hint_mask_bytes(const uint32_t *s, const uint32_t *p) { return s[10] * s[11]; }
+static uint32_t hint_mask_bytes(const uint32_t *s, const uint32_t *p) { return s[7] ? q3_mul(s[10], s[11]) : 0; }
 static const q3field vwhn_f[] = { { 0, QF_OBJ, NULL, NULL }, { 1, QF_OBJ, NULL, NULL }, { 2, QF_OBJ, NULL, NULL }, { 3, QF_OBJ, NULL, NULL },
                                   { 8, QF_BYTES, hint_mask_bytes, NULL } };
 static const q3schema vwhn_s = { 18, 5, vwhn_f };

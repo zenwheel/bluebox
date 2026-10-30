@@ -14,7 +14,9 @@
 
 #include "filemgr_internal.h"
 #include "forks.h"
+#include "q3_data.h"
 #include "q3_obj.h"
+#include "q3_view.h"
 #include "tb_internal.h"
 
 /* ---------------------------------------------------------------------- */
@@ -1557,9 +1559,22 @@ static void Q3XObjectClass_GetMethod(ppc_cpu *c) { Q3RETURN(method_of(class_of_h
 
 gaddr q3_registered_new(q3class *k, gaddr param)
 {
-    q3obj *o = k ? q3_new(k->type, NULL) : NULL;
-    if (!o)
+    /* The object has its class's data, a subclass its parent's, as one
+     * the class's own New made (Interiors makes its groups this way). */
+    void *data = NULL;
+    const q3schema *s = k ? q3_schema_of(k->type) : NULL;
+    if (k && q3_type_is(k->type, Q3_GROUP))
+        data = q3_group_data_new();
+    else if (s)
+        data = q3d_new(s, 1);
+    q3obj *o = k ? q3_new(k->type, data) : NULL;
+    if (!o) {
+        if (data && s)
+            q3d_free(data, s);
+        else
+            free(data);
         return 0;
+    }
     o->cls = k;
     if (k->instance_size)
         o->instance = tb_NewPtr((int32_t)k->instance_size, false, true);
@@ -1569,6 +1584,8 @@ gaddr q3_registered_new(q3class *k, gaddr param)
         if (ppc_call(fn, args, 3) != kQ3Success) {
             if (o->instance)
                 tb_DisposePtr(o->instance);
+            if (o->data && k->dispose)
+                k->dispose(o);
             q3_handle_free(o->g);
             free(o);
             return 0;

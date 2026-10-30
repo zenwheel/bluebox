@@ -32,6 +32,26 @@ extension BlueBox {
             #expect(memErr() == 0)
         }
 
+        /// A bulk copy running past the top of the 32-bit space wraps to
+        /// address 0, as the CPUs' addresses do, instead of running off
+        /// the end of the host's arena (a size from a program can be
+        /// anything).
+        @Test func bulkCopiesWrapAtTheTopOfTheSpace() {
+            let low = (0..<16).map { rd8(UInt32($0)) }
+            defer { for (i, b) in low.enumerated() { wr8(UInt32(i), b) } }
+            let src: [UInt8] = (0..<16).map { UInt8($0 + 1) }
+            src.withUnsafeBytes { gput(0xFFFF_FFF8, $0.baseAddress, 16) }
+            #expect(rd8(0xFFFF_FFF8) == 1 && rd8(0xFFFF_FFFF) == 8 && rd8(0) == 9 && rd8(7) == 16)
+            var back = [UInt8](repeating: 0, count: 16)
+            back.withUnsafeMutableBytes { gget($0.baseAddress, 0xFFFF_FFF8, 16) }
+            #expect(back == src)
+            gmemset(0xFFFF_FFFC, 0xAA, 8)
+            #expect(rd8(0xFFFF_FFFC) == 0xAA && rd8(3) == 0xAA && rd8(4) == 13)
+            // A copy whose source wraps, overlapping its destination.
+            gmemcpy(0xFFFF_FFFA, 0xFFFF_FFF8, 12)
+            #expect(rd8(0xFFFF_FFFA) == 1 && rd8(0xFFFF_FFFD) == 4 && rd8(0xFFFF_FFFE) == 0xAA && rd8(5) == 0xAA && rd8(6) == 15)
+        }
+
         /// A locked handle's master pointer stepped into its own block is
         /// the program's business (Bloodsuckers steps it past a length
         /// word); an unlocked one's, or one pointing elsewhere, is damage.

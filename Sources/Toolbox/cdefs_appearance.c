@@ -2162,7 +2162,20 @@ static int32_t data(gaddr ch, ap_ctl *a, gaddr rec, bool set)
     case 18: return static_data(ch, a, &x, set);
     case 22:
         switch (x.tag) {
-        case TAG('l', 'h', 'a', 'n'): return set ? errDataNotSupported : give32(&x, a->list);
+        case TAG('l', 'h', 'a', 'n'): {
+            /* A list the program made (CreateCustomList) in place of the
+             * control's: the old one is the program's to dispose of, as
+             * iView MediaPro does before it sets the new one. */
+            uint32_t v;
+            if (!set)
+                return give32(&x, a->list);
+            if (!take32(&x, &v))
+                return errDataSizeMismatch;
+            a->list = v;
+            if (cvisible(ch))
+                tb_Draw1Control(ch);
+            return 0;
+        }
         case TAG('d', 'b', 'l', 'c'): return set ? errDataNotSupported : give_bool(&x, a->dbl);
         case TAG('f', 'l', 't', 'r'): {
             uint32_t v;

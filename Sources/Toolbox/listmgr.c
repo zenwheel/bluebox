@@ -573,7 +573,12 @@ static void replace_data(gaddr list, int i, gaddr src, uint32_t n, bool append)
     uint32_t off, len;
     data_range(list, i, &off, &len);
     gaddr cells = rd32(lp(list) + ListRec_cells_off);
-    uint32_t total = (uint32_t)tb_GetHandleSize(cells);
+    int32_t size = tb_GetHandleSize(cells);
+    /* A list whose data handle is gone (disposed under the program) or
+     * whose offsets run past its data is left alone. */
+    if (size < 0 || off + len > (uint32_t)size)
+        return;
+    uint32_t total = (uint32_t)size;
     uint32_t keep = append ? len : 0;
     int32_t delta = (int32_t)(keep + n) - (int32_t)len;
     if (total + delta > 0x7FFF)
