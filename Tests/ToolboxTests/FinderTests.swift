@@ -170,6 +170,20 @@ extension BlueBox {
             #expect(tb_DisposeIconSuite(cache, 0) == 0)
         }
 
+        /// A member a suite lacks is a nil handle and noErr (Icon Machine's
+        /// paint pane asks an empty suite for its 'ics#'); a type that is
+        /// no member of the family is paramErr.
+        @Test func missingSuiteMemberIsNil() {
+            launchTestApp()
+            let sp = tb_NewPtr(4, false, true)
+            #expect(tb_NewIconSuite(sp) == 0)
+            let got = tb_NewPtr(4, false, true)
+            wr32(got, 0x1234)
+            #expect(tb_GetIconFromSuite(got, rd32(sp), Int32(bitPattern: fourCC("ics#"))) == 0 && rd32(got) == 0)
+            #expect(tb_GetIconFromSuite(got, rd32(sp), Int32(bitPattern: fourCC("PICT"))) == -50)
+            #expect(tb_GetIconFromSuite(got, 0, Int32(bitPattern: fourCC("ICN#"))) == -50)
+        }
+
         @Test func forEachIconDoVisitsTheMembers() {
             launchTestApp()
             guestStack()

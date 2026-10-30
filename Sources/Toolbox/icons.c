@@ -104,11 +104,22 @@ int16_t tb_AddIconToSuite(gaddr icon, gaddr suite, int32_t type)
     return noErr;
 }
 
+/* A suite has a place for each member of the family: one it lacks is a
+ * nil handle and noErr (the Icon Utilities read the slot), not an error.
+ * Icon Machine's paint pane makes an empty suite, asks for its 'ics#' and
+ * gives up on any error, leaving the window without the pane. */
 int16_t tb_GetIconFromSuite(gaddr iconp, gaddr suite, int32_t type)
 {
     gaddr h = suite ? suite_get(suite, (uint32_t)type) : 0;
     wr32(iconp, h);
-    return h ? noErr : resNotFound;
+    if (h)
+        return noErr;
+    if (!suite)
+        return paramErr_;
+    for (unsigned i = 0; i < sizeof members / sizeof members[0]; i++)
+        if ((uint32_t)type == fourcc(members[i]))
+            return noErr;
+    return paramErr_;
 }
 
 int16_t tb_GetIconSuite(gaddr suitep, int16_t res_id, uint32_t selector)
