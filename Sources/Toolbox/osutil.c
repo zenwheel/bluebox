@@ -95,11 +95,13 @@ int16_t tb_InitUtil(void) { return noErr; }
 int16_t tb_WriteParam(void) { return noErr; }
 
 /* SysEnvirons as the machine presented answers it (hw68k.c's profile).  The
- * record's version is the one asked for, up to the 2 this System knows:
- * version 1 has the machine, system, processor, FPU, colour QuickDraw and
- * keyboard, version 2 adds the AppleTalk driver's version and the System
- * Folder's volume.  A newer version than that is answered as version 2 with
- * envVersTooBig; version 0 or less is envBadVers. */
+ * record's version is the one asked for, up to the 2 this System knows; the
+ * record is the same in every version (Inside Macintosh V describes version
+ * 1 with the AppleTalk driver's version and the System Folder's volume, and
+ * later versions only know more machines), so every field is filled: Anthem
+ * asks for version 1 and opens its files on sysVRefNum.  A newer version
+ * than 2 is answered as version 2 with envVersTooBig; version 0 or less is
+ * envBadVers. */
 int16_t tb_SysEnvirons(int16_t vers, gaddr p)
 {
     if (vers < 1)
@@ -116,10 +118,8 @@ int16_t tb_SysEnvirons(int16_t vers, gaddr p)
     SysEnvRec_set_hasFPU(p, gestalt_value(fourcc("fpu "), 0) != 0);
     SysEnvRec_set_hasColorQD(p, m->color_qd);
     SysEnvRec_set_keyBoardType(p, (int16_t)m->env_keyboard);
-    if (v >= 2) {
-        SysEnvRec_set_atDrvrVersNum(p, 0);
-        SysEnvRec_set_sysVRefNum(p, fm_system_vref());
-    }
+    SysEnvRec_set_atDrvrVersNum(p, 0);
+    SysEnvRec_set_sysVRefNum(p, fm_system_vref());
     return vers > 2 ? -5502 : noErr; /* envVersTooBig */
 }
 

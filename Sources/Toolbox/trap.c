@@ -618,6 +618,16 @@ void machine_idle_for(int32_t sleep)
         uint64_t slept = c->icount + (uint64_t)(sleep ? sleep : 1) * 166667u; /* a tick at 10 MIPS */
         if (!next || slept < next)
             next = slept;
+        /* The menu walk's next step is input too and ends the sleep there:
+         * a program sleeping long between events (60 ticks, or 300) would
+         * otherwise spend that long on each step and run out of
+         * instructions before the walk was done. */
+        uint64_t step = walker_next_in();
+        if (step) {
+            uint64_t at = c->icount + (step + 99) / 100; /* 100 ns an instruction */
+            if (at < next)
+                next = at;
+        }
     }
     if (next > c->icount && (!icount_cap || next < icount_cap))
         c->icount = next;

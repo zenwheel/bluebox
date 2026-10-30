@@ -166,4 +166,5 @@ void finder_reset(void)
     }
     if (!rd32(em + EM_SYS_HEAP_RESERVE))
         wr32(em + EM_SYS_HEAP_RESERVE, 0x4000);
+    sm_note_kchr_cache(); /* emKeyCache: the keyboard layout */
 }

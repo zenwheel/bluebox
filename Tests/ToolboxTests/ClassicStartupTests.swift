@@ -356,14 +356,16 @@ extension BlueBox {
             return (tb_SysEnvirons(vers, rec), rec)
         }
 
-        /// Each version of SysEnvirons: 1 fills through the keyboard, 2 adds
-        /// the AppleTalk driver and the System Folder's volume, anything above
-        /// is answered as 2 with envVersTooBig, below 1 envBadVers.
+        /// Each version of SysEnvirons fills the whole record (version 1 has
+        /// the AppleTalk driver and the System Folder's volume too, which
+        /// Anthem opens its files on); anything above 2 is answered as 2
+        /// with envVersTooBig, below 1 envBadVers.
         @Test func sysEnvironsVersions() {
             launchTestApp()
             let v1 = sysEnv(1)
             #expect(v1.err == 0 && rd16(v1.rec) == 1)
-            #expect(rd16(v1.rec + 12) == 0x5555 && rd16(v1.rec + 14) == 0x5555) // version 2's fields untouched
+            #expect(rd16(v1.rec + 12) == 0 && rd16(v1.rec + 14) != 0x5555)
+            #expect(Int16(bitPattern: rd16(v1.rec + 14)) == fm_system_vref())
             let v2 = sysEnv(2)
             #expect(v2.err == 0 && rd16(v2.rec) == 2 && rd16(v2.rec + 12) == 0 && rd16(v2.rec + 14) != 0x5555)
             let v3 = sysEnv(3)

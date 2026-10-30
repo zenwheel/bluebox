@@ -19,6 +19,7 @@
 #define JMP_ABS_L 0x4EF9
 
 static gaddr jt_base(void) { return rd32(LM_CurrentA5) + rd16(LM_CurJTOffset); }
+static uint32_t jt_size; /* the jump table's, from CODE 0 at the launch */
 
 /* GetResource('CODE', seg) through the trap table when a program has
  * patched it, as the ROM's LoadSeg calls it: self-expanding applications
@@ -133,11 +134,7 @@ static void raw_UnloadSeg(cpu68k *c, uint16_t tw)
     cpu_push32(c, ret);
     gaddr a5 = rd32(LM_CurrentA5);
     gaddr jt = jt_base();
-    uint32_t jtsize = 0;
-    /* Jump table size from CODE 0 (kept loaded by the launch). */
-    gaddr c0 = get_code(0);
-    if (c0 && rd32(c0))
-        jtsize = rd32(rd32(c0) + 8);
+    uint32_t jtsize = jt_size;
     (void)a5;
     int16_t seg = -1;
     gaddr code = 0;
@@ -272,6 +269,14 @@ uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errl
     gmemset(base, 0, a5 - base);
     gmemset(a5, 0, above);
     gmemcpy(a5 + jtoff, c0 + 16, jtsize);
+    jt_size = jtsize;
+    /* CODE 0 is released once its jump table is in place, as the Segment
+     * Loader did: a program unloading every purgeable CODE resource that is
+     * in memory (Style) otherwise took CODE 0 for a segment, and its first
+     * word, 0, for the main segment's jump table entries, unloading the
+     * main segment under its own LoadSeg patch. */
+    tb_HUnlock(c0h);
+    tb_ReleaseResource(c0h);
     wr32(LM_CurrentA5, a5);
     wr16(LM_CurJTOffset, (uint16_t)jtoff);
     wr32(LM_CurStackBase, base);

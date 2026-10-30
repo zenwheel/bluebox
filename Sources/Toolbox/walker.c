@@ -277,6 +277,17 @@ static void stays_up(int at)
     cpu_halt(g_cpu, "menu walk stuck in a dialog after %s", last);
 }
 
+/* The machine's time to the walk's next step, 0 when it is due or there
+ * is no walk: a program asleep in WaitNextEvent is woken by that step as
+ * by any input, so its sleep ends there. */
+uint64_t walker_next_in(void)
+{
+    uint64_t now = machine_time_ns();
+    if (!walking || !g_cpu || g_cpu->halted || now >= next_at)
+        return 0;
+    return next_at - now;
+}
+
 void walker_idle(uint64_t icount)
 {
     (void)icount;

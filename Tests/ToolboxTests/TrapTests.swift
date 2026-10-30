@@ -311,6 +311,55 @@ extension BlueBox {
             #expect(rd16(a5 + 40 + 2) == 0x4EF9) // and so is entry 1
         }
 
+        /// CODE 0 is released once the jump table is set up, as the Segment
+        /// Loader did (Style unloads every purgeable CODE resource it finds
+        /// in memory, and took CODE 0 for the main segment), and UnloadSeg
+        /// still knows the jump table: a routine's entry, as Pascal's @
+        /// gives it, unloads its segment.
+        @Test func codeZeroIsReleasedAfterTheLaunch() throws {
+            bootMachine()
+            let jt = cat(
+                be16(0), be16(0x3F3C), be16(1), be16(0xA9F0),     // entry 0: seg 1, offset 0
+                be16(0), be16(0x3F3C), be16(2), be16(0xA9F0))     // entry 1: seg 2, offset 0
+            let code0 = cat(be32(48), be32(256), be32(16), be32(32), jt)
+            let code1 = cat(
+                be16(0), be16(1),                                 // first entry 0, 1 entry
+                be16(0x4EAD), be16(42),                           // JSR 42(A5): entry 1
+                be16(0x486D), be16(42),                           // PEA 42(A5): entry 1's JMP
+                be16(0xA9F1),                                     // _UnloadSeg
+                be16(0xA9F4))                                     // _ExitToShell
+            let code2 = cat(be16(8), be16(1), be16(0x7207), be16(0x4E75)) // MOVEQ #7,D1; RTS
+            var fork = buildFork([
+                TestResource(type: "CODE", id: 0, data: code0),
+                TestResource(type: "CODE", id: 1, data: code1),
+                TestResource(type: "CODE", id: 2, data: code2),
+            ])
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let path = dir.appendingPathComponent("Unloader").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+
+            #expect(machine_launch(path, &err, err.count))
+            #expect(machine_run(10_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.1 == 7)
+            let a5 = rd32(UInt32(LM_CurrentA5))
+            #expect(rd16(a5 + 32 + 2) == 0x4EF9) // the main segment's entry stays loaded
+            #expect(rd16(a5 + 40 + 2) == 0x3F3C && rd16(a5 + 40 + 6) == 0xA9F0) // segment 2's unloaded
+            let saved = tb_CurResFile()
+            tb_UseResFile(Int16(bitPattern: rd16(UInt32(LM_CurApRefNum))))
+            tb_SetResLoad(0)
+            let h = tb_Get1Resource(Int32(bitPattern: fourCC("CODE")), 0)
+            tb_SetResLoad(1)
+            tb_UseResFile(saved)
+            #expect(h != 0 && rd32(h) == 0) // not in memory
+        }
+
         /// LoadSeg gets each segment through GetResource, so a patch on it
         /// (self-expanding applications unpack their segments there) is called.
         @Test func loadSegCallsAPatchedGetResource() throws {

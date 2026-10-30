@@ -97,6 +97,7 @@ bool dialog_std_filter(gaddr d, gaddr evt, gaddr itemp);
 int window_button(gaddr w, int n, char *title, size_t size, int *x, int *y); /* controls.c */
 bool ctl_push_button(gaddr ch, bool custom);
 void walker_idle(uint64_t now);
+uint64_t walker_next_in(void); /* ns to the walk's next step; 0: due, or no walk */
 
 /* ---- Resource Manager internals ---- */
 
@@ -339,6 +340,7 @@ uint8_t *intl_itl2(uint32_t *lenp);
 void notify_pump(void);
 void notify_reset(void);
 void icons_reset(void); /* the Icon Utilities' labels and caches (icons.c) */
+void sm_note_kchr_cache(void); /* ExpandMem's emKeyCache: the keyboard layout's copy (scriptmgr.c) */
 void finder_reset(void); /* the Finder's Process Manager calls (finder.c) */
 void shutdown_reset(void); /* the Shutdown Manager's procedures (shutdown.c) */
 int finder_apple_menu_items(void); /* the items the Finder last gave the Apple menu */

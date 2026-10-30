@@ -163,12 +163,17 @@ static int16_t xref_call(uint8_t fn, gaddr pb)
         xrefs[i].flags = rd16(pb + 38);
         return noErr;
     case 0x86: /* SCSILookupRefNumXref: and the one after it */
-        if (dev == 0xFFFFFFFFu) { /* the first */
+        /* A device on bus $FF asks for the first (Norton's Volume Recover
+         * passes $00FF0000, others $FFFFFFFF); a next device on bus $FF
+         * ends the list, and a device not in it has none after it, so a
+         * scan stops either way. */
+        if (rd8(pb + sh_device + 1) == 0xFF) {
             wr32(pb + 40, nxrefs ? xrefs[0].device : 0xFFFFFFFFu);
             return noErr;
         }
         if (i == nxrefs) {
             wr16(pb + 36, 0);
+            wr32(pb + 40, 0xFFFFFFFFu);
             return scsiNoSuchXref;
         }
         wr16(pb + 36, (uint16_t)xrefs[i].refnum);

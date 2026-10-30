@@ -46,6 +46,25 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
         }
 
+        /// Asleep in WaitNextEvent, a program wakes at the walk's next step
+        /// (input, as a user's would be) rather than at the end of a long
+        /// sleep, so the walk's steps come as often whatever it asks.
+        @Test func aLongSleepEndsAtTheWalksNextStep() throws {
+            let dir = try launch(cat(be16(0xA9F4))) // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let ev = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            tb_FlushEvents(-1, 0)
+            machine_set_instruction_limit(0) // no limit left by an earlier run to stop the clock
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            for _ in 0..<3 {
+                let before = g_cpu!.pointee.icount
+                _ = tb_WaitNextEvent(0, ev, 300, 0) // five seconds
+                let slept = g_cpu!.pointee.icount - before
+                #expect(slept > 2_900_000 && slept < 3_100_000) // a step: 0.3 s at 100 ns an instruction
+            }
+        }
+
         /// A program that is one window of buttons, with no menu bar
         /// (Disinfectant 1.6): the walk presses its button, which here
         /// ends the program.
