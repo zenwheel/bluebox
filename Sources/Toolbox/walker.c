@@ -433,8 +433,9 @@ void walker_idle(uint64_t icount)
         }
         /* A game with no menus, in a window or the whole screen, given
          * keys and clicks: walked if it went on drawing, not one stuck on
-         * a still screen. */
-        if ((game || tb_FrontWindow()) && screen_moved_on()) {
+         * a still screen, nor one in a modal dialog it puts up again and
+         * again (MediaPresenter's, asking for a name). */
+        if ((game || tb_FrontWindow()) && !(d && dialog_modal(d)) && screen_moved_on()) {
             no_menu_bar(game ? "the program has the whole screen, it drew on as keys and clicks were given"
                              : "the program has no menus, it drew on as keys and clicks were given");
             return;

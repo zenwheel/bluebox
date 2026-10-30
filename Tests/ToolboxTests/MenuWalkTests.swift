@@ -206,6 +206,38 @@ extension BlueBox {
             #expect(String(cString: machine_halt_reason()).hasPrefix("menu walk found no menu bar or window"))
         }
 
+        /// A modal dialog the program stays in is not a game drawing on,
+        /// whatever changes on the screen (MediaPresenter's, put up again
+        /// and again as it asks for a name).
+        @Test func aModalDialogIsNotAGameDrawingOn() throws {
+            let dir = try launch(cat(
+                be16(0x487A), be16(0x000A),   // loop: PEA filter(PC)
+                be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+                be16(0xA991),                 // _ModalDialog
+                be16(0x60F4),                 // BRA loop
+                be16(0x0838), be16(5), be16(0x016D), // filter: BTST #5,Ticks+3
+                be16(0x6708),                 // BEQ erase
+                be16(0x486D), be16(0xFFD0),   // PEA box(A5)
+                be16(0xA8A2),                 // _PaintRect
+                be16(0x6006),                 // BRA done
+                be16(0x486D), be16(0xFFD0),   // erase: PEA box(A5)
+                be16(0xA8A3),                 // _EraseRect
+                be16(0x205F),                 // done: MOVE.L (SP)+,A0
+                be16(0x4FEF), be16(12),       // LEA 12(SP),SP
+                be16(0x4257),                 // CLR.W (SP): not handled
+                be16(0x4ED0)))                // JMP (A0)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            _ = dialog([50, 50, 250, 350])
+            let box = rd32(UInt32(LM_CurrentA5)) - 0x30
+            for (i, v) in [0, 0, 200, 300].enumerated() { wr16(box + UInt32(i * 2), UInt16(v)) }
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()).hasPrefix("menu walk found no menu bar"))
+        }
+
         /// A window's only button dimmed for now (a licence's Agree while
         /// it counts down, Terrain Builder's) is waited for and pressed
         /// once it is active.
