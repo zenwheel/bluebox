@@ -70,7 +70,7 @@ static const q3field gpoly_f[] = { { 1, QF_PTR, self0, &contour_s }, { 3, QF_OBJ
 static const q3schema gpoly_s = { 4, 2, gpoly_f };
 static const q3field line_f[] = { { 3, QF_OBJ, NULL, NULL }, { 7, QF_OBJ, NULL, NULL }, { 8, QF_OBJ, NULL, NULL } };
 static const q3schema line_s = { 9, 3, line_f };
-static uint32_t bitmap_bytes(const uint32_t *s, const uint32_t *p) { return s[7] * s[8]; }
+static uint32_t bitmap_bytes(const uint32_t *s, const uint32_t *p) { return q3_mul(s[7], s[8]); }
 static const q3field marker_f[] = { { 5, QF_BYTES, bitmap_bytes, NULL }, { 10, QF_OBJ, NULL, NULL } };
 static const q3schema marker_s = { 11, 2, marker_f };
 static uint32_t curve_knots(const uint32_t *s, const uint32_t *p) { return s[0] + s[1]; }
@@ -124,11 +124,11 @@ static uint32_t attr_size(const uint32_t *s)
     int32_t n = q3_element_size((int32_t)s[0]);
     return n > 0 ? (uint32_t)n : 0;
 }
-static uint32_t tri_data(const uint32_t *s, const uint32_t *p) { return p ? attr_size(s) * p[1] : 0; }
+static uint32_t tri_data(const uint32_t *s, const uint32_t *p) { return p ? q3_mul(attr_size(s), p[1]) : 0; }
 static uint32_t tri_use(const uint32_t *s, const uint32_t *p) { return p ? p[1] : 0; }
-static uint32_t edge_data(const uint32_t *s, const uint32_t *p) { return p ? attr_size(s) * p[5] : 0; }
+static uint32_t edge_data(const uint32_t *s, const uint32_t *p) { return p ? q3_mul(attr_size(s), p[5]) : 0; }
 static uint32_t edge_use(const uint32_t *s, const uint32_t *p) { return p ? p[5] : 0; }
-static uint32_t vtx_data(const uint32_t *s, const uint32_t *p) { return p ? attr_size(s) * p[9] : 0; }
+static uint32_t vtx_data(const uint32_t *s, const uint32_t *p) { return p ? q3_mul(attr_size(s), p[9]) : 0; }
 static uint32_t vtx_use(const uint32_t *s, const uint32_t *p) { return p ? p[9] : 0; }
 static const q3field tmtri_f[] = { { 1, QF_BYTES, tri_data, NULL }, { 2, QF_BYTES, tri_use, NULL } };
 static const q3schema tmtri_s = { 3, 2, tmtri_f };

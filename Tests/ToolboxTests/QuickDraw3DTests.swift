@@ -201,6 +201,25 @@ extension BlueBox {
             for obj in [green, group, null, box, v, dc] { Q.call("Q3Object_Dispose", [obj]) }
         }
 
+        /// A draw context whose mask is off is made whatever the mask's
+        /// fields hold, and one whose mask is too big to be real is made
+        /// without it.
+        @Test func unusedOrImpossibleMask() {
+            launchTestApp()
+            _ = cfm_ppc_cpu()
+            #expect(Q.call("Q3Initialize") == 1)
+            let image = tb_NewPtr(16 * 16 * 4, false, true)
+            for maskState in [0, 1] {
+                let d = Self.data([1, Float(1), Float(0), Float(0), Float(0),
+                                   Float(0), Float(0), Float(0), Float(0), 0,
+                                   0x0010_0000, 0xBEEF, 0xC000_0000, 0x7000_0000, 0, maskState, 1,
+                                   image, 16, 16, 64, 32, 0, 0, 0])
+                let dc = Q.call("Q3PixmapDrawContext_New", [d])
+                #expect(dc != 0)
+                Q.call("Q3Object_Dispose", [dc])
+            }
+        }
+
         /// A window point pick finds the trimesh under the point, not
         /// beside it.
         @Test func picksWhatIsUnderThePoint() {

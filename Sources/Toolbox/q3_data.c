@@ -8,6 +8,8 @@
 #include "tb_internal.h"
 
 enum { MAX_ELEMENTS = 1 << 24 };
+/* More than a guest buffer can be (a garbage size). */
+enum { MAX_BYTES = 1 << 28 };
 
 static int nptrs(const q3schema *s)
 {
@@ -39,6 +41,8 @@ q3node *q3d_new(const q3schema *s, uint32_t n)
 
 static q3node *bytes_from_guest(gaddr p, uint32_t n)
 {
+    if (n > MAX_BYTES)
+        return NULL;
     q3node *nd = calloc(1, sizeof *nd);
     if (!nd)
         return NULL;
