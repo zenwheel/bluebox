@@ -2086,7 +2086,7 @@ int32_t tb_DrawThemeMenuTitle(gaddr bar, gaddr title, uint16_t state, uint32_t a
     qrect r = rect_arg(title), b = rect_arg(bar);
     r.top = (int16_t)(b.top + 1);
     r.bottom = (int16_t)(b.bottom - 1);
-    if (themed() && thme_menu_title((qrect){ b.top, r.left, b.bottom, r.right }, state == 1))
+    if (themed() && thme_menu_title(b, (qrect){ b.top, r.left, b.bottom, r.right }, state == 1, state != 3))
         ;
     else if (state == 1)
         selection_fill(r);
@@ -2333,8 +2333,39 @@ int32_t tb_UseThemeFont(uint16_t id, int16_t script)
 
 /* The System's cursors where there is one (I-beam, cross, plus, watch);
  * the arrow for the rest. */
+/* A theme file's cursor: its 'crsr' in a handle of ours (one per
+ * resource, kept), set as a colour cursor. */
+static bool theme_file_cursor(uint32_t cursor, uint32_t step)
+{
+    static struct {
+        const uint8_t *src;
+        gaddr h;
+    } made[64];
+    uint32_t len;
+    const uint8_t *d = themed() ? thme_cursor((int)cursor, (int)step, &len) : NULL;
+    if (!d)
+        return false;
+    int k = 0;
+    while (k < 64 && made[k].src && made[k].src != d)
+        k++;
+    if (k == 64)
+        return false;
+    if (!made[k].src) {
+        gaddr h = tb_NewHandle((int32_t)len, true, false);
+        if (!h || !rd32(h))
+            return false;
+        gput(rd32(h), d, len);
+        made[k].src = d;
+        made[k].h = h;
+    }
+    tb_SetCCursor(made[k].h);
+    return true;
+}
+
 static int32_t theme_cursor(uint32_t cursor)
 {
+    if (cursor <= 17 && theme_file_cursor(cursor, 0))
+        return noErr;
     int16_t id = 0;
     switch (cursor) {
     case 4: id = 1; break;                           /* kThemeIBeamCursor */
@@ -2359,7 +2390,12 @@ static int32_t theme_cursor(uint32_t cursor)
 }
 
 int32_t tb_SetThemeCursor(uint32_t cursor) { return theme_cursor(cursor); }
-int32_t tb_SetAnimatedThemeCursor(uint32_t cursor, uint32_t step) { return theme_cursor(cursor); }
+int32_t tb_SetAnimatedThemeCursor(uint32_t cursor, uint32_t step)
+{
+    if (cursor <= 17 && theme_file_cursor(cursor, step))
+        return noErr;
+    return theme_cursor(cursor);
+}
 
 /* The theme's sounds: Platinum's are off unless a sound track is chosen. */
 int32_t tb_PlayThemeSound(int32_t kind) { return noErr; }

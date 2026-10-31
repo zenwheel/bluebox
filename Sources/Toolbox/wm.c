@@ -16,6 +16,7 @@
 #include "carbon_hi.h"
 #include "machine.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 enum { wDraw = 0, wHit, wCalcRgns, wNew, wDispose, wGrow, wDrawGIcon };
 enum { wNoHit = 0, wInContent, wInDrag, wInGrow, wInGoAway, wInZoomIn, wInZoomOut, wInCollapseBox = 9 };
@@ -978,7 +979,7 @@ static void paint_desk(const hrgn *area)
         tb_SetPort(wp);
         rgn_write(GrafPort_clipRgn(wp), &clip);
         hrgn_free(&clip);
-    } else {
+    } else if (!(g_appearance == MACHINE_APPEARANCE_THEME && thme_paint_desk(&r))) {
         uint8_t pat[8];
         gget(pat, LM_DeskPattern, 8);
         qd_fill_region(wp, &r, pat, patCopy);

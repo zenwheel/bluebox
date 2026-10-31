@@ -953,8 +953,8 @@ static void themed_title(int i, bool selected)
 {
     gaddr mh = menu_at(i);
     qrect r = title_rect(i);
-    thme_menu_title(r, selected);
     bool on = (MenuInfo_enableFlags(menu_ptr(mh)) & 1) != 0;
+    thme_menu_title((qrect){ 0, 0, (int16_t)mbar_height(), (int16_t)g_screen_width }, r, selected, on);
     draw_text_colored(r.left + 7, 14, title_of(mh), !on ? 33 : selected ? 32 : 31);
 }
 

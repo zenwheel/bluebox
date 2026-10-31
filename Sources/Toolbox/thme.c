@@ -1334,8 +1334,28 @@ bool thme_track(const thme_track_info *t)
 
 bool thme_menu_bar(qrect r) { return part(256, r, 0); }
 
-/* A menu title's background in the bar, selected or not. */
-bool thme_menu_title(qrect r, bool selected) { return part(256, r, selected ? 0x20 : 0); }
+/* A menu title's background: the bar's (some themes' bars have a
+ * selected look) under it, then the title's own (RootMenuItem). */
+bool thme_menu_title(qrect bar, qrect r, bool selected, bool enabled)
+{
+    if (!T.on || !layout(256))
+        return false;
+    int m[THME_MEASURES] = { 0 };
+    surface s;
+    port_surface(&s);
+    hrgn t;
+    hrgn_init(&t);
+    hrgn_rect(&t, r);
+    hrgn_op(&s.clip, &s.clip, &t, RGN_SECT);
+    hrgn_free(&t);
+    surface *old = S;
+    S = &s;
+    draw_part_on(256, bar, selected ? 0x20 : 0, m, 0, 0);
+    draw_part_on(260, r, (selected ? 0x20 : 0) | (enabled ? 0x02 : 0), m, 0, 0);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
+}
 
 /* A menu's background: 0 pull-down, 1 pop-up, 2 hierarchical. */
 bool thme_menu_background(qrect r, int type)
@@ -1352,6 +1372,142 @@ bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier)
 }
 
 bool thme_menu_separator(qrect r) { return part(263, r, 0); }
+
+/* ---------------------------------------------------------------------- */
+/* The scene ('scen'): the desktop pattern, highlight colour, fonts and
+ * sound set, a flattened collection like 'tinf' */
+
+/* An item of a flattened collection by its tag: u32 version, u32, u32
+ * count, then {tag, id, attributes, offset} entries; the offsets count
+ * from the u32 after them, and each item is a u32 length and the bytes. */
+static const uint8_t *coll_item(const uint8_t *d, uint32_t len, const char *tag, uint32_t *ilen)
+{
+    if (!d || len < 12)
+        return NULL;
+    uint32_t n = be32(d + 8), base = 12 + n * 16;
+    if (n > 4096 || base > len)
+        return NULL;
+    for (uint32_t i = 0; i < n; i++) {
+        const uint8_t *e = d + 12 + i * 16;
+        if (be32(e) != fourcc(tag))
+            continue;
+        uint32_t off = base + be32(e + 12);
+        if (off + 4 > len || off + 4 + be32(d + off) > len)
+            return NULL;
+        *ilen = be32(d + off);
+        return d + off + 4;
+    }
+    return NULL;
+}
+
+/* An item of the theme's scene: the one its 'tdat' names, else the
+ * first other scene that has it (Gizmo's names a desktop picture, which
+ * the theme file doesn't hold; another scene of it has a pattern). */
+static const uint8_t *scene_item(const char *tag, uint32_t *ilen)
+{
+    uint32_t tl, len;
+    const uint8_t *td = res(fourcc("tdat"), 1, &tl), *d;
+    for (uint32_t o = 0; td && o + 16 <= tl; o += 16)
+        if (be32(td + o) == fourcc("scen") && (d = res(fourcc("scen"), (int16_t)be16(td + o + 4), &len)) &&
+            (d = coll_item(d, len, tag, ilen)))
+            return d;
+    for (size_t i = 0; i < T.idx.count; i++)
+        if (T.idx.entries[i].type == fourcc("scen") &&
+            (d = coll_item(rsrc_data(T.fork, &T.idx, &T.idx.entries[i]), T.idx.entries[i].data_len, tag, ilen)))
+            return d;
+    return NULL;
+}
+
+/* A string item of the scene (a Pascal string), as C. */
+bool thme_scene_string(const char *tag, char *out, size_t n)
+{
+    uint32_t il;
+    const uint8_t *d = T.on ? scene_item(tag, &il) : NULL;
+    if (!d || !il || d[0] + 1u > il || !n)
+        return false;
+    size_t k = d[0] < n - 1 ? d[0] : n - 1;
+    memcpy(out, d + 1, k);
+    out[k] = 0;
+    return true;
+}
+
+/* The scene's highlight colour. */
+bool thme_highlight_rgb(uint16_t out[3])
+{
+    uint32_t il;
+    const uint8_t *d = T.on ? scene_item("hcol", &il) : NULL;
+    if (!d || il < 6)
+        return false;
+    for (int i = 0; i < 3; i++)
+        out[i] = be16(d + i * 2);
+    return true;
+}
+
+/* The desktop: the scene's pattern (a flattened ppat), tiled from the
+ * screen's top left, over the area in the current port. */
+bool thme_paint_desk(const hrgn *area)
+{
+    if (!T.on)
+        return false;
+    bool fresh;
+    tcache *c = cached(fourcc("patt"), 0, &fresh);
+    if (fresh) {
+        uint32_t il;
+        const uint8_t *d = scene_item("patt", &il);
+        c->ok = d && decode_ppat(d, il, &c->im);
+    }
+    if (!c->ok)
+        return false;
+    surface s;
+    port_surface(&s);
+    hrgn_op(&s.clip, &s.clip, area, RGN_SECT);
+    qrect b = hrgn_bbox(&s.clip);
+    surface *old = S;
+    S = &s;
+    if (b.right > b.left && b.bottom > b.top) {
+        /* pinned to 0,0: tile from there to cover the area */
+        qrect t = { 0, 0, b.bottom, b.right };
+        if (b.top < 0 || b.left < 0)
+            t = b;
+        draw_tile(&c->im, 0, t, 1);
+    }
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Cursors: 'crsr' 128-131 the arrows, 139 and 140 the closed and open
+ * hands; 'acur' 128 the watch (spinning), 129 and 130 the counting hands. */
+
+const uint8_t *thme_cursor(int cursor, int step, uint32_t *len)
+{
+    if (!T.on)
+        return NULL;
+    int16_t id = 0, anim = 0;
+    switch (cursor) {
+    case 0: case 1: case 2: case 3: id = (int16_t)(128 + cursor); break;
+    case 4: id = 132; break;  /* kThemeIBeamCursor */
+    case 5: id = 133; break;  /* kThemeCrossCursor */
+    case 6: id = 134; break;  /* kThemePlusCursor */
+    case 7: case 14: anim = 128; break; /* the watch, spinning */
+    case 8: id = 139; break;  /* kThemeClosedHandCursor */
+    case 9: id = 140; break;  /* kThemeOpenHandCursor */
+    case 10: id = 141; break; /* kThemePointingHandCursor */
+    case 11: anim = 129; break; /* counting up */
+    case 12: case 13: anim = 130; break;
+    default: return NULL;
+    }
+    if (anim) {
+        uint32_t al;
+        const uint8_t *a = res(fourcc("acur"), anim, &al);
+        int n = a && al >= 4 ? be16(a) : 0;
+        if (n <= 0 || 4 + (uint32_t)n * 4 > al)
+            return NULL;
+        id = (int16_t)be16(a + 4 + (step % n) * 4);
+    }
+    return res(fourcc("crsr"), id, len);
+}
 
 /* ---------------------------------------------------------------------- */
 /* A sheet of the theme's parts, off-screen (bluebox themes --render) */

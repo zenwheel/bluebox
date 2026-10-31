@@ -86,9 +86,17 @@ bool thme_track(const thme_track_info *t);
 /* Menus: the bar, a title's background, a menu's (0 pull-down, 1 pop-up, 2
  * hierarchical), an item's, a divider. */
 bool thme_menu_bar(qrect r);
-bool thme_menu_title(qrect r, bool selected);
+bool thme_menu_title(qrect bar, qrect r, bool selected, bool enabled);
 bool thme_menu_background(qrect r, int type);
 bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier);
 bool thme_menu_separator(qrect r);
+
+/* The scene: a string item ('name', 'snds' the sound set, 'patn', fonts),
+ * the highlight colour, the desktop pattern painted over an area. */
+bool thme_scene_string(const char *tag, char *out, size_t n);
+bool thme_highlight_rgb(uint16_t out[3]);
+bool thme_paint_desk(const hrgn *area);
+/* A ThemeCursor's 'crsr' (the step'th of an animated one), or NULL. */
+const uint8_t *thme_cursor(int cursor, int step, uint32_t *len);
 
 #endif
