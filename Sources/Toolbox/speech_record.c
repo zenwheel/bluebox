@@ -105,3 +105,6 @@ bool machine_set_speech_record(const char *path)
     machine_set_speech_handler(record, NULL);
     return true;
 }
+
+/* Whether the record backend is the host: it doesn't wait for anything. */
+bool speech_recording(machine_speech_fn fn) { return fn == record; }

@@ -38,6 +38,7 @@ nonisolated(unsafe) var appleShares: [String] = []
 nonisolated(unsafe) var headlessFileAnswers: [String] = []
 /// --speech: system (NSSpeechSynthesizer), avspeech (AVSpeechSynthesizer) or record:FILE.
 nonisolated(unsafe) var speechBackend = "system"
+nonisolated(unsafe) var speechGiven = false
 
 /// Where --jit keeps translations: the user's caches folder.
 func defaultJITCache() -> String {
@@ -79,7 +80,8 @@ func usage() -> Never {
                      rootless windows (implied by --screen)
           --census   keep going past unimplemented traps and report every trap used
           --max N    stop after N instructions (default 50000000)
-          --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu
+          --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu, speech (the Speech
+                     Manager's callbacks, timed)
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --lowmem N=V  set a low-memory setting: DoubleTime, CaretTime, KeyThresh,
                      KeyRepThresh (ticks), SdVolume, MenuFlash, DlgFont, SysFontFam,
@@ -139,7 +141,8 @@ func usage() -> Never {
           --print-to F  print to PDF file F instead of the print panel (headless runs)
           --speech S  speech through system (NSSpeechSynthesizer, the default), avspeech
                      (AVSpeechSynthesizer, also used when the system one is missing)
-                     or record:FILE (requests logged, callbacks at once, no sound)
+                     or record:FILE (requests logged, callbacks at once, no sound); given
+                     to a headless run, system and avspeech speak there too
           --appleshare S  mount an AppleShare volume (repeatable): tcp:[user[:pass]@]host/Volume
                      (AFP over TCP) or atalk:[user[:pass]@]Server:AFPServer[@zone]/Volume
                      (over AppleTalk, which --appletalk must turn on)
@@ -479,6 +482,7 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             speechBackend = args[i]
+            speechGiven = true
             if speechBackend.hasPrefix("record:") {
                 guard machine_set_speech_record(String(speechBackend.dropFirst(7))) else {
                     fail("--speech: can't write \(speechBackend.dropFirst(7))")
@@ -592,6 +596,7 @@ func runCommand(_ args: [String]) {
                 case "rsrc": logMask |= UInt32(LOG_RSRC)
                 case "mem": logMask |= UInt32(LOG_MEM)
                 case "cpu": logMask |= UInt32(LOG_CPU)
+                case "speech": logMask |= UInt32(LOG_SPEECH)
                 default: fail("unknown log category \(item)")
                 }
             }
@@ -844,6 +849,14 @@ func runCommand(_ args: [String]) {
         print("open URL: \(String(cString: urlPtr))")
         return true
     }, nil)
+
+    // Headless, the host speaks only when asked to (--speech system or
+    // avspeech); the Speech Manager pumps the main thread for it.
+    #if canImport(AppKit)
+    if speechGiven && !speechBackend.hasPrefix("record:") {
+        ClassicSpeech.shared.install(avspeech: speechBackend == "avspeech")
+    }
+    #endif
 
     // Guest threads run on host threads of their own; host code they call
     // may wait for the main thread, which runs the machine here.

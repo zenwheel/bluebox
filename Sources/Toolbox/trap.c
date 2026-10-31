@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "log.h"
 #include "machine.h"
@@ -665,6 +666,15 @@ void machine_idle_for(int32_t sleep)
      * program polling Button (a title waiting for a click) looked. */
     if (ev_press_count() != presses)
         return;
+    /* The host speaking (a headless run given --speech): the wait takes its
+     * real time, in slices with interrupt-time work between them, so the
+     * voice's callbacks come as it speaks, not after the run is over. */
+    for (int32_t ms = sleep > 0 ? (sleep > 600 ? 600 : sleep) * 50 / 3 : 0; ms > 0 && speech_waiting(); ms -= 5) {
+        struct timespec slice = { 0, 5000000 };
+        nanosleep(&slice, NULL);
+        machine_advance_ticks();
+        time_pump();
+    }
     /* Waiting: scripted input comes now, or the clock moves on to it. */
     uint64_t next = events_script_next_at();
     if (sleep == 0) {
