@@ -1627,6 +1627,59 @@ bool thme_paint_desk(const hrgn *area)
 }
 
 /* ---------------------------------------------------------------------- */
+/* Icons: 'tic#' 384 maps the system's icon types ('fldr', 'trsh', 'stop',
+ * 'caut', 'note'...) to the theme's icon resources: u32 count, then
+ * {OSType, int16 ID} entries.  The IDs are mostly the System's own (-3999
+ * the folder), the theme holding its own icons at them. */
+
+static const uint8_t *icon_table(uint32_t *n)
+{
+    uint32_t len;
+    const uint8_t *d = T.on ? res(fourcc("tic#"), 384, &len) : NULL;
+    if (!d || len < 4)
+        return NULL;
+    *n = be32(d);
+    if (*n > (len - 4) / 6)
+        *n = (len - 4) / 6;
+    return d + 4;
+}
+
+/* Whether the theme has any of an icon family's resources at an ID. */
+static bool has_icon(int16_t id)
+{
+    static const char *const kinds[] = { "icns", "ICN#", "ics#", "icl8", "ics8", "icm#" };
+    uint32_t len;
+    for (unsigned i = 0; i < sizeof kinds / sizeof kinds[0]; i++)
+        if (res(fourcc(kinds[i]), id, &len))
+            return true;
+    return false;
+}
+
+bool thme_icon_id(uint32_t type, int16_t *id)
+{
+    uint32_t n;
+    const uint8_t *e = icon_table(&n);
+    for (uint32_t i = 0; e && i < n; i++, e += 6)
+        if (be32(e) == type && has_icon((int16_t)be16(e + 4))) {
+            *id = (int16_t)be16(e + 4);
+            return true;
+        }
+    return false;
+}
+
+bool thme_icon_listed(int16_t id)
+{
+    uint32_t n;
+    const uint8_t *e = icon_table(&n);
+    for (uint32_t i = 0; e && i < n; i++, e += 6)
+        if ((int16_t)be16(e + 4) == id)
+            return has_icon(id);
+    return false;
+}
+
+const uint8_t *thme_resource(uint32_t type, int16_t id, uint32_t *len) { return T.on ? res(type, id, len) : NULL; }
+
+/* ---------------------------------------------------------------------- */
 /* Cursors: 'crsr' 128-131 the arrows, 139 and 140 the closed and open
  * hands; 'acur' 128 the watch (spinning), 129 and 130 the counting hands. */
 

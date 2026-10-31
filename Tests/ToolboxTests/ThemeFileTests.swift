@@ -89,7 +89,11 @@ extension BlueBox {
             let scene = collection([("lgsf", pstr("Gadget")), ("smsf", pstr("Monaco")), ("vfnt", pstr("Chicago")),
                                     ("vfsz", be16(12)), ("hcol", be16(0xCCCC) + be16(0x9999) + be16(0x6666)),
                                     ("sbar", be16(2)), ("smoo", [1, 0]), ("sndt", pstr("Synthetic Sounds"))])
-            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("scen", 128, scene), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
+            // tic# 384: the trash is the theme's ICN# -3993 (a 32x32 square).
+            let tic = be32(2) + Array("trsh".utf8) + be16(-3993) + Array("fldr".utf8) + be16(-3999)
+            let trash = [UInt8](repeating: 0xFF, count: 256)
+            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("scen", 128, scene),
+                                                 ("tic#", 384, tic), ("ICN#", -3993, trash), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
                                                  ("frme", 520, frame),
                                                  ("plut", 387, fills), ("plut", 386, brushes), ("clr#", 384, colors)]
             var datas: [UnsafeMutablePointer<UInt8>] = []
@@ -213,6 +217,39 @@ extension BlueBox {
             #expect(thme_scene_int("vfsz", &v) && v == 12)
             #expect(thme_scene_bool("smoo", &b) && b)
             #expect(machine_theme_sound_set_name(&name, name.count) && String(cString: name) == "Synthetic Sounds")
+        }
+
+        /// The theme's icons stand in for the System's ('tic#'), through
+        /// Icon Services and the Icon Utilities; one it lists but hasn't
+        /// is the System's.
+        @Test func icons() {
+            launchTestApp()
+            _ = initToolbox()
+            load()
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_THEME))
+            iconservices_reset()
+            defer {
+                thme_unload()
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+                iconservices_reset()
+            }
+            var id: Int16 = 0
+            #expect(thme_icon_id(fourCC("trsh"), &id) && id == -3993)
+            #expect(!thme_icon_id(fourCC("fldr"), &id)) // listed, but no icon of its own
+            #expect(thme_icon_listed(-3993) && !thme_icon_listed(-3999))
+            let ref = tb_NewPtr(4, false, true), fam = tb_NewPtr(4, false, true), h = tb_NewHandle(0, false, false)
+            #expect(tb_GetIconRef(0, Int32(bitPattern: fourCC("macs")), Int32(bitPattern: fourCC("trsh")), ref) == 0)
+            #expect(tb_IconRefToIconFamily(rd32(ref), 0xFFFF_FFFF, fam) == 0)
+            #expect(tb_GetIconFamilyData(rd32(fam), Int32(bitPattern: fourCC("ICN#")), h) == 0)
+            #expect(tb_GetHandleSize(h) == 256 && rd32(rd32(h)) == 0xFFFF_FFFF)
+            let h8 = tb_NewHandle(0, false, false)
+            _ = tb_GetIconFamilyData(rd32(fam), Int32(bitPattern: fourCC("icl8")), h8)
+            #expect(tb_GetHandleSize(h8) == 0) // not the System's
+            let suite = tb_NewPtr(4, false, true)
+            #expect(tb_GetIconSuite(suite, -3993, 0xFFFF_FFFF) == 0)
+            let icn = tb_NewPtr(4, false, true)
+            #expect(tb_GetIconFromSuite(icn, rd32(suite), Int32(bitPattern: fourCC("ICN#"))) == 0)
+            #expect(rd32(rd32(rd32(icn))) == 0xFFFF_FFFF)
         }
 
         /// A menu's background covers what its layout draws round it.

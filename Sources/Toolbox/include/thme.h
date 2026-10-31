@@ -116,6 +116,11 @@ void thme_unload_sounds(void);
 const char *thme_sound_set(void);
 uint32_t thme_sound_mask(void);
 const uint8_t *thme_sound(uint32_t kind, int *cls, int16_t *id, uint32_t *len);
+/* The theme's icons ('tic#'): the resource ID of its icon for a system
+ * icon type, whether an ID is one of them, and its resources. */
+bool thme_icon_id(uint32_t type, int16_t *id);
+bool thme_icon_listed(int16_t id);
+const uint8_t *thme_resource(uint32_t type, int16_t id, uint32_t *len);
 /* A ThemeCursor's 'crsr' (the step'th of an animated one), or NULL. */
 const uint8_t *thme_cursor(int cursor, int step, uint32_t *len);
 

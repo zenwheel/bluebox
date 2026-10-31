@@ -14,6 +14,7 @@
 
 #include "machine.h"
 #include "qd_internal.h"
+#include "thme.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -775,6 +776,7 @@ void tb_GetDialogItemText(gaddr item, gaddr text)
 }
 
 static void draw_item(gaddr d, int n);
+static bool theme_alert_icon(gaddr h, gaddr rp);
 
 void tb_SetDialogItemText(gaddr item, gaddr text)
 {
@@ -951,7 +953,7 @@ static void draw_item(gaddr d, int n)
     } else if (type == userItem && ap_item_draw(d, n)) {
         /* its stand-in's drawing procedure (a user pane's) */
     } else if (type == iconItem) {
-        if (h)
+        if (h && !theme_alert_icon(h, rp))
             tb_PlotIcon(rp, h);
     } else if (type == picItem) {
         if (h)
@@ -963,6 +965,20 @@ static void draw_item(gaddr d, int n)
     }
     item_font_end(d, &fs);
     tb_DisposePtr(rp);
+}
+
+/* The stop, note and caution icons ('ICON' 0-2) in a theme file's own
+ * look, when it has them (its 'tic#' 'stop', 'note', 'caut'). */
+static bool theme_alert_icon(gaddr h, gaddr rp)
+{
+    static const char *const kinds[] = { "stop", "note", "caut" };
+    int16_t id;
+    if (!thme_in_use())
+        return false;
+    for (int k = 0; k < 3; k++)
+        if (h == tb_GetResource((int32_t)fourcc("ICON"), (int16_t)k) && thme_icon_id(fourcc(kinds[k]), &id))
+            return tb_PlotIconID(rp, 0, 0, id) == noErr;
+    return false;
 }
 
 /* For the items' stand-in controls (cdefs_appearance.c). */
