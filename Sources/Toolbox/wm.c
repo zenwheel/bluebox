@@ -1273,11 +1273,41 @@ static gaddr new_string_handle(gaddr pstr)
     return h;
 }
 
+/* Mac OS 8's window definitions (WDEFs 64 to 67: document windows,
+ * dialog boxes, floating windows with the title on top or at the side), as
+ * the procIDs of ours that draw the same kinds; their variation codes are
+ * bits: grow box, vertical and horizontal zoom. */
+static int16_t appearance_proc(int16_t procid)
+{
+    int v = procid & 15;
+    bool grow, zoom;
+    switch (procid >> 4) {
+    case 64: /* kWindowDocumentProc 1024 and its kin */
+        grow = v & 1;
+        zoom = v & 6;
+        return (int16_t)(zoom ? (grow ? 8 : 12) : (grow ? 0 : 4));
+    case 65: { /* plain, shadow, modal, movable modal, alert, movable alert, movable modal grow */
+        static const int16_t dialog[] = { 2, 3, 1, 5, 1, 5, 5 };
+        return v < 7 ? dialog[v] : 1;
+    }
+    case 66:
+    case 67: /* kWindowFloatProc 1057, kWindowFloatSideProc 1073 */
+        grow = v & 2;
+        zoom = v & 12;
+        return (int16_t)(124 * 16 + 1 + (grow ? 2 : 0) + (zoom ? 4 : 0) + ((procid >> 4) == 67 ? 8 : 0));
+    default:
+        return procid;
+    }
+}
+
 static gaddr new_window(gaddr storage, qrect bounds, gaddr title, bool vis, int16_t procid, gaddr behind, bool goaway,
                         int32_t refcon, bool color)
 {
     LOGF(LOG_TRAPS, "  new window %d,%d,%d,%d proc %d vis %d\n", bounds.top, bounds.left, bounds.bottom, bounds.right,
          procid, vis);
+    if ((procid >> 4) >= 64 && (procid >> 4) <= 67 && !carbonwm_registered_def((int16_t)(procid >> 4)) &&
+        !tb_GetResource((int32_t)fourcc("WDEF"), (int16_t)(procid >> 4)))
+        procid = appearance_proc(procid); /* Mac OS 8's, as ours */
     gaddr saved = qd_port();
     gaddr w = storage ? storage : tb_NewPtr(WindowRecord_SIZEOF, false, true);
     if (!w)

@@ -687,6 +687,27 @@ extension BlueBox {
             tb_DisposeWindow(w)
         }
 
+        /// Mac OS 8's window definitions (WDEFs 64 to 67) are drawn as ours:
+        /// kWindowFloatGrowProc (1059) is a floating window with its bar on
+        /// top, kWindowFloatSideProc (1073) at the side, and
+        /// kWindowGrowDocumentProc (1025) a document window, not a dialog box.
+        @Test func appearanceWindowDefinitions() {
+            launchTestApp()
+            _ = initToolbox()
+            let title = tb_NewPtr(16, false, true)
+            guestPString("Tools", at: title)
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 160), title, 1, 1059, 0xFFFF_FFFF, 1, 0)
+            #expect(bbox(WindowRecord_strucRgn(w)) == [88, 99, 202, 162])
+            let s = tb_NewCWindow(0, rect(100, 300, 200, 360), title, 1, 1073, 0xFFFF_FFFF, 1, 0)
+            #expect(bbox(WindowRecord_strucRgn(s)) == [99, 288, 202, 362])
+            let d = tb_NewCWindow(0, rect(300, 100, 400, 200), title, 1, 1025, 0xFFFF_FFFF, 1, 0)
+            #expect(tb_GetWVariant(d) == 0)
+            #expect(bbox(WindowRecord_strucRgn(d))[0] < 290) // a title bar above
+            tb_DisposeWindow(d)
+            tb_DisposeWindow(s)
+            tb_DisposeWindow(w)
+        }
+
         /// A program's own WDEF on a window made invisible is not asked for the
         /// window's regions until the window is shown (CanOpener's WDEF calls
         /// routines the program hands it after NewCWindow returns).
