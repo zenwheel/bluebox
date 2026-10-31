@@ -89,11 +89,14 @@ extension BlueBox {
             let scene = collection([("lgsf", pstr("Gadget")), ("smsf", pstr("Monaco")), ("vfnt", pstr("Chicago")),
                                     ("vfsz", be16(12)), ("hcol", be16(0xCCCC) + be16(0x9999) + be16(0x6666)),
                                     ("sbar", be16(2)), ("smoo", [1, 0]), ("sndt", pstr("Synthetic Sounds"))])
+            // layo 510 and 511, check boxes: green, and grey right to left.
+            let box = { (fill: Int) in be32(0) + be32(0) + be16(1) + record(flags: 0x0100, [-1, -2, -3, -4], "plut", id: fill) }
             // tic# 384: the trash is the theme's ICN# -3993 (a 32x32 square).
             let tic = be32(2) + Array("trsh".utf8) + be16(-3993) + Array("fldr".utf8) + be16(-3999)
             let trash = [UInt8](repeating: 0xFF, count: 256)
             let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("scen", 128, scene),
-                                                 ("tic#", 384, tic), ("ICN#", -3993, trash), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
+                                                 ("tic#", 384, tic), ("ICN#", -3993, trash),
+                                                 ("layo", 510, box(-1)), ("layo", 511, box(-2)), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
                                                  ("frme", 520, frame),
                                                  ("plut", 387, fills), ("plut", 386, brushes), ("clr#", 384, colors)]
             var datas: [UnsafeMutablePointer<UInt8>] = []
@@ -324,6 +327,15 @@ extension BlueBox {
             #expect(rd16(c) == 0x8080 && rd16(c + 2) == 0x8080)
             tb_GetCPixel(150, 145, c)
             #expect(rd16(c) == 0xFFFF && rd16(c + 2) == 0xFFFF) // untouched
+            // A check box, and right to left (TESysJust -1) its mirrored layout.
+            #expect(thme_check_box(qrect(top: 5, left: 180, bottom: 17, right: 192), false, 0, 1))
+            tb_GetCPixel(185, 10, c)
+            #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF)
+            wr16(0x0BAC, 0xFFFF)
+            #expect(thme_check_box(qrect(top: 5, left: 180, bottom: 17, right: 192), false, 0, 1))
+            wr16(0x0BAC, 0)
+            tb_GetCPixel(185, 10, c)
+            #expect(rd16(c) == 0x8080 && rd16(c + 2) == 0x8080)
         }
     }
 }

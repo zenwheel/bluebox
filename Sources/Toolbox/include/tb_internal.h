@@ -438,6 +438,7 @@ bool ap_text_rgb(int color, uint16_t out[3]);
  * 'mnuo', 'wcls', 'btnr'...), when a theme's sound set is in use. */
 void appearance_sound(uint32_t kind);
 void appearance_sound_reset(void);
+void appearance_drag_sound_tick(void); /* a theme drag sound played again while the drag lasts */
 bool ap_in_color(void);
 void ap_fill_rgn(const hrgn *g, const uint16_t rgb[3]);
 void ap_fill(qrect r, const uint16_t rgb[3]);

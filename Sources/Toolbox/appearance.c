@@ -70,6 +70,7 @@ static bool themed(void) { return thme_in_use(); }
 /* At event calls: the host's colours as they are now. */
 void appearance_poll(void)
 {
+    appearance_drag_sound_tick();
     if (!atomic_exchange(&host_colors_changed, false))
         return;
     uint64_t a = atomic_load(&host_accent), h = atomic_load(&host_hilite);
@@ -2482,9 +2483,12 @@ static struct {
     gaddr h;
 } sound_made[128];
 
+static uint32_t drag_kind;
+
 void appearance_sound_reset(void)
 {
     sound_chan = 0;
+    drag_kind = 0;
     memset(sound_made, 0, sizeof sound_made);
 }
 
@@ -2544,11 +2548,39 @@ int32_t tb_PlayThemeSound(int32_t kind)
     return noErr;
 }
 
+/* A drag's sound plays again each time it ends, for as long as the drag
+ * lasts (the Appearance Manager looped it); it is looked at on every tick
+ * of a tracking loop and at event calls. */
+
 int32_t tb_BeginThemeDragSound(int32_t kind)
 {
-    if (themed())
-        play_sound((uint32_t)kind);
+    drag_kind = 0;
+    if (themed() && play_sound((uint32_t)kind))
+        drag_kind = (uint32_t)kind;
     return noErr;
 }
 
-int32_t tb_EndThemeDragSound(void) { return noErr; }
+void appearance_drag_sound_tick(void)
+{
+    if (!drag_kind || !sound_chan)
+        return;
+    gaddr st = tb_NewPtr(24, false, true); /* SCStatus: scChannelBusy at 12 */
+    bool busy = tb_SndChannelStatus(sound_chan, 24, st) == noErr && rd8(st + 12);
+    tb_DisposePtr(st);
+    if (!busy)
+        play_sound(drag_kind);
+}
+
+int32_t tb_EndThemeDragSound(void)
+{
+    if (drag_kind && sound_chan) {
+        gaddr cmd = tb_NewPtr(8, false, true);
+        wr16(cmd, 4); /* flushCmd, quietCmd */
+        tb_SndDoImmediate(sound_chan, cmd);
+        wr16(cmd, 3);
+        tb_SndDoImmediate(sound_chan, cmd);
+        tb_DisposePtr(cmd);
+    }
+    drag_kind = 0;
+    return noErr;
+}

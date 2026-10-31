@@ -41,7 +41,13 @@
  *    side masks}: a byte (version 2) or a word (version 3) per side, top,
  *    left, bottom, right, each going round counter-clockwise: the top bit
  *    is the corner the side starts at, then the first pixels, the middle,
- *    and the last pixels.
+ *    and the last pixels.  The flag bytes (the header's and each
+ *    entry's) are 0x00, 0x40, 0x80 or 0xC0; in the 219 sample themes the
+ *    entries' are set in some thirty third-party themes (Moby, Sosumi,
+ *    LUCENT...), none of Apple's, often on a bevel's highlight or shadow
+ *    sides with the same fills as unflagged entries.  What they change is
+ *    not known (no theme here draws differently with them on a real Mac
+ *    that we have seen), so they are ignored.
  *  - 'clr#' 384: the theme text colours (kThemeTextColor 1-46), RGB each.
  *  - 'tinf' 128: a flattened collection of the theme's metrics; 'tdat' 1
  *    lists the resources that make the theme; 'scen' is its desktop
@@ -1042,6 +1048,8 @@ void thme_dump(FILE *f, bool coords)
         for (int k = 0; k < n && 12 + (uint32_t)(k + 1) * (uint32_t)es <= e->data_len; k++) {
             const uint8_t *x = d + 12 + k * es;
             fprintf(f, " [%d %d", (int8_t)x[1], (int16_t)be16(x + 2));
+            if (x[0])
+                fprintf(f, " flags %02x", x[0]);
             for (int s = 0; s < 4; s++)
                 fprintf(f, ver >= 3 ? " %04x" : " %02x", ver >= 3 ? be16(x + 4 + s * 2) : x[4 + s]);
             fprintf(f, "]");
@@ -1129,6 +1137,11 @@ static int window_title(gaddr w, const wkind *k, uint8_t *s, int *m)
     return n;
 }
 
+/* The system's script runs right to left (TESysJust -1): windows,
+ * check boxes, radio buttons and pop-up buttons are drawn mirrored, from
+ * the theme's own right-to-left layouts and images. */
+static bool right_to_left(void) { return (int16_t)rd16(0x0BAC) == -1; }
+
 static uint32_t window_state(int var, bool goaway, bool zoom, bool titled)
 {
     int v = var & ~0x200;
@@ -1160,7 +1173,7 @@ bool thme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool
     uint8_t s[256];
     int m[THME_MEASURES];
     int n = window_title(w, &k, s, m);
-    uint32_t st = window_state(var, goaway, zoom, n > 0);
+    uint32_t st = window_state(var, goaway, zoom, n > 0) | (right_to_left() ? 0x02 : 0);
     thme_draw_part(id, c, st, m, pressed);
     qrect tr;
     if (n && thme_part_rect(id, c, st, m, THME_TITLE_TEXT, &tr)) {
@@ -1200,7 +1213,8 @@ bool thme_window_region(gaddr w, int var, qrect c, bool goaway, bool zoom, hrgn 
     uint8_t s[256];
     int m[THME_MEASURES];
     int n = window_title(w, &k, s, m);
-    return thme_part_region(k.id, c, window_state(var, goaway, zoom, n > 0), m, THME_CONTENT, out);
+    return thme_part_region(k.id, c, window_state(var, goaway, zoom, n > 0) | (right_to_left() ? 0x02 : 0), m, THME_CONTENT,
+                            out);
 }
 
 /* 1 close box, 2 zoom box, 3 collapse box, 4 title bar or frame, 0 none, -1
@@ -1213,7 +1227,8 @@ int thme_window_hit(gaddr w, int var, qrect c, bool goaway, bool zoom, int h, in
     uint8_t s[256];
     int m[THME_MEASURES];
     int n = window_title(w, &k, s, m);
-    uint32_t hit = thme_part_hit(k.id, c, window_state(var, goaway, zoom, n > 0), m, 0xFF, h, v);
+    uint32_t hit =
+        thme_part_hit(k.id, c, window_state(var, goaway, zoom, n > 0) | (right_to_left() ? 0x02 : 0), m, 0xFF, h, v);
     if (hit & THME_CLOSE)
         return 1;
     if (hit & THME_ZOOM)
@@ -1286,7 +1301,8 @@ bool thme_check_box(qrect box, bool radio, int value, uint32_t state)
     int m[THME_MEASURES] = { 0 };
     qrect b = { box.top, (int16_t)(box.left - 2), box.bottom, (int16_t)(box.right + 2) };
     uint32_t st = (state == 0 ? 0x01 : 0) | (state == 2 ? 0x20 : 0) | (value == 1 ? 0x02 : value == 2 ? 0x04 : 0);
-    return T.on && thme_draw_part(radio ? 515 : 510, b, st, m, 0);
+    int id = (radio ? 515 : 510) + (right_to_left() && thme_has_part(radio ? 516 : 511) ? 1 : 0);
+    return T.on && thme_draw_part(id, b, st, m, 0);
 }
 
 /* A scroll bar: the arrows' images at its ends, the track's layout between
@@ -1411,7 +1427,7 @@ bool thme_popup(qrect r, uint32_t state, bool arrow_only)
 {
     if (arrow_only && thme_has_part(525))
         return part(525, r, draw_state(state));
-    return part(520, r, draw_state(state));
+    return part(right_to_left() && thme_has_part(521) ? 521 : 520, r, draw_state(state));
 }
 
 /* A tab: ThemeTabStyle (0 non-front, 1 pressed, 2 inactive, 3 front, 4

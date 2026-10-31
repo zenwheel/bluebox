@@ -574,6 +574,7 @@ void ev_post_menubar_click(void)
 void ev_wait_tick(void)
 {
     machine_advance_ticks();
+    appearance_drag_sound_tick();
     sound_pump();
     time_pump();
     if (!host_attached) {
