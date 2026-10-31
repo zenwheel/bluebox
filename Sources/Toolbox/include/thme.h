@@ -91,6 +91,7 @@ bool thme_track(const thme_track_info *t);
 bool thme_menu_bar(qrect r);
 bool thme_menu_title(qrect bar, qrect r, bool selected, bool enabled);
 bool thme_menu_background(qrect r, int type);
+bool thme_menu_extent(qrect r, int type, qrect *out);
 bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier);
 bool thme_menu_separator(qrect r);
 

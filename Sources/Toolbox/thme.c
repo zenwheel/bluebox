@@ -1386,10 +1386,28 @@ bool thme_menu_title(qrect bar, qrect r, bool selected, bool enabled)
 }
 
 /* A menu's background: 0 pull-down, 1 pop-up, 2 hierarchical. */
-bool thme_menu_background(qrect r, int type)
+static int menu_part(int type)
 {
     int id = 257 + (type == 1 ? 1 : type == 2 ? 2 : 0);
-    return part(thme_has_part(id) ? id : 257, r, 0);
+    return thme_has_part(id) ? id : 257;
+}
+
+bool thme_menu_background(qrect r, int type) { return part(menu_part(type), r, 0); }
+
+/* What a menu's background covers round r: most themes draw the frame and
+ * shadow outside the menu's rectangle (System 7's a pixel left and above,
+ * two right and below, as the classic menus; some a wide soft shadow), a
+ * few inside it.  False when the theme has no menu background. */
+bool thme_menu_extent(qrect r, int type, qrect *out)
+{
+    hrgn g;
+    int m[THME_MEASURES] = { 0 };
+    if (!T.on || !layout(257) || !thme_part_region(menu_part(type), r, 0, m, 0, &g))
+        return false;
+    qrect b = hrgn_bbox(&g);
+    hrgn_free(&g);
+    *out = b.right > b.left && b.bottom > b.top ? b : r;
+    return true;
 }
 
 /* An item's background (and the arrow of a hierarchical one): 0x02 an

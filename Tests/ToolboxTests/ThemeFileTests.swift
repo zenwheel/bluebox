@@ -79,8 +79,13 @@ extension BlueBox {
             // the inside grey.
             let frame = be16(2) + be16(0) + [0, 0xFF, 0, 0xFF] + be16(-2) + be16(1) + [0, 0xFF] + be16(-1) +
                 [0xFF, 0xFF, 0xFF, 0xFF]
+            // layo 257, a pulled-down menu: a pixel round it above and left,
+            // three below and right (a shadow).
+            let menuCoords = [coord(0, -1, -1), coord(0, -1, -2), coord(0, 3, -3), coord(0, 3, -4)]
+            let menu = be32(0) + be32(menuCoords.count) + menuCoords.flatMap { $0 } + be16(1) +
+                record(flags: 0x0100, [1, 2, 3, 4], "plut", id: -1)
             let tinf = collection([("vers", be16(1)), ("mbht", be16(22)), ("lvth", be16(15))])
-            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("clut", 2000, clut), ("pxm#", 200, pxm),
+            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
                                                  ("frme", 520, frame),
                                                  ("plut", 387, fills), ("plut", 386, brushes), ("clr#", 384, colors)]
             var datas: [UnsafeMutablePointer<UInt8>] = []
@@ -185,6 +190,15 @@ extension BlueBox {
             #expect(machine_menu_bar_height() == 20) // not while the appearance is another
             machine_set_appearance(Int32(MACHINE_APPEARANCE_THEME))
             #expect(machine_menu_bar_height() == 22)
+        }
+
+        /// A menu's background covers what its layout draws round it.
+        @Test func menuExtent() {
+            load()
+            defer { thme_unload() }
+            var e = qrect()
+            #expect(thme_menu_extent(qrect(top: 20, left: 10, bottom: 60, right: 50), 1, &e)) // pop-up: the pull-down's
+            #expect(e.top == 19 && e.left == 9 && e.bottom == 63 && e.right == 53)
         }
 
         /// A sound set: 'snd#' maps a ThemeSoundKind to the first 'snd ' of
