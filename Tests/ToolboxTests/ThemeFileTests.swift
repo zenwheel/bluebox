@@ -62,8 +62,13 @@ extension BlueBox {
             let fills = be32(8) + be16(42) + be16(2) + be16(0) + be16(0) + be16(0xFFFF) + be16(0) +
                 be16(0) + be16(0x8080) + be16(0x8080) + be16(0x8080)
             let brushes = be32(8) + be16(42) + be16(1) + be16(0) + be16(0x1212) + be16(0x5656) + be16(0x9A9A)
-            let colors = be16(0) + be16(0) + be16(0x1111) + be16(0x2222) + be16(0x3333)
+            let colors = be32(1) + be16(0x1111) + be16(0x2222) + be16(0x3333)
+            // frme 520: one ring a pixel outside the rectangle, green all round,
+            // the inside grey.
+            let frame = be16(2) + be16(0) + [0, 0xFF, 0, 0xFF] + be16(-2) + be16(1) + [0, 0xFF] + be16(-1) +
+                [0xFF, 0xFF, 0xFF, 0xFF]
             let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("clut", 2000, clut), ("pxm#", 200, pxm),
+                                                 ("frme", 520, frame),
                                                  ("plut", 387, fills), ("plut", 386, brushes), ("clr#", 384, colors)]
             var datas: [UnsafeMutablePointer<UInt8>] = []
             var specs: [rsrc_spec] = []
@@ -173,6 +178,16 @@ extension BlueBox {
             #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF && rd16(c + 4) == 0)
             tb_GetCPixel(21, 22, c)
             #expect(rd16(c) == 0xFFFF && rd16(c + 2) == 0 && rd16(c + 4) == 0)
+            // A frame: its ring outside the rectangle, its fill inside.
+            #expect(thme_frame(520, qrect(top: 120, left: 130, bottom: 140, right: 170)))
+            tb_GetCPixel(129, 119, c)
+            #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF && rd16(c + 4) == 0)
+            tb_GetCPixel(150, 140, c)
+            #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF && rd16(c + 4) == 0)
+            tb_GetCPixel(150, 130, c)
+            #expect(rd16(c) == 0x8080 && rd16(c + 2) == 0x8080)
+            tb_GetCPixel(150, 145, c)
+            #expect(rd16(c) == 0xFFFF && rd16(c + 2) == 0xFFFF) // untouched
         }
     }
 }

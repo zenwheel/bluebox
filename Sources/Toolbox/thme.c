@@ -34,9 +34,10 @@
  *  - 'plut' 386 (the theme brushes, kThemeBrush 1-47) and 387 (the
  *    theme's own fills): u32, u16, u16 count, then {int16 ppat id or 0,
  *    RGB} entries.
- *  - 'frme': u16 version (2 or 3), u16, int16 first and last ring (0 is
- *    the rectangle's outermost row of pixels, negative ones outside it),
- *    int16 default fill, u16 count, then entries {u16 ring, int16 fill,
+ *  - 'frme': u16 version (2 or 3), u16, u8 flags, int8 first ring, u8,
+ *    int8 last ring (0 is the rectangle's outermost row of pixels, negative
+ *    ones outside it), int16 fill for the inside (0 none), u16 count, then
+ *    entries {u8 flags, int8 ring, int16 fill,
  *    side masks}: a byte (version 2) or a word (version 3) per side, top,
  *    left, bottom, right, each going round counter-clockwise: the top bit
  *    is the corner the side starts at, then the first pixels, the middle,
@@ -405,7 +406,7 @@ bool thme_text_rgb(int color, uint16_t out[3])
 {
     uint32_t len;
     const uint8_t *d = T.on ? res(fourcc("clr#"), 384, &len) : NULL;
-    if (!d || len < 4 || color < 1 || color > (int)be16(d + 2) + 1 || 4 + (uint32_t)color * 6 > len)
+    if (!d || len < 4 || color < 1 || color > (int)be16(d + 2) || 4 + (uint32_t)color * 6 > len)
         return false;
     const uint8_t *e = d + 4 + (color - 1) * 6;
     for (int i = 0; i < 3; i++)
@@ -514,6 +515,16 @@ static void draw_frame(int16_t id, qrect r)
         return;
     int ver = be16(d);
     int esize = ver >= 3 ? 12 : 8, n = be16(d + 10);
+    /* The inside, past the last ring, in the frame's own fill (patterns
+     * pinned to its bottom: the betas' button faces are tall gradients). */
+    int last = (int8_t)d[7];
+    tfill in;
+    if ((int16_t)be16(d + 8) && fill_of((int16_t)be16(d + 8), &in)) {
+        qrect q = { (int16_t)(r.top + last + 1), (int16_t)(r.left + last + 1), (int16_t)(r.bottom - last - 1),
+                    (int16_t)(r.right - last - 1) };
+        if (q.right > q.left && q.bottom > q.top)
+            draw_fill((int16_t)be16(d + 8), q, 3);
+    }
     for (int i = 0; i < n && 12 + (uint32_t)(i + 1) * (uint32_t)esize <= len; i++) {
         const uint8_t *e = d + 12 + i * esize;
         int ring = (int8_t)e[1];
@@ -560,6 +571,21 @@ static void draw_frame(int16_t id, qrect r)
             }
         }
     }
+}
+
+bool thme_frame(int id, qrect r)
+{
+    uint32_t len;
+    if (!T.on || !res(fourcc("frme"), (int16_t)id, &len))
+        return false;
+    surface s;
+    port_surface(&s);
+    surface *old = S;
+    S = &s;
+    draw_frame((int16_t)id, r);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -948,8 +974,8 @@ void thme_dump(FILE *f, bool coords)
         if (e->data_len < 12)
             continue;
         int ver = be16(d), n = be16(d + 10), es = ver >= 3 ? 12 : 8;
-        fprintf(f, "frme %d \"%s\": version %d, rings %d to %d, %d entries:", e->id, e->name, ver, (int16_t)be16(d + 4),
-                (int16_t)be16(d + 6), n);
+        fprintf(f, "frme %d \"%s\": version %d, flags %02x, rings %d to %d, fill %d, %d entries:", e->id, e->name, ver,
+                d[4], (int8_t)d[5], (int8_t)d[7], (int16_t)be16(d + 8), n);
         for (int k = 0; k < n && 12 + (uint32_t)(k + 1) * (uint32_t)es <= e->data_len; k++) {
             const uint8_t *x = d + 12 + k * es;
             fprintf(f, " [%d %d", (int8_t)x[1], (int16_t)be16(x + 2));
@@ -1155,6 +1181,28 @@ bool thme_push_button(qrect r, uint32_t state, bool is_default)
     return T.on && thme_draw_part(id, r, (state == 0 ? 0x01 : 0) | (state == 2 ? 0x20 : 0), m, 0);
 }
 
+/* The default button's ring round r: the default button's layout, drawn
+ * only outside the button (whose face and title are drawn already). */
+bool thme_default_ring(qrect r, uint32_t state)
+{
+    if (!T.on || !layout(501))
+        return false;
+    int m[THME_MEASURES] = { 0 };
+    surface s;
+    port_surface(&s);
+    hrgn in;
+    hrgn_init(&in);
+    hrgn_rect(&in, r);
+    hrgn_op(&s.clip, &s.clip, &in, RGN_DIFF);
+    hrgn_free(&in);
+    surface *old = S;
+    S = &s;
+    draw_part_on(501, r, (state == 0 ? 0x01 : 0) | (state == 2 ? 0x20 : 0), m, 0, 0);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
+}
+
 /* The 12-pixel box of a check box or radio button; value 0 off, 1 on, 2 mixed. */
 bool thme_check_box(qrect box, bool radio, int value, uint32_t state)
 {
@@ -1202,6 +1250,109 @@ bool thme_scroll_bar(qrect r, bool vertical, int hilite, bool enabled, bool acti
     return true;
 }
 
+static bool part(int id, qrect r, uint32_t st)
+{
+    int m[THME_MEASURES] = { 0 };
+    return T.on && thme_draw_part(id, r, st, m, 0);
+}
+
+/* The layouts' common state bits for a ThemeDrawState. */
+static uint32_t draw_state(uint32_t state) { return (state == 0 ? 0x01 : 0) | (state == 2 ? 0x20 : 0); }
+
+/* Bevel buttons: size 0 small, 1 normal, 2 large; on, pushed in. */
+bool thme_bevel(qrect r, int size, uint32_t state, bool on)
+{
+    return part(530 + (size < 0 ? 0 : size > 2 ? 2 : size), r, draw_state(state) | (on ? 0x02 : 0));
+}
+
+/* A disclosure triangle: value 1 open; facing left (right-to-left). */
+bool thme_disclosure(qrect r, int value, uint32_t state, bool left)
+{
+    return part(550, r, draw_state(state) | (value ? 0x02 : 0) | (left ? 0x04 : 0));
+}
+
+/* The little arrows: state 2 the upper one pressed, 3 the lower one. */
+bool thme_little_arrows(qrect r, uint32_t state)
+{
+    return part(540, r, (state == 0 ? 0x01 : 0) | (state == 2 ? 0x20 : 0) | (state == 3 ? 0x40 : 0));
+}
+
+/* A pop-up button's frame and arrow, or the arrow button alone. */
+bool thme_popup(qrect r, uint32_t state, bool arrow_only)
+{
+    if (arrow_only && thme_has_part(525))
+        return part(525, r, draw_state(state));
+    return part(520, r, draw_state(state));
+}
+
+/* A north-facing tab: ThemeTabStyle (0 non-front, 1 pressed, 2 inactive, 3
+ * front, 4 front inactive, 5 and 6 unavailable); small ones are 315. */
+bool thme_tab(qrect r, int style, bool small)
+{
+    bool front = style == 3 || style == 4 || style == 6, inactive = style == 2 || style == 4 || style >= 5;
+    int id = small && thme_has_part(315) ? 315 : 310;
+    return part(id, r, (front ? 0x01 : 0) | (inactive ? 0x02 : 0) | (style == 1 ? 0x20 : 0));
+}
+
+bool thme_tab_pane(qrect r, uint32_t state) { return part(300, r, state == 0 ? 0x02 : 0); }
+
+/* Sliders, progress and indeterminate bars (scroll bars go to
+ * thme_scroll_bar): the thumb (from the caller's geometry) is measure 3,
+ * from the bounds' start; a progress bar's fill ends at measure 3. */
+bool thme_track(const thme_track_info *t)
+{
+    if (!T.on)
+        return false;
+    qrect b = t->bounds;
+    int m[THME_MEASURES] = { 0 };
+    uint32_t st = t->enable == 1 ? 0x01 : t->enable == 2 ? 0x02 : 0;
+    int id;
+    if (t->kind == 2) { /* slider */
+        id = t->horizontal ? (t->thumb_dir == 1 ? 421 : t->thumb_dir == 2 ? 422 : 420)
+                           : (t->thumb_dir == 1 ? 427 : t->thumb_dir == 2 ? 426 : 425);
+        if (!thme_has_part(id))
+            id = t->horizontal ? 420 : 425;
+        m[3] = t->horizontal ? t->thumb.left - b.left : t->thumb.top - b.top;
+        m[5] = m[3];
+        st |= (t->enable == 0 && t->max > t->min ? 0x10 : 0) | (t->press & 0x08 ? 0x100 : 0);
+    } else if (t->kind == 3) { /* progress */
+        id = 430;
+        int len = t->horizontal ? b.right - b.left : b.bottom - b.top;
+        long range = (long)t->max - t->min;
+        m[3] = range > 0 ? (int)((long)(t->value - t->min) * len / range) : 0;
+        m[3] = imax(0, imin(len, m[3]));
+        st |= 0x10;
+    } else { /* indeterminate */
+        id = 440;
+        st |= 0x40u << (t->phase & 3);
+    }
+    return thme_draw_part(id, b, st, m, 0);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Menus */
+
+bool thme_menu_bar(qrect r) { return part(256, r, 0); }
+
+/* A menu title's background in the bar, selected or not. */
+bool thme_menu_title(qrect r, bool selected) { return part(256, r, selected ? 0x20 : 0); }
+
+/* A menu's background: 0 pull-down, 1 pop-up, 2 hierarchical. */
+bool thme_menu_background(qrect r, int type)
+{
+    int id = 257 + (type == 1 ? 1 : type == 2 ? 2 : 0);
+    return part(thme_has_part(id) ? id : 257, r, 0);
+}
+
+/* An item's background (and the arrow of a hierarchical one): 0x02 an
+ * enabled item, 0x20 the selected one, 0x04 one with a submenu. */
+bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier)
+{
+    return part(261, r, (enabled ? 0x02 : 0) | (selected ? 0x20 : 0) | (hier ? 0x04 : 0));
+}
+
+bool thme_menu_separator(qrect r) { return part(263, r, 0); }
+
 /* ---------------------------------------------------------------------- */
 /* A sheet of the theme's parts, off-screen (bluebox themes --render) */
 
@@ -1238,10 +1389,11 @@ void thme_render_sheet(uint8_t *rgba, int w, int h)
     int m[THME_MEASURES] = { 0 };
     draw_part_on(256, (qrect){ 340, 40, 360, 600 }, 0, m, 0, 0);
     draw_part_on(257, (qrect){ 360, 60, 460, 220 }, 0, m, 0, 0);
-    draw_part_on(261, (qrect){ 364, 60, 382, 220 }, 0, m, 0, 0);
-    draw_part_on(261, (qrect){ 382, 60, 400, 220 }, 0x20, m, 0, 0);
+    draw_part_on(261, (qrect){ 364, 60, 382, 220 }, 0x02, m, 0, 0);
+    draw_part_on(261, (qrect){ 382, 60, 400, 220 }, 0x22, m, 0, 0);
     draw_part_on(263, (qrect){ 400, 60, 409, 220 }, 0, m, 0, 0);
-    draw_part_on(261, (qrect){ 409, 60, 427, 220 }, 0x04, m, 0, 0);
+    draw_part_on(261, (qrect){ 409, 60, 427, 220 }, 0x06, m, 0, 0);
+    draw_part_on(261, (qrect){ 427, 60, 445, 220 }, 0, m, 0, 0);
     /* Push buttons (active, default, pressed, inactive), check boxes and
      * radio buttons (off, on, mixed; pressed; inactive). */
     draw_part_on(500, (qrect){ 490, 40, 510, 110 }, 0, m, 0, 0);
@@ -1300,13 +1452,43 @@ bool machine_theme_dump(const char *path, bool coords, char *err, size_t errlen)
     return true;
 }
 
-bool machine_theme_render(const char *path, const char *png, char *err, size_t errlen)
+/* One part in each single state bit (and none), a row each: for working
+ * out what the bits mean. */
+static void render_states(uint8_t *rgba, int w, int h, int id, int pw, int ph)
+{
+    for (int i = 0; i < w * h; i++) {
+        rgba[i * 4] = 0x66;
+        rgba[i * 4 + 1] = 0x77;
+        rgba[i * 4 + 2] = 0x99;
+        rgba[i * 4 + 3] = 255;
+    }
+    int m[THME_MEASURES] = { 0, 40, 20, 12, 6, 0, 0 };
+    if (id >= 400 && id < 500) {
+        m[3] = pw > ph ? pw / 4 : ph / 4;
+        m[4] = m[3] + 24;
+    }
+    surface s = { .kind = 1, .bounds = { 0, 0, (int16_t)h, (int16_t)w }, .buf = rgba };
+    surface *old = S;
+    S = &s;
+    int cols = imax(1, (w - 20) / (pw + 40));
+    for (int k = 0; k <= 12; k++) {
+        uint32_t st = k ? 1u << (k - 1) : 0;
+        int x = 30 + (k % cols) * (pw + 40), y = 30 + (k / cols) * (ph + 40);
+        draw_part_on(id, (qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + ph), (int16_t)(x + pw) }, st, m, 0, 0);
+    }
+    S = old;
+}
+
+bool machine_theme_render(const char *path, const char *png, int part, int pw, int ph, char *err, size_t errlen)
 {
     if (!open_file(path, err, errlen))
         return false;
     int w = 800, h = 680;
     uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
-    thme_render_sheet(rgba, w, h);
+    if (part)
+        render_states(rgba, w, h, part, pw, ph);
+    else
+        thme_render_sheet(rgba, w, h);
     bool ok = machine_write_png(png, rgba, w, h);
     if (!ok)
         snprintf(err, errlen, "could not write %s", png);

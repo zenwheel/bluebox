@@ -17,6 +17,7 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 #include "qt_movie_internal.h"
+#include "thme.h"
 
 enum { drawCntl = 0, testCntl, calcCRgns, initCntl, dispCntl, posCntl, thumbCntl, dragCntl, autoTrack };
 enum { inButton = 10, inCheckBox = 11, inUpButton = 20, inDownButton = 21, inPageUp = 22, inPageDown = 23,
@@ -177,6 +178,10 @@ void ctl_set_window_themed(gaddr w, bool themed)
  * them; in colour (the current port is the control's). */
 bool ctl_platinum(gaddr ch)
 {
+    /* A Mac OS 8.5 theme file draws every control as the Appearance
+     * Manager's, in its look. */
+    if (g_appearance == MACHINE_APPEARANCE_THEME && thme_on() && ap_in_color())
+        return true;
     if (g_appearance != MACHINE_APPEARANCE_BW || !ap_in_color())
         return false;
     int i = win_index(cowner(ch), false);

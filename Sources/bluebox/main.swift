@@ -200,9 +200,9 @@ func usage() -> Never {
           an application as listed ("Macintosh HD/Folder/App") or by its name.
       bluebox themes [--library dir]
           List the themes (Kaleidoscope schemes, Mac OS 8.5 theme files) in the library.
-      bluebox themes --dump <theme> [--coords] | --render <theme> <out.png>
+      bluebox themes --dump <theme> [--coords] | --render <theme> <out.png> [layo w h]
           Show a Mac OS 8.5 theme file's parts (layouts, frames, fills), or draw
-          them off-screen into a PNG.
+          them off-screen into a PNG (or one part, w x h, in each state bit).
       bluebox rsrc <file>
           List the resources in a file (AppleDouble or MacBinary).
       bluebox movie-speed <movie>...
@@ -1201,8 +1201,10 @@ func themesCommand(_ args: [String]) {
         if first == "--dump" {
             ok = machine_theme_dump(path, args.dropFirst(2).contains("--coords"), &err, err.count)
         } else {
-            guard args.count == 3 else { usage() }
-            ok = machine_theme_render(path, args[2], &err, err.count)
+            guard args.count == 3 || args.count == 6 else { usage() }
+            let part = args.count == 6 ? args[3...5].compactMap { Int32($0) } : [0, 0, 0]
+            guard part.count == 3 else { usage() }
+            ok = machine_theme_render(path, args[2], part[0], part[1], part[2], &err, err.count)
         }
         if !ok { fail(str(err)) }
         return

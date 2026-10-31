@@ -39,6 +39,8 @@ bool thme_text_rgb(int color, uint16_t out[3]);
 
 /* A part ('layo' id) for a rectangle, state bits and measures (m[1..]). */
 bool thme_has_part(int id);
+/* A 'frme' round (or, for rings below 0, outside) a rectangle. */
+bool thme_frame(int id, qrect r);
 bool thme_draw_part(int id, qrect b, uint32_t state, const int *m, uint32_t pressed);
 bool thme_part_rect(int id, qrect b, uint32_t state, const int *m, uint32_t which, qrect *out);
 uint32_t thme_part_hit(int id, qrect b, uint32_t state, const int *m, uint32_t which, int h, int v);
@@ -60,7 +62,33 @@ bool thme_draw_grow(qrect c, bool active);
 /* Controls, as the Appearance Manager's ThemeDrawState (0 inactive, 1
  * active, 2 pressed) gives them. */
 bool thme_push_button(qrect r, uint32_t state, bool is_default);
+bool thme_default_ring(qrect r, uint32_t state);
 bool thme_check_box(qrect box, bool radio, int value, uint32_t state);
 bool thme_scroll_bar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
+bool thme_bevel(qrect r, int size, uint32_t state, bool on);
+bool thme_disclosure(qrect r, int value, uint32_t state, bool left);
+bool thme_little_arrows(qrect r, uint32_t state);
+bool thme_popup(qrect r, uint32_t state, bool arrow_only);
+bool thme_tab(qrect r, int style, bool small);
+bool thme_tab_pane(qrect r, uint32_t state);
+
+/* A ThemeTrackDrawInfo's slider, progress or indeterminate bar (kind 2-4),
+ * with the thumb where the Appearance code puts it. */
+typedef struct {
+    int kind;
+    qrect bounds, thumb;
+    bool horizontal;
+    int32_t min, max, value;
+    int enable, press, thumb_dir, phase;
+} thme_track_info;
+bool thme_track(const thme_track_info *t);
+
+/* Menus: the bar, a title's background, a menu's (0 pull-down, 1 pop-up, 2
+ * hierarchical), an item's, a divider. */
+bool thme_menu_bar(qrect r);
+bool thme_menu_title(qrect r, bool selected);
+bool thme_menu_background(qrect r, int type);
+bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier);
+bool thme_menu_separator(qrect r);
 
 #endif

@@ -16,6 +16,7 @@
 #include "os9_toolbox.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 enum {
     themeInvalidBrushErr = -30560,
@@ -91,9 +92,14 @@ static void accent_shade(int t, uint16_t out[3])
     }
 }
 
-/* A brush's colour in Platinum. */
+/* A Mac OS 8.5 theme file in use: its parts, brushes and colours. */
+static bool themed(void) { return thme_on() && g_appearance == MACHINE_APPEARANCE_THEME; }
+
+/* A brush's colour in Platinum (or the theme's). */
 bool ap_brush_rgb(int brush, uint16_t out[3])
 {
+    if (themed() && brush >= 1 && thme_brush_rgb(brush, out))
+        return true;
     switch (brush) {
     case -1: grey(out, 0); return true;           /* kThemeBrushBlack */
     case -2: grey(out, 0xFFFF); return true;      /* kThemeBrushWhite */
@@ -146,9 +152,11 @@ bool ap_brush_rgb(int brush, uint16_t out[3])
     }
 }
 
-/* A text colour in Platinum. */
+/* A text colour in Platinum (or the theme's). */
 bool ap_text_rgb(int color, uint16_t out[3])
 {
+    if (themed() && color >= 1 && thme_text_rgb(color, out))
+        return true;
     switch (color) {
     case -1: grey(out, 0); return true;
     case -2: grey(out, 0xFFFF); return true;
@@ -632,6 +640,8 @@ static qrect rect_arg(gaddr r) { return qrect_get(r); }
 /* A window header: a grey band with a light top edge and a dark bottom one. */
 static void window_header(qrect r, uint32_t state, bool list_view)
 {
+    if (themed() && thme_frame(state != kThemeStateInactive ? 542 : 543, r))
+        return;
     bool active = state != kThemeStateInactive;
     ap_fill_grey(r, 0xDDDD);
     if (ap_in_color()) {
@@ -657,6 +667,8 @@ int32_t tb_DrawThemeWindowListViewHeader(gaddr r, uint32_t state)
 /* A placard: a raised grey panel in a frame. */
 void ap_placard(qrect r, uint32_t state)
 {
+    if (themed() && thme_frame(state == kThemeStatePressed ? 546 : state != kThemeStateInactive ? 544 : 545, r))
+        return;
     bool active = state != kThemeStateInactive, pressed = state == kThemeStatePressed;
     ap_frame_grey(r, active ? 0 : 0x8888);
     qrect in = inset(r, 1);
@@ -676,6 +688,8 @@ int32_t tb_DrawThemePlacard(gaddr r, uint32_t state)
 /* An edit text or list box frame, outside r: a dark ring in an etched one. */
 void ap_well_frame(qrect r, uint32_t state)
 {
+    if (themed() && thme_frame(state != kThemeStateInactive ? 520 : 521, r))
+        return;
     bool active = state != kThemeStateInactive;
     qrect outer = inset(r, -2), ring = inset(r, -1);
     if (ap_in_color()) {
@@ -772,6 +786,8 @@ void ap_focus_rect(qrect r, bool focus)
 /* Group boxes: an etched frame (primary) or a lighter one (secondary). */
 void ap_group(qrect r, uint32_t state, bool primary)
 {
+    if (themed() && thme_frame((primary ? 500 : 502) + (state != kThemeStateInactive ? 0 : 1), r))
+        return;
     bool active = state != kThemeStateInactive;
     if (!ap_in_color()) {
         ap_frame_grey(r, 0);
@@ -800,6 +816,8 @@ int32_t tb_DrawThemeSecondaryGroup(gaddr r, uint32_t state)
 /* A separator: an etched line along the rectangle's longer side. */
 void ap_separator(qrect r, uint32_t state)
 {
+    if (themed() && thme_frame((r.right - r.left >= r.bottom - r.top ? 510 : 512) + (state != kThemeStateInactive ? 0 : 1), r))
+        return;
     uint16_t dark = state != kThemeStateInactive ? 0x8888 : 0xBBBB;
     if (!ap_in_color())
         dark = 0;
@@ -835,6 +853,8 @@ int32_t tb_DrawThemeTickMark(gaddr rp, uint32_t state)
 /* A tab pane: the frame the front tab joins, its inside Platinum grey. */
 void ap_tab_pane(qrect r, uint32_t state)
 {
+    if (themed() && thme_tab_pane(r, state))
+        return;
     bool active = state != kThemeStateInactive;
     ap_frame_grey(r, active ? 0 : 0x8888);
     qrect in = inset(r, 1);
@@ -853,6 +873,17 @@ int32_t tb_DrawThemeTabPane(gaddr r, uint32_t state)
  * front tab covers by kThemeTabPaneOverlap). */
 void ap_tab(qrect r, int style, const uint8_t *title, int n)
 {
+    if (themed() && thme_tab(r, style, false)) {
+        if (n > 0) {
+            bool front = style == 3 || style == 4, inactive = style == 2 || style == 4 || style >= 5;
+            uint16_t tc[3];
+            int color = front ? (inactive ? 42 : 39) : inactive ? 43 : style == 1 ? 41 : 40;
+            if (!ap_text_rgb(color, tc))
+                grey(tc, 0);
+            ap_text_in((qrect){ (int16_t)(r.top + 2), (int16_t)(r.left + 4), (int16_t)(r.bottom - (front ? 0 : 3)), (int16_t)(r.right - 4) }, title, n, true, tc);
+        }
+        return;
+    }
     bool front = style == 3 || style == 4, inactive = style == 2 || style == 4, pressed = style == 1;
     qrect t = r;
     if (!front)
@@ -933,6 +964,8 @@ enum {
 /* The default button's ring, four pixels around the button r. */
 void ap_default_ring(qrect r, uint32_t state)
 {
+    if (themed() && thme_default_ring(r, state))
+        return;
     bool active = state != kThemeStateInactive;
     qrect ring = inset(r, -4);
     uint16_t g[3];
@@ -948,6 +981,8 @@ void ap_default_ring(qrect r, uint32_t state)
 
 void ap_push_button(qrect r, uint32_t state, bool is_default)
 {
+    if (themed() && thme_push_button(r, state, is_default))
+        return;
     bool active = state != kThemeStateInactive, pressed = state == kThemeStatePressed;
     int round = 8;
     if (is_default)
@@ -969,6 +1004,8 @@ void ap_push_button(qrect r, uint32_t state, bool is_default)
 /* A check box or radio button's 12-pixel box: value 0 off, 1 on, 2 mixed. */
 void ap_check_box(qrect box, bool radio, int value, uint32_t state)
 {
+    if (themed() && thme_check_box(box, radio, value, state))
+        return;
     bool active = state != kThemeStateInactive, pressed = state == kThemeStatePressed;
     uint16_t frame[3], face[3], mark[3];
     grey(frame, active ? 0 : 0x8888);
@@ -1037,6 +1074,8 @@ void ap_check_box(qrect box, bool radio, int value, uint32_t state)
 /* A bevel button: square, grey, with a raised (or, pressed or on, sunk) edge. */
 void ap_bevel_button(qrect r, int kind, uint32_t state, bool on)
 {
+    if (themed() && thme_bevel(r, kind == kThemeSmallBevelButton ? 0 : kind == kThemeLargeBevelButton ? 2 : 1, state, on))
+        return;
     bool active = state != kThemeStateInactive, down = state == kThemeStatePressed || on;
     int w = kind == kThemeSmallBevelButton ? 1 : kind == kThemeLargeBevelButton ? 3 : 2;
     ap_frame_grey(r, active ? 0 : 0x8888);
@@ -1054,6 +1093,8 @@ void ap_bevel_button(qrect r, int kind, uint32_t state, bool on)
 /* A disclosure triangle: value 0 points right, 1 down. */
 void ap_disclosure(qrect r, int value, uint32_t state, bool left_facing)
 {
+    if (themed() && thme_disclosure(r, value, state, left_facing))
+        return;
     uint16_t c[3], fill[3];
     grey(c, state != kThemeStateInactive ? 0 : 0x8888);
     grey(fill, state == kThemeStatePressed ? 0x4444 : 0x9999);
@@ -1069,6 +1110,8 @@ void ap_disclosure(qrect r, int value, uint32_t state, bool left_facing)
 /* The little arrows: two stacked halves of a small bevel button. */
 void ap_little_arrows(qrect r, uint32_t state)
 {
+    if (themed() && thme_little_arrows(r, state))
+        return;
     bool active = state != kThemeStateInactive;
     int mid = (r.top + r.bottom) / 2;
     qrect up = { r.top, r.left, (int16_t)(mid + 1), r.right }, down = { (int16_t)mid, r.left, r.bottom, r.right };
@@ -1083,6 +1126,8 @@ void ap_little_arrows(qrect r, uint32_t state)
 /* A pop-up button's frame and arrow part (the title is the caller's). */
 void ap_popup_button(qrect r, uint32_t state, bool arrow_only)
 {
+    if (themed() && thme_popup(r, state, arrow_only))
+        return;
     bool active = state != kThemeStateInactive, pressed = state == kThemeStatePressed;
     uint16_t face[3], frame[3];
     grey(face, pressed ? 0x7777 : 0xDDDD);
@@ -1479,6 +1524,8 @@ static void scroll_thumb(qrect r, bool horiz, bool pressed)
  * hilite is the part pressed (20, 21; 22 and 23 the track; 129 the thumb). */
 void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb)
 {
+    if (themed() && thme_scroll_bar(r, vertical, hilite, live, active, thumb))
+        return;
     qrect lo = vertical ? (qrect){ r.top, r.left, (int16_t)(r.top + 16), r.right } : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 16) };
     qrect hi = vertical ? (qrect){ (int16_t)(r.bottom - 16), r.left, r.bottom, r.right }
                         : (qrect){ r.top, (int16_t)(r.right - 16), r.bottom, r.right };
@@ -1500,6 +1547,12 @@ void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, q
 /* Scroll bars: the press state's bits are kTheme...Pressed. */
 static void draw_scroll_bar(const track_info *t)
 {
+    if (themed()) {
+        int hil = t->press & 0x01 ? 20 : t->press & 0x40 ? 21 : t->press & 0x08 ? 129 : 0;
+        bool live = t->enable == kThemeTrackActive && t->max > t->min;
+        if (thme_scroll_bar(t->bounds, !horizontal(t), hil, live, t->enable != kThemeTrackDisabled, live ? track_thumb(t) : (qrect){ 0, 0, 0, 0 }))
+            return;
+    }
     qrect r = t->bounds;
     bool h = horizontal(t), active = t->enable != kThemeTrackDisabled;
     int a = arrow_len(t);
@@ -1633,6 +1686,15 @@ static void draw_progress(const track_info *t)
 
 void ap_track(gaddr info)
 {
+    if (themed()) {
+        track_info t = read_track(info);
+        if (t.kind > kThemeSmallScrollBar) {
+            thme_track_info ti = { t.kind, t.bounds, t.kind == kThemeSlider ? track_thumb(&t) : t.bounds, horizontal(&t),
+                                   t.min, t.max, t.value, t.enable, t.press, t.thumb_dir, t.phase };
+            if (thme_track(&ti))
+                return;
+        }
+    }
     track_info t = read_track(info);
     if (t.kind <= kThemeSmallScrollBar)
         draw_scroll_bar(&t);
@@ -2002,6 +2064,8 @@ int32_t tb_DrawThemeScrollBarDelimiters(uint16_t flavor, gaddr content, uint32_t
 int32_t tb_DrawThemeMenuBarBackground(gaddr rp, uint16_t state, uint32_t attrs)
 {
     qrect r = rect_arg(rp);
+    if (themed() && thme_menu_bar(r))
+        return noErr;
     ap_fill_grey(r, 0xDDDD);
     if (ap_in_color())
         ap_fill_grey((qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right }, 0xFFFF);
@@ -2022,7 +2086,9 @@ int32_t tb_DrawThemeMenuTitle(gaddr bar, gaddr title, uint16_t state, uint32_t a
     qrect r = rect_arg(title), b = rect_arg(bar);
     r.top = (int16_t)(b.top + 1);
     r.bottom = (int16_t)(b.bottom - 1);
-    if (state == 1)
+    if (themed() && thme_menu_title((qrect){ b.top, r.left, b.bottom, r.right }, state == 1))
+        ;
+    else if (state == 1)
         selection_fill(r);
     else
         ap_fill_grey(r, 0xDDDD);
@@ -2047,6 +2113,9 @@ int32_t tb_GetThemeMenuBarHeight(gaddr out)
 int32_t tb_DrawThemeMenuBackground(gaddr rp, uint16_t type)
 {
     qrect r = rect_arg(rp);
+    /* kThemeMenuTypePullDown 0, PopUp 1, Hierarchical 2 */
+    if (themed() && thme_menu_background(r, type & 3))
+        return noErr;
     ap_fill_grey(r, 0xDDDD);
     if (ap_in_color())
         ap_bevel(r, 0xFFFF, 0xAAAA);
@@ -2067,11 +2136,22 @@ int32_t tb_DrawThemeMenuItem(gaddr menu_rect, gaddr item_rect, int16_t top, int1
                              uint16_t type, gaddr proc, uint32_t data)
 {
     qrect r = rect_arg(item_rect);
+    int kind = type & 0xFF;
+    if (themed() && thme_menu_item(r, state == 1, state != 3, kind == 1)) {
+        if (proc && kind <= 1) {
+            gaddr p = tb_NewPtr(8, false, false);
+            qrect_put(p, r);
+            int depth = qd_port_pixels(qd_port()).depth;
+            uint32_t args[4] = { p, (uint32_t)depth, depth >= 4, data };
+            mm_call(proc, 0x00003EC0, args, 4);
+            tb_DisposePtr(p);
+        }
+        return noErr;
+    }
     if (state == 1)
         selection_fill(r);
     else
         ap_fill_grey(r, 0xDDDD);
-    int kind = type & 0xFF;
     uint16_t c[3];
     grey(c, state == 1 ? 0xFFFF : state == 3 ? 0x8888 : 0);
     if (kind == 1) /* hierarchical: an arrow at the right */
@@ -2093,6 +2173,8 @@ int32_t tb_DrawThemeMenuItem(gaddr menu_rect, gaddr item_rect, int16_t top, int1
 int32_t tb_DrawThemeMenuSeparator(gaddr rp)
 {
     qrect r = rect_arg(rp);
+    if (themed() && thme_menu_separator(r))
+        return noErr;
     ap_fill_grey(r, 0xDDDD);
     ap_separator(r, kThemeStateActive);
     return noErr;

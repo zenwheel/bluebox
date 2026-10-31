@@ -16,6 +16,7 @@
 #include "carbon_hi.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 enum { mDrawMsg = 0, mChooseMsg, mSizeMsg, mPopUpMsg };
 enum { ITEM_HEIGHT = 16, MBAR_TITLE_GAP = 13, MBAR_FIRST = 10 };
@@ -932,6 +933,31 @@ static void draw_text_at(int x, int y, gaddr pstr)
     tb_DrawString(pstr);
 }
 
+/* A Mac OS 8.5 theme file draws the menus. */
+static bool themed(void) { return thme_on() && g_appearance == MACHINE_APPEARANCE_THEME; }
+
+/* Text in a theme text colour (kThemeTextColor). */
+static void draw_text_colored(int x, int y, gaddr pstr, int color)
+{
+    uint16_t c[3] = { 0, 0, 0 };
+    if (!ap_text_rgb(color, c))
+        c[0] = c[1] = c[2] = 0;
+    qd_set_fg_override(c);
+    draw_text_at(x, y, pstr);
+    qd_set_fg_override(NULL);
+}
+
+/* A title in the bar in the theme: its background, selected or not, and
+ * its text. */
+static void themed_title(int i, bool selected)
+{
+    gaddr mh = menu_at(i);
+    qrect r = title_rect(i);
+    thme_menu_title(r, selected);
+    bool on = (MenuInfo_enableFlags(menu_ptr(mh)) & 1) != 0;
+    draw_text_colored(r.left + 7, 14, title_of(mh), !on ? 33 : selected ? 32 : 31);
+}
+
 static void dim_rect(qrect r)
 {
     hrgn g;
@@ -963,6 +989,18 @@ void tb_DrawMenuBar(void)
     hrgn_init(&bar);
     hrgn round;
     hrgn_init(&round);
+    if (themed()) {
+        hrgn_free(&bar);
+        hrgn_free(&round);
+        thme_menu_bar((qrect){ 0, 0, (int16_t)h, (int16_t)g_screen_width });
+        int n = nmenus();
+        int16_t hil = (int16_t)rd16(LM_TheMenu);
+        for (int i = 0; i < n; i++)
+            themed_title(i, hil && MenuInfo_menuID(menu_ptr(menu_at(i))) == hil);
+        os9tbx_draw_clock();
+        tb_SetPort(saved);
+        return;
+    }
     hrgn_rect(&bar, (qrect){ 0, 0, (int16_t)(h - 1), (int16_t)g_screen_width });
     qd_rrect_region(&round, (qrect){ 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width }, 16, 16);
     hrgn_op(&bar, &bar, &round, RGN_SECT);
@@ -1004,6 +1042,11 @@ static void invert_title(int16_t mid)
             continue;
         gaddr saved;
         with_wmgr_port(&saved);
+        if (themed()) { /* drawn selected, or not, rather than inverted */
+            themed_title(i, (int16_t)rd16(LM_TheMenu) != mid);
+            tb_SetPort(saved);
+            continue;
+        }
         hrgn t;
         hrgn_init(&t);
         hrgn_rect(&t, title_rect(i));
@@ -1027,6 +1070,19 @@ void tb_HiliteMenu(int16_t mid)
 
 void tb_FlashMenuBar(int16_t mid)
 {
+    static int16_t flashed; /* a theme draws titles, not inverts them: which one is lit */
+    if (mid && themed()) {
+        int n = nmenus();
+        for (int i = 0; i < n; i++)
+            if (MenuInfo_menuID(menu_ptr(menu_at(i))) == mid) {
+                gaddr saved;
+                with_wmgr_port(&saved);
+                themed_title(i, flashed != mid);
+                tb_SetPort(saved);
+            }
+        flashed = flashed == mid ? 0 : mid;
+        return;
+    }
     if (mid)
         invert_title(mid);
 }
@@ -1049,13 +1105,42 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
     }
     gaddr rr = tb_NewPtr(8, false, false);
     qrect_put(rr, r);
-    tb_EraseRect(rr);
+    bool th = themed();
+    if (!th || !thme_menu_background(r, 0))
+        tb_EraseRect(rr);
     int n = tb_CountMItems(mh);
     for (int i = 1; i <= n; i++) {
         gaddr it = item_addr(mh, i);
         int nl = rd8(it);
         int top = r.top + (i - 1) * ITEM_HEIGHT;
         qrect ir = { (int16_t)top, r.left, (int16_t)(top + ITEM_HEIGHT), r.right };
+        if (th) {
+            if (nl > 0 && rd8(it + 1) == '-') {
+                thme_menu_separator(ir);
+                continue;
+            }
+            uint8_t mark = rd8(it + 1 + nl + 2), key = rd8(it + 1 + nl + 1), style = rd8(it + 1 + nl + 3);
+            bool sel = i == hilite_item, on = item_enabled(mh, i);
+            thme_menu_item(ir, sel, on, key == 0x1B);
+            int color = !on ? 36 : sel ? 35 : 34;
+            GrafPort_set_txFace(port, style);
+            draw_text_colored(r.left + 15, top + 12, it, color);
+            GrafPort_set_txFace(port, 0);
+            uint16_t c[3] = { 0, 0, 0 };
+            ap_text_rgb(color, c);
+            qd_set_fg_override(c);
+            if (mark) {
+                tb_MoveTo((int16_t)(r.left + 2), (int16_t)(top + 12));
+                tb_DrawChar(mark);
+            }
+            if (key && key != 0x1B) {
+                tb_MoveTo((int16_t)(r.right - 24), (int16_t)(top + 12));
+                tb_DrawChar(0x11); /* command symbol */
+                tb_DrawChar(key);
+            }
+            qd_set_fg_override(NULL);
+            continue;
+        }
         if (nl > 0 && rd8(it + 1) == '-') { /* divider */
             hrgn line;
             hrgn_init(&line);

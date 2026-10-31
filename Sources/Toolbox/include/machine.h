@@ -94,9 +94,10 @@ void machine_set_accent_color(uint16_t r, uint16_t g, uint16_t b);
  * implies MACHINE_APPEARANCE_THEME and a 32-bit screen.  Before boot. */
 bool machine_load_theme(const char *path, char *err, size_t errlen);
 /* A Mac OS 8.5 Appearance theme file's parts, as text on stdout (with the
- * layouts' coordinates if asked), or drawn off-screen into a PNG. */
+ * layouts' coordinates if asked), or drawn off-screen into a PNG: a sheet
+ * of them all, or one ('layo' part, pw x ph) in each state bit. */
 bool machine_theme_dump(const char *path, bool coords, char *err, size_t errlen);
-bool machine_theme_render(const char *path, const char *png, char *err, size_t errlen);
+bool machine_theme_render(const char *path, const char *png, int part, int pw, int ph, char *err, size_t errlen);
 /* Screen depth: 1 (black and white, the default), 8 or 32; before boot. */
 void machine_set_screen_depth(int depth);
 /* The depth the next boot gives the screen (machine_screen_depth is the one it has). */
