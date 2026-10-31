@@ -3,9 +3,9 @@
 // NSSpeechSynthesizer speaks through the same engine the classic Speech
 // Manager grew into and understands the classic embedded commands
 // ([[rate 200]], [[pbas 40]], [[slnc 500]] ...).  Every classic voice
-// speaks with the system voice (the one chosen in Spoken Content, else
-// the language's default; Siri voices aren't open to other programs): the
-// classic voices that macOS still has by name are novelties, and programs
+// speaks with the system voice (the one chosen in Spoken Content, a Siri
+// voice too, else the language's default; Siri voices can't be chosen by
+// name, only as the system voice): the classic voices that macOS still has by name are novelties, and programs
 // ask for ones it lacks.
 // Requests come on the emulator thread and are done on the main thread
 // without waiting; words, sync messages and the end of each utterance go
