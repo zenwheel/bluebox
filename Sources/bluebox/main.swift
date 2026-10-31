@@ -146,9 +146,10 @@ func usage() -> Never {
           --file-answer P  answer the next open or save dialog with host path P,
                      without a panel (headless runs; repeatable, in order)
           --appearance A  bw (default); native (macOS window frames); or a theme: a
-                     Kaleidoscope scheme file, an archive of schemes (.sit etc.,
-                     "archive.sit:Name" picks one), or the name of an imported
-                     scheme (bluebox themes lists them); themes use a 32-bit screen
+                     Kaleidoscope scheme or Mac OS 8.5 theme file, an archive of
+                     them (.sit etc., "archive.sit:Name" picks one), or the name
+                     of an imported one (bluebox themes lists them); themes use a
+                     32-bit screen
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
                      keydown:K and keyup:K (K a character, space, return, tab,
@@ -198,7 +199,10 @@ func usage() -> Never {
           Mac's disk (\(defaultDisk())).  run and install take
           an application as listed ("Macintosh HD/Folder/App") or by its name.
       bluebox themes [--library dir]
-          List the themes (Kaleidoscope schemes) in the library.
+          List the themes (Kaleidoscope schemes, Mac OS 8.5 theme files) in the library.
+      bluebox themes --dump <theme> [--coords] | --render <theme> <out.png>
+          Show a Mac OS 8.5 theme file's parts (layouts, frames, fills), or draw
+          them off-screen into a PNG.
       bluebox rsrc <file>
           List the resources in a file (AppleDouble or MacBinary).
       bluebox movie-speed <movie>...
@@ -1147,9 +1151,12 @@ func appsCommand(_ args: [String]) {
     if !any { print("no applications in \(library)") }
 }
 
-/// Kaleidoscope schemes ('Colr'/'Acid' files) in a library.
+/// Kaleidoscope schemes ('Colr'/'Acid' files) and Mac OS 8.5 theme files
+/// ('thme') in a library.
 func themes(in library: String) -> [String] {
-    scan(library).filter { fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid" }.map(\.path)
+    scan(library).filter {
+        (fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid") || fourCCString($0.type) == "thme"
+    }.map(\.path)
 }
 
 /// A theme by path (a scheme file, or an archive or disk image holding
@@ -1173,7 +1180,7 @@ func findTheme(_ spec: String) -> String? {
                 return found.first { ($0 as NSString).lastPathComponent.caseInsensitiveCompare(pick) == .orderedSame }
             }
             if found.count == 1 { return found[0] }
-            if found.isEmpty { fail("no Kaleidoscope schemes in \(name)") }
+            if found.isEmpty { fail("no Kaleidoscope schemes or theme files in \(name)") }
             eprint("several schemes in \(name); choose one with --appearance \"\(name):Name\" or by name:\n")
             for t in found { eprint("  \((t as NSString).lastPathComponent)\n") }
             exit(2)
@@ -1187,10 +1194,23 @@ func findTheme(_ spec: String) -> String? {
 }
 
 func themesCommand(_ args: [String]) {
+    if let first = args.first, first == "--dump" || first == "--render" {
+        guard args.count >= 2, let path = findTheme(args[1]) else { fail("no theme \"\(args.count >= 2 ? args[1] : "")\"") }
+        var err = [CChar](repeating: 0, count: 512)
+        let ok: Bool
+        if first == "--dump" {
+            ok = machine_theme_dump(path, args.dropFirst(2).contains("--coords"), &err, err.count)
+        } else {
+            guard args.count == 3 else { usage() }
+            ok = machine_theme_render(path, args[2], &err, err.count)
+        }
+        if !ok { fail(str(err)) }
+        return
+    }
     var library = defaultLibrary()
     if args.count == 2 && args[0] == "--library" { library = args[1] } else if !args.isEmpty { usage() }
     let found = themes(in: library)
-    if found.isEmpty { print("no themes in \(library); import a Kaleidoscope scheme archive with bluebox import") }
+    if found.isEmpty { print("no themes in \(library); import a Kaleidoscope scheme or theme archive with bluebox import") }
     for t in found { print("\((t as NSString).lastPathComponent)  (\(String(t.dropFirst(library.count + 1))))") }
 }
 

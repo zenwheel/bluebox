@@ -145,7 +145,9 @@ func sidecarPath(_ path: String) -> String {
 
 func classify(_ path: String) -> InputKind {
     var prefix = readPrefix(path)
-    let hasSidecar = FileManager.default.fileExists(atPath: sidecarPath(path))
+    // A sidecar, or the forks macOS keeps with the file itself (a Mac file
+    // copied from a classic volume or extracted with its resource fork).
+    let hasSidecar = FileManager.default.fileExists(atPath: sidecarPath(path)) || appledouble_has_native(path)
     let ext = (path as NSString).pathExtension.lowercased()
     // The MacBinary I check is weak; a file that already has Mac forks is only
     // MacBinary if it says so in its name.
