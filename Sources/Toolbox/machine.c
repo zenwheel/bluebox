@@ -502,6 +502,7 @@ bool machine_boot(bool census)
     events_reset();
     display_reset();
     speech_reset();
+    macintalk_reset();
     drag_reset();
     print_reset();
     carbonsvc_reset();
@@ -802,6 +803,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     fm_init(g_app_dir);
     open_user_fonts();
     mactcp_install_resolver();
+    macintalk_install_file();
     snprintf(g_app_path, sizeof g_app_path, "%s", app_path);
     g_app_creator = mac_file_creator(&mf);
     g_is_finder = mac_file_type(&mf) == fourcc("FNDR");
