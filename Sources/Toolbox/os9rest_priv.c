@@ -103,11 +103,11 @@ static void p_InstallSystemExceptionHandler(ppc_cpu *c)
 static void p_AlreadyDone(ppc_cpu *c) { RETURN(noErr); }
 static void p_PrintCopyright(ppc_cpu *c) { DONE(); } /* to the debugger's console, which there is none of */
 
-/* MoveHLow(h): to the low end of the heap, where nothing watches the
- * difference: as MoveHHi, the block stays and the call succeeds. */
+/* MoveHLow(h): down to the bottom of the free space and unlocked
+ * relocatable blocks below it, as MoveHHi moves one up. */
 static void p_MoveHLow(ppc_cpu *c)
 {
-    wr16(LM_MemErr, noErr);
+    wr16(LM_MemErr, (uint16_t)mm_move_handle(R(0), false));
     DONE();
 }
 

@@ -1438,7 +1438,7 @@ extension BlueBox {
             // A malformed document: the error, its line, the handler told.
             let badBytes = Array("<a>\n<b>\n</a>".utf8)
             let bad = call("CFDataCreate", [0, bytes(badBytes), UInt32(badBytes.count)])
-            let errors = buffer(4)
+            let errors = buffer(12) // the counting callbacks above still count in it
             let handler = routine([0x9085_0000, 0x3860_0000, 0x4E80_0020]) // *info = error; false
             wr32(cbs + 20, handler)
             wr32(ctx + 4, errors)
