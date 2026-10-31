@@ -1110,6 +1110,12 @@ bool thme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool
         int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
         tb_DisposePtr(fi);
         int tw = m[1];
+        /* Too wide for its place: cut short with an ellipsis. */
+        while (n > 1 && tw > tr.right - tr.left) {
+            s[n - 2] = 0xC9; /* … */
+            n--;
+            tw = qd_text_width(port, s, n);
+        }
         tb_MoveTo((int16_t)(tr.left + (tr.right - tr.left - tw) / 2),
                   (int16_t)(tr.top + (tr.bottom - tr.top - asc - desc) / 2 + asc));
         uint16_t col[3] = { 0, 0, 0 };
