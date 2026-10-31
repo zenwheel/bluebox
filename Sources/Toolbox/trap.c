@@ -1107,17 +1107,25 @@ void trap_autovectors(void)
     wr16(rte, 0x4E73); /* RTE */
     for (unsigned v = 32; v < 48; v++)
         wr32(v * 4, rte);
-    /* MacJmp ($120), the debugger's entry: a Mac with no debugger
-     * installed had its ROM's MicroBug there, never nil, and the flags
-     * (MacJmpFlag, or MacJmp's top byte in 24-bit mode) clear.  Here it
-     * is a JMP in the system heap to Debugger, which stops the run as
-     * entering a debugger would.  AMP 68K, starting, reads its song
-     * window's fields through nil: a nonzero byte at $122 (the window's
-     * busy flag) is what made it leave them alone. */
+    /* MacJmp ($120), the debugger's entry, as the ROM left it with no
+     * debugger installed.  The Quadra 800/900/950 and Power Mac ROMs clear
+     * it and MacJmpFlag ($BFF) as they set the exception vectors (CLR.L
+     * $120, CLR.B $BFF), and nil is what the system takes for no debugger
+     * (System 7.5's NMI patch; the Power Mac Memory Manager, before its
+     * DebugStr).  The Mac Plus ROM put its serial debugger nub there, with
+     * the flags in the top byte at $20 (initialised, not installed, so the
+     * ROM never jumped to it); a 68000 here gets a JMP to Debugger in the
+     * system heap with those flags.  AMP 68K 2.9a2 reads its song window's
+     * busy flag through nil from $122: nonzero only on such a Mac or with
+     * MacsBug in, so without one it goes on through a nil object. */
+    wr32(0x0120, 0);
+    wr8(0x0BFF, 0);
+    if (machine_cpu_model() != 68000)
+        return;
     gaddr dbg = mm_new_ptr_in(rd32(LM_SysZone), 6, false);
     if (!dbg)
         return;
     wr16(dbg, 0x4EF9); /* JMP */
     wr32(dbg + 2, rd32(TB_TRAP_TABLE + 0x1FFu * 4)); /* Debugger ($A9FF) */
-    wr32(0x0120, dbg);
+    wr32(0x0120, 0x20000000u | dbg);
 }

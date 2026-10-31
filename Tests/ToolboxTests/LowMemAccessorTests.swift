@@ -31,16 +31,19 @@ extension BlueBox {
             #expect(ilCall("LMGetAt2MenuBottom", []) == 0x1234)
         }
 
-        @Test func macJmpIsADebuggerEntryNotNil() {
-            // As on a Mac with no debugger installed (its ROM's MicroBug):
-            // an entry, no flags in the top byte, and a nonzero byte at
-            // $122, which AMP 68K reads through a nil window as its busy flag.
-            let entry = ilCall("LMGetMacJmp", [])
-            #expect(entry == rd32(0x120) && entry != 0)
-            #expect(rd8(0x120) & 0x80 == 0 && rd8(0xBFF) & 0x80 == 0)
-            #expect(rd8(0x122) != 0)
-            // a JMP to Debugger
-            #expect(rd16(entry) == 0x4EF9 && rd32(entry + 2) == rd32(UInt32(TB_TRAP_TABLE) + 0x1FF * 4))
+        @Test func macJmpIsAsTheROMLeftItWithNoDebugger() {
+            // A Quadra's or Power Mac's ROM: MacJmp nil, MacJmpFlag clear,
+            // so $122 (AMP 68K's busy flag, through a nil window) is zero.
+            #expect(ilCall("LMGetMacJmp", []) == 0 && rd32(0x120) == 0)
+            #expect(ilCall("LMGetMacJmpFlag", []) == 0)
+            // A Mac Plus's: an entry, its top byte the flags $20
+            // (initialised, not installed); here a JMP to Debugger.
+            withModel(68000) {
+                let jmp = rd32(0x120)
+                #expect(jmp >> 24 == 0x20)
+                let entry = jmp & 0xFF_FFFF
+                #expect(rd16(entry) == 0x4EF9 && rd32(entry + 2) == rd32(UInt32(TB_TRAP_TABLE) + 0x1FF * 4))
+            }
         }
 
         @Test func addressesAndRecords() {
