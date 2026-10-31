@@ -10,6 +10,7 @@ enum {
     LOG_RSRC = 1 << 3,   /* resource manager */
     LOG_MEM = 1 << 4,    /* memory manager */
     LOG_CPU = 1 << 5,    /* instruction trace */
+    LOG_SPEECH = 1 << 6, /* the Speech Manager's callbacks, with their host times */
 };
 
 extern unsigned g_log_mask;

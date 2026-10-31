@@ -393,6 +393,7 @@ void time_pump(void)
     appletalk_poll();     /* datagrams for socket listeners, NBP's answers */
     ppc_toolbox_poll();   /* PPC Toolbox sessions: requests, answers and blocks */
     qt_callbacks_periodic(); /* QuickTime's time base callbacks at interrupt time */
+    speech_interrupt();   /* the Speech Manager's callbacks, as the voice reaches them */
     adb_pump();
     hw_pump();            /* the VIA's timers and interrupts, the sound buffer */
     uint64_t t = now();

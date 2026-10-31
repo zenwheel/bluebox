@@ -125,6 +125,137 @@ extension BlueBox {
             #expect(tb_DisposeSpeechChannel(ch) == 0)
         }
 
+        /// A host that speaks nothing and reports nothing: the test posts
+        /// its words, and a clock of its own times them.
+        nonisolated(unsafe) static var clock = 0.0
+        nonisolated(unsafe) static var timed: [(Double, UInt16)] = []
+        nonisolated(unsafe) static var a5s: [UInt32] = []
+        static let timedProc: native_fn = { c, _ in
+            guard let c else { return }
+            let ret = cpu_pop32(c)
+            let op = cpu_pop16(c)
+            _ = cpu_pop32(c)
+            _ = cpu_pop32(c)
+            Speech.timed.append((Speech.clock, op))
+            Speech.a5s.append(c.pointee.a.5)
+            cpu_push32(c, ret)
+        }
+
+        /// A channel speaking `text` to a silent host, its phonemes timed.
+        func timedChannel(_ text: String) -> (UInt32, UInt32) {
+            launchTestApp()
+            _ = initToolbox()
+            g_cpu!.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            machine_set_speech_handler({ _, _ in }, nil)
+            machine_set_speech_clock { Speech.clock }
+            Self.clock = 100
+            Self.timed = []
+            Self.a5s = []
+            let chp = tb_NewPtr(4, false, true)
+            #expect(tb_NewSpeechChannel(0, chp) == 0)
+            let ch = rd32(chp)
+            #expect(tb_SetSpeechInfo(ch, Int32(bitPattern: 0x7068_6362), native_register(Self.timedProc, "timed phoneme", 0)) == 0)
+            let buf = tb_NewPtr(256, false, true)
+            for (i, b) in text.utf8.enumerated() { wr8(buf + UInt32(i), b) }
+            #expect(tb_SpeakText(ch, buf, UInt32(text.utf8.count)) == 0)
+            return (ch, buf)
+        }
+
+        /// Time passes in 5 ms steps, the Time Manager's pump running.
+        func run(until t: Double) {
+            while Self.clock < t - 1e-9 {
+                Self.clock += 0.005
+                time_pump()
+            }
+        }
+
+        /// macOS reports words but no phonemes.  A word's made-up phonemes
+        /// come at interrupt time (the program needn't call the Event
+        /// Manager), spread over the word: vowels longer than stops, and
+        /// the mouth closes at a pause, before the next word.  How long the
+        /// words took sets the pace of the later ones.
+        @Test func madeUpPhonemesKeepTimeWithTheWords() {
+            let (ch, _) = timedChannel("lalala top, top top")
+            defer { machine_set_speech_handler(nil, nil); machine_set_speech_clock(nil) }
+            Self.clock = 100.5
+            machine_speech_event(0, 1, 0, 6) // "lalala", heard a little before macOS says
+            run(until: 100.51)
+            #expect(Self.timed.map(\.1) == [27, 2]) // l AE, at once
+            run(until: 100.95)
+            #expect(Self.timed.map(\.1) == [27, 2, 27, 2, 27, 2]) // l AE l AE l AE, the mouth left open
+            let at = Self.timed.map(\.0)
+            #expect(at[2] - at[1] > at[1] - at[0]) // AE outlasts l
+            #expect(at[5] - at[0] > 0.25 && at[5] - at[0] < 0.5) // over the word, not at once
+            // The next word comes 0.3 s after the first: the pace is learnt.
+            Self.timed = []
+            machine_speech_event(0, 1, 7, 4) // "top,"
+            run(until: 101.9)
+            #expect(Self.timed.map(\.1) == [35, 11, 31, 0]) // t AA p, then the pause closes the mouth
+            let top1 = Self.timed[3].0 - Self.timed[0].0
+            Self.timed = []
+            Self.clock = 102
+            machine_speech_event(0, 1, 12, 3) // "top"
+            run(until: 102.15)
+            machine_speech_event(0, 1, 16, 3) // "top", sooner than expected
+            run(until: 102.4)
+            let ops = Self.timed.map(\.1)
+            #expect(ops.count >= 6 && Array(ops.prefix(6)) == [35, 11, 31, 35, 11, 31]) // nothing lost
+            #expect(Self.timed[5].0 - Self.timed[3].0 < top1) // faster now
+            machine_speech_event(0, 0, 0, 0) // done
+            run(until: 102.6)
+            #expect(Self.timed.last?.1 == 0) // closed at the end
+            #expect(tb_DisposeSpeechChannel(ch) == 0)
+        }
+
+        /// soCurrentA5: the callbacks run with the program's A5.  soStatus
+        /// tells the phoneme being said; soPhonemeSymbols lists them.
+        @Test func callbacksGetTheirA5AndTheStatusHasThePhoneme() {
+            let (ch, _) = timedChannel("mom")
+            defer { machine_set_speech_handler(nil, nil); machine_set_speech_clock(nil) }
+            #expect(tb_SetSpeechInfo(ch, Int32(bitPattern: 0x6D79_4135), 0x0012_3450) == 0) // 'myA5'
+            machine_speech_event(0, 1, 0, 3)
+            run(until: 100.01)
+            #expect(Self.a5s.first == 0x0012_3450)
+            let status = tb_NewPtr(8, false, true)
+            #expect(tb_GetSpeechInfo(ch, Int32(bitPattern: 0x7374_6174), status) == 0 && rd16(status + 6) == 28) // m
+            let hp = tb_NewPtr(4, false, true)
+            #expect(tb_GetSpeechInfo(ch, Int32(bitPattern: 0x7068_7379), hp) == 0) // 'phsy'
+            let d = rd32(rd32(hp))
+            #expect(rd16(d) == 42)
+            let ae = d + 2 + 2 * 54 // opcode 2: AE, "bat" with the a lit
+            #expect(rd16(ae) == 2 && pstring(at: ae + 2) == "AE" && pstring(at: ae + 18) == "bat")
+            #expect(rd16(ae + 50) == 1 && rd16(ae + 52) == 2)
+            #expect(tb_DisposeSpeechChannel(ch) == 0)
+        }
+
+        /// Phonemes given as input ([[inpt PHON]]) are said as written,
+        /// the embedded commands left out of the words.
+        @Test func phonemeInputIsSaidAsWritten() {
+            let text = "[[inpt PHON]]_gUXd\\>>>AY_m//////<<<AYt.[[inpt TEXT]]"
+            let (ch, _) = timedChannel(text)
+            defer { machine_set_speech_handler(nil, nil); machine_set_speech_clock(nil) }
+            machine_speech_event(0, 1, 2, 16) // "inpt PHON]]_gUXd", as macOS splits it
+            run(until: 101)
+            #expect(Self.timed.map(\.1) == [23, 14, 20, 0]) // g UX d, closed when no word comes
+            #expect(tb_DisposeSpeechChannel(ch) == 0)
+        }
+
+        /// macOS no longer turns text into phonemes: TextToPhonemes has ours.
+        @Test func textToPhonemesByTheLetters() {
+            launchTestApp()
+            _ = initToolbox()
+            let chp = tb_NewPtr(4, false, true)
+            #expect(tb_NewSpeechChannel(0, chp) == 0)
+            let text = tb_NewPtr(16, false, true)
+            for (i, b) in "Mom, why?".utf8.enumerated() { wr8(text + UInt32(i), b) }
+            let h = tb_NewHandle(0, false, true)
+            let len = tb_NewPtr(4, false, true)
+            #expect(tb_TextToPhonemes(rd32(chp), text, 9, h, len) == 0)
+            let n = Int(rd32(len))
+            #expect(String(decoding: (0..<n).map { rd8(rd32(h) + UInt32($0)) }, as: UTF8.self) == "mAAm, wIY?")
+            #expect(tb_DisposeSpeechChannel(rd32(chp)) == 0)
+        }
+
         /// MacinTalk 1, as WordSpell's SuperCard externals use it: the glue
         /// opens "MacinTalk" (found in the System Folder by the poor man's
         /// search path), gives DRVR ".SPEECH" a free unit's ID and _Opens it

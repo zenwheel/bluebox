@@ -235,6 +235,14 @@ static bool on_main_thread(void)
 #endif
 }
 
+/* Serve the host's main thread once, when the machine runs on it (a
+ * headless run): the speech synthesizers report there. */
+void machine_serve_main_thread(void)
+{
+    if (main_pump && on_main_thread())
+        main_pump();
+}
+
 static void wait_turn(host_thread *h)
 {
     bool serve = main_pump && on_main_thread();

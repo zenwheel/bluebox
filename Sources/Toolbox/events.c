@@ -867,14 +867,15 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     }
     if (host_attached && sleep > 0) {
         /* Sleep until input arrives or the time is up.  Interrupt-time
-         * work (sound refills, Time Manager and VBL tasks) goes on while
+         * work (sound refills, Time Manager and VBL tasks, speech
+         * callbacks) goes on while
          * the program sleeps, as it did on a Mac: then the wait is cut into
          * slices with the work done between them. */
         uint64_t total_ns = (uint64_t)(sleep > 600 ? 600 : sleep) * 1000000000ULL / 60;
         struct timespec start;
         clock_gettime(CLOCK_MONOTONIC, &start);
         for (;;) {
-            bool busy = sound_busy() || time_busy();
+            bool busy = sound_busy() || time_busy() || speech_waiting();
             struct timespec now;
             clock_gettime(CLOCK_MONOTONIC, &now);
             uint64_t spent = (uint64_t)(now.tv_sec - start.tv_sec) * 1000000000ULL + (uint64_t)(now.tv_nsec - start.tv_nsec);

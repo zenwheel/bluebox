@@ -23,16 +23,23 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
     /// Touched only on the main thread.
     private var synths: [Int32: NSSpeechSynthesizer] = [:]
     private var channelOf: [ObjectIdentifier: Int32] = [:]
+    /// Synthesizers stopped (by StopSpeech, or for a new utterance): the end
+    /// they report next (not finished) is the stopped one's, not news.
+    private var replaced: Set<ObjectIdentifier> = []
 
     /// AVSpeechSynthesizer instead (--speech avspeech, or no NSSpeechSynthesizer voices).
     private var useAV = false
     private let av = AVSpeech()
 
-    /// Route the machine's speech to the host.
+    /// Route the machine's speech to the host.  BLUEBOX_SPEECH_VOLUME scales
+    /// every channel's volume (0: silent, for timing runs and tests).
     public func install(avspeech: Bool = false) {
         useAV = avspeech || NSSpeechSynthesizer.availableVoices.isEmpty
-        machine_set_speech_handler({ rqp, _ in
+        let scale = Double(ProcessInfo.processInfo.environment["BLUEBOX_SPEECH_VOLUME"] ?? "") ?? 1
+        volumeScale.storeBytes(of: max(0, scale), as: Double.self)
+        machine_set_speech_handler({ rqp, ctx in
             guard let rq = rqp?.pointee else { return }
+            let scale = ctx.map { $0.load(as: Double.self) } ?? 1
             let op = Int(rq.op)
             let channel = rq.channel
             if op == Int(MACHINE_SPEECH_PHONEMES) {
@@ -51,7 +58,7 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
             }
             let text = rq.text.map { String(cString: $0) }
             let voice = rq.voice.map { String(cString: $0) }
-            let (rate, pitch, modulation, volume) = (rq.rate, rq.pitch, rq.modulation, rq.volume)
+            let (rate, pitch, modulation, volume) = (rq.rate, rq.pitch, rq.modulation, rq.volume * scale)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if ClassicSpeech.shared.useAV {
@@ -63,8 +70,15 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
                     }
                 }
             }
-        }, nil)
+        }, volumeScale)
     }
+
+    /// For the handler, which is a C function: BLUEBOX_SPEECH_VOLUME's scale.
+    private let volumeScale: UnsafeMutableRawPointer = {
+        let p = UnsafeMutableRawPointer.allocate(byteCount: 8, alignment: 8)
+        p.storeBytes(of: 1.0, as: Double.self)
+        return p
+    }()
 
     @MainActor private func synth(_ channel: Int32) -> NSSpeechSynthesizer {
         if let s = synths[channel] { return s }
@@ -80,14 +94,20 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
         switch op {
         case Int(MACHINE_SPEECH_SPEAK):
             let s = synth(channel)
-            if s.isSpeaking { s.stopSpeaking() }
+            if s.isSpeaking { /* its unfinished end isn't the new one's */
+                replaced.insert(ObjectIdentifier(s))
+                s.stopSpeaking()
+            }
             if rate > 0 { s.rate = Float(rate) }
             s.volume = Float(max(0, min(1, volume)))
             if pitch > 0 { try? s.setObject(NSNumber(value: pitch), forProperty: .pitchBase) }
             if modulation >= 0 { try? s.setObject(NSNumber(value: modulation), forProperty: .pitchMod) }
             if !s.startSpeaking(text ?? "") { machine_speech_event(channel, 0, 0, 0) }
-        case Int(MACHINE_SPEECH_STOP):
-            synths[channel]?.stopSpeaking()
+        case Int(MACHINE_SPEECH_STOP): /* over already for the Speech Manager */
+            if let s = synths[channel], s.isSpeaking {
+                replaced.insert(ObjectIdentifier(s))
+                s.stopSpeaking()
+            }
         case Int(MACHINE_SPEECH_PAUSE):
             synths[channel]?.pauseSpeaking(at: .immediateBoundary)
         case Int(MACHINE_SPEECH_CONTINUE):
@@ -109,6 +129,7 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
     private func channel(_ s: NSSpeechSynthesizer) -> Int32? { channelOf[ObjectIdentifier(s)] }
 
     public func speechSynthesizer(_ sender: NSSpeechSynthesizer, didFinishSpeaking finishedSpeaking: Bool) {
+        if !finishedSpeaking, replaced.remove(ObjectIdentifier(sender)) != nil { return }
         if let c = channel(sender) { machine_speech_event(c, 0, 0, 0) }
     }
 
@@ -235,8 +256,11 @@ final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
             }
             current[ObjectIdentifier(s)] = state
             if parts.isEmpty { machine_speech_event(channel, 0, 0, 0) }
-        case Int(MACHINE_SPEECH_STOP):
-            synths[channel]?.stopSpeaking(at: .immediate)
+        case Int(MACHINE_SPEECH_STOP): /* over already for the Speech Manager: no end reported */
+            if let s = synths[channel] {
+                current[ObjectIdentifier(s)] = nil
+                s.stopSpeaking(at: .immediate)
+            }
         case Int(MACHINE_SPEECH_PAUSE):
             synths[channel]?.pauseSpeaking(at: .immediate)
         case Int(MACHINE_SPEECH_CONTINUE):

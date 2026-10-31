@@ -595,11 +595,17 @@ bool depth_alert(const char *message);
 int fm_apple_menu_items(char (*names)[256], int max);
 bool fm_open_apple_menu_item(const uint8_t *name, int n);
 
-/* Speech Manager (speech.c): callbacks at safe points; a fresh machine. */
+/* Speech Manager (speech.c): callbacks at safe points and at interrupt
+ * time (time_pump); whether a channel is speaking; a fresh machine. */
 void speech_pump(void);
+void speech_interrupt(void);
+bool speech_waiting(void);
+bool speech_recording(machine_speech_fn fn); /* speech_record.c */
 void speech_reset(void);
 /* A word's phonemes (the Speech Manager's opcodes) by letter-to-sound rules. */
 int speech_word_phonemes(const uint8_t *text, int len, uint8_t *out, int max);
+/* The host's main thread served once, when the machine runs on it (threadmgr.c). */
+void machine_serve_main_thread(void);
 /* MacinTalk 1, the old speech driver (macintalk.c): its natives, and its
  * file in the System Folder. */
 void macintalk_reset(void);

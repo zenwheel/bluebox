@@ -465,6 +465,9 @@ void machine_speech_event(int channel, int kind, int32_t a, int32_t b);
 /* The record backend: requests logged to path ("-" for stderr), words,
  * syncs and done delivered at once, no sound.  For tests and probes. */
 bool machine_set_speech_record(const char *path);
+/* The clock (seconds) the made-up phonemes are timed by; NULL: the host's.
+ * For tests. */
+void machine_set_speech_clock(double (*fn)(void));
 
 /* ---- Native controls (the native appearance) ---- */
 
