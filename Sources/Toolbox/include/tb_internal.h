@@ -434,6 +434,10 @@ void appearance_poll(void);
 void appearance_hilite_changed(uint16_t r, uint16_t g, uint16_t b);
 bool ap_brush_rgb(int brush, uint16_t out[3]);
 bool ap_text_rgb(int color, uint16_t out[3]);
+/* A theme sound for something the system does (an OSType ThemeSoundKind:
+ * 'mnuo', 'wcls', 'btnr'...), when a theme's sound set is in use. */
+void appearance_sound(uint32_t kind);
+void appearance_sound_reset(void);
 bool ap_in_color(void);
 void ap_fill_rgn(const hrgn *g, const uint16_t rgb[3]);
 void ap_fill(qrect r, const uint16_t rgb[3]);

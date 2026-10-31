@@ -30,6 +30,7 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 #include "trap.h"
+#include "thme.h"
 
 #define R(n) (c->gpr[3 + (n)])
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; } while (0)
@@ -1020,6 +1021,9 @@ static void settings_default(void)
     settings.check_style = 1; /* kThemeCheckBoxCheckMark */
     settings.smoothing_size = 12;
     settings.dbl_click = 1;
+    /* A theme's sound set chosen: its sounds on, for the classes it asks. */
+    settings.sounds = thme_sound_set()[0] != 0;
+    settings.sound_mask = settings.sounds ? thme_sound_mask() : 0;
 }
 
 appearance_settings *ap_settings(void)
@@ -1396,6 +1400,8 @@ static void GetThemePlaylist(ppc_cpu *c)
         RETURN(paramErr);
         return;
     }
+    if (!sound_track[0] && thme_sound_set()[0])
+        snprintf(sound_track, sizeof sound_track, "%s", thme_sound_set());
     pstr_put(R(0), sound_track);
     RETURN(sound_track[0] ? noErr : kNoSoundTrackErr);
 }
@@ -1404,11 +1410,12 @@ static void SetThemePlaylist(ppc_cpu *c)
 {
     char name[256];
     pstr_get(R(0), name, sizeof name);
-    if (name[0]) {
+    if (name[0] && strcmp(name, thme_sound_set())) {
         RETURN(fnfErr);
         return;
     }
-    sound_track[0] = 0;
+    snprintf(sound_track, sizeof sound_track, "%s", name);
+    ap_settings()->sounds = name[0] != 0;
     RETURN(noErr);
 }
 

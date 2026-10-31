@@ -1513,19 +1513,22 @@ int32_t tb_MenuSelect(uint32_t p)
                 saved_area = (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 2),
                                       (int16_t)(box.right + 2) };
                 under = save_bits(saved_area);
-                gaddr fr = tb_NewPtr(8, false, false);
-                qrect_put(fr, (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 1),
-                                       (int16_t)(box.right + 1) });
-                tb_FrameRect(fr);
-                qrect_put(fr, (qrect){ (int16_t)(box.bottom + 1), box.left, (int16_t)(box.bottom + 2),
-                                       (int16_t)(box.right + 2) });
-                tb_PaintRect(fr);
-                qrect_put(fr, (qrect){ box.top, (int16_t)(box.right + 1), (int16_t)(box.bottom + 2),
-                                       (int16_t)(box.right + 2) });
-                tb_PaintRect(fr);
-                tb_DisposePtr(fr);
+                if (!themed()) { /* a theme's menu background has its own edges */
+                    gaddr fr = tb_NewPtr(8, false, false);
+                    qrect_put(fr, (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 1),
+                                           (int16_t)(box.right + 1) });
+                    tb_FrameRect(fr);
+                    qrect_put(fr, (qrect){ (int16_t)(box.bottom + 1), box.left, (int16_t)(box.bottom + 2),
+                                           (int16_t)(box.right + 2) });
+                    tb_PaintRect(fr);
+                    qrect_put(fr, (qrect){ box.top, (int16_t)(box.right + 1), (int16_t)(box.bottom + 2),
+                                           (int16_t)(box.right + 2) });
+                    tb_PaintRect(fr);
+                    tb_DisposePtr(fr);
+                }
                 wr16(which, 0);
                 call_mdef(mh, mDrawMsg, box, 0, which);
+                appearance_sound(fourcc("mnuo"));
             } else {
                 box = (qrect){ 0, 0, 0, 0 };
             }
@@ -1545,8 +1548,10 @@ int32_t tb_MenuSelect(uint32_t p)
             restore_bits(saved_area, under);
         if (item) {
             result = ((int32_t)MenuInfo_menuID(menu_ptr(mh)) << 16) | item;
+            appearance_sound(fourcc("mnus"));
         } else {
             tb_HiliteMenu(0);
+            appearance_sound(fourcc("mnuc"));
         }
     }
     tb_DisposePtr(which);

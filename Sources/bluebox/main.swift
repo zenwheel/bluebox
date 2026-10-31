@@ -689,6 +689,9 @@ func runCommand(_ args: [String]) {
     if let themePath {
         var terr = [CChar](repeating: 0, count: 256)
         guard machine_load_theme(themePath, &terr, terr.count) else { fail(str(terr)) }
+        if let sounds = themeSoundSet(for: themePath), !machine_load_theme_sounds(sounds, &terr, terr.count) {
+            eprint("bluebox: \(str(terr)); the theme plays no sounds\n")
+        }
     }
     // A classic Mac by name: its screen, processor and FPU, addressing, ROM
     // and chips (hardware programs address them by number); --depth, --cpu,
@@ -1191,6 +1194,25 @@ func findTheme(_ spec: String) -> String? {
     let all = themes(in: defaultLibrary())
     return all.first { ($0 as NSString).lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }
         ?? all.first { ($0 as NSString).lastPathComponent.range(of: name, options: .caseInsensitive) != nil }
+}
+
+/// A Mac OS 8.5 theme's sound set ('tsnd' file): the one its scene names,
+/// beside the theme or in the library, or the only one beside it.
+func themeSoundSet(for theme: String) -> String? {
+    var buf = [CChar](repeating: 0, count: 256)
+    let name = machine_theme_sound_set_name(&buf, buf.count) ? str(buf) : ""
+    let dir = (theme as NSString).deletingLastPathComponent
+    let near = scan(dir).filter { fourCCString($0.type) == "tsnd" }.map(\.path)
+    let named = { (paths: [String]) in
+        paths.first { !name.isEmpty && ($0 as NSString).lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }
+    }
+    if let p = named(near) { return p }
+    let library = defaultLibrary()
+    if FileManager.default.fileExists(atPath: library),
+       let p = named(scan(library).filter { fourCCString($0.type) == "tsnd" }.map(\.path)) {
+        return p
+    }
+    return near.count == 1 ? near[0] : nil
 }
 
 func themesCommand(_ args: [String]) {

@@ -112,6 +112,13 @@ static struct {
     int ncache;
 } T;
 
+/* The sound set, loaded apart from the theme. */
+static struct {
+    uint8_t *fork;
+    rsrc_index idx;
+    char name[64];
+} SND;
+
 static const uint8_t *res(uint32_t type, int16_t id, uint32_t *len)
 {
     if (!T.fork)
@@ -1431,6 +1438,14 @@ bool thme_scene_string(const char *tag, char *out, size_t n)
     return true;
 }
 
+/* The sound mask the scene asks for ('smsk'), else every class. */
+uint32_t thme_sound_mask(void)
+{
+    uint32_t il;
+    const uint8_t *d = T.on ? scene_item("smsk", &il) : NULL;
+    return d && il >= 4 ? be32(d) : 0xF;
+}
+
 /* The scene's highlight colour. */
 bool thme_highlight_rgb(uint16_t out[3])
 {
@@ -1507,6 +1522,87 @@ const uint8_t *thme_cursor(int cursor, int step, uint32_t *len)
         id = (int16_t)be16(a + 4 + (step % n) * 4);
     }
     return res(fourcc("crsr"), id, len);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Sound sets ('tsnd' files): 'snd#' 1000 the effects, 1001 the drag sounds;
+ * u16 version, u16 count, then entries of 44 bytes: the ThemeSoundKind
+ * (an OSType: 'mnuo', 'wcls', 'btnp'...), u16 its class (1 window, 2 menu,
+ * 4 control, 8 Finder: the bits of the sound mask), u16, u16, u16, then
+ * four {u16 'snd ' id, u16, u32} of which the first that names one plays. */
+
+bool thme_load_sounds(const char *path, const uint8_t *fork, size_t len, char *err, size_t errlen)
+{
+    thme_unload_sounds();
+    rsrc_index idx;
+    if (!rsrc_parse(fork, len, &idx, err, errlen))
+        return false;
+    bool ok = false;
+    for (size_t i = 0; i < idx.count && !ok; i++)
+        ok = idx.entries[i].type == fourcc("snd#");
+    if (!ok) {
+        rsrc_index_free(&idx);
+        snprintf(err, errlen, "%s is not a sound set (no snd#)", path);
+        return false;
+    }
+    SND.fork = malloc(len);
+    memcpy(SND.fork, fork, len);
+    rsrc_index_free(&idx);
+    rsrc_parse(SND.fork, len, &SND.idx, err, errlen);
+    const char *base = strrchr(path, '/');
+    snprintf(SND.name, sizeof SND.name, "%s", base ? base + 1 : path);
+    return true;
+}
+
+void thme_unload_sounds(void)
+{
+    if (SND.fork) {
+        rsrc_index_free(&SND.idx);
+        free(SND.fork);
+    }
+    memset(&SND, 0, sizeof SND);
+}
+
+const char *thme_sound_set(void) { return SND.fork ? SND.name : ""; }
+
+static const uint8_t *snd_res(uint32_t type, int16_t id, uint32_t *len)
+{
+    for (size_t i = 0; SND.fork && i < SND.idx.count; i++) {
+        rsrc_entry *e = &SND.idx.entries[i];
+        if (e->type == type && e->id == id) {
+            *len = e->data_len;
+            return rsrc_data(SND.fork, &SND.idx, e);
+        }
+    }
+    return NULL;
+}
+
+/* The 'snd ' for a ThemeSoundKind or ThemeDragSoundKind, and its class. */
+const uint8_t *thme_sound(uint32_t kind, int *cls, int16_t *id, uint32_t *len)
+{
+    for (int16_t table = 1000; table <= 1001 && SND.fork; table++) {
+        uint32_t tl;
+        const uint8_t *d = snd_res(fourcc("snd#"), table, &tl);
+        if (!d || tl < 4)
+            continue;
+        int n = be16(d + 2);
+        for (int i = 0; i < n && 4 + (uint32_t)(i + 1) * 44 <= tl; i++) {
+            const uint8_t *e = d + 4 + i * 44;
+            if (be32(e) != kind)
+                continue;
+            for (int k = 0; k < 4; k++) {
+                int16_t sid = (int16_t)be16(e + 12 + k * 8);
+                const uint8_t *snd = sid ? snd_res(fourcc("snd "), sid, len) : NULL;
+                if (snd) {
+                    *cls = be16(e + 4);
+                    *id = sid;
+                    return snd;
+                }
+            }
+            return NULL;
+        }
+    }
+    return NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1652,3 +1748,17 @@ bool machine_theme_render(const char *path, const char *png, int part, int pw, i
     thme_unload();
     return ok;
 }
+
+bool machine_load_theme_sounds(const char *path, char *err, size_t errlen)
+{
+    mac_file mf;
+    if (!appledouble_read(path, &mf, err, errlen))
+        return false;
+    bool ok = mf.rsrc_len && thme_load_sounds(path, mf.rsrc, mf.rsrc_len, err, errlen);
+    if (!mf.rsrc_len)
+        snprintf(err, errlen, "%s has no resource fork", path);
+    mac_file_free(&mf);
+    return ok;
+}
+
+bool machine_theme_sound_set_name(char *out, size_t n) { return thme_scene_string("snds", out, n); }

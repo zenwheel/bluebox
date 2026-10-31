@@ -158,6 +158,39 @@ extension BlueBox {
             #expect(thme_text_rgb(1, &c) && c == [0x1111, 0x2222, 0x3333])
         }
 
+        /// A sound set: 'snd#' maps a ThemeSoundKind to the first 'snd ' of
+        /// its entry that is there, with the entry's class.
+        @Test func soundSets() {
+            let entry = Array("wcls".utf8) + Self.be16(1) + Self.be16(5) + Self.be16(0) + Self.be16(0) +
+                Self.be16(999) + Self.be16(0) + Self.be32(0) + Self.be16(130) + Self.be16(0x9B) + Self.be32(0) +
+                [UInt8](repeating: 0, count: 16)
+            let table = Self.be16(1) + Self.be16(1) + entry
+            let snd: [UInt8] = Self.be16(1) + [1, 2, 3, 4]
+            var specs: [rsrc_spec] = []
+            let datas = [table, snd].map { bytes -> UnsafeMutablePointer<UInt8> in
+                let p = UnsafeMutablePointer<UInt8>.allocate(capacity: bytes.count)
+                p.initialize(from: bytes, count: bytes.count)
+                return p
+            }
+            specs.append(rsrc_spec(type: fourCC("snd#"), id: 1000, name: nil, attrs: 0, data: datas[0], len: UInt32(table.count)))
+            specs.append(rsrc_spec(type: fourCC("snd "), id: 130, name: nil, attrs: 0, data: datas[1], len: UInt32(snd.count)))
+            var out: UnsafeMutablePointer<UInt8>?
+            var len = 0
+            #expect(rsrc_build(specs, specs.count, &out, &len))
+            datas.forEach { $0.deallocate() }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(thme_load_sounds("Synthetic Sounds", out, len, &err, err.count))
+            free(out)
+            defer { thme_unload_sounds() }
+            #expect(String(cString: thme_sound_set()) == "Synthetic Sounds")
+            var cls: Int32 = 0
+            var id: Int16 = 0
+            var n: UInt32 = 0
+            let d = thme_sound(fourCC("wcls"), &cls, &id, &n)
+            #expect(d != nil && cls == 1 && id == 130 && n == UInt32(snd.count)) // 999 isn't there; 130 is
+            #expect(thme_sound(fourCC("wopn"), &cls, &id, &n) == nil)
+        }
+
         /// Drawn into a port, through its clip.
         @Test func drawsIntoThePort() {
             launchTestApp()

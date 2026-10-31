@@ -115,6 +115,21 @@ static int our_wdef(gaddr w)
 
 static bool is_floating(gaddr w) { return our_wdef(w) == 124; }
 
+/* A theme sound's kind for a window: 'w' a document's, 'u' a utility
+ * (floating) window's, 'd' a dialog's, 'a' an alert's, then the event
+ * ('opn', 'cls'; a dialog or alert closes with 'dlgc' and 'altc'). */
+static const char *window_sound(gaddr w, const char *what)
+{
+    static char kind[5];
+    int var = varcode(w), def = our_wdef(w);
+    char c = def == 124 ? 'u' : def == 0 && var == 3 ? 'a' : def == 0 && (var == 1 || var == 5) ? 'd' : 'w';
+    if (!strcmp(what, "cls") && (c == 'd' || c == 'a'))
+        snprintf(kind, sizeof kind, "%s", c == 'd' ? "dlgc" : "altc");
+    else
+        snprintf(kind, sizeof kind, "%c%s", c, what);
+    return kind;
+}
+
 /* After InitFloatingWindows (Mac OS 8.5), the Window Manager keeps the
  * floating windows (WDEF 124's) in front of the others, all of them
  * highlighted, and the front document window the active one. */
@@ -1379,6 +1394,8 @@ static void free_window_parts(gaddr w)
 static void close_window(gaddr w, bool keep_parts)
 {
     bool was_visible = wvisible(w);
+    if (was_visible)
+        appearance_sound(fourcc(window_sound(w, "cls")));
     hrgn s;
     hrgn_init(&s);
     rgn_read(WindowRecord_strucRgn(w), &s);
@@ -1466,6 +1483,7 @@ void tb_ShowWindow(gaddr w)
     call_wdef(w, wCalcRgns, 0);
     update_active();
     repaint_rgn_of(w);
+    appearance_sound(fourcc(window_sound(w, "opn")));
 }
 
 void tb_HideWindow(gaddr w)
@@ -1626,6 +1644,7 @@ static void toggle_collapse(gaddr w)
 {
     if (our_wdef(w) < 0)
         return;
+    appearance_sound(fourcc(is_collapsed(w) ? "wexp" : "wcol"));
     hrgn old;
     hrgn_init(&old);
     rgn_read(WindowRecord_strucRgn(w), &old);
@@ -2236,8 +2255,13 @@ static void toggle_box(gaddr w, int part)
 
 static int8_t track_box(gaddr w, uint32_t p, int part)
 {
-    /* Pressed while the mouse is in the box; true if released inside. */
+    /* Pressed while the mouse is in the box; true if released inside.
+     * The theme sounds: 'wclp' pressed, 'wclx' left, 'wcle' entered again,
+     * 'wclr' released in it (the zoom box's 'wzm.'). */
     bool inside = true, shown = true;
+    const char *snd = part == wInGoAway ? "wcl" : "wzm";
+    char kind[5] = { snd[0], snd[1], snd[2], 'p', 0 };
+    appearance_sound(fourcc(kind));
     toggle_box(w, part);
     while (ev_still_down()) {
         uint32_t m = ev_mouse_global();
@@ -2245,12 +2269,18 @@ static int8_t track_box(gaddr w, uint32_t p, int part)
         if (inside != shown) {
             toggle_box(w, part);
             shown = inside;
+            kind[3] = inside ? 'e' : 'x';
+            appearance_sound(fourcc(kind));
         }
         drag_hook();
         ev_wait_tick();
     }
     if (shown)
         toggle_box(w, part);
+    if (inside) {
+        kind[3] = 'r';
+        appearance_sound(fourcc(kind));
+    }
     return inside;
 }
 
@@ -2276,6 +2306,7 @@ void tb_ZoomWindow(gaddr wp, int16_t part, int8_t front)
 {
     if (!wp)
         return;
+    appearance_sound(fourcc(part == inZoomOut ? "wzmo" : "wzmi"));
     /* As the Window Manager did, with the WStateData in the dataHandle:
      * zooming out keeps the current place as the user state and goes to
      * the standard state; zooming in goes back to the user state. */

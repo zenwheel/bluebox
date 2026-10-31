@@ -1784,7 +1784,20 @@ static int16_t hit(gaddr ch, int16_t part, int16_t modifiers)
     return part;
 }
 
-int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a) { return hit(ch, track(ch, p, a), 0); }
+int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a)
+{
+    int16_t part = hit(ch, track(ch, p, a), 0);
+    /* The theme sound for a click that took: a button's, a check box's or
+     * radio button's (they share the part), a scroll arrow's, the page. */
+    switch (part) {
+    case 10: appearance_sound(fourcc("btnr")); break;
+    case 11: appearance_sound(fourcc("chkr")); break;
+    case 20: case 21: appearance_sound(fourcc("sbar")); break;
+    case 22: case 23: appearance_sound(fourcc("sbtp")); break;
+    default: break;
+    }
+    return part;
+}
 
 void tb_DragControl(gaddr ch, uint32_t p, gaddr limit, gaddr slop, int16_t axis)
 {

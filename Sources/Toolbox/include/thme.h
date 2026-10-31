@@ -96,6 +96,13 @@ bool thme_menu_separator(qrect r);
 bool thme_scene_string(const char *tag, char *out, size_t n);
 bool thme_highlight_rgb(uint16_t out[3]);
 bool thme_paint_desk(const hrgn *area);
+/* The sound set: its 'snd ' for a ThemeSoundKind or ThemeDragSoundKind
+ * (an OSType), and the kind's class (the sound mask's bit). */
+bool thme_load_sounds(const char *path, const uint8_t *fork, size_t len, char *err, size_t errlen);
+void thme_unload_sounds(void);
+const char *thme_sound_set(void);
+uint32_t thme_sound_mask(void);
+const uint8_t *thme_sound(uint32_t kind, int *cls, int16_t *id, uint32_t *len);
 /* A ThemeCursor's 'crsr' (the step'th of an animated one), or NULL. */
 const uint8_t *thme_cursor(int cursor, int step, uint32_t *len);
 

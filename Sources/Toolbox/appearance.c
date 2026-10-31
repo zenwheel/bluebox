@@ -356,9 +356,13 @@ bool appearance_client(void) { return client; }
 /* At boot: the accent as the host gave it; the highlight colour is in
  * HiliteRGB already (machine.c), and only a later change is taken up, so
  * that a program's own HiliteRGB stays until the host's colour changes. */
+static void cursors_reset(void);
+
 void appearance_reset(void)
 {
     client = false;
+    cursors_reset();
+    appearance_sound_reset();
     atomic_store(&host_colors_changed, false);
     atomic_store(&host_hilite, 0);
     uint64_t a = atomic_load(&host_accent);
@@ -2335,12 +2339,15 @@ int32_t tb_UseThemeFont(uint16_t id, int16_t script)
  * the arrow for the rest. */
 /* A theme file's cursor: its 'crsr' in a handle of ours (one per
  * resource, kept), set as a colour cursor. */
+static struct {
+    const uint8_t *src;
+    gaddr h;
+} made[64];
+
+static void cursors_reset(void) { memset(made, 0, sizeof made); }
+
 static bool theme_file_cursor(uint32_t cursor, uint32_t step)
 {
-    static struct {
-        const uint8_t *src;
-        gaddr h;
-    } made[64];
     uint32_t len;
     const uint8_t *d = themed() ? thme_cursor((int)cursor, (int)step, &len) : NULL;
     if (!d)
@@ -2398,6 +2405,84 @@ int32_t tb_SetAnimatedThemeCursor(uint32_t cursor, uint32_t step)
 }
 
 /* The theme's sounds: Platinum's are off unless a sound track is chosen. */
-int32_t tb_PlayThemeSound(int32_t kind) { return noErr; }
-int32_t tb_BeginThemeDragSound(int32_t kind) { return noErr; }
+/* ---------------------------------------------------------------------- */
+/* Theme sounds: the sound set's (a theme file's 'tsnd'), played on a
+ * channel of ours when theme sounds are on and the sound's class (window,
+ * menu, control, Finder) is in the mask. */
+
+static gaddr sound_chan;
+static struct {
+    int16_t id;
+    gaddr h;
+} sound_made[128];
+
+void appearance_sound_reset(void)
+{
+    sound_chan = 0;
+    memset(sound_made, 0, sizeof sound_made);
+}
+
+static bool play_sound(uint32_t kind)
+{
+    appearance_settings *set = ap_settings();
+    int cls;
+    int16_t id;
+    uint32_t len;
+    const uint8_t *d = set->sounds ? thme_sound(kind, &cls, &id, &len) : NULL;
+    if (!d || !(set->sound_mask & (uint32_t)cls))
+        return false;
+    int k = 0;
+    while (k < 128 && sound_made[k].h && sound_made[k].id != id)
+        k++;
+    if (k == 128)
+        return false;
+    if (!sound_made[k].h) {
+        gaddr h = tb_NewHandle((int32_t)len, true, false);
+        if (!h || !rd32(h))
+            return false;
+        gput(rd32(h), d, len);
+        tb_HLock(h);
+        sound_made[k].id = id;
+        sound_made[k].h = h;
+    }
+    if (!sound_chan) {
+        gaddr pp = tb_NewPtr(4, true, true);
+        if (tb_SndNewChannel(pp, 5 /* sampledSynth */, 0, 0) == noErr)
+            sound_chan = rd32(pp);
+        tb_DisposePtr(pp);
+        if (!sound_chan)
+            return false;
+    }
+    /* The one before stops: flushCmd, then quietCmd. */
+    gaddr cmd = tb_NewPtr(8, false, true);
+    wr16(cmd, 4);
+    tb_SndDoImmediate(sound_chan, cmd);
+    wr16(cmd, 3);
+    tb_SndDoImmediate(sound_chan, cmd);
+    tb_DisposePtr(cmd);
+    tb_SndPlay(sound_chan, sound_made[k].h, true);
+    return true;
+}
+
+/* The system's own sounds (menus, windows, controls): kind an OSType. */
+void appearance_sound(uint32_t kind)
+{
+    if (themed())
+        play_sound(kind);
+}
+
+int32_t tb_PlayThemeSound(int32_t kind)
+{
+    if (themed())
+        play_sound((uint32_t)kind);
+    return noErr;
+}
+
+int32_t tb_BeginThemeDragSound(int32_t kind)
+{
+    if (themed())
+        play_sound((uint32_t)kind);
+    return noErr;
+}
+
 int32_t tb_EndThemeDragSound(void) { return noErr; }
