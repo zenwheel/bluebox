@@ -177,48 +177,24 @@ static void read_poly(reader *r, const mapping *m, poly *out)
     }
 }
 
-/* Scan-convert a polygon (even-odd) into a region. */
+/* Scan-convert a polygon (even-odd) into a region, a row at a time as
+ * PaintPoly does (a union per row was quadratic in the rows: a tall
+ * polygon in a picture took minutes). */
 static void poly_region(const poly *pl, hrgn *out)
 {
     hrgn_init(out);
     if (pl->n < 3)
         return;
-    int top = 32767, bottom = -32768;
+    int (*e)[4] = malloc((size_t)pl->n * sizeof *e);
     for (int i = 0; i < pl->n; i++) {
-        if (pl->pts[i][1] < top)
-            top = pl->pts[i][1];
-        if (pl->pts[i][1] > bottom)
-            bottom = pl->pts[i][1];
+        int j = (i + 1) % pl->n;
+        e[i][0] = pl->pts[i][0];
+        e[i][1] = pl->pts[i][1];
+        e[i][2] = pl->pts[j][0];
+        e[i][3] = pl->pts[j][1];
     }
-    int *xs = malloc(sizeof *xs * (size_t)pl->n);
-    for (int y = top; y < bottom; y++) {
-        double sy = y + 0.5;
-        int nx = 0;
-        for (int i = 0; i < pl->n; i++) {
-            int j = (i + 1) % pl->n;
-            double y0 = pl->pts[i][1], y1 = pl->pts[j][1];
-            if ((sy >= y0) != (sy >= y1)) {
-                double x = pl->pts[i][0] + (sy - y0) * (pl->pts[j][0] - pl->pts[i][0]) / (y1 - y0);
-                xs[nx++] = (int)(x + 0.5);
-            }
-        }
-        for (int a = 1; a < nx; a++)
-            for (int b = a; b > 0 && xs[b - 1] > xs[b]; b--) {
-                int t = xs[b];
-                xs[b] = xs[b - 1];
-                xs[b - 1] = t;
-            }
-        for (int k = 0; k + 1 < nx; k += 2) {
-            if (xs[k] >= xs[k + 1])
-                continue;
-            hrgn row;
-            hrgn_init(&row);
-            hrgn_rect(&row, (qrect){ (int16_t)y, (int16_t)xs[k], (int16_t)(y + 1), (int16_t)xs[k + 1] });
-            hrgn_op(out, out, &row, RGN_UNION);
-            hrgn_free(&row);
-        }
-    }
-    free(xs);
+    hrgn_even_odd(out, (const int (*)[4])e, pl->n);
+    free(e);
 }
 
 /* ---------------------------------------------------------------------- */

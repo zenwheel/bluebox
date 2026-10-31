@@ -258,11 +258,16 @@ enum { MAX_SUBZONES = 64 };
 static struct { gaddr z, lim; } subzones[MAX_SUBZONES];
 static int nsubzones;
 
+/* The zones whose headers were in from..to, a block disposed of or a zone
+ * made over them.  A block disposed of inside a zone leaves the zone be
+ * (Director makes its heaps in temporary memory and disposes pointers in
+ * them; forgetting the heap then had its handles resized in the zone
+ * around it, which said memWZErr). */
 static void forget_subzones(gaddr from, gaddr to)
 {
     int k = 0;
     for (int i = 0; i < nsubzones; i++)
-        if (subzones[i].z >= to || subzones[i].lim + TRAILER <= from)
+        if (subzones[i].z < from || subzones[i].z >= to)
             subzones[k++] = subzones[i];
     nsubzones = k;
 }
@@ -938,6 +943,7 @@ void tb_DisposeHandle(gaddr h)
             return;
         }
         z = zone_of(b);
+        forget_subzones(b, b + b_psize(b));
         b_free(z, b);
     }
     if (!z)
