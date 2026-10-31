@@ -184,6 +184,28 @@ extension BlueBox {
             #expect(doc.page(at: 0)?.string?.contains("Hello, printer") == true) // real text, not pixels
         }
 
+        /// PrOpenPage makes the printing port current: a program that opened
+        /// and closed a port of its own after PrOpenDoc draws the page there
+        /// (El Verbo Simple's Print Form drew into its closed colour port).
+        @Test func openPageMakesThePrintingPortCurrent() throws {
+            launchTestApp()
+            _ = initToolbox()
+            let h = tb_NewHandle(120, false, true)
+            tb_PrOpen()
+            tb_PrintDefault(h)
+            let port = tb_PrOpenDoc(h, 0, 0)
+            #expect(port != 0)
+            let other = tb_NewPtr(Int32(CGrafPort_SIZEOF), false, true)
+            tb_OpenCPort(other)
+            #expect(qd_port() == other)
+            tb_CloseCPort(other)
+            tb_PrOpenPage(port, 0)
+            #expect(qd_port() == port)
+            tb_PrClosePage(port)
+            tb_PrCloseDoc(port)
+            tb_DisposePtr(other)
+        }
+
         /// DrawText with a negative count draws nothing, on the page too
         /// (SIOW programs' Print did so, and the recording copied -127 bytes).
         @Test func negativeTextCountDrawsNothing() throws {

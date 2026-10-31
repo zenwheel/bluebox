@@ -451,6 +451,10 @@ void tb_PrOpenPage(gaddr port, gaddr pPageFrame)
 {
     if (port != job_port)
         return;
+    /* The page is drawn in the printing port: PrOpenPage makes it current,
+     * as the drivers do (El Verbo Simple draws its form after opening a
+     * port of its own and closing it again). */
+    tb_SetPort(port);
     gaddr bits = rd32(port + GrafPort_portBits_off);
     qrect b = qrect_get(port + GrafPort_portBits_off + 6);
     gmemset(bits, 0, (uint32_t)rd16(port + GrafPort_portBits_off + 4) * (uint32_t)(b.bottom - b.top));
