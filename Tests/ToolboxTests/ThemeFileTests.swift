@@ -24,6 +24,18 @@ extension BlueBox {
                 Array(what.utf8) + be16(id) + be16(anchor) + be16(index) + [UInt8](repeating: 0, count: 6)
         }
 
+        /// A flattened collection ('tinf', 'scen'): its items by tag, each
+        /// a length and the bytes.
+        static func collection(_ items: [(String, [UInt8])]) -> [UInt8] {
+            var entries: [UInt8] = []
+            var data: [UInt8] = []
+            for (tag, bytes) in items {
+                entries += Array(tag.utf8) + be32(0) + be32(0) + be32(data.count)
+                data += be32(bytes.count) + bytes
+            }
+            return be32(1) + be32(0) + be32(items.count) + entries + data
+        }
+
         /// The theme: a document window whose frame is a green fill four
         /// pixels round the content (twenty above it), a 4x4 close box (red,
         /// blue when pressed, its top left pixel transparent) and a title
@@ -67,7 +79,8 @@ extension BlueBox {
             // the inside grey.
             let frame = be16(2) + be16(0) + [0, 0xFF, 0, 0xFF] + be16(-2) + be16(1) + [0, 0xFF] + be16(-1) +
                 [0xFF, 0xFF, 0xFF, 0xFF]
-            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("clut", 2000, clut), ("pxm#", 200, pxm),
+            let tinf = collection([("vers", be16(1)), ("mbht", be16(22)), ("lvth", be16(15))])
+            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("clut", 2000, clut), ("pxm#", 200, pxm),
                                                  ("frme", 520, frame),
                                                  ("plut", 387, fills), ("plut", 386, brushes), ("clr#", 384, colors)]
             var datas: [UnsafeMutablePointer<UInt8>] = []
@@ -156,6 +169,22 @@ extension BlueBox {
             #expect(thme_brush_rgb(1, &c) && c == [0x1212, 0x5656, 0x9A9A])
             #expect(!thme_brush_rgb(2, &c))
             #expect(thme_text_rgb(1, &c) && c == [0x1111, 0x2222, 0x3333])
+        }
+
+        /// The theme's metrics, and the menu bar's height from them.
+        @Test func metrics() {
+            load()
+            defer {
+                thme_unload()
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+            }
+            var v: Int32 = 0
+            #expect(thme_metric("mbht", &v) && v == 22)
+            #expect(thme_metric("lvth", &v) && v == 15)
+            #expect(!thme_metric("msht", &v))
+            #expect(machine_menu_bar_height() == 20) // not while the appearance is another
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_THEME))
+            #expect(machine_menu_bar_height() == 22)
         }
 
         /// A sound set: 'snd#' maps a ThemeSoundKind to the first 'snd ' of

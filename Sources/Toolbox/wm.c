@@ -2515,7 +2515,7 @@ void tb_InitWindows(void)
     make_default_aux();
     wr32(LM_DeskHook, 0);
     wr32(LM_DragHook, 0);
-    int mbar = (int16_t)rd16(LM_MBarHeight) ? (int16_t)rd16(LM_MBarHeight) : 20;
+    int mbar = (int16_t)rd16(LM_MBarHeight) ? (int16_t)rd16(LM_MBarHeight) : machine_menu_bar_height();
     wr16(LM_MBarHeight, (uint16_t)mbar);
 
     set_desk(mbar);

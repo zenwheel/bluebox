@@ -64,6 +64,7 @@ static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 static int imin(int a, int b) { return a < b ? a : b; }
 static int imax(int a, int b) { return a > b ? a : b; }
+static const uint8_t *coll_item(const uint8_t *d, uint32_t len, const char *tag, uint32_t *ilen);
 
 /* ---------------------------------------------------------------------- */
 /* The theme */
@@ -887,6 +888,20 @@ static const char *res_name(uint32_t type, int16_t id)
         if (T.idx.entries[i].type == type && T.idx.entries[i].id == id)
             return T.idx.entries[i].name;
     return "";
+}
+
+/* A metric of 'tinf' 128 (a flattened collection of 16-bit values) by
+ * its tag: 'mbht' the menu bar's height, 'lvth'/'lhtw' and 'svth'/'shtw'
+ * the scroll bars' widths, and so on (thme_dump lists them). */
+bool thme_metric(const char *tag, int *out)
+{
+    uint32_t len, il;
+    const uint8_t *d = T.on ? res(fourcc("tinf"), 128, &len) : NULL;
+    const uint8_t *v = d ? coll_item(d, len, tag, &il) : NULL;
+    if (!v || il != 2)
+        return false;
+    *out = (int16_t)be16(v);
+    return true;
 }
 
 static void dump_metrics(FILE *f)
@@ -1753,6 +1768,15 @@ bool machine_theme_render(const char *path, const char *png, int part, int pw, i
     free(rgba);
     thme_unload();
     return ok;
+}
+
+/* The menu bar's height: the theme's, when a theme file draws it. */
+int machine_menu_bar_height(void)
+{
+    int h;
+    if (T.on && g_appearance == MACHINE_APPEARANCE_THEME && thme_metric("mbht", &h) && h >= 12 && h <= 48)
+        return h;
+    return 20;
 }
 
 bool machine_load_theme_sounds(const char *path, char *err, size_t errlen)

@@ -33,6 +33,9 @@ void thme_unload(void);
 bool thme_on(void);
 const char *thme_name(void);
 
+/* A metric of the theme's 'tinf' ('mbht', 'lvth'...). */
+bool thme_metric(const char *tag, int *out);
+
 /* The theme's brushes (kThemeBrush 1-47) and text colours (1-46). */
 bool thme_brush_rgb(int brush, uint16_t out[3]);
 bool thme_text_rgb(int color, uint16_t out[3]);

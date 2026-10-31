@@ -2110,7 +2110,7 @@ int32_t tb_DrawThemeMenuTitle(gaddr bar, gaddr title, uint16_t state, uint32_t a
 
 int32_t tb_GetThemeMenuBarHeight(gaddr out)
 {
-    wr16(out, 20);
+    wr16(out, (uint16_t)machine_menu_bar_height());
     return noErr;
 }
 

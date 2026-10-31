@@ -230,7 +230,7 @@ static void init_lowmem(void)
     wr16(LM_KeyRepThresh, (uint16_t)input_timing[3]);
     wr16(LM_SysFontFam, 0);
     wr16(LM_SysFontSiz, 12);
-    wr16(LM_MBarHeight, 20);
+    wr16(LM_MBarHeight, (uint16_t)machine_menu_bar_height());
     wr32(LM_ScrnBase, GA_SCREEN);
     wr16(LM_ApFontID, 3); /* applFont is Geneva (our Classic Sans) */
     wr8(LM_ScrDmpEnb, 0xFF);

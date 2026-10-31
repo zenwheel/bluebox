@@ -101,6 +101,8 @@ bool machine_theme_dump(const char *path, bool coords, char *err, size_t errlen)
  * name the loaded theme gives its own. */
 bool machine_load_theme_sounds(const char *path, char *err, size_t errlen);
 bool machine_theme_sound_set_name(char *out, size_t n);
+/* The menu bar's height in the appearance chosen (a theme's own, else 20). */
+int machine_menu_bar_height(void);
 bool machine_theme_render(const char *path, const char *png, int part, int pw, int ph, char *err, size_t errlen);
 /* Screen depth: 1 (black and white, the default), 8 or 32; before boot. */
 void machine_set_screen_depth(int depth);
