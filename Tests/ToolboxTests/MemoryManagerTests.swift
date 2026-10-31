@@ -329,6 +329,46 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// A pointer disposed of inside such a zone leaves the zone known
+        /// (Hornet Logbook, a Director projector, makes its heaps in
+        /// temporary memory): its handles still grow in it, not memWZErr
+        /// from the zone around it; disposing of the block holding the zone
+        /// is what forgets it.
+        @Test func disposingInsideAZoneKeepsIt() {
+            let size: UInt32 = 16 * 1024
+            let holder = tb_TempNewHandle(Int32(size), 0)
+            #expect(holder != 0)
+            tb_HLock(holder)
+            let sub = rd32(holder)
+            let args = tb_NewPtr(14, false, true)
+            wr32(args, sub)
+            wr32(args + 4, sub + size)
+            wr16(args + 8, 16)
+            var c = cpu68k()
+            c.a.0 = args
+            raw_InitZone(&c, 0xA019)
+            tb_DisposePtr(args)
+            #expect(rd32(UInt32(LM_TheZone)) == sub)
+            let p = tb_NewPtr(200, false, false)
+            let h = tb_NewHandle(50, false, false)
+            #expect(p > sub && p < sub + size && rd32(h) > sub && rd32(h) < sub + size)
+            tb_DisposePtr(p)
+            tb_SetZone(appZone)
+            #expect(tb_HandleZone(h) == sub)
+            tb_SetHandleSize(h, 96)
+            #expect(memErr() == 0 && tb_GetHandleSize(h) == 96)
+            #expect(mm_check_zone(sub))
+            // An address where the zone was, once its block is disposed of,
+            // is the application zone's (a master pointer holding it).
+            let mp = tb_NewPtr(4, false, false)
+            wr32(mp, sub + 100)
+            #expect(tb_HandleZone(mp) == sub)
+            tb_DisposeHandle(holder)
+            #expect(tb_HandleZone(mp) == appZone)
+            tb_DisposePtr(mp)
+            #expect(mm_check_zone(appZone))
+        }
+
         /// The free bytes of a zone, block by block (the 32-bit headers).
         func freeBytes(_ z: UInt32) -> UInt32 {
             let lim = rd32(z + UInt32(Zone_bkLim_off))
