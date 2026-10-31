@@ -237,6 +237,30 @@ extension BlueBox {
             tb_KillPoly(poly)
         }
 
+        /// A picture's polygon paints its inside when the picture is drawn,
+        /// scaled to where it is drawn (scan-converted a row at a time, as
+        /// PaintPoly does).
+        @Test func picturePolygonsPaintTheirInside() {
+            _ = offscreen()
+            tb_EraseRect(rect(0, 0, 40, 40))
+            let poly = tb_OpenPoly()
+            tb_MoveTo(5, 5)
+            tb_LineTo(35, 5)
+            tb_LineTo(5, 35)
+            tb_LineTo(5, 5)
+            tb_ClosePoly()
+            let pic = tb_OpenPicture(rect(0, 0, 40, 40))
+            tb_PaintPoly(poly)
+            tb_ClosePicture()
+            tb_KillPoly(poly)
+            tb_EraseRect(rect(0, 0, 40, 40))
+            tb_DrawPicture(pic, rect(0, 0, 20, 20)) // at half size
+            #expect(black(4, 4))     // inside the triangle
+            #expect(!black(15, 15))  // beyond the diagonal
+            #expect(!black(30, 6))   // outside the drawn rectangle
+            tb_KillPicture(pic)
+        }
+
         /// Lines drawn while a region is open bound it, as polygons do, and
         /// draw nothing: the pen is hidden until CloseRgn (Shards erases its
         /// flying pieces through regions made of their edges).
