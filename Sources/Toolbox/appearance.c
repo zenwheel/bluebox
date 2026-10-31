@@ -308,6 +308,54 @@ void ap_text_in(qrect r, const uint8_t *s, int n, bool center, const uint16_t rg
     ap_text(x, y, s, n, rgb);
 }
 
+/* Text turned to run down (clockwise, an east tab's) or up (a west
+ * tab's) the middle of r: drawn off-screen in the port's font, then put
+ * there a pixel at a time. */
+void ap_text_turned(qrect r, const uint8_t *s, int n, bool clockwise, const uint16_t rgb[3])
+{
+    int asc, desc;
+    ap_font_info(&asc, &desc);
+    gaddr port = qd_port();
+    while (n > 0 && qd_text_width(port, s, n) > r.bottom - r.top)
+        n--;
+    int tw = qd_text_width(port, s, n), th = asc + desc;
+    if (n <= 0 || tw <= 0 || th <= 0)
+        return;
+    int16_t font = GrafPort_txFont(port), size = GrafPort_txSize(port);
+    uint8_t face = GrafPort_txFace(port);
+    gaddr gwp = tb_NewPtr(4, false, true), bounds = tb_NewPtr(8, false, false), cur = tb_NewPtr(8, false, true);
+    qrect_put(bounds, (qrect){ 0, 0, (int16_t)th, (int16_t)tw });
+    tb_GetGWorld(cur, cur + 4);
+    if (tb_NewGWorld(gwp, 32, bounds, 0, 0, 0) == noErr) {
+        gaddr gw = rd32(gwp);
+        tb_SetGWorld(gw, 0);
+        tb_LockPixels(tb_GetGWorldPixMap(gw));
+        GrafPort_set_txFont(gw, font);
+        GrafPort_set_txSize(gw, size);
+        GrafPort_set_txFace(gw, face);
+        tb_EraseRect(bounds);
+        tb_MoveTo(0, (int16_t)asc);
+        uint8_t buf[256];
+        memcpy(buf, s, (size_t)n);
+        qd_draw_text(gw, buf, n);
+        pixdst d = qd_port_pixels(gw);
+        uint32_t white = get_px(&d, tw - 1, 0) | get_px(&d, 0, 0); /* erased */
+        tb_SetGWorld(rd32(cur), rd32(cur + 4));
+        int x0 = r.left + (r.right - r.left - th) / 2, y0 = r.top + (r.bottom - r.top - tw) / 2;
+        for (int y = 0; y < th; y++)
+            for (int x = 0; x < tw; x++) {
+                if (get_px(&d, x, y) == white)
+                    continue;
+                int sx = clockwise ? x0 + th - 1 - y : x0 + y, sy = clockwise ? y0 + x : y0 + tw - 1 - x;
+                ap_fill((qrect){ (int16_t)sy, (int16_t)sx, (int16_t)(sy + 1), (int16_t)(sx + 1) }, rgb);
+            }
+        tb_DisposeGWorld(gw);
+    }
+    tb_DisposePtr(gwp);
+    tb_DisposePtr(bounds);
+    tb_DisposePtr(cur);
+}
+
 /* A filled triangle pointing in dir (0 left, 1 down, 2 right, 3 up: the
  * ThemeArrowOrientation order) with its base `size` pixels, centred in r. */
 void ap_arrow(qrect r, int dir, int size, const uint16_t rgb[3])
@@ -738,6 +786,8 @@ int32_t tb_DrawThemeModelessDialogFrame(gaddr rp, uint32_t state)
  * a pixel outside the shape; without the focus, the background over it. */
 static void focus_ring(const hrgn *shape, bool focus)
 {
+    if (focus && themed() && thme_focus_rect(hrgn_bbox(shape))) /* a theme's focus frame */
+        return;
     hrgn outer, inner;
     hrgn_init(&outer);
     hrgn_init(&inner);
@@ -874,60 +924,73 @@ int32_t tb_DrawThemeTabPane(gaddr r, uint32_t state)
     return noErr;
 }
 
-/* A north-facing tab in r (its bottom on the pane's top edge, which the
- * front tab covers by kThemeTabPaneOverlap). */
-void ap_tab(qrect r, int style, const uint8_t *title, int n)
+/* A rectangle of a tab drawn as if it faced north (u along the tab, v in
+ * from its outer edge), turned to face dir (ThemeTabDirection: 0 north, 1
+ * south, 2 east, 3 west) in r. */
+static qrect tab_map(qrect r, int dir, int u0, int v0, int u1, int v1)
 {
-    if (themed() && thme_tab(r, style, false)) {
+    switch (dir) {
+    case 1: return (qrect){ (int16_t)(r.bottom - v1), (int16_t)(r.left + u0), (int16_t)(r.bottom - v0), (int16_t)(r.left + u1) };
+    case 2: return (qrect){ (int16_t)(r.top + u0), (int16_t)(r.right - v1), (int16_t)(r.top + u1), (int16_t)(r.right - v0) };
+    case 3: return (qrect){ (int16_t)(r.top + u0), (int16_t)(r.left + v0), (int16_t)(r.top + u1), (int16_t)(r.left + v1) };
+    default: return (qrect){ (int16_t)(r.top + v0), (int16_t)(r.left + u0), (int16_t)(r.top + v1), (int16_t)(r.left + u1) };
+    }
+}
+
+/* A tab's title: across a north or south tab, along an east or west one. */
+static void tab_title(qrect r, int dir, const uint8_t *s, int n, const uint16_t tc[3])
+{
+    if (dir >= 2)
+        ap_text_turned(r, s, n, dir == 2, tc);
+    else
+        ap_text_in(r, s, n, true, tc);
+}
+
+/* A tab in r facing dir, its inner edge on the pane's edge (which the
+ * front tab covers by kThemeTabPaneOverlap). */
+void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n)
+{
+    bool front = style == 3 || style == 4, inactive = style == 2 || style == 4 || style >= 5, pressed = style == 1;
+    dir &= 3;
+    int along = dir < 2 ? r.right - r.left : r.bottom - r.top, depth = dir < 2 ? r.bottom - r.top : r.right - r.left;
+    int d = front ? depth : depth - 3; /* the ones behind stop short of the pane */
+    /* The title's place: inside the tab's frame, away from the pane. */
+    qrect tr = tab_map(r, dir, 4, 2, along - 4, d);
+    if (themed() && thme_tab(r, style, false, dir)) {
         if (n > 0) {
-            bool front = style == 3 || style == 4, inactive = style == 2 || style == 4 || style >= 5;
             uint16_t tc[3];
             int color = front ? (inactive ? 42 : 39) : inactive ? 43 : style == 1 ? 41 : 40;
             if (!ap_text_rgb(color, tc))
                 grey(tc, 0);
-            ap_text_in((qrect){ (int16_t)(r.top + 2), (int16_t)(r.left + 4), (int16_t)(r.bottom - (front ? 0 : 3)), (int16_t)(r.right - 4) }, title, n, true, tc);
+            tab_title(tr, dir, title, n, tc);
         }
         return;
     }
-    bool front = style == 3 || style == 4, inactive = style == 2 || style == 4, pressed = style == 1;
-    qrect t = r;
-    if (!front)
-        t.bottom = (int16_t)(t.bottom - 3);
     uint16_t frame = inactive ? 0x8888 : 0;
     uint16_t face = front ? 0xDDDD : pressed ? 0x7777 : 0xBBBB;
-    hrgn g;
-    hrgn_init(&g);
-    /* Corners cut by two pixels at the top. */
-    for (int y = t.top; y < t.bottom; y++) {
-        int cut = y == t.top ? 2 : y == t.top + 1 ? 1 : 0;
-        hrgn_add_row(&g, y, t.left + cut, t.right - cut);
-    }
     uint16_t fc[3] = { frame, frame, frame }, bc[3] = { face, face, face };
-    ap_fill_rgn(&g, fc);
-    hrgn_free(&g);
-    hrgn_init(&g);
-    for (int y = t.top + 1; y < t.bottom - (front ? 0 : 0); y++) {
-        int cut = y == t.top + 1 ? 2 : 1;
-        hrgn_add_row(&g, y, t.left + cut, t.right - cut);
-    }
-    ap_fill_rgn(&g, bc);
-    hrgn_free(&g);
+    /* The frame with its outer corners cut by two pixels, the face inside. */
+    ap_fill(tab_map(r, dir, 2, 0, along - 2, 1), fc);
+    ap_fill(tab_map(r, dir, 1, 1, along - 1, 2), fc);
+    ap_fill(tab_map(r, dir, 0, 2, along, d), fc);
+    ap_fill(tab_map(r, dir, 2, 1, along - 2, 2), bc);
+    ap_fill(tab_map(r, dir, 1, 2, along - 1, d), bc);
     if (ap_in_color() && !pressed) {
-        ap_fill_grey((qrect){ (int16_t)(t.top + 1), (int16_t)(t.left + 2), (int16_t)(t.top + 2), (int16_t)(t.right - 2) }, 0xFFFF);
-        ap_fill_grey((qrect){ (int16_t)(t.top + 2), (int16_t)(t.left + 1), t.bottom, (int16_t)(t.left + 2) }, 0xFFFF);
-        ap_fill_grey((qrect){ (int16_t)(t.top + 2), (int16_t)(t.right - 2), t.bottom, (int16_t)(t.right - 1) }, 0xAAAA);
+        ap_fill_grey(tab_map(r, dir, 2, 1, along - 2, 2), 0xFFFF);
+        ap_fill_grey(tab_map(r, dir, 1, 2, 2, d), 0xFFFF);
+        ap_fill_grey(tab_map(r, dir, along - 2, 2, along - 1, d), 0xAAAA);
     }
     if (n > 0) {
         uint16_t tc[3];
         grey(tc, inactive ? 0x7777 : pressed ? 0xFFFF : 0);
-        ap_text_in((qrect){ (int16_t)(t.top + 2), (int16_t)(t.left + 4), t.bottom, (int16_t)(t.right - 4) }, title, n, true, tc);
+        tab_title(tr, dir, title, n, tc);
     }
 }
 
 int32_t tb_DrawThemeTab(gaddr rp, uint16_t style, uint16_t direction, gaddr label_proc, uint32_t data)
 {
     qrect r = rect_arg(rp);
-    ap_tab(r, style, NULL, 0);
+    ap_tab(r, style, direction, NULL, 0);
     if (label_proc) {
         /* ThemeTabTitleDrawProcPtr(const Rect *bounds, ThemeTabStyle, ThemeTabDirection, SInt16 depth,
          * Boolean isColorDev, UInt32 userData) */
@@ -1272,6 +1335,8 @@ int32_t tb_DrawThemePopupArrow(gaddr rp, uint16_t orient, uint16_t size, uint32_
                                uint32_t data)
 {
     static const int sizes[4] = { 5, 9, 13, 17 }; /* 3, 5, 7 and 9 points tall */
+    if (themed() && thme_popup_arrow(rect_arg(rp), orient & 3, size & 3, state))
+        return noErr;
     uint16_t c[3];
     ap_brush_rgb(state == kThemeStateInactive ? 22 : state == kThemeStatePressed ? 21 : 20, c);
     ap_arrow(rect_arg(rp), orient & 3, sizes[size & 3], c);

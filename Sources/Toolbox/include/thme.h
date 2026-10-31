@@ -72,7 +72,9 @@ bool thme_bevel(qrect r, int size, uint32_t state, bool on);
 bool thme_disclosure(qrect r, int value, uint32_t state, bool left);
 bool thme_little_arrows(qrect r, uint32_t state);
 bool thme_popup(qrect r, uint32_t state, bool arrow_only);
-bool thme_tab(qrect r, int style, bool small);
+bool thme_popup_arrow(qrect r, int orient, int size, uint32_t state);
+bool thme_focus_rect(qrect r);
+bool thme_tab(qrect r, int style, bool small, int dir);
 bool thme_tab_pane(qrect r, uint32_t state);
 
 /* A ThemeTrackDrawInfo's slider, progress or indeterminate bar (kind 2-4),

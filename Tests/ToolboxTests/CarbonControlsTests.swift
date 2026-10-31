@@ -349,6 +349,15 @@ extension BlueBox {
             #expect(data(tab, "enab", part: 2, 1) == [0] && data(tab, "enab", part: 1, 1) == [1])
             let content = t.ptr(8)
             #expect(tb_GetTabContentRect(tab, content) == 0 && t.rectOf(content)[0] > 10)
+            // Tabs facing south, east and west: the pane on the other side.
+            for (dir, check) in [(1, { (c: [Int]) in c[2] < 40 }), (2, { c in c[3] < 180 }), (3, { c in c[1] > 30 })] {
+                let side = make { w, r, out in tb_CreateTabsControl(w, r, 0, UInt16(dir), 3, tabs, out) }
+                #expect(tb_GetControlVariant(side) == Int16(dir * 2))
+                #expect(tb_GetTabContentRect(side, content) == 0 && check(t.rectOf(content)))
+                tb_Draw1Control(side)
+                if let path = ProcessInfo.processInfo.environment["BLUEBOX_TEST_SHOT"] { _ = machine_screenshot("\(path)-\(dir).png") }
+                tb_DisposeControl(side)
+            }
             let tri = make { w, r, out in tb_CreateDisclosureTriangleControl(w, r, 2, t.cfString("More"), 1, 1, 1, out) }
             #expect(cdefID(tri) == 4 && tb_GetControlVariant(tri) == 3 && tb_GetControlValue(tri) == 1)
             let box = make { w, r, out in tb_CreateGroupBoxControl(w, r, t.cfString("Box"), 0, out) }

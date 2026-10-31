@@ -1295,8 +1295,13 @@ bool thme_check_box(qrect box, bool radio, int value, uint32_t state)
  * thumb. */
 bool thme_scroll_bar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb)
 {
-    int id = vertical ? 405 : 400;
-    int16_t a0 = vertical ? 321 : 331, a1 = vertical ? 322 : 332;
+    /* Small scroll bars (11 pixels across) have their own layouts and
+     * arrows: 410 and 415, 'pxm#' 471/472 and 481/482. */
+    int across = vertical ? r.right - r.left : r.bottom - r.top;
+    bool small = across < 14 && T.on && layout(vertical ? 415 : 410) &&
+                 thme_image_size(fourcc("pxm#"), vertical ? 471 : 481, &(int){ 0 }, &(int){ 0 }, &(int){ 0 });
+    int id = (vertical ? 405 : 400) + (small ? 10 : 0);
+    int16_t a0 = small ? (vertical ? 471 : 481) : vertical ? 321 : 331, a1 = (int16_t)(a0 + 1);
     int w0, h0, n0, w1, h1, n1;
     if (!T.on || !layout((int16_t)id) || !thme_image_size(fourcc("pxm#"), a0, &w0, &h0, &n0) ||
         !thme_image_size(fourcc("pxm#"), a1, &w1, &h1, &n1))
@@ -1348,6 +1353,53 @@ bool thme_disclosure(qrect r, int value, uint32_t state, bool left)
     return part(550, r, draw_state(state) | (value ? 0x02 : 0) | (left ? 0x04 : 0));
 }
 
+/* DrawThemePopupArrow: the theme's arrow images ('pxm#' 360-364 down, 370
+ * right, 380 left, 385 up, three to eleven pixels across), the one as tall
+ * (or, sideways, as wide) as the size's points, else the nearest below,
+ * centred; images 0 active, 1 pressed, 2 inactive.  orient is a
+ * ThemeArrowOrientation (0 left, 1 down, 2 right, 3 up); size 0-3 the 3,
+ * 5, 7 and 9 point arrows. */
+bool thme_popup_arrow(qrect r, int orient, int size, uint32_t state)
+{
+    static const int16_t base[4] = { 380, 360, 370, 385 };
+    static const int pts[4] = { 3, 5, 7, 9 };
+    if (!T.on)
+        return false;
+    int16_t best = 0;
+    int bw = 0, bh = 0, bn = 0, got = 0;
+    for (int k = 0; k < 5; k++) {
+        int w, h, n;
+        int16_t id = (int16_t)(base[orient & 3] + k);
+        if (!thme_image_size(fourcc("pxm#"), id, &w, &h, &n))
+            continue;
+        int along = (orient & 1) ? h : w, want = pts[size & 3];
+        /* the largest that fits, else the smallest */
+        bool better = !best || (along <= want ? got > want || along > got : got > want && along < got);
+        if (better) {
+            best = id;
+            bw = w, bh = h, bn = n, got = along;
+        }
+    }
+    if (!best)
+        return false;
+    int frame = state == 0 ? 2 : state == 2 ? 1 : 0;
+    if (frame >= bn)
+        frame = 0;
+    int x = r.left + (r.right - r.left - bw) / 2, y = r.top + (r.bottom - r.top - bh) / 2;
+    surface s;
+    port_surface(&s);
+    surface *old = S;
+    S = &s;
+    draw_tile(image(fourcc("pxm#"), best), frame, (qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + bh), (int16_t)(x + bw) }, 1);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
+}
+
+/* The keyboard focus round a rectangle: the theme's FocusGenericRect
+ * frame ('frme' 560, its rings outside the rectangle). */
+bool thme_focus_rect(qrect r) { return thme_frame(560, r); }
+
 /* The little arrows: state 2 the upper one pressed, 3 the lower one. */
 bool thme_little_arrows(qrect r, uint32_t state)
 {
@@ -1362,12 +1414,18 @@ bool thme_popup(qrect r, uint32_t state, bool arrow_only)
     return part(520, r, draw_state(state));
 }
 
-/* A north-facing tab: ThemeTabStyle (0 non-front, 1 pressed, 2 inactive, 3
- * front, 4 front inactive, 5 and 6 unavailable); small ones are 315. */
-bool thme_tab(qrect r, int style, bool small)
+/* A tab: ThemeTabStyle (0 non-front, 1 pressed, 2 inactive, 3 front, 4
+ * front inactive, 5 and 6 unavailable), facing dir (0 north, 1 south, 2
+ * east, 3 west: layouts 310, 320, 340 and 330; the small ones 5 on). */
+bool thme_tab(qrect r, int style, bool small, int dir)
 {
+    static const int ids[4] = { 310, 320, 340, 330 };
     bool front = style == 3 || style == 4 || style == 6, inactive = style == 2 || style == 4 || style >= 5;
-    int id = small && thme_has_part(315) ? 315 : 310;
+    int id = ids[dir & 3];
+    if (!thme_has_part(id))
+        id = 310;
+    if (small && thme_has_part(id + 5))
+        id += 5;
     return part(id, r, (front ? 0x01 : 0) | (inactive ? 0x02 : 0) | (style == 1 ? 0x20 : 0));
 }
 
@@ -1863,6 +1921,45 @@ void thme_render_sheet(uint8_t *rgba, int w, int h)
         int mm[THME_MEASURES] = { 0, 0, 0, 30, 70 };
         draw_part_on(405, (qrect){ (int16_t)(490 + h0), 440, 640, (int16_t)(440 + w0) }, 0x10, mm, 0, 0);
     }
+    if (h < 900)
+        goto done;
+    /* Tabs facing each way (a front one and one behind, on their panes),
+     * small scroll bars, pop-up arrows, a focus frame and a drawer. */
+    static const int tab_ids[4] = { 310, 320, 340, 330 };
+    for (int d = 0; d < 4; d++) {
+        int x = 40 + d * 190, y = 700;
+        bool side = d >= 2;
+        qrect pane = { (int16_t)(y + (d == 0 ? 21 : 0)), (int16_t)(x + (d == 3 ? 21 : 0)),
+                       (int16_t)(y + 120 - (d == 1 ? 21 : 0)), (int16_t)(x + 170 - (d == 2 ? 21 : 0)) };
+        draw_part_on(300, pane, 0, m, 0, 0);
+        for (int k = 0; k < 2; k++) {
+            int p = (side ? y : x) + 8 + k * 50;
+            qrect t = d == 0 ? (qrect){ (int16_t)y, (int16_t)p, (int16_t)(y + 24), (int16_t)(p + 51) }
+                    : d == 1 ? (qrect){ (int16_t)(y + 96), (int16_t)p, (int16_t)(y + 120), (int16_t)(p + 51) }
+                    : d == 2 ? (qrect){ (int16_t)p, (int16_t)(x + 146), (int16_t)(p + 51), (int16_t)(x + 170) }
+                             : (qrect){ (int16_t)p, (int16_t)x, (int16_t)(p + 51), (int16_t)(x + 24) };
+            draw_part_on(layout((int16_t)tab_ids[d]) ? tab_ids[d] : 310, t, k == 0 ? 0x01 : 0, m, 0, 0);
+        }
+    }
+    int sw, sh, sn;
+    if (layout(410) && thme_image_size(fourcc("pxm#"), 481, &sw, &sh, &sn)) {
+        draw_tile(image(fourcc("pxm#"), 481), 0, (qrect){ 840, 40, (int16_t)(840 + sh), (int16_t)(40 + sw) }, 1);
+        draw_tile(image(fourcc("pxm#"), 482), 0, (qrect){ 840, 240, (int16_t)(840 + sh), (int16_t)(240 + sw) }, 1);
+        int mm[THME_MEASURES] = { 0, 0, 0, 40, 70 };
+        draw_part_on(410, (qrect){ 840, (int16_t)(40 + sw), (int16_t)(840 + sh), 240 }, 0x10, mm, 0, 0);
+    }
+    for (int o = 0; o < 4; o++)
+        for (int k = 0; k < 5; k++) {
+            static const int16_t base[4] = { 380, 360, 370, 385 };
+            const timg *im = image(fourcc("pxm#"), (int16_t)(base[o] + k));
+            if (im)
+                draw_tile(im, 0, (qrect){ (int16_t)(840 + o * 14), (int16_t)(300 + k * 16), (int16_t)(840 + o * 14 + im->h),
+                                          (int16_t)(300 + k * 16 + im->w) }, 1);
+        }
+    draw_frame(560, (qrect){ 845, 420, 865, 480 });
+    sheet_window(140, 0, 520, 830, 120, 50, false, false, 0);
+    sheet_window(141, 0, 660, 830, 120, 50, false, false, 0);
+done:
     S = old;
 }
 
@@ -1923,7 +2020,7 @@ bool machine_theme_render(const char *path, const char *png, int part, int pw, i
 {
     if (!open_file(path, err, errlen))
         return false;
-    int w = 800, h = 680;
+    int w = 800, h = part ? 680 : 900;
     uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
     if (part)
         render_states(rgba, w, h, part, pw, ph);

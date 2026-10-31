@@ -455,7 +455,7 @@ void ap_focus_rect(qrect r, bool focus);
 void ap_group(qrect r, uint32_t state, bool primary);
 void ap_separator(qrect r, uint32_t state);
 void ap_tab_pane(qrect r, uint32_t state);
-void ap_tab(qrect r, int style, const uint8_t *title, int n);
+void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n);
 void ap_push_button(qrect r, uint32_t state, bool is_default);
 void ap_default_ring(qrect r, uint32_t state);
 void ap_check_box(qrect box, bool radio, int value, uint32_t state);
