@@ -929,12 +929,53 @@ static void dump_metrics(FILE *f)
     fprintf(f, "\n");
 }
 
+/* The scenes: each item's tag and size, strings and 16-bit values shown. */
+static void dump_scenes(FILE *f)
+{
+    for (size_t i = 0; i < T.idx.count; i++) {
+        rsrc_entry *e = &T.idx.entries[i];
+        if (e->type != fourcc("scen"))
+            continue;
+        const uint8_t *d = rsrc_data(T.fork, &T.idx, e);
+        uint32_t len = e->data_len;
+        if (len < 12)
+            continue;
+        uint32_t n = be32(d + 8), base = 12 + n * 16;
+        fprintf(f, "scen %d \"%s\":", e->id, e->name);
+        for (uint32_t k = 0; k < n && 12 + k * 16 + 16 <= len; k++) {
+            const uint8_t *x = d + 12 + k * 16;
+            uint32_t off = base + be32(x + 12);
+            char tag[5];
+            fourcc_str(be32(x), tag);
+            if (off + 4 > len)
+                continue;
+            uint32_t sz = be32(d + off);
+            const uint8_t *v = d + off + 4;
+            if (off + 4 + sz > len)
+                continue;
+            fprintf(f, " %s", tag);
+            if (sz == 2)
+                fprintf(f, "=%d", (int16_t)be16(v));
+            else if (sz == 4)
+                fprintf(f, "=%08x", be32(v));
+            else if (sz == 6)
+                fprintf(f, "=%04x%04x%04x", be16(v), be16(v + 2), be16(v + 4));
+            else if (sz && v[0] + 1u == sz)
+                fprintf(f, "=\"%.*s\"", v[0], v + 1);
+            else
+                fprintf(f, "=(%u bytes)", sz);
+        }
+        fprintf(f, "\n");
+    }
+}
+
 void thme_dump(FILE *f, bool coords)
 {
     if (!T.on)
         return;
     fprintf(f, "theme %s\n", T.name);
     dump_metrics(f);
+    dump_scenes(f);
     char ts[5];
     for (size_t i = 0; i < T.idx.count; i++) {
         rsrc_entry *e = &T.idx.entries[i];
@@ -1050,6 +1091,14 @@ static bool window_kind(int var, wkind *k)
     }
 }
 
+/* Utility windows' titles are in the small system font (Geneva, unless
+ * the theme's scene names another that is here). */
+static int small_family(void)
+{
+    int fam = thme_scene_font("smsf", NULL, 0);
+    return fam > 0 ? fam : 3;
+}
+
 /* The title, and its size in the title's font (measures 1-4: the width,
  * half of it, the height, half of it). */
 static int window_title(gaddr w, const wkind *k, uint8_t *s, int *m)
@@ -1062,7 +1111,7 @@ static int window_title(gaddr w, const wkind *k, uint8_t *s, int *m)
     gaddr port = qd_port();
     int16_t f = GrafPort_txFont(port), sz = GrafPort_txSize(port);
     uint8_t face = GrafPort_txFace(port);
-    GrafPort_set_txFont(port, k->small ? 3 : 0);
+    GrafPort_set_txFont(port, k->small ? small_family() : 0);
     GrafPort_set_txSize(port, k->small ? 9 : 12);
     GrafPort_set_txFace(port, 0);
     int tw = n ? qd_text_width(port, s, n) : 0;
@@ -1116,7 +1165,7 @@ bool thme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool
     qrect tr;
     if (n && thme_part_rect(id, c, st, m, THME_TITLE_TEXT, &tr)) {
         gaddr port = qd_port();
-        GrafPort_set_txFont(port, k.small ? 3 : 0);
+        GrafPort_set_txFont(port, k.small ? small_family() : 0);
         GrafPort_set_txSize(port, k.small ? 9 : 12);
         GrafPort_set_txFace(port, 0);
         GrafPort_set_txMode(port, 1);
@@ -1477,6 +1526,53 @@ bool thme_scene_string(const char *tag, char *out, size_t n)
     return true;
 }
 
+/* A theme file draws the screen: loaded, and the appearance chosen. */
+bool thme_in_use(void) { return T.on && g_appearance == MACHINE_APPEARANCE_THEME; }
+
+/* A font of the scene ('lgsf' the system font, 'smsf' the small one,
+ * 'vfnt' the views font) that is installed here, as its family. */
+int thme_scene_font(const char *tag, char *out, size_t n)
+{
+    char name[64];
+    if (!thme_scene_string(tag, name, sizeof name) || !name[0])
+        return -1;
+    int fam = qd_classic_family(name);
+    if (fam >= 0 && out)
+        snprintf(out, n, "%s", name);
+    return fam;
+}
+
+/* The system font a theme's screen has: its scene's, else Charcoal (Mac
+ * OS 8's, which stays when a theme names one that isn't installed, as
+ * Gizmo's Gadget and Hi-Tech's Techno are not here). */
+int thme_system_family(void)
+{
+    int fam = thme_scene_font("lgsf", NULL, 0);
+    return fam >= 0 ? fam : qd_classic_family("Charcoal");
+}
+
+/* A 16-bit number of the scene, or a Boolean (a byte, sometimes padded
+ * to two: the first). */
+bool thme_scene_int(const char *tag, int *out)
+{
+    uint32_t il;
+    const uint8_t *d = T.on ? scene_item(tag, &il) : NULL;
+    if (!d || il != 2)
+        return false;
+    *out = (int16_t)be16(d);
+    return true;
+}
+
+bool thme_scene_bool(const char *tag, bool *out)
+{
+    uint32_t il;
+    const uint8_t *d = T.on ? scene_item(tag, &il) : NULL;
+    if (!d || !il || il > 2)
+        return false;
+    *out = d[0] != 0;
+    return true;
+}
+
 /* The sound mask the scene asks for ('smsk'), else every class. */
 uint32_t thme_sound_mask(void)
 {
@@ -1809,4 +1905,4 @@ bool machine_load_theme_sounds(const char *path, char *err, size_t errlen)
     return ok;
 }
 
-bool machine_theme_sound_set_name(char *out, size_t n) { return thme_scene_string("snds", out, n); }
+bool machine_theme_sound_set_name(char *out, size_t n) { return thme_scene_string("sndt", out, n); }

@@ -98,6 +98,15 @@ bool thme_menu_separator(qrect r);
 /* The scene: a string item ('name', 'snds' the sound set, 'patn', fonts),
  * the highlight colour, the desktop pattern painted over an area. */
 bool thme_scene_string(const char *tag, char *out, size_t n);
+bool thme_scene_int(const char *tag, int *out);
+bool thme_scene_bool(const char *tag, bool *out);
+/* A theme file draws the screen (loaded, and the appearance chosen). */
+bool thme_in_use(void);
+/* A scene font ('lgsf', 'smsf', 'vfnt') that is installed: its family and
+ * name; else -1.  The system font's family (Charcoal when the theme's
+ * isn't installed). */
+int thme_scene_font(const char *tag, char *out, size_t n);
+int thme_system_family(void);
 bool thme_highlight_rgb(uint16_t out[3]);
 bool thme_paint_desk(const hrgn *area);
 /* The sound set: its 'snd ' for a ThemeSoundKind or ThemeDragSoundKind

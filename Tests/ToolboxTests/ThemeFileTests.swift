@@ -85,7 +85,11 @@ extension BlueBox {
             let menu = be32(0) + be32(menuCoords.count) + menuCoords.flatMap { $0 } + be16(1) +
                 record(flags: 0x0100, [1, 2, 3, 4], "plut", id: -1)
             let tinf = collection([("vers", be16(1)), ("mbht", be16(22)), ("lvth", be16(15))])
-            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
+            let pstr = { (t: String) in [UInt8(t.utf8.count)] + Array(t.utf8) }
+            let scene = collection([("lgsf", pstr("Gadget")), ("smsf", pstr("Monaco")), ("vfnt", pstr("Chicago")),
+                                    ("vfsz", be16(12)), ("hcol", be16(0xCCCC) + be16(0x9999) + be16(0x6666)),
+                                    ("sbar", be16(2)), ("smoo", [1, 0]), ("sndt", pstr("Synthetic Sounds"))])
+            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("scen", 128, scene), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
                                                  ("frme", 520, frame),
                                                  ("plut", 387, fills), ("plut", 386, brushes), ("clr#", 384, colors)]
             var datas: [UnsafeMutablePointer<UInt8>] = []
@@ -190,6 +194,25 @@ extension BlueBox {
             #expect(machine_menu_bar_height() == 20) // not while the appearance is another
             machine_set_appearance(Int32(MACHINE_APPEARANCE_THEME))
             #expect(machine_menu_bar_height() == 22)
+        }
+
+        /// The scene: fonts (those installed), the highlight colour, settings.
+        @Test func scene() {
+            load()
+            defer { thme_unload() }
+            var name = [CChar](repeating: 0, count: 64)
+            #expect(thme_scene_font("lgsf", &name, name.count) == -1) // Gadget isn't here
+            #expect(thme_system_family() == 2002)                      // so Charcoal stays
+            #expect(thme_scene_font("smsf", &name, name.count) == 4 && String(cString: name) == "Monaco")
+            #expect(thme_scene_font("vfnt", &name, name.count) == 0 && String(cString: name) == "Chicago")
+            var c: [UInt16] = [0, 0, 0]
+            #expect(thme_highlight_rgb(&c) && c == [0xCCCC, 0x9999, 0x6666])
+            var v: Int32 = 0
+            var b = false
+            #expect(thme_scene_int("sbar", &v) && v == 2)
+            #expect(thme_scene_int("vfsz", &v) && v == 12)
+            #expect(thme_scene_bool("smoo", &b) && b)
+            #expect(machine_theme_sound_set_name(&name, name.count) && String(cString: name) == "Synthetic Sounds")
         }
 
         /// A menu's background covers what its layout draws round it.

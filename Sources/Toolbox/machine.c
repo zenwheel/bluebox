@@ -18,6 +18,7 @@
 #include "carbon_hi.h"
 #include "os9_toolbox.h"
 #include "tb_internal.h"
+#include "thme.h"
 #include "sysres_gen.h"
 #include "machine.h"
 #include "qd3d.h"
@@ -176,9 +177,12 @@ static void init_lowmem(void)
     wr8(LM_MMUType, (uint8_t)machine_mmu_type());
     /* The highlight colour: the host's selection colour when the host gave
      * one, else Mac OS 8's lavender (the Color control panel's). */
-    wr16(LM_HiliteRGB, hilite_rgb[0]);
-    wr16(LM_HiliteRGB + 2, hilite_rgb[1]);
-    wr16(LM_HiliteRGB + 4, hilite_rgb[2]);
+    uint16_t hl[3] = { hilite_rgb[0], hilite_rgb[1], hilite_rgb[2] };
+    if (thme_in_use()) /* a theme's own, when its scene has one */
+        thme_highlight_rgb(hl);
+    wr16(LM_HiliteRGB, hl[0]);
+    wr16(LM_HiliteRGB + 2, hl[1]);
+    wr16(LM_HiliteRGB + 4, hl[2]);
     wr8(LM_HiliteMode, 0xFF); /* no highlighting pending */
     wr8(LM_MMU32Bit, g_mem_24bit ? 0 : 1); /* the addressing mode */
     wr16(LM_SCSIFlags, (uint16_t)machine_hwcfg());
@@ -228,7 +232,7 @@ static void init_lowmem(void)
     wr32(LM_CaretTime, input_timing[1]);
     wr16(LM_KeyThresh, (uint16_t)input_timing[2]);
     wr16(LM_KeyRepThresh, (uint16_t)input_timing[3]);
-    wr16(LM_SysFontFam, 0);
+    wr16(LM_SysFontFam, (uint16_t)(thme_in_use() ? thme_system_family() : 0)); /* a theme's is Mac OS 8's */
     wr16(LM_SysFontSiz, 12);
     wr16(LM_MBarHeight, (uint16_t)machine_menu_bar_height());
     wr32(LM_ScrnBase, GA_SCREEN);

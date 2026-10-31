@@ -46,6 +46,16 @@ static int classic_index(int num)
     return -1;
 }
 
+/* A classic family's number by its name, or -1 (for settings made before
+ * the Resource Manager is there, as a theme's fonts at boot). */
+int qd_classic_family(const char *name)
+{
+    for (unsigned i = 0; i < sizeof classic_fonts / sizeof classic_fonts[0]; i++)
+        if (!strcasecmp(name, classic_fonts[i].name))
+            return classic_fonts[i].num;
+    return -1;
+}
+
 /* The font resource ID for a family and size, through its FOND if any. */
 static gaddr font_resource_of(int family, int size);
 

@@ -64,6 +64,9 @@ static void unpack_rgb(uint64_t v, uint16_t out[3])
     out[2] = (uint16_t)v;
 }
 
+/* A Mac OS 8.5 theme file in use: its parts, brushes and colours. */
+static bool themed(void) { return thme_in_use(); }
+
 /* At event calls: the host's colours as they are now. */
 void appearance_poll(void)
 {
@@ -72,8 +75,8 @@ void appearance_poll(void)
     uint64_t a = atomic_load(&host_accent), h = atomic_load(&host_hilite);
     if (a)
         unpack_rgb(a, accent);
-    if (h) {
-        uint16_t rgb[3];
+    uint16_t rgb[3];
+    if (h && !(themed() && thme_highlight_rgb(rgb))) { /* a theme's own highlight colour stays */
         unpack_rgb(h, rgb);
         wr16(LM_HiliteRGB, rgb[0]);
         wr16(LM_HiliteRGB + 2, rgb[1]);
@@ -92,8 +95,6 @@ static void accent_shade(int t, uint16_t out[3])
     }
 }
 
-/* A Mac OS 8.5 theme file in use: its parts, brushes and colours. */
-static bool themed(void) { return thme_on() && g_appearance == MACHINE_APPEARANCE_THEME; }
 
 /* A brush's colour in Platinum (or the theme's). */
 bool ap_brush_rgb(int brush, uint16_t out[3])
