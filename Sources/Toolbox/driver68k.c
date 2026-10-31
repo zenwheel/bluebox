@@ -432,11 +432,13 @@ static int16_t close_entry(gaddr e, gaddr pb)
         control_now(e, goodbye, 0);
     abort_queue(e);
     gaddr fn = routine_of(e, drvrClose);
+    int u = -1 - refnum_of(e);
     int16_t r = fn ? call_routine(fn, pb, e) : noErr;
     if (r < 0)
         return r;
+    if (dce_of_unit(u) != e) /* the driver took its entry out of the unit table (MacinTalk) */
+        return noErr;
     wr16(e + DCtlEntry_dCtlFlags_off, (uint16_t)(flags_of(e) & ~(dOpened | drvrActive)));
-    int u = -1 - refnum_of(e);
     if (u >= 0 && u < MAX_UNITS && menu_in_bar[u]) {
         tb_DeleteMenu(menu_in_bar[u]);
         tb_DrawMenuBar();

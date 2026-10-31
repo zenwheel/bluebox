@@ -152,6 +152,11 @@ static int word_phonemes(const uint8_t *text, int len, uint8_t *out, int max)
     return k;
 }
 
+int speech_word_phonemes(const uint8_t *text, int len, uint8_t *out, int max)
+{
+    return word_phonemes(text, len, out, max);
+}
+
 static double now_seconds(void)
 {
     struct timespec ts;
@@ -245,7 +250,7 @@ static void host_request(channel *c, int op, const char *text)
     rq.modulation = c->modulation / 65536.0;
     rq.volume = c->volume / 65536.0;
     rq.text = text;
-    rq.phonemes = c->input_mode == 0x5048304Eu; /* 'PHON' */
+    rq.phonemes = c->input_mode == 0x50484F4Eu; /* 'PHON' */
     speech_fn(&rq, speech_ctx);
 }
 

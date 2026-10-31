@@ -1008,6 +1008,22 @@ static int16_t open_path_perm(const char *path, int perm)
 
 static int16_t open_path(const char *path) { return open_path_perm(path, 0); }
 
+/* The poor man's search path: a file named without a folder in the
+ * default directory (vRefNum 0, no directory ID) that isn't there is
+ * looked for in the System Folder, as HFS did; programs open drivers'
+ * files that way, OpenResFile("MacinTalk"). */
+static void system_folder_too(int16_t vref, int32_t dirid, gaddr fn, char *path, size_t pathsize)
+{
+    if (vref || dirid || !fn || !rd8(fn) || fm_host_exists(path))
+        return;
+    for (int i = 0; i < rd8(fn); i++)
+        if (rd8(fn + 1 + (uint32_t)i) == ':')
+            return;
+    char alt[1024];
+    if (fm_host_path(fm_system_vref(), 0, fn, false, alt, sizeof alt) && fm_host_exists(alt))
+        snprintf(path, pathsize, "%s", alt);
+}
+
 static int16_t open_named(gaddr fn)
 {
     char path[1024];
@@ -1015,6 +1031,7 @@ static int16_t open_named(gaddr fn)
         set_res_err(-35);
         return -1;
     }
+    system_folder_too(0, 0, fn, path, sizeof path);
     return open_path(path);
 }
 
@@ -1025,6 +1042,7 @@ int16_t tb_HOpenResFile(int16_t vref, int32_t dirid, gaddr file_name, int8_t per
         set_res_err(-35);
         return -1;
     }
+    system_folder_too(vref, dirid, file_name, path, sizeof path);
     return open_path_perm(path, perm);
 }
 
@@ -1041,6 +1059,7 @@ int16_t tb_OpenRFPerm(gaddr fn, int16_t vref, uint8_t perm)
         set_res_err(-35);
         return -1;
     }
+    system_folder_too(vref, 0, fn, path, sizeof path);
     return open_path_perm(path, perm);
 }
 

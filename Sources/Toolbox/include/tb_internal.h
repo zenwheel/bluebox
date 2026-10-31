@@ -598,6 +598,12 @@ bool fm_open_apple_menu_item(const uint8_t *name, int n);
 /* Speech Manager (speech.c): callbacks at safe points; a fresh machine. */
 void speech_pump(void);
 void speech_reset(void);
+/* A word's phonemes (the Speech Manager's opcodes) by letter-to-sound rules. */
+int speech_word_phonemes(const uint8_t *text, int len, uint8_t *out, int max);
+/* MacinTalk 1, the old speech driver (macintalk.c): its natives, and its
+ * file in the System Folder. */
+void macintalk_reset(void);
+void macintalk_install_file(void);
 
 /* Code Fragment Manager (cfm.c): PowerPC applications. */
 struct ppc_cpu;
