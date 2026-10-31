@@ -17,6 +17,7 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 #include "qt_movie_internal.h"
+#include "thme.h"
 
 enum { drawCntl = 0, testCntl, calcCRgns, initCntl, dispCntl, posCntl, thumbCntl, dragCntl, autoTrack };
 enum { inButton = 10, inCheckBox = 11, inUpButton = 20, inDownButton = 21, inPageUp = 22, inPageDown = 23,
@@ -177,6 +178,10 @@ void ctl_set_window_themed(gaddr w, bool themed)
  * them; in colour (the current port is the control's). */
 bool ctl_platinum(gaddr ch)
 {
+    /* A Mac OS 8.5 theme file draws every control as the Appearance
+     * Manager's, in its look. */
+    if (g_appearance == MACHINE_APPEARANCE_THEME && thme_on() && ap_in_color())
+        return true;
     if (g_appearance != MACHINE_APPEARANCE_BW || !ap_in_color())
         return false;
     int i = win_index(cowner(ch), false);
@@ -1779,7 +1784,20 @@ static int16_t hit(gaddr ch, int16_t part, int16_t modifiers)
     return part;
 }
 
-int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a) { return hit(ch, track(ch, p, a), 0); }
+int16_t tb_TrackControl(gaddr ch, uint32_t p, gaddr a)
+{
+    int16_t part = hit(ch, track(ch, p, a), 0);
+    /* The theme sound for a click that took: a button's, a check box's or
+     * radio button's (they share the part), a scroll arrow's, the page. */
+    switch (part) {
+    case 10: appearance_sound(fourcc("btnr")); break;
+    case 11: appearance_sound(fourcc("chkr")); break;
+    case 20: case 21: appearance_sound(fourcc("sbar")); break;
+    case 22: case 23: appearance_sound(fourcc("sbtp")); break;
+    default: break;
+    }
+    return part;
+}
 
 void tb_DragControl(gaddr ch, uint32_t p, gaddr limit, gaddr slop, int16_t axis)
 {

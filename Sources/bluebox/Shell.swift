@@ -504,10 +504,13 @@ enum ShellItem: Hashable {
     }
 }
 
-/// Kaleidoscope schemes in a library (Colr/Acid files).
+/// Kaleidoscope schemes (Colr/Acid files) and Mac OS 8.5 theme files
+/// ('thme') in a library.
 func classicThemes(in library: String) -> [String] {
     guard FileManager.default.fileExists(atPath: library) else { return [] }
-    return scan(library).filter { fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid" }.map(\.path)
+    return scan(library).filter {
+        (fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid") || fourCCString($0.type) == "thme"
+    }.map(\.path)
 }
 
 // MARK: - Views

@@ -19,6 +19,7 @@
 #include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 typedef struct {
     int16_t id;
@@ -200,6 +201,17 @@ bool machine_load_theme(const char *path, char *err, size_t errlen)
         mac_file_free(&mf);
         return false;
     }
+    if (mac_file_type(&mf) == fourcc("thme") || thme_fork_is_theme(mf.rsrc, mf.rsrc_len)) {
+        /* A Mac OS 8.5 Appearance theme file, not a scheme. */
+        bool ok = thme_load(path, mf.rsrc, mf.rsrc_len, err, errlen);
+        mac_file_free(&mf);
+        if (!ok)
+            return false;
+        loaded = false;
+        machine_set_appearance(MACHINE_APPEARANCE_THEME);
+        return true;
+    }
+    thme_unload();
     free(scheme_fork);
     scheme_fork = malloc(mf.rsrc_len);
     memcpy(scheme_fork, mf.rsrc, mf.rsrc_len);
@@ -226,7 +238,17 @@ bool machine_load_theme(const char *path, char *err, size_t errlen)
     return true;
 }
 
-bool theme_active(void) { return loaded && g_appearance == MACHINE_APPEARANCE_THEME; }
+bool theme_active(void) { return (loaded || thme_on()) && g_appearance == MACHINE_APPEARANCE_THEME; }
+
+static bool appearance_theme(void) { return thme_on() && g_appearance == MACHINE_APPEARANCE_THEME; }
+
+/* Whether a window variant (as theme_draw_window has it) has a zoom box. */
+static bool window_zoom(gaddr w, int var)
+{
+    (void)w;
+    int v = var & ~0x200;
+    return (v & 0x100) ? (v & 4) != 0 : v == 8 || v == 12;
+}
 
 /* A scheme's Finder and system icons (Kaleidoscope 2's "icxx" resources,
  * IDs -20999 to -3700) take the place of the System file's: put them into
@@ -432,7 +454,7 @@ static bool insets(int var, int *l, int *t, int *r, int *b)
     return true;
 }
 
-bool theme_window_insets(int var, int *l, int *t, int *r, int *b) { return theme_active() && insets(var, l, t, r, b); }
+bool theme_window_insets(int var, int *l, int *t, int *r, int *b) { return theme_active() && loaded && insets(var, l, t, r, b); }
 
 /* Where a sample x lands in a laid-out side. */
 static int map_pos(const placed *p, int n, int s)
@@ -669,6 +691,12 @@ void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway,
 
 bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom, int param)
 {
+    if (appearance_theme()) {
+        if (param >= 4 && param <= 6) /* a box pressed or released */
+            toggle_down(w, param == 4 ? 1 : 2);
+        uint32_t pressed = (is_down(w, 1) ? THME_CLOSE : 0) | (is_down(w, 2) ? THME_ZOOM : 0);
+        return thme_draw_window(w, var, c, hilited, goaway, zoom, pressed);
+    }
     if (!theme_active() || k1)
         return false;
     frame f;
@@ -744,6 +772,8 @@ bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, boo
 /* The structure region: every opaque pixel of the composed frame plus the content. */
 bool theme_window_region(gaddr w, int var, qrect c, hrgn *out)
 {
+    if (appearance_theme())
+        return thme_window_region(w, var, c, WindowRecord_goAwayFlag(w) != 0, window_zoom(w, var), out);
     if (!theme_active() || k1)
         return false;
     frame f;
@@ -801,6 +831,8 @@ bool theme_window_region(gaddr w, int var, qrect c, hrgn *out)
 /* Hit testing: 1 close, 2 zoom, 3 collapse, 4 title/drag, 0 none. */
 int theme_window_hit(gaddr w, int var, qrect c, int h, int v)
 {
+    if (appearance_theme())
+        return thme_window_hit(w, var, c, WindowRecord_goAwayFlag(w) != 0, window_zoom(w, var), h, v);
     frame f;
     if (!theme_active() || k1 || !frame_for(w, var, c, true, &f))
         return -1;
@@ -821,6 +853,8 @@ int theme_window_hit(gaddr w, int var, qrect c, int h, int v)
 
 bool theme_draw_grow(qrect c, bool active)
 {
+    if (appearance_theme())
+        return thme_draw_grow(c, active);
     if (!theme_active())
         return false;
     const image *im = img(k1 ? (active ? -14330 : -14334) : (active ? -14333 : -14334));
@@ -840,6 +874,24 @@ bool theme_draw_grow(qrect c, bool active)
 
 bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled)
 {
+    if (appearance_theme()) {
+        if (!thme_push_button(r, disabled ? 0 : pressed ? 2 : 1, false))
+            return false;
+        gaddr fi = tb_NewPtr(8, false, false);
+        tb_GetFontInfo(fi);
+        int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
+        tb_DisposePtr(fi);
+        gaddr port = qd_port();
+        int tw = qd_text_width(port, title, n);
+        tb_MoveTo((int16_t)(r.left + (r.right - r.left - tw) / 2), (int16_t)(r.top + (r.bottom - r.top + asc - desc) / 2));
+        uint16_t col[3] = { 0, 0, 0 };
+        if (!thme_text_rgb(disabled ? 13 : pressed ? 14 : 12, col) && disabled)
+            col[0] = col[1] = col[2] = 0x8888;
+        qd_set_fg_override(col);
+        qd_draw_text(port, title, n);
+        qd_set_fg_override(NULL);
+        return true;
+    }
     if (!theme_active())
         return false;
     int16_t id = disabled ? -10240 : pressed ? -10238 : -10239;
@@ -876,6 +928,8 @@ bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool 
 
 bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled)
 {
+    if (appearance_theme())
+        return thme_check_box(box, radio, on ? 1 : 0, disabled ? 0 : pressed ? 2 : 1);
     if (!theme_active())
         return false;
     /* -9504.. check boxes (inactive, normal, pressed; unchecked then checked),
@@ -895,6 +949,8 @@ bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disable
 
 bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb)
 {
+    if (appearance_theme())
+        return thme_scroll_bar(r, vertical, hilite, enabled, active, thumb);
     if (!theme_active())
         return false;
     hrgn clip;
@@ -957,7 +1013,7 @@ bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool
     return true;
 }
 
-const char *theme_name(void) { return loaded ? scheme_name : ""; }
+const char *theme_name(void) { return thme_on() ? thme_name() : loaded ? scheme_name : ""; }
 
 /* A cicn's image as RGBA (malloc'd), for PlotCIcon. */
 uint8_t *qd_cicn_rgba(const uint8_t *d, uint32_t len, int *w, int *h)
