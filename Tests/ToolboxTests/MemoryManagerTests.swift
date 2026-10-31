@@ -242,6 +242,56 @@ extension BlueBox {
             tb_DisposeHandle(follower)
         }
 
+        /// MoveHHi slides the unlocked handles after a block down and puts
+        /// the block above them, so a locked handle below can grow where it
+        /// is (SpaceCURVS grows its locked Forth dictionary over the place
+        /// its terminal buffer, moved high and locked, was made in; with
+        /// MoveHHi doing nothing the dictionary couldn't grow, MacForth
+        /// aborted and ran its stack: "F-line (no FPU)").
+        @Test func moveHHiLetsALockedHandleBelowGrow() {
+            let dict = tb_NewHandle(20000, false, false)
+            tb_HLock(dict)
+            let at = rd32(dict)
+            let buffer = tb_NewHandle(1028, false, false)
+            let other = tb_NewHandle(64, false, false)
+            for i in 0..<1028 { wr8(rd32(buffer) + UInt32(i), UInt8(truncatingIfNeeded: i * 7)) }
+            for i in 0..<64 { wr8(rd32(other) + UInt32(i), UInt8(i)) }
+            tb_MoveHHi(buffer)
+            #expect(memErr() == 0)
+            #expect(rd32(buffer) > rd32(other)) // above the handle after it now
+            #expect((0..<1028).allSatisfy { rd8(rd32(buffer) + UInt32($0)) == UInt8(truncatingIfNeeded: $0 * 7) })
+            #expect((0..<64).allSatisfy { rd8(rd32(other) + UInt32($0)) == UInt8($0) })
+            tb_HLock(buffer)
+            tb_MoveHHi(buffer)
+            #expect(memErr() == -117) // memLockedErr
+            tb_SetHandleSize(dict, 22000)
+            #expect(memErr() == 0)
+            #expect(rd32(dict) == at)
+            #expect(mm_check_zone(appZone))
+            #expect(mm_move_handle(buffer, true) == -117)
+            tb_HUnlock(buffer)
+            #expect(mm_move_handle(buffer, false) == 0) // MoveHLow: down again
+            #expect(rd32(buffer) < rd32(other))
+            #expect((0..<1028).allSatisfy { rd8(rd32(buffer) + UInt32($0)) == UInt8(truncatingIfNeeded: $0 * 7) })
+            #expect(mm_check_zone(appZone))
+            tb_HUnlock(dict)
+            [dict, buffer, other].forEach { tb_DisposeHandle($0) }
+        }
+
+        /// A pointer goes as low in the zone as there is room, not after
+        /// the handles the last allocation left the rover at.
+        @Test func pointersGoLow() {
+            let hole = tb_NewPtr(4096, false, false)
+            let big = tb_NewHandle(30000, false, false)
+            tb_DisposePtr(hole)
+            let after = tb_NewHandle(16, false, false) // the rover is past big
+            let p = tb_NewPtr(30, false, false)
+            #expect(p != 0 && p < rd32(big))
+            #expect(mm_check_zone(appZone))
+            tb_DisposePtr(p)
+            [big, after].forEach { tb_DisposeHandle($0) }
+        }
+
         @Test func handleStateAndRecovery() {
             let h = tb_NewHandle(8, false, false)
             #expect(tb_HGetState(h) == 0)

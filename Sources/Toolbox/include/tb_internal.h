@@ -69,6 +69,7 @@ uint32_t mm_appl_heap_size(void);
 /* Allocate in a specific zone. */
 gaddr mm_new_handle_in(gaddr zone, uint32_t size, bool clear);
 gaddr mm_new_ptr_in(gaddr zone, uint32_t size, bool clear);
+int16_t mm_move_handle(gaddr h, bool high); /* MoveHHi, or MoveHLow */
 /* Cap on memory sizes reported to apps (FreeMem, MaxBlock ...). */
 extern uint32_t g_mem_report_cap;
 /* Check that the zone's blocks tile it correctly; returns false and logs on damage. */

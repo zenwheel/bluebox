@@ -451,6 +451,28 @@ static bool grow_zone(gaddr z, uint32_t need) { return grow_zone_by(z, need, fal
 /* ---------------------------------------------------------------------- */
 /* Allocation */
 
+/* The lowest free block of at least psize bytes: where the Memory Manager
+ * put a nonrelocatable block, as low in the zone as it could, so that
+ * pointers don't end up after the relocatable blocks and keep them from
+ * growing (SpaceCURVS loads its Forth dictionary, frees a pointer below
+ * it, takes small pointers and then grows the dictionary, locked). */
+static gaddr find_lowest(gaddr z, uint32_t psize)
+{
+    gaddr lim = z_lim(z);
+    for (gaddr b = z_first(z); b < lim; b = b_next(b)) {
+        if (b_psize(b) < HDR) {
+            LOGF(LOG_MEM, "mm: zone %08X damaged at block %08X\n", z, b);
+            return 0;
+        }
+        if (b_use(b) != USE_FREE)
+            continue;
+        coalesce(z, b);
+        if (b_psize(b) >= psize)
+            return b;
+    }
+    return 0;
+}
+
 static gaddr find_free(gaddr z, uint32_t psize)
 {
     gaddr lim = z_lim(z), first = z_first(z);
@@ -568,31 +590,35 @@ static bool call_gz_proc(gaddr z, uint32_t psize)
     return freed != 0;
 }
 
-/* Find (making room if needed) a free block of at least psize bytes. */
-static gaddr make_room(gaddr z, uint32_t psize)
+/* Find (making room if needed) a free block of at least psize bytes: the
+ * lowest one for a nonrelocatable block, else the next from the rover. */
+static gaddr make_room_for(gaddr z, uint32_t psize, bool low)
 {
-    gaddr b = find_free(z, psize);
+    gaddr (*find)(gaddr, uint32_t) = low ? find_lowest : find_free;
+    gaddr b = find(z, psize);
     if (b)
         return b;
     compact(z);
-    if ((b = find_free(z, psize)))
+    if ((b = find(z, psize)))
         return b;
     purge(z);
     compact(z);
-    if ((b = find_free(z, psize)))
+    if ((b = find(z, psize)))
         return b;
     if (grow_zone(z, psize)) {
         compact(z);
-        return find_free(z, psize);
+        return find(z, psize);
     }
     for (int tries = 0; tries < 64 && call_gz_proc(z, psize); tries++) {
         purge(z);
         compact(z);
-        if ((b = find_free(z, psize)))
+        if ((b = find(z, psize)))
             return b;
     }
     return 0;
 }
+
+static gaddr make_room(gaddr z, uint32_t psize) { return make_room_for(z, psize, false); }
 
 /* Claim the front of free block b for a block of psize bytes. */
 static void carve(gaddr z, gaddr b, uint32_t psize, unsigned use, uint8_t state, uint32_t logical, uint32_t loc)
@@ -641,7 +667,7 @@ static void free_master(gaddr z, gaddr mp)
 gaddr mm_new_ptr_in(gaddr z, uint32_t size, bool clear)
 {
     uint32_t ps = phys_for(size);
-    gaddr b = ps ? make_room(z, ps) : 0;
+    gaddr b = ps ? make_room_for(z, ps, true) : 0;
     if (!b) {
         set_mem_err(memFullErr);
         return 0;
@@ -1069,7 +1095,104 @@ void tb_HPurge(gaddr h) { set_state_bits(h, ST_PURGE, 0); }
 void tb_HNoPurge(gaddr h) { set_state_bits(h, 0, ST_PURGE); }
 void tb_HSetRBit(gaddr h) { set_state_bits(h, ST_RSRC, 0); }
 void tb_HClrRBit(gaddr h) { set_state_bits(h, 0, ST_RSRC); }
-void tb_MoveHHi(gaddr h) { set_mem_err(noErr); }
+/* Move handle h's block up to the top of the run of free space and
+ * unlocked relocatable blocks it is in (to just below the next pointer or
+ * locked block, or the zone's end), sliding those relocatable blocks down
+ * under it, as MoveHHi did; or with high false down to the bottom of the
+ * run, sliding them up over it, as MoveHLow.  A program moves a handle it
+ * will keep locked out of the way so (SpaceCURVS's Forth dictionary,
+ * locked low in the heap, grows over where its terminal buffer was
+ * made). */
+int16_t mm_move_handle(gaddr h, bool high)
+{
+    int16_t err;
+    gaddr b = handle_block(h, &err);
+    if (!b)
+        return err;
+    if (h_state(h, b) & ST_LOCK)
+        return memLockedErr;
+    gaddr z = zone_of(b), lim = z_lim(z);
+    uint32_t ps = b_psize(b);
+    /* The run around b: lo its first block, hi the end of its last. */
+    gaddr lo = z_first(z), hi = lim, q;
+    for (q = z_first(z); q < lim; q = b_next(q)) {
+        if (b_psize(q) < HDR)
+            return noErr; /* a damaged zone: leave it as it is */
+        bool fixed = b_use(q) == USE_NREL || (b_use(q) == USE_REL && (blk_state(z, q) & ST_LOCK));
+        if (q > b && fixed) {
+            hi = q;
+            break;
+        }
+        if (q < b && fixed)
+            lo = b_next(q);
+    }
+    /* The relocatable blocks to slide and the free space there is. */
+    gaddr from = high ? b + ps : lo, to = high ? hi : b;
+    uint32_t moving = 0, nmoving = 0;
+    for (q = from; q < to; q = b_next(q))
+        if (b_use(q) == USE_REL) {
+            moving += b_psize(q);
+            nmoving++;
+        }
+    uint32_t gap = (to - from) - moving;
+    uint32_t sizec = b_sizec(b);
+    if (!gap || (gap < MIN_BLOCK && sizec + gap > MAX_SIZEC))
+        return noErr; /* already there, or nowhere to put a sliver of space */
+    uint8_t *blk = malloc(ps);
+    gaddr *list = high ? 0 : malloc((nmoving ? nmoving : 1) * sizeof *list);
+    if (!blk || (!high && !list)) {
+        free(blk);
+        free(list);
+        return noErr;
+    }
+    memcpy(blk, g_mem + b, ps);
+    set_rover(z, 0); /* blocks move */
+    gaddr nb;
+    if (high) {
+        gaddr dst = b;
+        for (q = from; q < to;) {
+            uint32_t qs = b_psize(q);
+            if (b_use(q) == USE_REL) {
+                gmemcpy(dst, q, qs);
+                mp_point(z + b_loc(dst), dst + HDR);
+                dst += qs;
+            }
+            q += qs;
+        }
+        nb = gap < MIN_BLOCK ? dst : dst + gap;
+        if (gap >= MIN_BLOCK)
+            b_set(dst, USE_FREE, 0, 0, gap, 0);
+    } else {
+        uint32_t n = 0;
+        for (q = from; q < to; q = b_next(q))
+            if (b_use(q) == USE_REL)
+                list[n++] = q;
+        gaddr dst = b + ps;
+        while (n--) {
+            uint32_t qs = b_psize(list[n]);
+            dst -= qs;
+            gmemcpy(dst, list[n], qs);
+            mp_point(z + b_loc(dst), dst + HDR);
+        }
+        nb = lo;
+        if (gap >= MIN_BLOCK)
+            b_set(lo + ps, USE_FREE, 0, 0, gap, 0);
+    }
+    free(list);
+    if (g_code_map)
+        mem_code_range(nb, ps);
+    memcpy(g_mem + nb, blk, ps);
+    free(blk);
+    if (gap < MIN_BLOCK) { /* the sliver goes with the block */
+        b_set_psize(nb, ps + gap);
+        b_set_sizec(nb, (uint8_t)(sizec + gap));
+        zone_free_add(z, -(int64_t)gap);
+    }
+    mp_point(mem_strip(h), nb + HDR);
+    return noErr;
+}
+
+void tb_MoveHHi(gaddr h) { set_mem_err(mm_move_handle(h, true)); }
 
 int8_t tb_HGetState(gaddr h)
 {
