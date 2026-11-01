@@ -186,19 +186,7 @@ void tb_HWPriv(int32_t d0, int32_t a0)
 /* FlushCodeCache ($A0BD): the whole instruction cache. */
 void tb_FlushCodeCache(void) { cpu_icache_flush(g_cpu, 0, 0); }
 
-void tb_Debugger(void)
-{
-    machine_dump_68k_trace();
-    cpu_halt(g_cpu, "Debugger() called");
-}
-
-void tb_DebugStr(gaddr p)
-{
-    char s[256];
-    pstr_to_c(p, s, sizeof s);
-    machine_dump_68k_trace();
-    cpu_halt(g_cpu, "DebugStr: %s", s);
-}
+/* Debugger and DebugStr are in debugger.c. */
 
 /* ---- Trap table access ---- */
 
@@ -387,11 +375,22 @@ void raw_WriteXPRam(cpu68k *c, uint16_t tw)
     c->d[0] = 0;
 }
 
-/* SysError: on a real Mac, the bomb box.  The error code is in D0. */
+/* SysError: on a real Mac, the bomb box. */
 void tb_SysError(int16_t code)
 {
-    wr16(LM_DSErrCode, (uint16_t)g_cpu->d[0]);
-    cpu_halt(g_cpu, "SysError %d", (int16_t)g_cpu->d[0]);
+    wr16(LM_DSErrCode, (uint16_t)code);
+    cpu_halt(g_cpu, "SysError %d", code);
+}
+
+/* The trap takes its code in D0 (the Pascal glue's MOVE.W (SP)+,D0 pops
+ * it first), and SysBreak's codes enter the debugger. */
+void raw_SysError(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    int16_t code = (int16_t)c->d[0];
+    if (debugger_sys_break(c, code) || c->halted)
+        return;
+    tb_SysError(code);
 }
 
 void tb_InitAllPacks(void) {}

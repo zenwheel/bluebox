@@ -31,18 +31,29 @@ extension BlueBox {
             #expect(ilCall("LMGetAt2MenuBottom", []) == 0x1234)
         }
 
-        @Test func macJmpIsAsTheROMLeftItWithNoDebugger() {
-            // A Quadra's or Power Mac's ROM: MacJmp nil, MacJmpFlag clear,
-            // so $122 (AMP 68K's busy flag, through a nil window) is zero.
-            #expect(ilCall("LMGetMacJmp", []) == 0 && rd32(0x120) == 0)
-            #expect(ilCall("LMGetMacJmpFlag", []) == 0)
-            // A Mac Plus's: an entry, its top byte the flags $20
-            // (initialised, not installed); here a JMP to Debugger.
+        @Test func macJmpIsMacsBugsAsItLeftItInstalled() {
+            // A Quadra's or Power Mac's ROM clears MacJmpFlag and MacsBug
+            // sets its flags there: installed, initialised, 4 and 2 ($74);
+            // MacJmp is the entry alone, in the system heap, so $122 (AMP
+            // 68K's busy flag, through a nil window) is nonzero.
+            #expect(ilCall("LMGetMacJmpFlag", []) == 0x74)
+            let entry = ilCall("LMGetMacJmp", [])
+            #expect(entry == rd32(0x120) && entry >> 24 == 0)
+            let sys = rd32(UInt32(LM_SysZone))
+            #expect(entry > sys && entry < rd32(sys))
+            #expect(rd8(0x122) != 0)
+            // a JMP to our debugger
+            #expect(rd16(entry) == 0x4EF9)
+            #expect(String(cString: native_name_at(native_index_for(rd32(entry + 2)))) == "MacsBug")
+            // A ROM before MacJmpFlag (a 68000 Mac's): $FF there, and the
+            // flags in MacJmp's top byte.
             withModel(68000) {
+                #expect(rd8(0xBFF) == 0xFF)
                 let jmp = rd32(0x120)
-                #expect(jmp >> 24 == 0x20)
+                #expect(jmp >> 24 == 0x74)
                 let entry = jmp & 0xFF_FFFF
-                #expect(rd16(entry) == 0x4EF9 && rd32(entry + 2) == rd32(UInt32(TB_TRAP_TABLE) + 0x1FF * 4))
+                #expect(rd16(entry) == 0x4EF9)
+                #expect(String(cString: native_name_at(native_index_for(rd32(entry + 2)))) == "MacsBug")
             }
         }
 

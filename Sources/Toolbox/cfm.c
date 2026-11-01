@@ -145,7 +145,9 @@ static void ppc_ExitToShell(ppc_cpu *c)
     ppc_halt(c, "ExitToShell");
 }
 
-static void ppc_Debugger(ppc_cpu *c) { c->pc = c->lr; }
+static void ppc_Debugger(ppc_cpu *c) { debugger_ppc(c, "Debugger", DEBUGGER_ARG_NONE); }
+static void ppc_DebugStr(ppc_cpu *c) { debugger_ppc(c, "DebugStr", DEBUGGER_ARG_PSTR); }
+static void ppc_debugstr(ppc_cpu *c) { debugger_ppc(c, "DebugStr", DEBUGGER_ARG_CSTR); }
 
 static void ppc_SysBeep(ppc_cpu *c)
 {
@@ -155,7 +157,8 @@ static void ppc_SysBeep(ppc_cpu *c)
 
 static const ppc_export manual_exports[] = {
     { "Debugger", ppc_Debugger },
-    { "DebugStr", ppc_Debugger },
+    { "DebugStr", ppc_DebugStr },
+    { "debugstr", ppc_debugstr },
     { "ExitToShell", ppc_ExitToShell },
     { "SysBeep", ppc_SysBeep },
 };

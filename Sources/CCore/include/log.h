@@ -11,6 +11,7 @@ enum {
     LOG_MEM = 1 << 4,    /* memory manager */
     LOG_CPU = 1 << 5,    /* instruction trace */
     LOG_SPEECH = 1 << 6, /* the Speech Manager's callbacks, with their host times */
+    LOG_DEBUGGER = 1 << 7, /* Debugger, DebugStr and SysBreak entered (on by default; --log keeps it) */
 };
 
 extern unsigned g_log_mask;

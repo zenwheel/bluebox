@@ -81,7 +81,12 @@ func usage() -> Never {
           --census   keep going past unimplemented traps and report every trap used
           --max N    stop after N instructions (default 50000000)
           --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu, speech (the Speech
-                     Manager's callbacks, timed)
+                     Manager's callbacks, timed); the debugger's entries are always logged
+          --debugger D  what Debugger, DebugStr and SysBreak do, Blue Box being a Mac with
+                     MacsBug installed: log (the default: log the message, where from and how
+                     often, and go on, as "g" in MacsBug), halt (stop the run there) or quiet
+                     (only count them); BLUEBOX_DEBUGGER=halt or quiet does the same.  The run's
+                     summary says how often it was entered ("debugger entered N times ...")
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --lowmem N=V  set a low-memory setting: DoubleTime, CaretTime, KeyThresh,
                      KeyRepThresh (ticks), SdVolume, MenuFlash, DlgFont, SysFontFam,
@@ -417,7 +422,7 @@ func runCommand(_ args: [String]) {
     var appName: String?
     var census = false
     var maxInstructions: UInt64 = 50_000_000
-    var logMask: UInt32 = UInt32(LOG_UNIMPL)
+    var logMask: UInt32 = UInt32(LOG_UNIMPL | LOG_DEBUGGER)
     var gestalts: [(UInt32, UInt32)] = []
     var lowmems: [(String, UInt32)] = []
     var fontFiles: [String] = []
@@ -591,7 +596,7 @@ func runCommand(_ args: [String]) {
         case "--log":
             i += 1
             guard i < args.count else { usage() }
-            logMask = 0
+            logMask = UInt32(LOG_DEBUGGER) // the debugger's entries are always shown (--debugger quiet: not)
             for item in args[i].split(separator: ",") {
                 switch item {
                 case "traps": logMask |= UInt32(LOG_TRAPS)
@@ -601,8 +606,18 @@ func runCommand(_ args: [String]) {
                 case "mem": logMask |= UInt32(LOG_MEM)
                 case "cpu": logMask |= UInt32(LOG_CPU)
                 case "speech": logMask |= UInt32(LOG_SPEECH)
+                case "debugger": break
                 default: fail("unknown log category \(item)")
                 }
+            }
+        case "--debugger":
+            i += 1
+            guard i < args.count else { usage() }
+            switch args[i] {
+            case "log": machine_set_debugger(Int32(DEBUGGER_LOG))
+            case "halt": machine_set_debugger(Int32(DEBUGGER_HALT))
+            case "quiet": machine_set_debugger(Int32(DEBUGGER_QUIET))
+            default: fail("--debugger expects log, halt or quiet")
             }
         case "--gestalt":
             i += 1
@@ -886,6 +901,9 @@ func runCommand(_ args: [String]) {
         machine_dump_68k_trace() // where a program that never stops is going round
         print("instruction limit reached\(waiting) after \(count) instructions (pc \(String(machine_pc(), radix: 16, uppercase: true)))")
     }
+    var debuggerLine = [CChar](repeating: 0, count: 512)
+    machine_debugger_summary(&debuggerLine, debuggerLine.count)
+    if debuggerLine[0] != 0 { print(str(debuggerLine)) }
 
     if let screenshot {
         if machine_screenshot(screenshot) { print("screenshot: \(screenshot)") } else { eprint("could not write \(screenshot)\n") }

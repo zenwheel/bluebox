@@ -2,7 +2,7 @@
 
 #include <stdarg.h>
 
-unsigned g_log_mask = LOG_UNIMPL;
+unsigned g_log_mask = LOG_UNIMPL | LOG_DEBUGGER;
 FILE *g_log_file;
 
 void log_printf(const char *fmt, ...)

@@ -53,6 +53,18 @@ bool machine_set_floppy(const char *path, char *err, size_t errlen);
 bool sony_has_disk(void);
 uint32_t sony_disk_size(void);
 bool sony_sector_tags(uint32_t sector, uint8_t out[12]);
+/* The debugger (debugger.c), a MacsBug that is there: DEBUGGER_LOG (the
+ * default) logs each Debugger, DebugStr and SysBreak and goes on, as "g"
+ * in MacsBug; DEBUGGER_HALT stops the run there; DEBUGGER_QUIET only
+ * counts them.  BLUEBOX_DEBUGGER=halt or quiet when none is set.  The
+ * run's count, the places it came from, the last message, and a summary
+ * line (empty if it was never entered). */
+enum { DEBUGGER_LOG, DEBUGGER_HALT, DEBUGGER_QUIET };
+void machine_set_debugger(int mode);
+uint64_t machine_debugger_entries(void);
+unsigned machine_debugger_places(void);
+const char *machine_debugger_last(void);
+void machine_debugger_summary(char *out, size_t n);
 /* Run up to max_instructions. */
 run_status machine_run(uint64_t max_instructions);
 const char *machine_halt_reason(void);
