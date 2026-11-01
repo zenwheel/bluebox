@@ -226,8 +226,19 @@ final class TransientView: NSView {
     var launchEvents = LaunchEvents()
     var transientVersion: UInt32 = .max
     var transientWindow: NSWindow?
+    /// What the system's own code drew over the desktop (the Talking Moose).
+    var overlayWindow: NSPanel?
+    /// Run in the background (bluebox run --background): no Dock icon or
+    /// menu bar; the program's menus are in a status item's menu.
+    let background: Bool
+    var statusItem: NSStatusItem?
+    var statusMenusVersion: UInt32 = .max
+    var lastActivityNote = Date.distantPast
 
-    init(title: String) { self.title = title }
+    init(title: String, background: Bool = false) {
+        self.title = title
+        self.background = background
+    }
 
     func applicationWillFinishLaunching(_ notification: Notification) { HostAppleEvents.shared.install() }
     func application(_ application: NSApplication, open urls: [URL]) { launchEvents.open(urls) }
@@ -343,7 +354,11 @@ final class TransientView: NSView {
         // After launch: AppKit sets the icon from the main bundle while launching.
         if let appIcon { NSApp.applicationIconImage = appIcon }
         launchEvents.finishLaunching()
-        NSApp.activate(ignoringOtherApps: true)
+        if background {
+            installStatusItem()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
         installKeyMonitor()
         let script = self.script
         Thread.detachNewThread {
@@ -383,7 +398,9 @@ final class TransientView: NSView {
         for w in windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
         (screenWindow?.contentView as? MacWindowView)?.refresh(force: false)
         syncTransient()
+        syncOverlay()
         syncMenus()
+        if background { noteActivityElsewhere() }
         CursorSync.shared.tick()
         DragOut.shared.tick()
     }
@@ -491,6 +508,9 @@ final class TransientView: NSView {
                 applyingFrame = false
                 windows[mw.id] = window
             } else {
+                // In the background, a window the program opens (a desk
+                // accessory's, chosen from the status item) comes to the front.
+                if background { NSApp.activate(ignoringOtherApps: true) }
                 window = MacWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
                 window.isOpaque = false
                 window.backgroundColor = .clear
@@ -609,12 +629,49 @@ final class TransientView: NSView {
                Int32((content.height / displayScale).rounded()))
     }
 
+    /// A classic menu's items as host menu items, which choose them.
+    func hostItems(_ m: inout machine_menu, keys: Bool = true) -> [NSMenuItem] {
+        var out: [NSMenuItem] = []
+        let id = Int(m.id), menuEnabled = m.enabled
+        withUnsafeBytes(of: &m.items) { raw in
+            let items = raw.bindMemory(to: machine_menu_item.self)
+            for k in 0..<Int(m.nitems) {
+                var it = items[k]
+                if it.separator {
+                    out.append(.separator())
+                    continue
+                }
+                let text = withUnsafeBytes(of: &it.text) { Self.string($0.baseAddress!, 64) }
+                let key = keys && it.key != 0 ? String(UnicodeScalar(it.key)).lowercased() : ""
+                let ni = NSMenuItem(title: text, action: #selector(chooseMenu(_:)), keyEquivalent: key)
+                ni.target = self
+                if keys && it.modifiers != 0 { // Mac OS 8's item modifiers (SetMenuItemModifiers, 'xmnu')
+                    var mask: NSEvent.ModifierFlags = it.modifiers & 8 != 0 ? [] : [.command]
+                    if it.modifiers & 1 != 0 { mask.insert(.shift) }
+                    if it.modifiers & 2 != 0 { mask.insert(.option) }
+                    if it.modifiers & 4 != 0 { mask.insert(.control) }
+                    ni.keyEquivalentModifierMask = mask
+                }
+                ni.isEnabled = it.enabled && menuEnabled
+                ni.state = it.mark == 0x12 ? .on : .off
+                ni.representedObject = [id, k + 1]
+                if it.style & 1 != 0 { ni.attributedTitle = NSAttributedString(string: text, attributes: [.font: NSFont.boldSystemFont(ofSize: 0)]) }
+                out.append(ni)
+            }
+        }
+        return out
+    }
+
     func syncMenus() {
         let version = machine_menus_version()
         guard version != menusVersion, openMenus == 0 else { return }
         menusVersion = version
         var menus = [machine_menu](repeating: machine_menu(), count: 32)
         let n = Int(machine_menus(&menus, 32))
+        if background {
+            syncStatusMenu(menus, n)
+            return
+        }
         let bar = NSMenu()
         let appItem = NSMenuItem()
         bar.addItem(appItem)
@@ -638,32 +695,7 @@ final class TransientView: NSView {
                 bar.addItem(item)
                 target = sub
             }
-            withUnsafeBytes(of: &m.items) { raw in
-                let items = raw.bindMemory(to: machine_menu_item.self)
-                for k in 0..<Int(m.nitems) {
-                    var it = items[k]
-                    if it.separator {
-                        target.addItem(.separator())
-                        continue
-                    }
-                    let text = withUnsafeBytes(of: &it.text) { Self.string($0.baseAddress!, 64) }
-                    let key = it.key != 0 ? String(UnicodeScalar(it.key)).lowercased() : ""
-                    let ni = NSMenuItem(title: text, action: #selector(chooseMenu(_:)), keyEquivalent: key)
-                    ni.target = self
-                    if it.modifiers != 0 { // Mac OS 8's item modifiers (SetMenuItemModifiers, 'xmnu')
-                        var mask: NSEvent.ModifierFlags = it.modifiers & 8 != 0 ? [] : [.command]
-                        if it.modifiers & 1 != 0 { mask.insert(.shift) }
-                        if it.modifiers & 2 != 0 { mask.insert(.option) }
-                        if it.modifiers & 4 != 0 { mask.insert(.control) }
-                        ni.keyEquivalentModifierMask = mask
-                    }
-                    ni.isEnabled = it.enabled && m.enabled
-                    ni.state = it.mark == 0x12 ? .on : .off
-                    ni.representedObject = [Int(m.id), k + 1]
-                    if it.style & 1 != 0 { ni.attributedTitle = NSAttributedString(string: text, attributes: [.font: NSFont.boldSystemFont(ofSize: 0)]) }
-                    target.addItem(ni)
-                }
-            }
+            for ni in hostItems(&m) { target.addItem(ni) }
         }
         if appMenu.numberOfItems > 0 { appMenu.addItem(.separator()) }
         // Quit asks the classic app to quit; with Option held, Force Quit
@@ -815,11 +847,11 @@ func postScriptLive(_ script: [String]) {
 }
 
 /// Run with rootless windows and the native menu bar until the app quits.
-@MainActor func runRootless(title: String, icon: NSImage?, script: [String] = []) -> Never {
+@MainActor func runRootless(title: String, icon: NSImage?, script: [String] = [], background: Bool = false) -> Never {
     nameProcess(title)
     machine_attach_host(true)
     let app = NSApplication.shared
-    app.setActivationPolicy(.regular)
+    app.setActivationPolicy(background ? .accessory : .regular)
     appIcon = icon
     installAlertHandler()
     installFileHandler()
@@ -836,7 +868,7 @@ func postScriptLive(_ script: [String]) {
     NativeControls.install()
     if !speechBackend.hasPrefix("record:") { ClassicSpeech.shared.install(avspeech: speechBackend == "avspeech") }
     NotificationRelay.shared.install()
-    let host = RootlessHost(title: title)
+    let host = RootlessHost(title: title, background: background)
     host.script = script
     app.delegate = host
     app.run()

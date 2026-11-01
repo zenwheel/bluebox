@@ -387,6 +387,10 @@ static void prime_native(cpu68k *c, uint16_t tw)
                 }
                 struct timespec ts = { 0, 10000000 };
                 nanosleep(&ts, NULL);
+                /* Interrupts went on while MacinTalk spoke: VBL tasks
+                 * (the Talking Moose moves its mouth from one). */
+                machine_advance_ticks();
+                time_pump();
             }
             if (st)
                 tb_DisposePtr(st);

@@ -140,6 +140,19 @@ Finder icon and with document drag and drop:
 bluebox install SimpleText
 ```
 
+A desk accessory file (a Font/DA Mover suitcase) runs too, in a small host
+of Blue Box's own with the file's desk accessories in its Apple menu. One
+that lives in the background, like the Talking Moose (1988), can become a
+menu bar application: no Dock icon, its menu in a status item (Tell a
+Joke, Be Quiet, Moose Settings, Open at Login, Quit), and the Moose popping
+up over your desktop when you leave the Mac alone. `--background` makes a
+bundle with its own copy of Blue Box and of the program's folder, which you
+can move to `/Applications`:
+
+```sh
+bluebox install "Moose Folder/Moose1.21" --background --name "Talking Moose"
+```
+
 The shell is a window listing the library's applications with their
 settings. Its sidebar's search field finds applications by name or folder,
 and a folder's context menu moves the whole folder to the Trash. You can drop
@@ -161,6 +174,7 @@ Some useful options for `run`:
 | `--machine plus\|se\|classic\|macii` | Present a classic Mac: its processor (a 68000, or the Mac II's 68020 and 68881), 24-bit addressing, its memory map (a compact Mac's 4 MB with the 512×342 screen near the top of RAM and its chips at `$EFE1FE` and the rest; the Mac II's 8 MB, ROM at `$800000` and chips at `$F00000`), ROM and System 6.0.8. `--cpu`, `--fpu` and `--addressing` change the machine's own. |
 | `--appearance native` | Use macOS window frames. A Kaleidoscope scheme can be given instead. |
 | `--headless --screenshot out.png` | Run without a window and save the screen at the end. |
+| `--background` | No Dock icon or menu bar: the program's menus are in a status item, its windows float over the desktop. |
 
 `bluebox set <app> depth 8` (or `cpu`, `fpu`, `addressing`, `scale`)
 remembers a setting for one application. `bluebox --help` lists everything.

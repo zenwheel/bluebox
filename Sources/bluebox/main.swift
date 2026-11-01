@@ -76,6 +76,10 @@ func usage() -> Never {
                  the program at an earlier run (scripts/walk-corpus.sh)
       --realtime a headless run's clock follows real time, not the instructions
                      run (for networked programs talking to other copies)
+          --background  run in the background: no Dock icon or menu bar; the
+                     program's menus are in a menu bar status item (with Open at
+                     Login and Quit), its windows and what an INIT or desk accessory
+                     draws on the desktop float over the host's (the Talking Moose)
           --screen-window  show the whole classic screen in one window instead of
                      rootless windows (implied by --screen)
           --census   keep going past unimplemented traps and report every trap used
@@ -173,10 +177,14 @@ func usage() -> Never {
       bluebox import <file>... [--library dir] [--force]
           Add MacBinary (.bin), StuffIt (.sit/.sea), Compact Pro (.cpt) or BinHex (.hqx)
           files to the library as AppleDouble.  Archives need unar (The Unarchiver).
-      bluebox install <app-or-archive> [--app name] [--to folder] [--force]
+      bluebox install <app-or-archive> [--app name] [--to folder] [--name N] [--force] [--background]
           Make a macOS application bundle for a classic application (default folder
           ~/Applications/Blue Box) with its Finder icon; documents dropped on it open
-          in the application.
+          in the application; --name gives the bundle another name than the program's.
+          --background: one that runs in the background (see
+          run --background) and carries its own copy of Blue Box and of the program's
+          folder, so it can be moved to /Applications and opened at login; for a desk
+          accessory file such as the Talking Moose.
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default]
                 [cpu 68000|68020|68030|68040|ppc|default] [fpu none|68881|68882|68040|default]
                 [addressing 24|32|default] [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
@@ -428,6 +436,7 @@ func runCommand(_ args: [String]) {
     var fontFiles: [String] = []
     var keyScript: [String] = []
     var headless = false
+    var background = false
     var screenWindow = false
     var appletalkGiven = false
     var portsGiven = Set<Int32>()
@@ -454,6 +463,7 @@ func runCommand(_ args: [String]) {
         switch a {
         case "--census": census = true
         case "--headless": headless = true
+        case "--background": background = true
         case "--realtime": machine_set_realtime(true)
         case "--walk-menus": machine_set_menu_walk(true)
         case "--walk-avoid":
@@ -661,7 +671,8 @@ func runCommand(_ args: [String]) {
     }
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
-    if interactive { reexecInNamedBundle(app: app) }
+    if background && !interactive { background = false }
+    if interactive && !background { reexecInNamedBundle(app: app) }
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
         MainActor.assumeIsolated { displayScale = CGFloat(scale) }
@@ -829,12 +840,14 @@ func runCommand(_ args: [String]) {
     #if canImport(AppKit)
     // The whole screen in one window, as the setting says, or when the
     // program turns out to want it: then that becomes its setting.
-    if interactive && !screenWindow && saved.display == "screen" { screenWindow = true }
+    // In the background the program stays rootless: its windows float over the host's.
+    if background { screenWindow = false }
+    if interactive && !background && !screenWindow && saved.display == "screen" { screenWindow = true }
     // The Finder draws the desktop: the whole screen, unless its setting says otherwise.
     if interactive && !screenWindow && machine_is_finder() && saved.display != "rootless" { screenWindow = true }
     let chosenFor = app
     MainActor.assumeIsolated {
-        RootlessHost.switchesToScreen = saved.display != "rootless"
+        RootlessHost.switchesToScreen = saved.display != "rootless" && !background
         RootlessHost.screenModeChosen = { why in
             var all = loadSettings(defaultLibrary())
             var s = all[settingsKey(chosenFor)] ?? AppSettings()
@@ -847,13 +860,17 @@ func runCommand(_ args: [String]) {
     }
     if interactive {
         runningApp = app
-        let title = (app as NSString).lastPathComponent
+        // A bundle's own name for the program it carries (install --name).
+        let bundleTitle = bundledRun().flatMap { _ in Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String }
+        let title = bundleTitle ?? (app as NSString).lastPathComponent
         let script = keyScript
         let icons = finderBundle(applicationAt: app).appIcons
         if screenWindow {
             MainActor.assumeIsolated { runHostWindow(title: title, icon: dockImage(icons)) }
         } else {
-            MainActor.assumeIsolated { runRootless(title: title, icon: dockImage(icons), script: script) }
+            MainActor.assumeIsolated {
+                runRootless(title: title, icon: dockImage(icons), script: script, background: background)
+            }
         }
     }
     #endif
@@ -1585,6 +1602,9 @@ let argv = Array(CommandLine.arguments.dropFirst()).filter { !$0.hasPrefix("-psn
 #if canImport(AppKit)
 // Blue Box.app opened from the Finder or the Dock: the shell.
 if argv.isEmpty && Bundle.main.bundleIdentifier == shellBundleIdentifier { shellCommand([]) }
+// A bundle carrying its own copy of Blue Box (bluebox install --background)
+// opened: the program it was made for, as it was made to run it.
+if argv.isEmpty, let (app, options) = bundledRun() { runCommand([app] + options) }
 #endif
 /// bluebox movie-speed <movie>...: how many times faster than the movie
 /// plays our decoders decode it (1x or better is full frame rate).

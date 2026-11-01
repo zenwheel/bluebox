@@ -275,6 +275,18 @@ uint32_t machine_menus_version(void);
  * its rectangle (top, left, bottom, right) and whether it is up; the
  * result changes whenever it does. */
 uint32_t machine_transient(int16_t rect[4], bool *on);
+/* What the system's own code (an INIT's, a desk accessory's resident code
+ * in the system heap: the Talking Moose) drew on the screen outside the
+ * windows, which a rootless host shows floating over its desktop: its
+ * rectangle and whether it is there (it goes when what was under it is
+ * put back); the result changes when either does.  The pixels come as
+ * RGBA, clear where that code didn't draw. */
+uint32_t machine_overlay(int16_t rect[4], bool *on);
+void machine_overlay_rgba(int x, int y, int w, int h, uint8_t *out);
+/* The user typed or clicked in another host application: KeyTime moves,
+ * so code waiting for the Mac to be left alone (the Talking Moose) waits
+ * on.  For a program run in the background. */
+void machine_note_user_activity(void);
 int machine_menus(machine_menu *out, int max);
 /* Deliver a choice made in the host's menu bar (item is 1-based). */
 void machine_choose_menu(int16_t menu_id, int16_t item);

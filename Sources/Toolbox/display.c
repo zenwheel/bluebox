@@ -374,6 +374,119 @@ void display_want_screen(const char *why)
 
 const char *machine_screen_mode_wanted(void) { return screen_reason; }
 
+/* ---------------------------------------------------------------------- */
+/* Drawing on the desktop by the system's own code: an INIT's or a desk
+ * accessory's resident code in the system heap (the Talking Moose, which
+ * draws itself on the screen with stores of its own while it speaks).
+ * That is not the program wanting the whole screen: in rootless mode the
+ * host shows what it drew floating over the host's desktop, as long as
+ * it is there.  Each byte of the screen such code writes keeps what was
+ * there before its first store; the overlay is the written bytes while
+ * any of them differs from that, and ends when all are back. */
+
+static pthread_mutex_t ov_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint8_t *ov_orig, *ov_have; /* per byte of the screen */
+static uint32_t ov_size, ov_rb;
+static gaddr ov_base;
+static int ov_top, ov_bottom, ov_left, ov_right; /* rows, and bytes in a row, written (inclusive) */
+static bool ov_on;
+static uint32_t ov_version;
+
+/* Whether the store being made comes from code in the system heap. */
+static bool system_code_store(void)
+{
+    cpu68k *c = g_cpu;
+    if (!c || g_ppc_mode)
+        return false;
+    gaddr z = rd32(LM_SysZone), pc = mem_strip(c->op_pc);
+    return z && pc >= z && pc < rd32(z);
+}
+
+static void overlay_written(gaddr base, uint32_t off)
+{
+    uint32_t rb = qd_screen_row_bytes();
+    int w, h;
+    machine_screen_size(&w, &h);
+    uint32_t size = rb * (uint32_t)h;
+    pthread_mutex_lock(&ov_lock);
+    if (size != ov_size || base != ov_base || rb != ov_rb) {
+        free(ov_orig);
+        free(ov_have);
+        ov_orig = malloc(size);
+        ov_have = calloc(size, 1);
+        ov_size = ov_orig && ov_have ? size : 0;
+        ov_base = base;
+        ov_rb = rb;
+        ov_on = false;
+    }
+    if (off < ov_size) {
+        int row = (int)(off / rb), col = (int)(off % rb);
+        for (uint32_t k = off; k < off + 4 && k < ov_size; k++)
+            if (!ov_have[k]) {
+                ov_have[k] = 1;
+                ov_orig[k] = rd8(base + k); /* the store is still to come */
+            }
+        int last = col + 3 < (int)rb ? col + 3 : (int)rb - 1;
+        if (!ov_on) {
+            ov_on = true;
+            ov_top = ov_bottom = row;
+            ov_left = col;
+            ov_right = last;
+            ov_version++;
+        } else if (row < ov_top || row > ov_bottom || col < ov_left || last > ov_right) {
+            if (row < ov_top) ov_top = row;
+            if (row > ov_bottom) ov_bottom = row;
+            if (col < ov_left) ov_left = col;
+            if (last > ov_right) ov_right = last;
+            ov_version++;
+        }
+    }
+    pthread_mutex_unlock(&ov_lock);
+}
+
+/* Whether a byte the system code wrote still differs; with ov_lock held. */
+static bool ov_differs(uint32_t k) { return ov_have[k] && rd8(ov_base + k) != ov_orig[k]; }
+
+uint32_t machine_overlay(int16_t rect[4], bool *on)
+{
+    pthread_mutex_lock(&ov_lock);
+    bool any = false;
+    for (int y = ov_top; ov_on && y <= ov_bottom && !any; y++)
+        for (int x = ov_left; x <= ov_right && !any; x++)
+            any = ov_differs((uint32_t)y * ov_rb + (uint32_t)x);
+    if (ov_on && !any) { /* all put back: over */
+        for (int y = ov_top; y <= ov_bottom; y++)
+            memset(ov_have + (uint32_t)y * ov_rb + (uint32_t)ov_left, 0, (size_t)(ov_right - ov_left + 1));
+        ov_on = false;
+        ov_version++;
+    }
+    *on = ov_on;
+    int depth = qd_screen_depth();
+    rect[0] = (int16_t)ov_top;
+    rect[1] = (int16_t)(ov_left * 8 / depth);
+    rect[2] = (int16_t)(ov_bottom + 1);
+    rect[3] = (int16_t)((ov_right + 1) * 8 / depth);
+    uint32_t v = ov_version;
+    pthread_mutex_unlock(&ov_lock);
+    return v;
+}
+
+/* The overlay's pixels in RGBA, clear where the system code didn't write. */
+void machine_overlay_rgba(int x, int y, int w, int h, uint8_t *out)
+{
+    machine_screen_rgba(x, y, w, h, out);
+    int depth = qd_screen_depth();
+    pthread_mutex_lock(&ov_lock);
+    for (int r = 0; r < h; r++)
+        for (int c = 0; c < w; c++) {
+            int sx = x + c, sy = y + r;
+            uint32_t k = (uint32_t)sy * ov_rb + (uint32_t)(sx * depth / 8);
+            if (sx < 0 || sy < 0 || k >= ov_size || !ov_have[k])
+                out[((size_t)r * (size_t)w + (size_t)c) * 4 + 3] = 0;
+        }
+    pthread_mutex_unlock(&ov_lock);
+}
+
 /* A store the program made into the screen (mem.h's watch). */
 static void screen_written(gaddr a)
 {
@@ -390,6 +503,10 @@ static void screen_written(gaddr a)
         }
     }
     uint32_t off = a - base, rb = qd_screen_row_bytes();
+    if (system_code_store()) {
+        overlay_written(base, off);
+        return;
+    }
     int y = (int)(off / rb), x = (int)((off % rb) * 8 / (uint32_t)qd_screen_depth());
     if (!direct_written) {
         direct_written = true;
@@ -531,6 +648,11 @@ void display_sync(void)
 
 void display_reset(void)
 {
+    pthread_mutex_lock(&ov_lock);
+    ov_on = false;
+    ov_size = 0;
+    ov_version++;
+    pthread_mutex_unlock(&ov_lock);
     screen_reason = NULL;
     direct_written = false;
     g_watch_len = 0;
