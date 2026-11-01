@@ -174,5 +174,47 @@ extension BlueBox {
             machine_set_instruction_limit(0)
             #expect(Array(messages(log).prefix(4)) == [4, 9, 0, 2])
         }
+
+        /// In a program's run: after the minutes without input the module
+        /// blanks the screen, until a key wakes it; the program's screen
+        /// comes back as it was.
+        @Test func idleBlankingInARun() {
+            bootMachine()
+            let log = tb_NewPtr(4096, true, true), psave = tb_NewPtr(64, true, true), evt = tb_NewPtr(16, true, true)
+            let dir = tempDir()
+            let module = moduleFile(moduleCode(log: log, psave: psave, evt: evt), in: dir)
+            // A program waiting for events: WaitNextEvent(everyEvent, ..., 1, nil) in a loop.
+            let ebuf = tb_NewPtr(16, true, true)
+            let loop: [UInt16] = [0x5547, 0x3F3C, 0xFFFF, 0x4879, UInt16(ebuf >> 16), UInt16(ebuf & 0xFFFF),
+                                  0x2F3C, 0x0000, 0x0001, 0x42A7, 0xA860, 0x544F, 0x60E6]
+            let jt = cat(be16(0), be16(0x3F3C), be16(1), be16(0xA9F0))
+            let app = writeResourceFile([
+                TestResource(type: "CODE", id: 0, data: cat(be32(40), be32(256), be32(8), be32(32), jt)),
+                TestResource(type: "CODE", id: 1, data: cat(be16(0), be16(1), code68k(loop))),
+                TestResource(type: "SIZE", id: -1, data: cat(be16(0x0080), be32(0x80000), be32(0x80000))),
+            ], name: "Waiting App", in: dir)
+            machine_screensaver_set_idle(module, 0.01) // 36 ticks
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(app, &err, err.count))
+            let start = g_cpu!.pointee.icount
+            _ = machine_run(2_000_000)
+            var w: Int32 = 0, h: Int32 = 0
+            machine_screen_size(&w, &h)
+            var before = [UInt8](repeating: 0, count: Int(w * h * 4))
+            machine_screen_rgba(0, 0, w, h, &before)
+            machine_script_add(start + 30_000_000, 0, 0x61, 0, 0) // "a"
+            // woken at 30 million; not yet blanked again (36 ticks later)
+            machine_set_instruction_limit(start + 33_000_000)
+            _ = machine_run(40_000_000)
+            machine_set_instruction_limit(0)
+            machine_screensaver_set_idle(nil, 0)
+            let seen = messages(log)
+            #expect(Array(seen.prefix(3)) == [0, 2, 3])
+            #expect(seen.last == 1)
+            #expect(seen.count > 20)
+            var after = [UInt8](repeating: 0, count: Int(w * h * 4))
+            machine_screen_rgba(0, 0, w, h, &after)
+            #expect(before == after)
+        }
     }
 }

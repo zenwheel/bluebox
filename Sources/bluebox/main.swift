@@ -109,6 +109,11 @@ func usage() -> Never {
                      run on them (the 68k interpreter, without --jit)
           --floppy F the raw floppy disk image F (a sector dump, or Disk Copy 4.2) as the disk in the Sony
                      driver's drive 1: a key disk whose sectors a program's copy protection reads
+          --screensaver M  blank the screen with After Dark module M (a file of type ADgm,
+                     or an archive holding one) after --idle minutes without input
+                     (default 5), as After Dark did, until a key, a click or the mouse
+                     moving wakes it (that input is not passed on); the program's
+                     screen comes back as it was
           --init F   run the INIT resources of file F (an INIT or extension) before the program starts, as the
                      Start Manager would; may be repeated
           --cpu M    processor: 68040 (the default, as a Quadra 800), 68030 (a Mac IIci),
@@ -439,6 +444,8 @@ func runCommand(_ args: [String]) {
     var addressingBits: Int32?
     var machineName: String?
     var initFiles: [String] = []
+    var idleModule: String?
+    var idleMinutes = 5.0
     var floppyImage: String?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
@@ -537,6 +544,14 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             floppyImage = args[i]
+        case "--screensaver":
+            i += 1
+            guard i < args.count else { usage() }
+            idleModule = args[i]
+        case "--idle":
+            i += 1
+            guard i < args.count, let m = Double(args[i]), m > 0 else { usage() }
+            idleMinutes = m
         case "--init":
             i += 1
             guard i < args.count else { usage() }
@@ -774,6 +789,10 @@ func runCommand(_ args: [String]) {
     if let floppyImage {
         var ferr = [CChar](repeating: 0, count: 256)
         guard machine_set_floppy(floppyImage, &ferr, ferr.count) else { fail(str(ferr)) }
+    }
+    if let idleModule {
+        let given = FileManager.default.fileExists(atPath: idleModule) ? URL(fileURLWithPath: idleModule).standardizedFileURL.path : idleModule
+        machine_screensaver_set_idle(resolveFile(given, kinds: ["ADgm", "A4gm"]), idleMinutes)
     }
     for f in initFiles {
         guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }
