@@ -244,6 +244,7 @@ static void sd_open(cpu68k *c, uint16_t tw)
 {
     uint32_t ret = cpu_pop32(c);
     cpu_pop32(c); /* params */
+    LOGF(LOG_TRAPS, "  After Dark: OpenSound\n");
     gaddr h = tb_NewHandle(8, false, true);
     if (h) {
         gaddr p = rd32(h);
@@ -283,6 +284,7 @@ static void sd_play(cpu68k *c, uint16_t tw)
     uint32_t ret = cpu_pop32(c);
     gaddr snd = cpu_pop32(c), chan = cpu_pop32(c);
     cpu_pop32(c); /* info */
+    LOGF(LOG_TRAPS, "  After Dark: PlaySound %08X on channel %08X\n", snd, chan);
     if (opt.sound && chan && snd && rd32(snd)) {
         quiet(chan, true);
         tb_SndPlay(chan, snd, 1);
