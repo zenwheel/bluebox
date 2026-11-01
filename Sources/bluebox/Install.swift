@@ -12,6 +12,19 @@ import BlueBoxHost
 import ForkStore
 
 let bundleAppKey = "ClassicApplicationPath"
+/// A bundle with its own Blue Box (install --background): the program, a
+/// path in its Resources, and the options it runs with.
+let bundledProgramKey = "BlueBoxProgram"
+let bundledOptionsKey = "BlueBoxRunOptions"
+let bundledProgramFolder = "Program"
+
+/// The program a bundle made with its own Blue Box runs, and its options.
+func bundledRun() -> (String, [String])? {
+    guard let rel = Bundle.main.object(forInfoDictionaryKey: bundledProgramKey) as? String,
+          let resources = Bundle.main.resourcePath else { return nil }
+    let options = Bundle.main.object(forInfoDictionaryKey: bundledOptionsKey) as? [String] ?? []
+    return ((resources as NSString).appendingPathComponent(rel), options)
+}
 
 // MARK: - Bundle
 
@@ -146,9 +159,16 @@ func installCommand(_ args: [String]) {
     var appName: String?
     var folder = defaultInstallFolder()
     var force = false
+    var background = false
+    var bundleName: String?
     var i = 0
     while i < args.count {
         switch args[i] {
+        case "--background": background = true
+        case "--name":
+            i += 1
+            guard i < args.count, !args[i].isEmpty else { usage() }
+            bundleName = args[i]
         case "--to":
             i += 1
             guard i < args.count else { usage() }
@@ -166,7 +186,8 @@ func installCommand(_ args: [String]) {
     }
     guard let source else { usage() }
     let app = URL(fileURLWithPath: resolveApplication(source, named: appName)).standardizedFileURL.path
-    let name = (app as NSString).lastPathComponent
+    let file = (app as NSString).lastPathComponent
+    let name = bundleName ?? file
     let bundlePath = (folder as NSString).appendingPathComponent(name + ".app")
     let fm = FileManager.default
 
@@ -196,11 +217,31 @@ func installCommand(_ args: [String]) {
         try fm.createDirectory(atPath: bundlePath + "/Contents/MacOS", withIntermediateDirectories: true)
         try fm.createDirectory(atPath: bundlePath + "/Contents/Resources", withIntermediateDirectories: true)
         let launcher = bundlePath + "/Contents/MacOS/" + executable
-        try Data(launcherScript(classic: selfPath, app: app).utf8).write(to: URL(fileURLWithPath: launcher))
+        if background {
+            // Its own Blue Box and the program's folder (the files the
+            // program finds beside it: the Moose's "Moose Phrases"), so the
+            // bundle stands alone and macOS can open it at login.
+            try fm.copyItem(atPath: selfPath, toPath: launcher)
+            let folder = (app as NSString).deletingLastPathComponent
+            let copy = bundlePath + "/Contents/Resources/" + bundledProgramFolder + "/" + (folder as NSString).lastPathComponent
+            try fm.createDirectory(atPath: (copy as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+            try fm.copyItem(atPath: folder, toPath: copy)
+        } else {
+            try Data(launcherScript(classic: selfPath, app: app).utf8).write(to: URL(fileURLWithPath: launcher))
+        }
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcher)
         if let icns { try icns.write(to: URL(fileURLWithPath: bundlePath + "/Contents/Resources/AppIcon.icns")) }
         var info = infoPlist(app: app, name: name, executable: executable, bundle: finder, creator: creator,
                              hasIcon: icns != nil)
+        if background {
+            let folder = ((app as NSString).deletingLastPathComponent as NSString).lastPathComponent
+            info[bundledProgramKey] = bundledProgramFolder + "/" + folder + "/" + file
+            info["CFBundleSignature"] = nil // a desk accessory file's creator is the Font/DA Mover's
+            info[bundledOptionsKey] = ["--background"]
+            info["LSUIElement"] = true
+            info["CFBundleDocumentTypes"] = nil // it takes no documents
+            info["CFBundleIdentifier"] = (info["CFBundleIdentifier"] as? String ?? "local.bluebox.app") + ".background"
+        }
         try addScripting(&info, resources: bundlePath + "/Contents/Resources")
         let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
         try data.write(to: URL(fileURLWithPath: bundlePath + "/Contents/Info.plist"))
@@ -210,12 +251,21 @@ func installCommand(_ args: [String]) {
         fail("cannot create \(bundlePath): \(error)")
     }
 
-    // Tell Launch Services about the new bundle and its document types.
+    // Tell Launch Services about the new bundle and its document types
+    // (one for the background has none; it is found when first opened).
     let lsregister = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-    if let p = try? Process.run(URL(fileURLWithPath: lsregister), arguments: ["-f", bundlePath]) {
+    if !background, let p = try? Process.run(URL(fileURLWithPath: lsregister), arguments: ["-f", bundlePath]) {
         p.waitUntilExit()
     }
+    if background {
+        // Signed (ad hoc) as a whole, so macOS can open it at login.
+        if let p = try? Process.run(URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--force", "--sign", "-", bundlePath]) {
+            p.waitUntilExit()
+            if p.terminationStatus != 0 { print("  note: codesign failed; Open at Login may not work") }
+        }
+    }
     print(bundlePath)
+    if background { print("  runs in the background: its menu is in the menu bar's status item") }
     if finder.appIcons.isEmpty { print("  note: no Finder icon found; the bundle uses the generic icon") }
     let types = finder.documentTypes.map(fourCCString).joined(separator: ", ")
     if !types.isEmpty { print("  documents: \(types)") }

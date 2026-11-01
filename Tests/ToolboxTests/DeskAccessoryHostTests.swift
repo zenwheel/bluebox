@@ -1,3 +1,4 @@
+import BlueBoxHost
 import CCore
 import Foundation
 import CPU68K
@@ -36,6 +37,25 @@ extension BlueBox {
             cpu.pointee.pc = code
             cpu.pointee.halted = false
             _ = cpu_run(cpu, 1000)
+        }
+
+        /// A file's desk accessories are its DRVRs named with a NUL first
+        /// (a driver's name starts with a period); inspect shows them so.
+        @Test func deskAccessoryNamesAreFound() throws {
+            var fork = buildFork([
+                TestResource(type: "DRVR", id: 12, name: "\u{0}Phonemes", data: [0]),
+                TestResource(type: "DRVR", id: 31, name: ".SPEECH", data: [0]),
+                TestResource(type: "DRVR", id: 29, name: "\u{0}Talking Moose", data: [0]),
+                TestResource(type: "STR#", id: 1988, name: "Pause", data: [0, 0]),
+            ])
+            let names = fork.withUnsafeMutableBufferPointer {
+                deskAccessoryNames(fork: UnsafePointer($0.baseAddress), length: $0.count)
+            }
+            #expect(names.sorted() == ["Phonemes", "Talking Moose"])
+            let listed = try fork.withUnsafeMutableBufferPointer {
+                try inspectResources(fork: UnsafePointer($0.baseAddress), length: $0.count)
+            }
+            #expect(listed.first { $0.id == 29 }?.name == "Talking Moose")
         }
 
         /// GetNextEvent calls the filter at jGNEFilter with A1 the event and

@@ -1,4 +1,5 @@
 import Foundation
+import BlueBoxHost
 import ForkStore
 #if canImport(SystemConfiguration)
 import SystemConfiguration
@@ -194,13 +195,22 @@ func requiredDepth(creator: UInt32, over depth: Int?) -> Int? {
     return r.preferred
 }
 
+/// Desk accessories that need a depth, by name (a desk accessory file's
+/// creator is the Font/DA Mover's): written for the Mac Plus, they draw
+/// on the screen directly, a bit a pixel.
+let knownDeskAccessoryDepths: [String: DepthRequirement] = [
+    "Talking Moose": DepthRequirement(allowed: [1], preferred: 1), /* draws itself into the screen while it speaks */
+]
+
 func requiredDepth(application path: String, over depth: Int?) -> Int? {
     var mf = mac_file()
     var err = [CChar](repeating: 0, count: 256)
     guard appledouble_read(path, &mf, &err, err.count) else { return nil }
-    let creator = mac_file_creator(&mf)
-    mac_file_free(&mf)
-    return requiredDepth(creator: creator, over: depth)
+    defer { mac_file_free(&mf) }
+    for name in deskAccessoryNames(fork: mf.rsrc, length: mf.rsrc_len) {
+        if let r = knownDeskAccessoryDepths[name], !r.allowed.contains(depth ?? 32) { return r.preferred }
+    }
+    return requiredDepth(creator: mac_file_creator(&mf), over: depth)
 }
 
 /// An RGB highlight colour from "#RRGGBB" as 16-bit components.

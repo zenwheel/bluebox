@@ -76,7 +76,7 @@ public func inspectResources(fork: UnsafePointer<UInt8>?, length: Int) throws ->
                 free(dec)
             }
         }
-        let name = withUnsafeBytes(of: e.name) { macRomanString($0.prefix { $0 != 0 }) }
+        let name = withUnsafeBytes(of: e.name) { resourceName($0) }
         out.append(InspectedResource(type: e.type, id: e.id, name: name, attrs: e.attrs, storedSize: Int(e.data_len),
                                      compressed: compressed, data: bytes))
     }
