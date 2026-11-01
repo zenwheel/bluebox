@@ -208,6 +208,11 @@ int speech_word_phonemes(const uint8_t *text, int len, uint8_t *out, int max)
     return word_phonemes(text, len, out, max);
 }
 
+int speech_symbol_phonemes(const uint8_t *text, int len, uint8_t *out, int max)
+{
+    return symbol_phonemes(text, len, out, max);
+}
+
 static double now_seconds(void)
 {
     struct timespec ts;
@@ -235,6 +240,8 @@ static double phoneme_weight(int op)
         return 0.9;
     case PH_f: case PH_v: case PH_s: case PH_z: case PH_S: case PH_Z: case PH_T: case PH_D: case PH_C: case PH_J:
         return 1.05;
+    case PH_SILENCE: /* a pause inside a word (an address's at each "dot") */
+        return 6;
     default:
         return op >= PH_AE && op <= PH_OY ? 1.2 : 1.0;
     }
@@ -250,12 +257,16 @@ static double unit_seconds(double wpm) { return 12.6 / (wpm > 20 ? wpm : 180); }
 #define FIRST_WORD_LATE 0.07
 /* A word before a pause is drawn out. */
 #define FINAL_LENGTHENING 1.35
+/* Longer than the voice pauses at punctuation (0.4 s at a comma). */
+#define PAUSE_LONGEST 1.0
+/* How long the mouth holds when a word outlasts its phonemes by a little. */
+#define FILL_GRACE 0.1
 
 /* ---------------------------------------------------------------------- */
 /* Channels */
 
 #define MAX_CHANNELS 16
-#define MAX_WORD_PHONEMES 64
+#define MAX_WORD_PHONEMES 1024 /* a URL spelled out has hundreds */
 
 typedef struct {
     gaddr chan;    /* the SpeechChannel the program holds (a 4-byte record) */
@@ -278,6 +289,10 @@ typedef struct {
     double word_units; /* its length in units of phoneme weight */
     bool word_pause;  /* a pause follows it (punctuation, the end) */
     double close_at;  /* when the mouth closes if no word has come (0: not) */
+    double fill_at;   /* when the phonemes go round again if no word has come (0: not) */
+    bool filling;     /* they have: the word outlasted them */
+    uint32_t word_from, word_end; /* the text the current word covers */
+    uint32_t prev_from, prev_end; /* and the word before it (a year's "in") */
     double unit;      /* seconds a unit takes, learnt from the words so far */
     int32_t unit_rate; /* the rate it was learnt at */
     bool first_word;
@@ -392,16 +407,30 @@ static void say_phoneme(channel *c, int opcode)
 }
 
 /* The made-up phonemes that are due (all of them: the word is over), and
- * the silence that closes the mouth at a pause. */
+ * the silence that closes the mouth at a pause.  A word whose sound
+ * outlasts its phonemes (the voice spells a URL out for 10 s, and the
+ * guess can be short) has them go round again at the same pace until the
+ * next word or the end, so the mouth never stops while the voice goes on;
+ * then what is left when the word ends isn't said in a burst. */
 static void phonemes_due(channel *c, double now, bool all)
 {
-    while (c->iph < c->nph && (all || now >= c->ph_next)) {
-        c->ph_next += c->dur[c->iph];
-        say_phoneme(c, c->ph[c->iph++]);
+    if (all && (c->filling || c->nph - c->iph > 4))
+        c->iph = c->nph;
+    for (;;) {
+        while (c->iph < c->nph && (all || now >= c->ph_next)) {
+            c->ph_next += c->dur[c->iph];
+            say_phoneme(c, c->ph[c->iph++]);
+        }
+        if (all || !c->nph || c->iph < c->nph || !c->fill_at || now < c->fill_at)
+            break;
+        c->iph = 0;
+        c->filling = true;
+        if (c->ph_next < now - 0.05) /* kept waiting: from now, not in a burst */
+            c->ph_next = now;
     }
-    if (c->iph >= c->nph)
+    if (c->iph >= c->nph && (all || !c->fill_at))
         c->nph = c->iph = 0;
-    if (!all && !c->nph && c->close_at && now >= c->close_at) {
+    if (!all && c->iph >= c->nph && c->close_at && now >= c->close_at) {
         c->close_at = 0;
         if (c->mouth_open)
             say_phoneme(c, PH_SILENCE);
@@ -481,41 +510,102 @@ static bool pause_after(channel *c, uint32_t pos, uint32_t len)
 {
     for (uint32_t i = pos + len > 0 ? pos + len - 1 : 0; i < c->text_len && i < pos + len + 8; i++) {
         uint8_t ch = rd8(c->text + i);
-        if (ch == ',' || ch == '.' || ch == ';' || ch == ':' || ch == '!' || ch == '?')
+        uint8_t next = i + 1 < c->text_len ? rd8(c->text + i + 1) : ' ';
+        if ((ch == ',' || ch == '.' || ch == ';' || ch == ':' || ch == '!' || ch == '?') &&
+            !((next >= '0' && next <= '9') || ((next | 0x20) >= 'a' && (next | 0x20) <= 'z'))) /* not "example.org" */
             return true;
-        if (i >= pos + len && ch != ' ' && ch != '"' && ch != '\'' && ch != ')')
+        if (i >= pos + len && (ch == '\r' || ch == '\n' || (ch == '[' && i + 1 < c->text_len && rd8(c->text + i + 1) == '[')))
+            return true; /* a line's end, an embedded command (a silence, perhaps) */
+        if (i >= pos + len && ch != ' ' && ch != '"' && ch != '\'' && ch != ')' && ch != '\t')
             return false;
     }
-    return pos + len >= c->text_len;
+    for (uint32_t i = pos + len; i < c->text_len; i++) { /* the end, but for spaces */
+        uint8_t ch = rd8(c->text + i);
+        if (ch != ' ' && ch != '\r' && ch != '\n' && ch != '\t')
+            return false;
+    }
+    return true;
+}
+
+static bool word_char(uint8_t ch) { return ch > ' ' && ch != '[' && ch != ']'; }
+static bool alnum_char(uint8_t ch) { return (ch >= '0' && ch <= '9') || ((ch | 0x20) >= 'a' && (ch | 0x20) <= 'z') || ch >= 0x80; }
+
+/* The text a word callback's range stands for.  The host's ranges can be
+ * odd: cut short ("tod" for "today." after an address), overlapping the
+ * last ("https://github.com", then "github.com/zenwheel/..."), the last
+ * again ("42 kB", then "42 kB,"), or leaving out what it said between two
+ * ("bob@example", "org": the "dot").  Returns false for the last again. */
+static bool word_range(channel *c, uint32_t *from, uint32_t *end)
+{
+    uint32_t f = *from, e = *end;
+    while (e < c->text_len && e > f && alnum_char(rd8(c->text + e - 1)) && alnum_char(rd8(c->text + e)))
+        e++;
+    if (c->word_end && f < c->word_end && c->word_end < e)
+        f = c->word_end;
+    else if (c->word_end && f > c->word_end && f - c->word_end < 8) {
+        uint32_t g = c->word_end;
+        while (g < f && word_char(rd8(c->text + g)))
+            g++;
+        if (g == f && word_char(rd8(c->text + c->word_end - 1)))
+            f = c->word_end;
+    }
+    bool said = false;
+    for (uint32_t i = f; i < e && !said; i++)
+        said = alnum_char(rd8(c->text + i));
+    if (!said && *from < c->word_end)
+        return false;
+    *from = f;
+    *end = e;
+    return true;
 }
 
 /* A word is starting.  The last one is over: what is left of its phonemes
  * is said, and the time it took tells how fast the voice speaks, unless a
- * pause followed it.  This one's phonemes are timed by that, each by its
- * kind; a pause after it closes the mouth when they are done, and so does
- * a long wait for the next word. */
+ * pause followed it or it was far off its phonemes' length (the guess at
+ * how it is said was wrong).  This one's phonemes are made from it as the
+ * voice says it and timed by that pace, each by its kind; a pause after it
+ * closes the mouth when they are done, and so does a long wait for the
+ * next word after phonemes given as input. */
 static void word_started(channel *c, double now, int32_t pos, int32_t len)
 {
+    uint32_t from = pos < 0 ? 0 : (uint32_t)pos, end = from + (len > 0 ? (uint32_t)len : 0);
+    if (end > c->text_len)
+        end = c->text_len;
+    if (pos >= 0 && len > 0 && from < c->text_len && !word_range(c, &from, &end))
+        return; /* the same word again: it goes on */
     phonemes_due(c, now, true);
     if (c->word_at && !c->word_pause && c->word_units > 0) {
         double seen = (now - c->word_at) / c->word_units;
-        if (seen < c->unit / 2)
-            seen = c->unit / 2;
-        if (seen > c->unit * 2)
-            seen = c->unit * 2;
-        c->unit += (seen - c->unit) / 2;
+        if (seen >= c->unit / 2 && seen <= c->unit * 2)
+            c->unit += (seen - c->unit) / 2;
     }
-    c->word_at = 0;
+    c->word_at = c->fill_at = 0;
+    c->filling = false;
     if (!c->phoneme_proc || c->host_phonemes || pos < 0 || len <= 0 || (uint32_t)pos >= c->text_len)
         return;
-    uint8_t w[64];
+    c->prev_from = c->word_from;
+    c->prev_end = c->word_end;
+    c->word_from = from;
+    if (end > c->word_end)
+        c->word_end = end;
+    uint8_t *w = malloc(end - from);
     bool phon;
-    uint32_t n = word_text(c, (uint32_t)pos, (uint32_t)len, w, sizeof w, &phon);
-    c->nph = phon ? symbol_phonemes(w, (int)n, c->ph, MAX_WORD_PHONEMES)
-                  : word_phonemes(w, (int)n, c->ph, MAX_WORD_PHONEMES);
+    uint32_t n = word_text(c, from, end - from, w, end - from, &phon);
+    if (phon) {
+        c->nph = symbol_phonemes(w, (int)n, c->ph, MAX_WORD_PHONEMES);
+    } else {
+        uint8_t prev[32];
+        uint32_t np = 0;
+        for (uint32_t i = c->prev_from; i < c->prev_end && i < from && np < sizeof prev; i++)
+            prev[np++] = rd8(c->text + i);
+        c->nph = speech_spoken_phonemes(w, (int)n, prev, (int)np, c->ph, MAX_WORD_PHONEMES);
+    }
+    free(w);
     c->iph = 0;
-    if (!c->nph)
+    if (!c->nph) { /* nothing said ("--", "..."): a pause */
+        c->close_at = now;
         return;
+    }
     double start = now;
     if (c->first_word) { /* its sound began a little before */
         c->first_word = false;
@@ -523,7 +613,7 @@ static void word_started(channel *c, double now, int32_t pos, int32_t len)
         if (start < c->spoke_at)
             start = c->spoke_at;
     }
-    c->word_pause = pause_after(c, (uint32_t)pos, (uint32_t)len);
+    c->word_pause = pause_after(c, from, end - from);
     c->word_units = 0;
     for (int i = 0; i < c->nph; i++)
         c->word_units += phoneme_weight(c->ph[i]);
@@ -533,7 +623,14 @@ static void word_started(channel *c, double now, int32_t pos, int32_t len)
         total += c->dur[i] = phoneme_weight(c->ph[i]) * unit;
     c->word_at = start;
     c->ph_next = start;
-    c->close_at = start + total + (c->word_pause ? 0 : (total / 2 > 0.15 ? total / 2 : 0.15));
+    /* Made-up phonemes go round again when the word outlasts them: soon if
+     * no pause follows, else after a longer silence than the voice's
+     * pauses.  Phonemes given as input are the word. */
+    if (phon)
+        c->close_at = start + total + (c->word_pause ? 0 : (total / 2 > 0.15 ? total / 2 : 0.15));
+    else
+        c->close_at = c->word_pause ? start + total : 0;
+    c->fill_at = phon ? 0 : start + total + (c->word_pause ? PAUSE_LONGEST : FILL_GRACE);
     phonemes_due(c, now, false);
 }
 
@@ -565,7 +662,8 @@ static void finish(channel *c)
     if (c->mouth_open && c->phoneme_proc && !c->host_phonemes)
         say_phoneme(c, PH_SILENCE);
     c->mouth_open = false;
-    c->word_at = c->close_at = 0;
+    c->word_at = c->close_at = c->fill_at = 0;
+    c->nph = c->iph = 0;
     if (c->text_done_proc) { /* TextDone(chan, refCon, &nextBuf, &byteLen, &controlFlags) */
         gaddr out = tb_NewPtr(12, true, true);
         cpu_push32(g_cpu, c->chan);
@@ -642,7 +740,7 @@ static void deliver(void)
         case EV_PHONEME: /* the host's own: no more made-up ones */
             c->host_phonemes = true;
             c->nph = c->iph = 0;
-            c->close_at = 0;
+            c->close_at = c->fill_at = 0;
             if (c->busy)
                 say_phoneme(c, evs[i].a);
             break;
@@ -721,7 +819,8 @@ static int16_t speak(channel *c, gaddr text, uint32_t len)
     c->busy = len > 0;
     c->paused = false;
     c->nph = c->iph = 0;
-    c->word_at = c->close_at = 0;
+    c->word_at = c->close_at = c->fill_at = 0;
+    c->word_from = c->word_end = c->prev_from = c->prev_end = 0;
     c->first_word = true;
     c->scan_pos = 1; /* read again from the start */
     scan_to(c, 0);
@@ -922,7 +1021,7 @@ int16_t tb_StopSpeech(gaddr chan)
         host_request(c, MACHINE_SPEECH_STOP, NULL);
         c->busy = c->paused = false;
         c->nph = c->iph = 0;
-        c->word_at = c->close_at = 0;
+        c->word_at = c->close_at = c->fill_at = 0;
     }
     return noErr;
 }

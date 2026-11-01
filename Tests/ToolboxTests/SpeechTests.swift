@@ -181,12 +181,15 @@ extension BlueBox {
             machine_speech_event(0, 1, 0, 6) // "lalala", heard a little before macOS says
             run(until: 100.51)
             #expect(Self.timed.map(\.1) == [27, 2]) // l AE, at once
-            run(until: 100.95)
-            #expect(Self.timed.map(\.1) == [27, 2, 27, 2, 27, 2]) // l AE l AE l AE, the mouth left open
+            run(until: 100.83)
+            #expect(Self.timed.map(\.1) == [27, 2, 27, 2, 27, 2]) // l AE l AE l AE
             let at = Self.timed.map(\.0)
             #expect(at[2] - at[1] > at[1] - at[0]) // AE outlasts l
             #expect(at[5] - at[0] > 0.25 && at[5] - at[0] < 0.5) // over the word, not at once
-            // The next word comes 0.3 s after the first: the pace is learnt.
+            // No word yet: the voice is still on this one, and they go round again.
+            run(until: 101)
+            #expect(Self.timed.count > 6 && Self.timed[6].1 == 27)
+            // The next word comes half a second after the first: the pace is learnt.
             Self.timed = []
             machine_speech_event(0, 1, 7, 4) // "top,"
             run(until: 101.9)
@@ -205,6 +208,123 @@ extension BlueBox {
             run(until: 102.6)
             #expect(Self.timed.last?.1 == 0) // closed at the end
             #expect(tb_DisposeSpeechChannel(ch) == 0)
+        }
+
+        /// A word the voice spells out for far longer than its phonemes
+        /// were guessed to take (a URL lasting 30 s): they go round again
+        /// at the pace until the next word, which starts without a burst
+        /// of what was left, and the outlier teaches the pace nothing.
+        @Test func aLongWordKeepsTheMouthMoving() {
+            let (ch, _) = timedChannel("go https://www.zenwheel.com/software/static/mouth.sit.bin go go")
+            defer { machine_set_speech_handler(nil, nil); machine_set_speech_clock(nil) }
+            machine_speech_event(0, 1, 0, 2) // "go": 99.93 (heard before macOS says) to 100.07, as guessed
+            run(until: 100.07)
+            machine_speech_event(0, 1, 3, 54) // the URL
+            run(until: 130.07)
+            let url = Self.timed.filter { $0.0 > 100.07 }.map(\.0)
+            #expect(url.count > 300)
+            #expect(zip(url, url.dropFirst()).map { $1 - $0 }.max()! < 0.25) // never still
+            Self.timed = []
+            machine_speech_event(0, 1, 58, 2) // "go"
+            run(until: 130.075)
+            #expect(Self.timed.map(\.1) == [23]) // g, and nothing of the URL's left over
+            run(until: 130.3)
+            #expect(Self.timed.count >= 2 && Self.timed[1].1 == 11)
+            #expect(abs(Self.timed[1].0 - Self.timed[0].0 - 0.8 * 12.6 / 180) < 0.006) // the pace as it was
+            machine_speech_event(0, 0, 0, 0)
+            run(until: 130.4)
+            #expect(Self.timed.last?.1 == 0)
+            #expect(tb_DisposeSpeechChannel(ch) == 0)
+        }
+
+        /// The host's odd ranges: an address split in two ("bob@example",
+        /// "org": the dot between said with the second), the word after it
+        /// cut short ("tod" for "today."), and a word given twice.
+        @Test func oddRangesFromTheHost() {
+            let (ch, _) = timedChannel("mail bob@example.org today. 42 kB, ok")
+            defer { machine_set_speech_handler(nil, nil); machine_set_speech_clock(nil) }
+            machine_speech_event(0, 1, 5, 11) // "bob@example"
+            run(until: 101)
+            Self.timed = []
+            machine_speech_event(0, 1, 17, 3) // "org"
+            run(until: 101.5)
+            #expect(Array(Self.timed.map(\.1).prefix(6)) == [20, 11, 35, 11, 32, 23]) // d AA t, AA r g
+            Self.timed = []
+            machine_speech_event(0, 1, 21, 3) // "tod"
+            run(until: 102.8)
+            #expect(Self.timed.map(\.1) == [35, 11, 20, 3, 0]) // t AA d EY, closed at the period
+            Self.timed = []
+            machine_speech_event(0, 1, 28, 5) // "42 kB"
+            run(until: 102.9)
+            machine_speech_event(0, 1, 28, 6) // "42 kB,": the same word, which goes on
+            run(until: 104.6)
+            #expect(Self.timed.map(\.1) == (spoken("42 kB,") + [0]).map(UInt16.init))
+            #expect(tb_DisposeSpeechChannel(ch) == 0)
+        }
+
+        /// How the host's voice says a word: URLs, addresses, numbers,
+        /// acronyms and symbols.
+        func spoken(_ s: String, after prev: String? = nil, max: Int = 2048) -> [UInt8] {
+            let t = Array(s.utf8), p = Array((prev ?? "").utf8)
+            var out = [UInt8](repeating: 0xEE, count: max + 8)
+            let n = t.withUnsafeBufferPointer { tb in
+                p.withUnsafeBufferPointer { pb in
+                    out.withUnsafeMutableBufferPointer { ob in
+                        speech_spoken_phonemes(tb.baseAddress, Int32(t.count), prev == nil ? nil : pb.baseAddress,
+                                               Int32(p.count), ob.baseAddress, Int32(max))
+                    }
+                }
+            }
+            #expect(out[max...].allSatisfy { $0 == 0xEE }) // nothing past the end
+            return Array(out.prefix(Int(n)))
+        }
+        /// Phonemes in MacinTalk's symbols, and by the letter rules.
+        func sym(_ s: String) -> [UInt8] {
+            let t = Array(s.utf8)
+            var out = [UInt8](repeating: 0, count: 1024)
+            let n = speech_symbol_phonemes(t, Int32(t.count), &out, 1024)
+            return Array(out.prefix(Int(n)))
+        }
+        func rules(_ s: String) -> [UInt8] {
+            let t = Array(s.utf8)
+            var out = [UInt8](repeating: 0, count: 1024)
+            let n = speech_word_phonemes(t, Int32(t.count), &out, 1024)
+            return Array(out.prefix(Int(n)))
+        }
+
+        @Test func wordsAreSaidAsTheVoiceSaysThem() {
+            let fwd = sym("fAOrwUXrdslAES"), dot = sym("dAAt"), at = sym("AEt")
+            // Numbers: cardinals, years (by the word before), money, decimals, ordinals.
+            #expect(spoken("1984") == sym("nAYntIYnEYtIYfAOr"))
+            #expect(spoken("2026") == sym("tUWTAWzAXndtwEHntIYsIHks"))
+            #expect(spoken("2026", after: "In") == sym("twEHntIYtwEHntIYsIHks"))
+            #expect(spoken("1,234,") == sym("wUXnTAWzAXndtUWhUXndrAXdTUXrtIYfAOr"))
+            #expect(spoken("$19.99") == sym("nAYntIYndAAlUXrzAEndnAYntIYnAYnsEHnts"))
+            #expect(spoken("3.14") == sym("TrIYpOYntwUXnfAOr"))
+            #expect(spoken("-5") == sym("mAYnAXsfAYv"))
+            #expect(spoken("50%") == sym("fIHftIYpUXrsEHnt"))
+            #expect(spoken("21st") == sym("twEHntIYfUXrst"))
+            #expect(spoken("40th") == sym("fAOrtIYIXT"))
+            #expect(spoken("3:45") == sym("TrIYfAOrtIYfAYv"))
+            #expect(spoken("007") == sym("OWOWsEHvAXn"))
+            // Acronyms: spelled unless they can be said; symbols by name.
+            #expect(spoken("FBI") == sym("EHfbIYAY"))
+            #expect(spoken("NASA,") == rules("nasa"))
+            #expect(spoken("JPEG") == sym("JEY") + rules("peg"))
+            #expect(spoken("AT&T") == sym("EYtIYAEndtIY"))
+            #expect(spoken("C++") == sym("sIYplUXsplUXs"))
+            #expect(spoken("...") == [] && spoken("--") == [])
+            // Addresses and URLs, part by part, unsayable parts spelled.
+            #expect(spoken("bob@example.org.") == rules("bob") + [0] + at + rules("example") + [0] + dot + rules("org"))
+            #expect(spoken("https://www.zenwheel.com/x") ==
+                    sym("EYCtIYtIYpIYEHskOWlAXn") + fwd + fwd + sym("dUXbAXlyUWdUXbAXlyUWdUXbAXlyUW") + dot +
+                    rules("zenwheel") + dot + rules("com") + fwd + sym("EHks"))
+            #expect(spoken("file.txt") == rules("file") + dot + sym("tIYEHkstIY"))
+            // Any length: a long word fills what there is room for, and no more.
+            let long = "https://" + String(repeating: "ab.", count: 1000) + "com"
+            #expect(spoken(long, max: 1024).count == 1024)
+            #expect(spoken(String(repeating: "la", count: 500)).count > 900)
+            #expect(spoken(long, max: 10).count == 10)
         }
 
         /// soCurrentA5: the callbacks run with the program's A5.  soStatus
