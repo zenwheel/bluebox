@@ -48,8 +48,10 @@ static gaddr new_menu(int16_t id, const char *title, const char *items)
     return m;
 }
 
-/* The desk accessories open now (refnums of the 68k drivers in the unit
- * table that are open and are desk accessories, by their NUL names). */
+/* How many desk accessories have a window open: the 68k drivers in the
+ * unit table from the desk accessories' units up that are open with one.
+ * (One that closed its window but stays installed, as the Moose's resident
+ * code does, is the system's now.) */
 static int open_desk_accessories(void)
 {
     int n = 0, count = rd16(LM_UnitNtryCnt);
