@@ -612,6 +612,12 @@ bool speech_recording(machine_speech_fn fn); /* speech_record.c */
 void speech_reset(void);
 /* A word's phonemes (the Speech Manager's opcodes) by letter-to-sound rules. */
 int speech_word_phonemes(const uint8_t *text, int len, uint8_t *out, int max);
+/* Phonemes written as MacinTalk's symbols ("hEHlOW"). */
+int speech_symbol_phonemes(const uint8_t *text, int len, uint8_t *out, int max);
+/* A word of text as the host's voice says it (a URL read out, numbers,
+ * acronyms, symbols), as phonemes; the word before it tells a year
+ * (speech_forms.c). */
+int speech_spoken_phonemes(const uint8_t *text, int len, const uint8_t *prev, int prevlen, uint8_t *out, int max);
 /* The host's main thread served once, when the machine runs on it (threadmgr.c). */
 void machine_serve_main_thread(void);
 /* MacinTalk 1, the old speech driver (macintalk.c): its natives, and its
