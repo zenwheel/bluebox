@@ -50,9 +50,8 @@ static void record(const machine_speech_request *rq, void *ctx)
     if (out) {
         fprintf(out, "channel %d %s", rq->channel, op_name(rq->op));
         if (rq->op == MACHINE_SPEECH_SPEAK || rq->op == MACHINE_SPEECH_PHONEMES)
-            fprintf(out, " voice %s rate %.1f pitch %.1f modulation %.1f volume %.2f%s: %s", rq->voice ? rq->voice : "-",
-                    rq->rate, rq->pitch, rq->modulation, rq->volume, rq->phonemes ? " phonemes" : "",
-                    rq->text ? rq->text : "");
+            fprintf(out, " voice %s rate %.1f pitch %.1f modulation %.1f volume %.2f: %s", rq->voice ? rq->voice : "-",
+                    rq->rate, rq->pitch, rq->modulation, rq->volume, rq->text ? rq->text : "");
         fputc('\n', out);
         fflush(out);
     }

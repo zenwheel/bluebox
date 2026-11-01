@@ -12,6 +12,13 @@
  * the program at interrupt time (the Time Manager's pump) and at the Event
  * Manager's safe points.  Without a host an utterance ends at the next
  * safe point, so headless runs see the same sequence of calls.
+ *
+ * Phonemes given as input ([[inpt PHON]], the 'PHON' and 'TUNE' input
+ * modes) never reach the host, whose voices read them out as letters:
+ * they are turned back into words (phonwords.c) and the host says those.
+ * The words it reports are placed back on the phonemes they came from,
+ * so word callbacks give the program's own offsets, and the mouth moves
+ * to the phonemes as written.
  */
 #include <pthread.h>
 #include <stdio.h>
@@ -22,6 +29,7 @@
 
 #include "forks.h"
 #include "machine.h"
+#include "phonwords.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -78,13 +86,6 @@ static int voice_index(gaddr spec)
 /* ---------------------------------------------------------------------- */
 /* Phonemes made up from the spoken words */
 
-/* The MacinTalk phoneme opcodes (American English). */
-enum {
-    PH_SILENCE, PH_BREATH, PH_AE, PH_EY, PH_AO, PH_AX, PH_IY, PH_EH, PH_IH, PH_AY, PH_IX, PH_AA, PH_UW, PH_UH,
-    PH_UX, PH_OW, PH_AW, PH_OY, PH_b, PH_C, PH_d, PH_D, PH_f, PH_g, PH_h, PH_J, PH_k, PH_l, PH_m, PH_n, PH_N,
-    PH_p, PH_r, PH_s, PH_S, PH_t, PH_T, PH_v, PH_w, PH_y, PH_z, PH_Z,
-};
-
 /* soPhonemeSymbols: MacinTalk's American English phonemes, each with an
  * example word, its sound bracketed. */
 static const struct {
@@ -136,11 +137,14 @@ static int symbol_phonemes(const uint8_t *text, int len, uint8_t *out, int max)
 
 static bool vowel(int ch) { return ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u'; }
 
-/* A word's phonemes by rough letter-to-sound rules: enough to move a
- * cartoon mouth (closed for m, b and p, round for o and w ...), not to
- * speak with. */
+/* A word's phonemes: the dictionary's (phonwords.c), else by rough
+ * letter-to-sound rules, enough to move a cartoon mouth (closed for m, b
+ * and p, round for o and w ...), not to speak with. */
 static int word_phonemes(const uint8_t *text, int len, uint8_t *out, int max)
 {
+    int known = phonwords_word_phonemes(text, len, out, max);
+    if (known)
+        return known;
     static const struct {
         const char *letters;
         uint8_t ph[2];
@@ -307,7 +311,19 @@ typedef struct {
     char cmd[32];
     int cmdlen;
     double spoke_at;  /* when the text was given (for the speech log) */
+    /* Phonemes turned into words: for each byte the host was given, the
+     * part of the program's text it came from (NULL: the text as it was). */
+    uint32_t *said_from, *said_to;
+    uint32_t said_len;
 } channel;
+
+/* What TextToPhonemes made of each text, the latest first: phonemes that
+ * are still what it made are said as that text. */
+#define MAX_MADE 8
+static struct {
+    uint8_t *text, *phonemes;
+    uint32_t tlen, plen;
+} made[MAX_MADE];
 
 static channel channels[MAX_CHANNELS];
 static channel *default_channel; /* SpeakString's */
@@ -372,7 +388,6 @@ static void host_request(channel *c, int op, const char *text)
     rq.modulation = c->modulation / 65536.0;
     rq.volume = c->volume / 65536.0;
     rq.text = text;
-    rq.phonemes = c->input_mode == 0x50484F4Eu; /* 'PHON' */
     speech_fn(&rq, speech_ctx);
 }
 
@@ -715,6 +730,12 @@ static void deliver(void)
         case EV_WORD: /* WordCallBack(chan, refCon, wordPos, wordLen) */
             if (!c->busy)
                 break;
+            if (c->said_from && evs[i].b > 0 && evs[i].a >= 0 && (uint32_t)(evs[i].a + evs[i].b) <= c->said_len) {
+                /* A word of ours: the phonemes it came from */
+                uint32_t from = c->said_from[evs[i].a], to = c->said_to[evs[i].a + evs[i].b - 1];
+                evs[i].a = (int32_t)from;
+                evs[i].b = (int32_t)(to > from ? to - from : 1);
+            }
             LOGF(LOG_SPEECH, "speech: %.3f channel %d word %d+%d (from the host at %.3f)\n", now - c->spoke_at,
                  (int)evs[i].channel, (int)evs[i].a, (int)evs[i].b, evs[i].at - c->spoke_at);
             if (c->word_proc) {
@@ -798,11 +819,26 @@ void speech_interrupt(void)
     deliver();
 }
 
+static void forget_said(channel *c)
+{
+    free(c->said_from);
+    free(c->said_to);
+    c->said_from = c->said_to = NULL;
+    c->said_len = 0;
+}
+
 void speech_reset(void)
 {
     nextra = 0; /* voices registered and defaults set belong to a run */
     speech_defaults.set = false;
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        forget_said(&channels[i]);
     memset(channels, 0, sizeof channels);
+    for (int i = 0; i < MAX_MADE; i++) {
+        free(made[i].text);
+        free(made[i].phonemes);
+    }
+    memset(made, 0, sizeof made);
     default_channel = NULL;
     pthread_mutex_lock(&lock);
     npending = 0;
@@ -811,6 +847,173 @@ void speech_reset(void)
 
 /* ---------------------------------------------------------------------- */
 /* Speaking */
+
+/* ---------------------------------------------------------------------- */
+/* Phonemes as input, said as words */
+
+static void remember_made(const uint8_t *text, uint32_t tlen, const uint8_t *ph, uint32_t plen)
+{
+    free(made[MAX_MADE - 1].text);
+    free(made[MAX_MADE - 1].phonemes);
+    memmove(&made[1], &made[0], sizeof made[0] * (MAX_MADE - 1));
+    made[0].text = malloc(tlen ? tlen : 1);
+    made[0].phonemes = malloc(plen ? plen : 1);
+    if (made[0].text && made[0].phonemes) {
+        memcpy(made[0].text, text, tlen);
+        memcpy(made[0].phonemes, ph, plen);
+    }
+    made[0].tlen = made[0].text && made[0].phonemes ? tlen : 0;
+    made[0].plen = made[0].text && made[0].phonemes ? plen : 0;
+}
+
+/* What the host is given, and where each byte of it came from. */
+typedef struct {
+    uint8_t *s;
+    uint32_t *from, *to;
+    uint32_t k, size;
+} said;
+
+static bool said_room(said *o, uint32_t more)
+{
+    if (o->k + more <= o->size)
+        return true;
+    uint32_t size = (o->k + more) * 2 + 64;
+    uint8_t *s = realloc(o->s, size);
+    uint32_t *from = realloc(o->from, sizeof *from * size);
+    uint32_t *to = realloc(o->to, sizeof *to * size);
+    if (s)
+        o->s = s;
+    if (from)
+        o->from = from;
+    if (to)
+        o->to = to;
+    if (!s || !from || !to)
+        return false;
+    o->size = size;
+    return true;
+}
+
+static void said_put(said *o, const void *bytes, uint32_t n, uint32_t from, uint32_t to)
+{
+    if (!said_room(o, n))
+        return;
+    for (uint32_t i = 0; i < n; i++) {
+        o->s[o->k] = ((const uint8_t *)bytes)[i];
+        o->from[o->k] = from;
+        o->to[o->k++] = to;
+    }
+}
+
+static bool word_char(uint8_t ch) { return ((ch | 0x20) >= 'a' && (ch | 0x20) <= 'z') || (ch >= '0' && ch <= '9'); }
+
+/* A run of phonemes (text[at..at+n]) as words. */
+static void say_phonemes(said *o, const uint8_t *text, uint32_t at, uint32_t n)
+{
+    const uint8_t *ph = text + at;
+    while (n && (ph[0] == ' ' || ph[0] == '\r')) { /* not part of what TextToPhonemes made */
+        ph++, at++, n--;
+    }
+    while (n && (ph[n - 1] == ' ' || ph[n - 1] == '\r'))
+        n--;
+    if (!n)
+        return;
+    if (o->k && word_char(o->s[o->k - 1]))
+        said_put(o, " ", 1, at, at + 1);
+    for (int m = 0; m < MAX_MADE; m++) {
+        if (!made[m].plen || made[m].plen != n || memcmp(made[m].phonemes, ph, n))
+            continue;
+        /* The text it came from, its words on the phonemes made for them:
+         * TextToPhonemes keeps what is between the words. */
+        const uint8_t *t = made[m].text;
+        uint32_t tl = made[m].tlen, ti = 0, pi = 0;
+        while (ti < tl) {
+            uint32_t ts = ti, ps = pi;
+            while (ti < tl && t[ti] != ' ')
+                ti++;
+            while (pi < n && ph[pi] != ' ')
+                pi++;
+            said_put(o, t + ts, ti - ts, at + ps, at + (pi > ps ? pi : n));
+            for (; ti < tl && t[ti] == ' '; ti++)
+                said_put(o, " ", 1, at + pi, at + pi + 1);
+            while (pi < n && ph[pi] == ' ')
+                pi++;
+        }
+        return;
+    }
+    size_t room = (size_t)n * 6 + 64;
+    char *out = malloc(room);
+    uint32_t *from = malloc(sizeof *from * room), *to = malloc(sizeof *to * room);
+    if (out && from && to) {
+        size_t k = phonemes_to_text(ph, n, out, room, from, to);
+        for (size_t i = 0; i < k; i++)
+            said_put(o, out + i, 1, at + from[i], at + to[i]);
+    }
+    free(out);
+    free(from);
+    free(to);
+}
+
+/* The text with its phonemes turned into words and the [[inpt]] commands
+ * that switched to them left out, if it has any; false if it hasn't. */
+static bool phonemes_said(channel *c, const uint8_t *text, uint32_t len, said *o)
+{
+    bool phon = phoneme_input(c->input_mode), any = phon;
+    for (uint32_t i = 0; i < len;) {
+        if (i + 1 < len && text[i] == '[' && text[i + 1] == '[') {
+            uint32_t end = i + 2;
+            while (end < len && !(text[end] == ']' && end + 1 < len && text[end + 1] == ']'))
+                end++;
+            uint32_t close = end + 2 <= len ? end + 2 : len;
+            /* The commands, without inpt: [[inpt PHON; rate 200]] */
+            char kept[256];
+            size_t nk = 0;
+            for (uint32_t p = i + 2; p < end;) {
+                uint32_t q = p;
+                while (q < end && text[q] != ';')
+                    q++;
+                uint32_t a = p;
+                while (a < q && text[a] == ' ')
+                    a++;
+                if (q - a >= 4 && !strncasecmp((const char *)text + a, "inpt", 4)) {
+                    uint32_t v = a + 4;
+                    while (v < q && text[v] == ' ')
+                        v++;
+                    if (q - v >= 4 && (!strncasecmp((const char *)text + v, "PHON", 4) ||
+                                       !strncasecmp((const char *)text + v, "TUNE", 4)))
+                        phon = any = true;
+                    else if (q - v >= 4 && !strncasecmp((const char *)text + v, "TEXT", 4))
+                        phon = false;
+                } else if (q > a && nk + (q - a) + 2 < sizeof kept) {
+                    if (nk)
+                        kept[nk++] = ';';
+                    memcpy(kept + nk, text + a, q - a);
+                    nk += q - a;
+                }
+                p = q + 1;
+            }
+            if (nk) {
+                said_put(o, "[[", 2, i, close);
+                said_put(o, kept, (uint32_t)nk, i, close);
+                said_put(o, "]]", 2, i, close);
+            }
+            i = close;
+            continue;
+        }
+        uint32_t end = i;
+        while (end < len && !(end + 1 < len && text[end] == '[' && text[end + 1] == '['))
+            end++;
+        if (phon) {
+            say_phonemes(o, text, i, end - i);
+        } else {
+            if (o->k && word_char(o->s[o->k - 1]) && word_char(text[i]))
+                said_put(o, " ", 1, i, i + 1);
+            for (uint32_t j = i; j < end; j++)
+                said_put(o, text + j, 1, j, j + 1);
+        }
+        i = end;
+    }
+    return any;
+}
 
 static int16_t speak(channel *c, gaddr text, uint32_t len)
 {
@@ -831,13 +1034,30 @@ static int16_t speak(channel *c, gaddr text, uint32_t len)
     c->text = text;
     c->text_len = len;
     c->spoke_at = clock_fn();
+    forget_said(c);
     if (!len)
         return noErr;
-    char *utf8 = malloc((size_t)len * 3 + 1);
     uint8_t *mac = malloc(len);
     gget(mac, text, len);
+    said o = { 0 };
+    bool words = phonemes_said(c, mac, len, &o);
+    if (words) {
+        c->said_from = o.from;
+        c->said_to = o.to;
+        c->said_len = o.k;
+        free(mac);
+        mac = o.s;
+        len = o.k;
+    } else {
+        free(o.s);
+        free(o.from);
+        free(o.to);
+    }
+    char *utf8 = malloc((size_t)len * 3 + 1);
     macroman_to_utf8(mac, len, utf8, (size_t)len * 3 + 1);
     free(mac);
+    if (words)
+        LOGF(LOG_SPEECH, "speech: channel %d says the phonemes as \"%s\"\n", chan_id(c), utf8);
     host_request(c, MACHINE_SPEECH_SPEAK, utf8);
     free(utf8);
     return noErr;
@@ -970,6 +1190,7 @@ int16_t tb_DisposeSpeechChannel(gaddr chan)
     tb_DisposePtr(c->chan);
     if (c == default_channel)
         default_channel = NULL;
+    forget_said(c);
     memset(c, 0, sizeof *c);
     return noErr;
 }
@@ -1257,8 +1478,14 @@ int16_t tb_TextToPhonemes(gaddr chan, gaddr textBuf, uint32_t textBytes, gaddr p
     }
     uint8_t mac[4096];
     size_t n = out[0] ? utf8_to_macroman(out, mac, sizeof mac) : 0;
-    if (!n) /* the host has none (macOS's say -50 now): ours, from the letters */
+    if (!n) /* the host has none (macOS's say -50 now): ours, from the dictionary and the letters */
         n = text_symbols(textBuf, textBytes, mac, sizeof mac);
+    if (textBytes <= 4096) { /* said as this text if they come back as input */
+        uint8_t *t = malloc(textBytes ? textBytes : 1);
+        gget(t, textBuf, textBytes);
+        remember_made(t, textBytes, mac, (uint32_t)n);
+        free(t);
+    }
     tb_SetHandleSize(phonemeBuf, (int32_t)n);
     if (rd32(phonemeBuf))
         gput(rd32(phonemeBuf), mac, (uint32_t)n);

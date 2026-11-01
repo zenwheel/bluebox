@@ -516,8 +516,7 @@ typedef struct {
     double rate;             /* words per minute */
     double pitch;            /* base pitch, as SetSpeechPitch's (about 30 to 65) */
     double modulation, volume;
-    const char *text;
-    bool phonemes;           /* the text is phonemes ([[inpt PHON]]) */
+    const char *text;        /* phonemes given as input are words by now */
     char *result;            /* MACHINE_SPEECH_PHONEMES: the phonemes, UTF-8 */
     size_t result_size;
 } machine_speech_request;

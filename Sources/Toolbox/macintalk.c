@@ -24,10 +24,12 @@
  * build's stubs differ; a file of someone else's is left alone), with a
  * driver and a Reader of our own that speak through the Speech Manager.
  * The Reader spells the English in MacinTalk's phonetic code (SAM's: IY
- * IH EH AE ... with stress digits) by rough letter-to-sound rules, and
- * remembers what it was given: phonemes that are still what it made are
- * spoken as the English, other phonemes (a program's own, written by
- * hand) in the host's phoneme mode.  MacinTalk was synchronous: the
+ * IH EH AE ... with stress digits), from the dictionary or else by rough
+ * letter-to-sound rules, and remembers what it was given: phonemes that
+ * are still what it made are spoken as the English.  Other phonemes (a
+ * program's own, written by hand: all of the Talking Moose's phrases) go
+ * to the Speech Manager as its phonemes, [[inpt PHON]], which turns them
+ * back into words for the host's voice.  MacinTalk was synchronous: the
  * _Write returns when the utterance is over.
  */
 #include <limits.h>
@@ -349,7 +351,8 @@ static void prime_native(cpu68k *c, uint16_t tw)
     if (s->chan && count) {
         uint8_t *ph = malloc(count);
         gget(ph, p, count);
-        /* The Reader's own phonemes say its English; others are phonemes. */
+        /* The Reader's own phonemes say its English; others are phonemes,
+         * which the Speech Manager makes words of. */
         const uint8_t *say = NULL;
         size_t say_len = 0;
         for (int i = 0; i < MAX_READ && !say; i++)
