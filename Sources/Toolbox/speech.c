@@ -904,7 +904,7 @@ static void said_put(said *o, const void *bytes, uint32_t n, uint32_t from, uint
     }
 }
 
-static bool word_char(uint8_t ch) { return ((ch | 0x20) >= 'a' && (ch | 0x20) <= 'z') || (ch >= '0' && ch <= '9'); }
+static bool letter_or_digit(uint8_t ch) { return ((ch | 0x20) >= 'a' && (ch | 0x20) <= 'z') || (ch >= '0' && ch <= '9'); }
 
 /* A run of phonemes (text[at..at+n]) as words. */
 static void say_phonemes(said *o, const uint8_t *text, uint32_t at, uint32_t n)
@@ -917,7 +917,7 @@ static void say_phonemes(said *o, const uint8_t *text, uint32_t at, uint32_t n)
         n--;
     if (!n)
         return;
-    if (o->k && word_char(o->s[o->k - 1]))
+    if (o->k && letter_or_digit(o->s[o->k - 1]))
         said_put(o, " ", 1, at, at + 1);
     for (int m = 0; m < MAX_MADE; m++) {
         if (!made[m].plen || made[m].plen != n || memcmp(made[m].phonemes, ph, n))
@@ -1005,7 +1005,7 @@ static bool phonemes_said(channel *c, const uint8_t *text, uint32_t len, said *o
         if (phon) {
             say_phonemes(o, text, i, end - i);
         } else {
-            if (o->k && word_char(o->s[o->k - 1]) && word_char(text[i]))
+            if (o->k && letter_or_digit(o->s[o->k - 1]) && letter_or_digit(text[i]))
                 said_put(o, " ", 1, i, i + 1);
             for (uint32_t j = i; j < end; j++)
                 said_put(o, text + j, 1, j, j + 1);
