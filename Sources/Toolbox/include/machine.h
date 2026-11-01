@@ -46,6 +46,32 @@ bool machine_volume_info(int i, char *name, size_t namesize, char *root, size_t 
 bool machine_add_init(const char *path);
 void startup_reset(void);
 int startup_run_init_file(const char *path, char *err, size_t errlen);
+/* After Dark graphics modules (afterdark.c).  A module file given to
+ * machine_launch is run as the screen saver: Initialize, Blank, then
+ * DrawFrame each tick (up to frames_per_tick calls, or until the module has
+ * run tick_budget instructions in the tick), and Close when input comes or
+ * the seconds are up.  Before machine_launch: */
+void machine_screensaver_reset(void);                  /* the options as they start */
+void machine_screensaver_set_sound(bool on);          /* off by default */
+void machine_screensaver_set_seconds(double seconds); /* 0: until input */
+void machine_screensaver_set_pace(int frames_per_tick, uint32_t tick_budget);
+/* A PNG of the screen every so many seconds, dir/frame-NNNNN.png. */
+void machine_screensaver_set_snapshots(double every, const char *dir);
+/* A control's value (0-3, or its resource ID 1000-1003) in place of the
+ * one the module's resources hold; false for another index. */
+bool machine_screensaver_set_control(int index, int value);
+/* Setup before it runs, as in After Dark's control panel: the module is
+ * told it was chosen (ModuleSelected, if it takes it) and the buttons are
+ * pressed in order (a message 8 or more, or a 'bVal' ID 1000 and up). */
+bool machine_screensaver_press_button(int button);
+/* In a normal run: blank the screen with the module at path after the
+ * minutes without input, and wake on input (empty path: none). */
+void machine_screensaver_set_idle(const char *path, double minutes);
+/* What happened: DrawFrame calls, calls by message (8: buttons), and the
+ * message the module stopped with ("" if it didn't). */
+uint32_t machine_screensaver_frames(void);
+uint32_t machine_screensaver_calls(int message);
+const char *machine_screensaver_error(void);
 /* A raw floppy disk image (a sector dump of 400K/720K/800K/1440K, or Disk
  * Copy 4.2) as the disk in the Sony driver's drive 1: a key disk whose
  * sectors the program's own copy protection reads (sony.c). */

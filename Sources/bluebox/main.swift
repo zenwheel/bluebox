@@ -160,6 +160,7 @@ func usage() -> Never {
                      option, control or command, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      snap:F.png saves the screen; in a window, wait:N is N/1000 ms
+    \(screensaverUsage)
       bluebox send [--to PID|SIGNATURE] [--no-wait] odoc|pdoc FILE... | oapp | quit | dosc TEXT | CLASSID [TEXT]
           Send an Apple Event to a running classic application (the only one, or the
           one --to names by process ID or creator): open or print documents, open,
@@ -878,6 +879,7 @@ func runCommand(_ args: [String]) {
 
     let count = machine_instruction_count()
     relaunchAtWantedDepth()
+    screensaverReport()
     if status == RUN_HALTED {
         machine_dump_68k_trace() // a stop the CPU made itself, with no exception handler
         print("stopped: \(String(cString: machine_halt_reason())) after \(count) instructions")
@@ -1597,6 +1599,7 @@ guard let command = argv.first else { usage() }
 let rest = Array(argv.dropFirst())
 switch command {
 case "run": runCommand(rest)
+case "screensaver": screensaverCommand(rest)
 case "import": importCommand(rest)
 case "send": sendCommand(rest)
 case "apps": appsCommand(rest)

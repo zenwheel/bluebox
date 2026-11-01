@@ -517,6 +517,7 @@ bool machine_boot(bool census)
     aem_reset_handlers();
     scriptmgr_reset(); /* from the System's 'itlc' */
     dialogs_reset();
+    afterdark_reset();
     sound_reset();
     components_reset();
     icm_components_reset(); /* the Standard Image Compression component */
@@ -838,6 +839,16 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     mm_set_appl_heap_size(partition > stack ? partition - stack : 0);
     build_app_parms();
 
+    /* An After Dark module: the screen saver's host stands in. */
+    if (afterdark_is_module_file()) {
+        gaddr stack = tb_NewPtr(65536, false, true);
+        cpu.a[7] = stack + 65536 - 16;
+        g_ppc_mode = false;
+        cfm_reset();
+        startup_run_inits();
+        cpu.pc = afterdark_module_entry();
+        return true;
+    }
     /* A cdev file has no program: the Control Panel's host stands in. */
     if (startup_is_cdev_file()) {
         gaddr stack = tb_NewPtr(65536, false, true);

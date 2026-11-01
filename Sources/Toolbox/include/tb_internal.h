@@ -681,6 +681,16 @@ void display_note_screen_draw(qrect r);
 void display_sync(void); /* the host's snapshots, at a safe point */
 void drag_host_pump(void); /* drags from the host, at the program's event calls */
 uint32_t qd_screen_row_bytes(void);
+void qd_screen_set_brightness(int level); /* 0-255, the screen as shown */
+uint32_t ev_input_serial(void);           /* moves with each key, click and mouse move */
+/* After Dark modules (afterdark.c): a module file as the program, and idle
+ * blanking in a run. */
+bool afterdark_is_module_file(void);
+uint32_t afterdark_module_entry(void);
+void afterdark_idle(void);
+bool afterdark_running(void);
+void afterdark_reset(void);
+bool afterdark_answer(gaddr evt); /* After Dark's 'aYmm' query in an event record */
 int qd_screen_depth(void);
 bool driver_refnum(int16_t refnum);
 bool driver_is_native(int16_t refnum); /* one of Blue Box's own, answered in C */
