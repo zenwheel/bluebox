@@ -586,7 +586,16 @@ static void word_started(channel *c, double now, int32_t pos, int32_t len)
     uint32_t from = pos < 0 ? 0 : (uint32_t)pos, end = from + (len > 0 ? (uint32_t)len : 0);
     if (end > c->text_len)
         end = c->text_len;
-    if (pos >= 0 && len > 0 && from < c->text_len && !word_range(c, &from, &end))
+    bool exact = false;
+    if (c->said_from && pos >= 0 && from < c->text_len) {
+        /* Phonemes said as words: the range is ours, placed on the phonemes
+         * the word came from, and run on into the next word's ("mEYkmIY"). */
+        scan_to(c, from);
+        exact = c->scan_phon && !c->scan_cmd;
+    }
+    if (exact && c->word_end && end <= c->word_end)
+        return; /* the same word again */
+    if (!exact && pos >= 0 && len > 0 && from < c->text_len && !word_range(c, &from, &end))
         return; /* the same word again: it goes on */
     phonemes_due(c, now, true);
     if (c->word_at && !c->word_pause && c->word_units > 0) {
