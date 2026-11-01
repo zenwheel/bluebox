@@ -1993,6 +1993,42 @@ static void ppc_CloseConnection(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+/* _CodeFragmentDispatch ($AA5A): the Code Fragment Manager as 68k code
+ * on a Power Mac called it (CodeFragments.h's inlines push a selector
+ * word over the Pascal arguments): the "PPC" After Dark modules' 68k stubs
+ * (Twist PPC, Flies 3D PPC) load their PowerPC code with GetMemFragment
+ * and FindSymbol and call it through Mixed Mode.  The calls are the
+ * PowerPC ones, given the arguments in their registers. */
+void raw_CodeFragmentDispatch(cpu68k *c, uint16_t tw)
+{
+    static const int arg_bytes[8] = { 0, 24, 32, 28, 4, 16, 8, 20 };
+    static void (*const calls[8])(ppc_cpu *) = { NULL, ppc_GetSharedLibrary, ppc_GetDiskFragment, ppc_GetMemFragment,
+                                                 ppc_CloseConnection, ppc_FindSymbol, ppc_CountSymbols, ppc_GetIndSymbol };
+    uint32_t ret = cpu_pop32(c);
+    uint16_t sel = cpu_pop16(c);
+    if (sel < 1 || sel > 7) {
+        cpu_halt(c, "CodeFragmentDispatch: selector %u", sel);
+        return;
+    }
+    static ppc_cpu regs; /* the arguments, as a PowerPC caller passes them */
+    memset(&regs, 0, sizeof regs);
+    int n = arg_bytes[sel] / 4;
+    for (int i = n - 1; i >= 0; i--)
+        regs.gpr[3 + i] = cpu_pop32(c);
+    LOGF(LOG_TRAPS, "  CodeFragmentDispatch selector %u\n", sel);
+    calls[sel](&regs);
+    wr16(c->a[7], (uint16_t)regs.gpr[3]); /* the OSErr */
+    cpu_push32(c, ret);
+}
+
+/* Installed when the machine is a Power Mac (gestalt_powerpc): on a 68k
+ * Mac the trap was unimplemented, and programs test for it (Tubular
+ * Worlds decides by it whether to load its PowerPC code). */
+void cfm_install_68k_trap(void)
+{
+    wr32(TB_TRAP_TABLE + 0x25Au * 4, native_register(raw_CodeFragmentDispatch, "CodeFragmentDispatch", 0xAA5A));
+}
+
 const ppc_export cfm_exports[] = {
     { "CloseConnection", ppc_CloseConnection },
     { "CountSymbols", ppc_CountSymbols },

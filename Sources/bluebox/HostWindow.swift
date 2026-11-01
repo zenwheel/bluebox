@@ -575,15 +575,25 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         launchEvents.finishLaunching()
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
-        let size = NSSize(width: CGFloat(w) * displayScale, height: CGFloat(h) * displayScale)
-        window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable],
-                          backing: .buffered, defer: false)
+        var size = NSSize(width: CGFloat(w) * displayScale, height: CGFloat(h) * displayScale)
+        if hostFullScreen, let screen = NSScreen.main {
+            // A screen saver over the whole display: borderless, above the
+            // menu bar and the Dock, the pointer hidden.
+            size = screen.frame.size
+            window = NSWindow(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.level = .screenSaver
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            NSCursor.hide()
+        } else {
+            window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable],
+                              backing: .buffered, defer: false)
+        }
         window.title = title
         window.delegate = self
         let view = ScreenView(frame: NSRect(origin: .zero, size: size))
         window.contentView = view
         window.acceptsMouseMovedEvents = true
-        window.center()
+        if !hostFullScreen { window.center() }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(view)
         NSApp.activate(ignoringOtherApps: true)

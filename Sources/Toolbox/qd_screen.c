@@ -316,6 +316,18 @@ void qd_screen_set_display_base(gaddr base)
     }
 }
 
+/* The screen dimmed (After Dark's brightness: 0 black to 255 as it is),
+ * as a monitor's gamma dimmed it: the pixels are unchanged. */
+static int brightness = 255;
+void qd_screen_set_brightness(int level) { brightness = level < 0 ? 0 : level > 255 ? 255 : level; }
+
+static void dim(uint8_t *out, size_t n)
+{
+    for (size_t i = 0; i < n; i++, out += 4)
+        for (int k = 0; k < 3; k++)
+            out[k] = (uint8_t)(out[k] * brightness / 255);
+}
+
 void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
 {
     pixdst d = { display_base, screen_row_bytes, { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width },
@@ -350,6 +362,8 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
             o[3] = 255;
         }
     }
+    if (brightness != 255)
+        dim(out, (size_t)w * (size_t)h);
 }
 
 bool machine_screenshot(const char *path)

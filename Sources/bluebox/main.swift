@@ -118,6 +118,11 @@ func usage() -> Never {
                      run on them (the 68k interpreter, without --jit)
           --floppy F the raw floppy disk image F (a sector dump, or Disk Copy 4.2) as the disk in the Sony
                      driver's drive 1: a key disk whose sectors a program's copy protection reads
+          --screensaver M  blank the screen with After Dark module M (a file of type ADgm,
+                     or an archive holding one) after --idle minutes without input
+                     (default 5), as After Dark did, until a key, a click or the mouse
+                     moving wakes it (that input is not passed on); the program's
+                     screen comes back as it was
           --init F   run the INIT resources of file F (an INIT or extension) before the program starts, as the
                      Start Manager would; may be repeated
           --cpu M    processor: 68040 (the default, as a Quadra 800), 68030 (a Mac IIci),
@@ -169,6 +174,7 @@ func usage() -> Never {
                      option, control or command, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      snap:F.png saves the screen; in a window, wait:N is N/1000 ms
+    \(screensaverUsage)
       bluebox send [--to PID|SIGNATURE] [--no-wait] odoc|pdoc FILE... | oapp | quit | dosc TEXT | CLASSID [TEXT]
           Send an Apple Event to a running classic application (the only one, or the
           one --to names by process ID or creator): open or print documents, open,
@@ -452,6 +458,8 @@ func runCommand(_ args: [String]) {
     var addressingBits: Int32?
     var machineName: String?
     var initFiles: [String] = []
+    var idleModule: String?
+    var idleMinutes = 5.0
     var floppyImage: String?
     var printTo: String?
     var appearance = Int32(MACHINE_APPEARANCE_BW)
@@ -551,6 +559,14 @@ func runCommand(_ args: [String]) {
             i += 1
             guard i < args.count else { usage() }
             floppyImage = args[i]
+        case "--screensaver":
+            i += 1
+            guard i < args.count else { usage() }
+            idleModule = args[i]
+        case "--idle":
+            i += 1
+            guard i < args.count, let m = Double(args[i]), m > 0 else { usage() }
+            idleMinutes = m
         case "--init":
             i += 1
             guard i < args.count else { usage() }
@@ -800,6 +816,9 @@ func runCommand(_ args: [String]) {
         var ferr = [CChar](repeating: 0, count: 256)
         guard machine_set_floppy(floppyImage, &ferr, ferr.count) else { fail(str(ferr)) }
     }
+    if let idleModule {
+        machine_screensaver_set_idle(resolveModule(idleModule), idleMinutes)
+    }
     for f in initFiles {
         guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }
     }
@@ -910,6 +929,7 @@ func runCommand(_ args: [String]) {
 
     let count = machine_instruction_count()
     relaunchAtWantedDepth()
+    screensaverReport()
     if status == RUN_HALTED {
         machine_dump_68k_trace() // a stop the CPU made itself, with no exception handler
         print("stopped: \(String(cString: machine_halt_reason())) after \(count) instructions")
@@ -1635,6 +1655,7 @@ guard let command = argv.first else { usage() }
 let rest = Array(argv.dropFirst())
 switch command {
 case "run": runCommand(rest)
+case "screensaver": screensaverCommand(rest)
 case "import": importCommand(rest)
 case "send": sendCommand(rest)
 case "apps": appsCommand(rest)

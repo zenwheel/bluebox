@@ -222,6 +222,7 @@ void gestalt_init(void)
  * it, and 8.5 would have programs look for Icon Services. */
 void gestalt_powerpc(void)
 {
+    cfm_install_68k_trap(); /* and its 68k code has the Code Fragment Manager's trap */
     gestalt_set(fourcc("sysa"), 2);      /* gestaltPowerPC */
     gestalt_set(fourcc("sysv"), 0x0810);
     wr16(LM_SysVersion, 0x0810);         /* SysEnvirons reads it */

@@ -333,9 +333,16 @@ void ev_wake(void)
 
 bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove);
 
+/* User input as it comes from the host: a count that moves with each key
+ * pressed, click, and move of the mouse (a screen saver wakes on it). */
+static volatile uint32_t input_serial;
+uint32_t ev_input_serial(void) { return input_serial; }
+
 void machine_post_mouse(int x, int y, int button)
 {
     pthread_mutex_lock(&lock);
+    if (x != mouse_h || y != mouse_v || (button >= 0 && (button != 0) != button_down))
+        input_serial++;
     motion_h += x - mouse_h;
     motion_v += y - mouse_v;
     total_h += x - mouse_h;
@@ -365,6 +372,8 @@ void machine_post_mouse_delta(double dx, double dy)
     int ih = (int)frac_h, iv = (int)frac_v;
     frac_h -= ih;
     frac_v -= iv;
+    if (ih || iv)
+        input_serial++;
     motion_h += ih; /* all of it, at the screen's edge too, as a mouse reports */
     motion_v += iv;
     total_h += ih;
@@ -452,6 +461,8 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
     pthread_mutex_lock(&lock);
     if (down && !repeat && charcode > 0)
         key_presses++;
+    if (down)
+        input_serial++;
     if (down) {
         key_last = (uint16_t)((keycode & 0xFF) << 8 | (charcode & 0xFF));
         key_new = true;
@@ -670,6 +681,10 @@ static void note_poll(void);
 
 static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
 {
+    /* A module asking whether After Dark is there (its message 'aYmm'):
+     * After Dark answered in the record, no event taken. */
+    if (afterdark_answer(evt))
+        return false;
     note_poll();
     opentransport_poll(); /* network events to the programs' notifiers */
     mactcp_poll();
@@ -839,6 +854,7 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
         note_repeated_update(evt);
         return gne_filtered(evt, true);
     }
+    afterdark_idle();
     /* Apps that poll GetNextEvent would spin the host CPU; a null event
      * waits up to a tick for input, as time passed on a real Mac too. */
     if (host_attached) {
@@ -918,6 +934,8 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
         note_repeated_update(evp);
         return 1;
     }
+    /* Long enough without input: the screen saver, until input comes. */
+    afterdark_idle();
     if (woken) { /* woken up: no sleep this time */
         woken = false;
         sleep = 0;

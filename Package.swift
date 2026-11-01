@@ -13,6 +13,8 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [
         .executable(name: "bluebox", targets: ["bluebox"]),
+        // The macOS screen saver's code (scripts/build-saver.sh makes the .saver).
+        .library(name: "BlueBoxSaver", type: .dynamic, targets: ["BlueBoxSaver"]),
     ],
     dependencies: [
         // Software updates for Blue Box.app's shell (macOS only).
@@ -65,12 +67,18 @@ let package = Package(
                           linkerSettings: [.unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "Sparkle",
                                                          "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"],
                                                         .when(platforms: [.macOS]))]),
+        // Blue Box After Dark.saver: After Dark modules as a macOS screen saver
+        // (macOS only; empty elsewhere).
+        .target(name: "BlueBoxSaver", dependencies: ["Toolbox", "ForkStore", "CCore", "BlueBoxHost"],
+                swiftSettings: [.swiftLanguageMode(.v5)],
+                linkerSettings: [.linkedFramework("ScreenSaver", .when(platforms: [.macOS]))]),
         // Runner for the SingleStepTests CPU vectors (test-only).
         .target(name: "CPUTestSupport", dependencies: ["CPU68K", "CCore"], path: "Tests/CPUTestSupport",
                 cSettings: warnings),
         // Tests touch C globals (one guest arena per process) and run serialized.
         .testTarget(name: "ToolboxTests",
-                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CPUPPC", "CCore", "CPUTestSupport", "BlueBoxHost", "MACE"],
+                    dependencies: ["Toolbox", "ForkStore", "CPU68K", "CPUPPC", "CCore", "CPUTestSupport", "BlueBoxHost", "MACE",
+                                   "BlueBoxSaver"],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ],
     cLanguageStandard: .c17

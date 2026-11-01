@@ -519,6 +519,7 @@ bool machine_boot(bool census)
     aem_reset_handlers();
     scriptmgr_reset(); /* from the System's 'itlc' */
     dialogs_reset();
+    afterdark_reset();
     sound_reset();
     components_reset();
     icm_components_reset(); /* the Standard Image Compression component */
@@ -840,6 +841,29 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     mm_set_appl_heap_size(partition > stack ? partition - stack : 0);
     build_app_parms();
 
+    /* An After Dark module: the screen saver's host stands in, with an A5
+     * world and stack where an application's are (modules ask StackSpace,
+     * which counts from ApplLimit: Zooma Zooma wants room for its
+     * recursion). */
+    if (afterdark_is_module_file()) {
+        /* One with PowerPC code ran on a Power Mac, whose Gestalt it asks
+         * before calling it (Twist PPC, Quantum Vichyssoise); After Dark
+         * itself was 68k there too. */
+        if (afterdark_has_powerpc(app_path))
+            gestalt_powerpc();
+        gaddr top = g_mem_24bit ? GA_A5WORLD_TOP_24 : GA_A5WORLD_TOP;
+        gaddr a5 = (top - 64) & ~3u, base = a5 - 1024;
+        gmemset(base, 0, top - base);
+        wr32(LM_CurrentA5, a5);
+        wr32(LM_CurStackBase, base);
+        cpu.a[5] = a5;
+        cpu.a[7] = base;
+        g_ppc_mode = false;
+        cfm_reset();
+        startup_run_inits();
+        cpu.pc = afterdark_module_entry();
+        return true;
+    }
     /* A cdev file has no program: the Control Panel's host stands in; a
      * file of desk accessories gets the desk accessory host (dahost.c). */
     bool cdev = startup_is_cdev_file();
