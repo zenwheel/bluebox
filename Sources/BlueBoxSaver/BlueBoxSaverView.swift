@@ -27,7 +27,7 @@ final class BlueBoxAfterDarkView: ScreenSaverView {
         animationTimeInterval = 1.0 / 30
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
-        layer?.contentsGravity = .resize
+        layer?.contentsGravity = .resizeAspect // displays of other shapes get the same screen, not stretched
         layer?.magnificationFilter = .nearest
         Self.observeStop()
     }
@@ -51,7 +51,7 @@ final class BlueBoxAfterDarkView: ScreenSaverView {
         // preview gets a classic 640 by 480).
         let size = isPreview ? CGSize(width: 640, height: 480) : (window?.screen?.frame.size ?? bounds.size)
         let settings = SaverSettings.load()
-        SaverMachine.shared.show(screenPoints: isPreview ? size : size, settings: isPreview ? previewSettings(settings) : settings)
+        SaverMachine.shared.show(screenPoints: size, settings: isPreview ? previewSettings(settings) : settings)
     }
 
     /// A preview shows the module at 1 point a pixel, small.

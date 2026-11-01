@@ -26,7 +26,10 @@
  * string at params->errorMessage and draws no more), RestartMe (1:
  * Initialize again, no Close; the module closed itself), ImDone (2: no
  * more calls, After Dark keeps the screen) or RefreshResources (3, after a
- * button or ModuleSelected: the controls are read again).  A 'Cals'
+ * button or ModuleSelected: the controls are read again).  Any other
+ * negative answer (an OSErr) is an error too; other positive ones are
+ * not.  A few modules' main is a C function: it leaves its arguments on
+ * the stack and answers in D0.  A 'Cals'
  * resource (ID 1 as the manual has it, 0 as the Rez types have it), a byte,
  * says which of messages 0-5 the module takes (bit n for message n); with
  * none it takes the first four.
@@ -218,6 +221,7 @@ typedef struct {
     gaddr cell;          /* the Handle its storage goes in */
     gaddr rgn, pb, mons, qd, ext, sd, mf, err, port, vbl, evt, chanp;
     bool color, stopped; /* stopped: ImDone or an error; no more calls */
+    bool time_up;        /* the seconds asked for have passed */
     gaddr zone;          /* the zone UseMemory gives */
     uint32_t snap_tick, start_tick;
     /* idle blanking: what goes back */
@@ -397,7 +401,12 @@ static void mf_restore(cpu68k *c, uint16_t tw)
     cpu_push32(c, ret);
 }
 
-/* The VBL task: each monitor's synchFlag goes true, as After Dark's did. */
+/* The VBL task: each monitor's synchFlag goes true, as After Dark's did:
+ * $FF, as ST sets it (Color Swarm waits in DrawFrame with TST.B and BGE
+ * until the flag is negative). */
+static void snapshot_due(void);
+static void time_up_check(void);
+
 static void vbl_native(cpu68k *c, uint16_t tw)
 {
     gaddr task = c->a[0];
@@ -405,7 +414,13 @@ static void vbl_native(cpu68k *c, uint16_t tw)
     if (ad.active && ad.mons) {
         int n = (int16_t)rd16(ad.mons);
         for (int i = 0; i < n; i++)
-            wr8(ad.mons + 2 + (uint32_t)i * 10 + 8, 1);
+            wr8(ad.mons + 2 + (uint32_t)i * 10 + 8, 0xFF);
+    }
+    /* A module may stay in DrawFrame until it sees input (Horizontal
+     * Hold, Color Swarm): its pictures and its time are kept from here. */
+    if (ad.active && !ad.own_file) {
+        snapshot_due();
+        time_up_check();
     }
 }
 
@@ -508,6 +523,7 @@ static int16_t call_module(int16_t message)
     uint32_t d[8], a[8];
     memcpy(d, c->d, sizeof d);
     memcpy(a, c->a, sizeof a);
+    uint32_t sp = c->a[7];
     cpu_push16(c, 0); /* the result */
     cpu_push32(c, ad.cell);
     cpu_push32(c, ad.rgn);
@@ -515,7 +531,9 @@ static int16_t call_module(int16_t message)
     cpu_push32(c, ad.pb);
     c->a[0] = ad.entry;
     guest_call_regs(ad.entry);
-    int16_t result = (int16_t)cpu_pop16(c);
+    /* A Pascal main took its arguments off and left the result; one
+     * written as a C function left them and answered in D0. */
+    int16_t result = c->a[7] == sp - 2 ? (int16_t)rd16(c->a[7]) : (int16_t)c->d[0];
     memcpy(c->d, d, sizeof d);
     memcpy(c->a, a, sizeof a);
     stats.calls[message < 8 ? message : 8]++;
@@ -576,7 +594,10 @@ static void handle_result(int16_t r, int16_t message)
             }
         }
     }
-    if (r == RefreshResources)
+    /* Other positive answers are no error (VS Screen Saver's Blank leaves
+     * QDExtensions' selector, 23); an error is negative: ModuleError, or
+     * an OSErr such as the kit's glue returns from MemError. */
+    if (r > 0)
         return;
     ad.stopped = true;
     if (!rd8(rd32(ad.pb + PB_error)))
@@ -795,6 +816,32 @@ static void snapshot(void)
     machine_screenshot(path);
 }
 
+/* The PNG due every snap_every seconds, if it is. */
+static void snapshot_due(void)
+{
+    if (opt.snap_every <= 0 || !opt.snap_dir[0])
+        return;
+    uint32_t every = (uint32_t)(opt.snap_every * 60 + 0.5);
+    if (!every)
+        every = 1;
+    if (rd32(LM_Ticks) - ad.snap_tick >= every) {
+        ad.snap_tick += every;
+        snapshot();
+    }
+}
+
+/* The seconds are up: a module still in DrawFrame is woken as by a key. */
+static void time_up_check(void)
+{
+    if (opt.seconds <= 0 || ad.time_up)
+        return;
+    if (rd32(LM_Ticks) - ad.start_tick >= (uint32_t)(opt.seconds * 60 + 0.5)) {
+        ad.time_up = true;
+        machine_post_key(' ', 49, 0, 1, 0);
+        machine_post_key(' ', 49, 0, 0, 0);
+    }
+}
+
 /* Frames for one tick, then wait for the next. */
 static void ad_tick(void)
 {
@@ -807,15 +854,7 @@ static void ad_tick(void)
         if (rd32(LM_Ticks) != tick || c->icount - start >= opt.tick_budget)
             break;
     }
-    if (opt.snap_every > 0 && opt.snap_dir[0]) {
-        uint32_t every = (uint32_t)(opt.snap_every * 60 + 0.5);
-        if (!every)
-            every = 1;
-        if (rd32(LM_Ticks) - ad.snap_tick >= every) {
-            ad.snap_tick += every;
-            snapshot();
-        }
-    }
+    snapshot_due();
 }
 
 static void ad_end(void)
@@ -852,9 +891,7 @@ static bool woken(void) { return ev_input_serial() != input_mark; }
 
 static void ad_host_native(cpu68k *c, uint16_t tw)
 {
-    gaddr world = tb_NewPtr(1024, false, true);
-    gaddr a5 = world + 768;
-    wr32(LM_CurrentA5, a5);
+    gaddr a5 = rd32(LM_CurrentA5); /* the launch made the A5 world, QuickDraw's globals below it */
     c->a[5] = a5;
     tb_InitGraf(a5 - 4);
     tb_InitFonts();
@@ -886,7 +923,7 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     }
     if (c->halted)
         return;
-    bool timed = limit && rd32(LM_Ticks) - ad.start_tick >= limit;
+    bool timed = ad.time_up || (limit && rd32(LM_Ticks) - ad.start_tick >= limit);
     ad_end();
     tb_ShowCursor();
     cpu_halt(c, timed ? "ExitToShell (the screen saver ran its time)" : "ExitToShell (woken by input)");

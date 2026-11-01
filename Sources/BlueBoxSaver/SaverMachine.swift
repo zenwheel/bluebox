@@ -117,8 +117,14 @@ final class SaverMachine: @unchecked Sendable {
     private func wake() {
         machine_post_key(0x20, 49, 0, 1, 0)
         machine_post_key(0x20, 49, 0, 0, 0)
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) {
-            if !machine_halted() { machine_set_instruction_limit(machine_instruction_count() + 1) }
+        let run = runs
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            if self.runs == run && self.booted && !machine_halted() {
+                machine_set_instruction_limit(machine_instruction_count() + 1)
+            }
         }
     }
 
@@ -127,6 +133,7 @@ final class SaverMachine: @unchecked Sendable {
     /// again until the settings or the screen change, or it is stopped).
     private var finished: Run?
     private var booted = false /* the screen is there to read */
+    private var runs = 0       /* machines started */
 
     private func loop() {
         while true {
@@ -135,6 +142,7 @@ final class SaverMachine: @unchecked Sendable {
             let run = wanted!
             current = run
             booted = false
+            runs += 1
             lock.unlock()
             start(run)
             lock.lock()

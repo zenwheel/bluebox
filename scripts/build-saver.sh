@@ -15,6 +15,7 @@ name="Blue Box After Dark"
 version=$(git -C "$root" describe --always --dirty 2>/dev/null || echo dev)
 
 swift build -c release --product BlueBoxSaver --package-path "$root"
+swift build -c release --product bluebox --package-path "$root"
 bin=$(swift build -c release --show-bin-path --package-path "$root")
 
 saver="$out/$name.saver"
@@ -53,6 +54,15 @@ cat > "$saver/Contents/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
+
+# System Settings' thumbnail: Blue Box's icon on black.
+icons=$(mktemp -d)
+"$bin/bluebox" make-iconset "$icons/Blue Box.iconset" >/dev/null
+sips -Z 50 "$icons/Blue Box.iconset/icon_128x128.png" --out "$icons/small.png" >/dev/null
+sips -p 58 90 --padColor 000000 "$icons/small.png" --out "$saver/Contents/Resources/thumbnail.png" >/dev/null
+sips -Z 100 "$icons/Blue Box.iconset/icon_128x128@2x.png" --out "$icons/large.png" >/dev/null
+sips -p 116 180 --padColor 000000 "$icons/large.png" --out "$saver/Contents/Resources/thumbnail@2x.png" >/dev/null
+rm -rf "$icons"
 
 # Signed for this Mac only (no identity): the screen saver host loads
 # bundles that aren't signed by a developer (it disables library validation).

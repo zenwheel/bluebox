@@ -227,6 +227,39 @@ extension BlueBox {
         }
         #endif
 
+        /// A module whose main is a C function (its arguments left on the
+        /// stack, the answer in D0) runs too, and the VBL task sets each
+        /// monitor's synchFlag to $FF, which a module waits for in DrawFrame.
+        @Test func aCModuleAndTheSynchFlag() {
+            bootMachine()
+            let log = tb_NewPtr(4096, false, true)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let code = code68k([
+                0x302F, 0x0008,                   // MOVE.W 8(SP),D0       the message
+                0x207C, hi(log), lo(log),         // MOVEA.L #log,A0
+                0x3210, 0x43E8, 0x0002, 0xD2C1, 0xD2C1, 0x3280, 0x5250, // log it
+                0x0C40, 0x0003, 0x6612,           // CMPI.W #DrawFrame,D0; BNE.S +18
+                0x206F, 0x0004,                   // MOVEA.L 4(SP),A0      params
+                0x2068, 0x0008,                   // MOVEA.L 8(A0),A0      monitors
+                0x4228, 0x000A,                   // CLR.B 10(A0)          the first one's synchFlag
+                0x4A28, 0x000A, 0x6CFA,           // wait: TST.B 10(A0); BGE.S wait
+                0x7000, 0x4E75,                   // MOVEQ #0,D0; RTS
+            ])
+            let path = moduleFile(code, in: tempDir())
+            machine_screensaver_set_seconds(0.3)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 30_000_000)
+            _ = machine_run(40_000_000)
+            machine_set_instruction_limit(0)
+            #expect(String(cString: machine_halt_reason()).contains("ran its time"))
+            let seen = messages(log)
+            #expect(Array(seen.prefix(3)) == [0, 2, 3] && seen.last == 1)
+            // a frame a VBL: about 18 in 0.3 seconds
+            #expect(seen.count - 3 >= 10 && seen.count - 3 <= 24)
+        }
+
         /// A button pressed first, as in the control panel: ModuleSelected
         /// (when 'Cals' takes it), then the 'bVal' button's value.
         @Test func buttonsGoFirst() {
