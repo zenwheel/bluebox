@@ -24,6 +24,18 @@ extension BlueBox {
                 Array(what.utf8) + be16(id) + be16(anchor) + be16(index) + [UInt8](repeating: 0, count: 6)
         }
 
+        /// A flattened collection ('tinf', 'scen'): its items by tag, each
+        /// a length and the bytes.
+        static func collection(_ items: [(String, [UInt8])]) -> [UInt8] {
+            var entries: [UInt8] = []
+            var data: [UInt8] = []
+            for (tag, bytes) in items {
+                entries += Array(tag.utf8) + be32(0) + be32(0) + be32(data.count)
+                data += be32(bytes.count) + bytes
+            }
+            return be32(1) + be32(0) + be32(items.count) + entries + data
+        }
+
         /// The theme: a document window whose frame is a green fill four
         /// pixels round the content (twenty above it), a 4x4 close box (red,
         /// blue when pressed, its top left pixel transparent) and a title
@@ -67,7 +79,24 @@ extension BlueBox {
             // the inside grey.
             let frame = be16(2) + be16(0) + [0, 0xFF, 0, 0xFF] + be16(-2) + be16(1) + [0, 0xFF] + be16(-1) +
                 [0xFF, 0xFF, 0xFF, 0xFF]
-            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("clut", 2000, clut), ("pxm#", 200, pxm),
+            // layo 257, a pulled-down menu: a pixel round it above and left,
+            // three below and right (a shadow).
+            let menuCoords = [coord(0, -1, -1), coord(0, -1, -2), coord(0, 3, -3), coord(0, 3, -4)]
+            let menu = be32(0) + be32(menuCoords.count) + menuCoords.flatMap { $0 } + be16(1) +
+                record(flags: 0x0100, [1, 2, 3, 4], "plut", id: -1)
+            let tinf = collection([("vers", be16(1)), ("mbht", be16(22)), ("lvth", be16(15))])
+            let pstr = { (t: String) in [UInt8(t.utf8.count)] + Array(t.utf8) }
+            let scene = collection([("lgsf", pstr("Gadget")), ("smsf", pstr("Monaco")), ("vfnt", pstr("Chicago")),
+                                    ("vfsz", be16(12)), ("hcol", be16(0xCCCC) + be16(0x9999) + be16(0x6666)),
+                                    ("sbar", be16(2)), ("smoo", [1, 0]), ("sndt", pstr("Synthetic Sounds"))])
+            // layo 510 and 511, check boxes: green, and grey right to left.
+            let box = { (fill: Int) in be32(0) + be32(0) + be16(1) + record(flags: 0x0100, [-1, -2, -3, -4], "plut", id: fill) }
+            // tic# 384: the trash is the theme's ICN# -3993 (a 32x32 square).
+            let tic = be32(2) + Array("trsh".utf8) + be16(-3993) + Array("fldr".utf8) + be16(-3999)
+            let trash = [UInt8](repeating: 0xFF, count: 256)
+            let res: [(String, Int, [UInt8])] = [("layo", 128, layo), ("tinf", 128, tinf), ("scen", 128, scene),
+                                                 ("tic#", 384, tic), ("ICN#", -3993, trash),
+                                                 ("layo", 510, box(-1)), ("layo", 511, box(-2)), ("layo", 257, menu), ("clut", 2000, clut), ("pxm#", 200, pxm),
                                                  ("frme", 520, frame),
                                                  ("plut", 387, fills), ("plut", 386, brushes), ("clr#", 384, colors)]
             var datas: [UnsafeMutablePointer<UInt8>] = []
@@ -158,6 +187,83 @@ extension BlueBox {
             #expect(thme_text_rgb(1, &c) && c == [0x1111, 0x2222, 0x3333])
         }
 
+        /// The theme's metrics, and the menu bar's height from them.
+        @Test func metrics() {
+            load()
+            defer {
+                thme_unload()
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+            }
+            var v: Int32 = 0
+            #expect(thme_metric("mbht", &v) && v == 22)
+            #expect(thme_metric("lvth", &v) && v == 15)
+            #expect(!thme_metric("msht", &v))
+            #expect(machine_menu_bar_height() == 20) // not while the appearance is another
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_THEME))
+            #expect(machine_menu_bar_height() == 22)
+        }
+
+        /// The scene: fonts (those installed), the highlight colour, settings.
+        @Test func scene() {
+            load()
+            defer { thme_unload() }
+            var name = [CChar](repeating: 0, count: 64)
+            #expect(thme_scene_font("lgsf", &name, name.count) == -1) // Gadget isn't here
+            #expect(thme_system_family() == 2002)                      // so Charcoal stays
+            #expect(thme_scene_font("smsf", &name, name.count) == 4 && String(cString: name) == "Monaco")
+            #expect(thme_scene_font("vfnt", &name, name.count) == 0 && String(cString: name) == "Chicago")
+            var c: [UInt16] = [0, 0, 0]
+            #expect(thme_highlight_rgb(&c) && c == [0xCCCC, 0x9999, 0x6666])
+            var v: Int32 = 0
+            var b = false
+            #expect(thme_scene_int("sbar", &v) && v == 2)
+            #expect(thme_scene_int("vfsz", &v) && v == 12)
+            #expect(thme_scene_bool("smoo", &b) && b)
+            #expect(machine_theme_sound_set_name(&name, name.count) && String(cString: name) == "Synthetic Sounds")
+        }
+
+        /// The theme's icons stand in for the System's ('tic#'), through
+        /// Icon Services and the Icon Utilities; one it lists but hasn't
+        /// is the System's.
+        @Test func icons() {
+            launchTestApp()
+            _ = initToolbox()
+            load()
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_THEME))
+            iconservices_reset()
+            defer {
+                thme_unload()
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+                iconservices_reset()
+            }
+            var id: Int16 = 0
+            #expect(thme_icon_id(fourCC("trsh"), &id) && id == -3993)
+            #expect(!thme_icon_id(fourCC("fldr"), &id)) // listed, but no icon of its own
+            #expect(thme_icon_listed(-3993) && !thme_icon_listed(-3999))
+            let ref = tb_NewPtr(4, false, true), fam = tb_NewPtr(4, false, true), h = tb_NewHandle(0, false, false)
+            #expect(tb_GetIconRef(0, Int32(bitPattern: fourCC("macs")), Int32(bitPattern: fourCC("trsh")), ref) == 0)
+            #expect(tb_IconRefToIconFamily(rd32(ref), 0xFFFF_FFFF, fam) == 0)
+            #expect(tb_GetIconFamilyData(rd32(fam), Int32(bitPattern: fourCC("ICN#")), h) == 0)
+            #expect(tb_GetHandleSize(h) == 256 && rd32(rd32(h)) == 0xFFFF_FFFF)
+            let h8 = tb_NewHandle(0, false, false)
+            _ = tb_GetIconFamilyData(rd32(fam), Int32(bitPattern: fourCC("icl8")), h8)
+            #expect(tb_GetHandleSize(h8) == 0) // not the System's
+            let suite = tb_NewPtr(4, false, true)
+            #expect(tb_GetIconSuite(suite, -3993, 0xFFFF_FFFF) == 0)
+            let icn = tb_NewPtr(4, false, true)
+            #expect(tb_GetIconFromSuite(icn, rd32(suite), Int32(bitPattern: fourCC("ICN#"))) == 0)
+            #expect(rd32(rd32(rd32(icn))) == 0xFFFF_FFFF)
+        }
+
+        /// A menu's background covers what its layout draws round it.
+        @Test func menuExtent() {
+            load()
+            defer { thme_unload() }
+            var e = qrect()
+            #expect(thme_menu_extent(qrect(top: 20, left: 10, bottom: 60, right: 50), 1, &e)) // pop-up: the pull-down's
+            #expect(e.top == 19 && e.left == 9 && e.bottom == 63 && e.right == 53)
+        }
+
         /// A sound set: 'snd#' maps a ThemeSoundKind to the first 'snd ' of
         /// its entry that is there, with the entry's class.
         @Test func soundSets() {
@@ -221,6 +327,15 @@ extension BlueBox {
             #expect(rd16(c) == 0x8080 && rd16(c + 2) == 0x8080)
             tb_GetCPixel(150, 145, c)
             #expect(rd16(c) == 0xFFFF && rd16(c + 2) == 0xFFFF) // untouched
+            // A check box, and right to left (TESysJust -1) its mirrored layout.
+            #expect(thme_check_box(qrect(top: 5, left: 180, bottom: 17, right: 192), false, 0, 1))
+            tb_GetCPixel(185, 10, c)
+            #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF)
+            wr16(0x0BAC, 0xFFFF)
+            #expect(thme_check_box(qrect(top: 5, left: 180, bottom: 17, right: 192), false, 0, 1))
+            wr16(0x0BAC, 0)
+            tb_GetCPixel(185, 10, c)
+            #expect(rd16(c) == 0x8080 && rd16(c + 2) == 0x8080)
         }
     }
 }

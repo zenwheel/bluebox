@@ -927,6 +927,17 @@ static void with_wmgr_port(gaddr *saved)
     GrafPort_set_txMode(wp, 1);
 }
 
+/* The titles' baseline: their font centred in the bar (14 in a bar of 20,
+ * with Chicago 12). */
+static int title_baseline(void)
+{
+    gaddr fi = tb_NewPtr(8, false, false);
+    tb_GetFontInfo(fi);
+    int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
+    tb_DisposePtr(fi);
+    return (mbar_height() - 1 - asc - desc + 1) / 2 + asc;
+}
+
 static void draw_text_at(int x, int y, gaddr pstr)
 {
     tb_MoveTo((int16_t)x, (int16_t)y);
@@ -935,6 +946,45 @@ static void draw_text_at(int x, int y, gaddr pstr)
 
 /* A Mac OS 8.5 theme file draws the menus. */
 static bool themed(void) { return thme_on() && g_appearance == MACHINE_APPEARANCE_THEME; }
+
+/* The kind of menu the standard MDEF is drawing (a theme has a background
+ * for each): 0 pulled down, 1 popped up, 2 a submenu. */
+static int menu_kind;
+
+/* The screen a menu in box covers with its frame and shadow: the classic
+ * pixel round it and two-pixel shadow, and whatever a theme's background
+ * draws beyond them. */
+static qrect menu_area(qrect box, int kind)
+{
+    qrect a = { (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 2), (int16_t)(box.right + 2) };
+    qrect e;
+    if (themed() && thme_menu_extent(box, kind, &e)) {
+        a.top = e.top < a.top ? e.top : a.top;
+        a.left = e.left < a.left ? e.left : a.left;
+        a.bottom = e.bottom > a.bottom ? e.bottom : a.bottom;
+        a.right = e.right > a.right ? e.right : a.right;
+    }
+    return a;
+}
+
+/* The classic frame (and, pulled down, the shadow) round a menu, unless
+ * a theme's menu background draws its own edges. */
+static void menu_frame(qrect box, bool shadow)
+{
+    qrect e;
+    if (themed() && thme_menu_extent(box, menu_kind, &e))
+        return;
+    gaddr fr = tb_NewPtr(8, false, false);
+    qrect_put(fr, (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 1), (int16_t)(box.right + 1) });
+    tb_FrameRect(fr);
+    if (shadow) {
+        qrect_put(fr, (qrect){ (int16_t)(box.bottom + 1), box.left, (int16_t)(box.bottom + 2), (int16_t)(box.right + 2) });
+        tb_PaintRect(fr);
+        qrect_put(fr, (qrect){ box.top, (int16_t)(box.right + 1), (int16_t)(box.bottom + 2), (int16_t)(box.right + 2) });
+        tb_PaintRect(fr);
+    }
+    tb_DisposePtr(fr);
+}
 
 /* Text in a theme text colour (kThemeTextColor). */
 static void draw_text_colored(int x, int y, gaddr pstr, int color)
@@ -955,7 +1005,7 @@ static void themed_title(int i, bool selected)
     qrect r = title_rect(i);
     bool on = (MenuInfo_enableFlags(menu_ptr(mh)) & 1) != 0;
     thme_menu_title((qrect){ 0, 0, (int16_t)mbar_height(), (int16_t)g_screen_width }, r, selected, on);
-    draw_text_colored(r.left + 7, 14, title_of(mh), !on ? 33 : selected ? 32 : 31);
+    draw_text_colored(r.left + 7, title_baseline(), title_of(mh), !on ? 33 : selected ? 32 : 31);
 }
 
 static void dim_rect(qrect r)
@@ -1013,7 +1063,7 @@ void tb_DrawMenuBar(void)
     for (int i = 0; i < n; i++) {
         gaddr mh = menu_at(i);
         qrect r = title_rect(i);
-        draw_text_at(r.left + 7, 14, title_of(mh));
+        draw_text_at(r.left + 7, title_baseline(), title_of(mh));
         if (!(MenuInfo_enableFlags(menu_ptr(mh)) & 1))
             dim_rect(r);
     }
@@ -1106,7 +1156,7 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
     gaddr rr = tb_NewPtr(8, false, false);
     qrect_put(rr, r);
     bool th = themed();
-    if (!th || !thme_menu_background(r, 0))
+    if (!th || !thme_menu_background(r, menu_kind))
         tb_EraseRect(rr);
     int n = tb_CountMItems(mh);
     for (int i = 1; i <= n; i++) {
@@ -1357,8 +1407,7 @@ int32_t menu_standard_mbdf(int16_t msg, int16_t param1, int32_t param2)
          * its shadow and frame. */
         if (nmbdf_saved == 8 || !param2)
             return 0;
-        qrect r = qrect_get((gaddr)param2);
-        r = (qrect){ (int16_t)(r.top - 1), (int16_t)(r.left - 1), (int16_t)(r.bottom + 2), (int16_t)(r.right + 2) };
+        qrect r = menu_area(qrect_get((gaddr)param2), 0);
         if (qrect_empty(r))
             return 0;
         mbdf_saved[nmbdf_saved].offset = param1;
@@ -1510,22 +1559,10 @@ int32_t tb_MenuSelect(uint32_t p)
                         break;
                     }
                 }
-                saved_area = (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 2),
-                                      (int16_t)(box.right + 2) };
+                menu_kind = 0;
+                saved_area = menu_area(box, 0);
                 under = save_bits(saved_area);
-                if (!themed()) { /* a theme's menu background has its own edges */
-                    gaddr fr = tb_NewPtr(8, false, false);
-                    qrect_put(fr, (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 1),
-                                           (int16_t)(box.right + 1) });
-                    tb_FrameRect(fr);
-                    qrect_put(fr, (qrect){ (int16_t)(box.bottom + 1), box.left, (int16_t)(box.bottom + 2),
-                                           (int16_t)(box.right + 2) });
-                    tb_PaintRect(fr);
-                    qrect_put(fr, (qrect){ box.top, (int16_t)(box.right + 1), (int16_t)(box.bottom + 2),
-                                           (int16_t)(box.right + 2) });
-                    tb_PaintRect(fr);
-                    tb_DisposePtr(fr);
-                }
+                menu_frame(box, true);
                 wr16(which, 0);
                 call_mdef(mh, mDrawMsg, box, 0, which);
                 appearance_sound(fourcc("mnuo"));
@@ -1599,13 +1636,11 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
     gaddr mp = menu_ptr(mh);
     int16_t t = (int16_t)(top - (item > 0 ? (item - 1) * ITEM_HEIGHT : 0));
     qrect box = { t, left, (int16_t)(t + MenuInfo_menuHeight(mp)), (int16_t)(left + MenuInfo_menuWidth(mp)) };
-    qrect area = { (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 2), (int16_t)(box.right + 2) };
+    menu_kind = 1;
+    qrect area = menu_area(box, 1);
     uint32_t *under = save_bits(area);
     display_set_transient(true, area.top, area.left, area.bottom, area.right);
-    gaddr fr = tb_NewPtr(8, false, false);
-    qrect_put(fr, (qrect){ (int16_t)(box.top - 1), (int16_t)(box.left - 1), (int16_t)(box.bottom + 1), (int16_t)(box.right + 1) });
-    tb_FrameRect(fr);
-    tb_DisposePtr(fr);
+    menu_frame(box, false);
     gaddr which = tb_NewPtr(2, false, true);
     call_mdef(mh, mDrawMsg, box, 0, which);
     /* At least once: a quick click chooses the item under the mouse. */
@@ -1642,6 +1677,7 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
             call_mdef(mh, mChooseMsg, box, ev_mouse_global(), which);
     }
     int chosen = (int16_t)rd16(which);
+    menu_kind = 0;
     restore_bits(area, under);
     display_set_transient(false, 0, 0, 0, 0);
     tb_DisposePtr(which);

@@ -33,6 +33,9 @@ void thme_unload(void);
 bool thme_on(void);
 const char *thme_name(void);
 
+/* A metric of the theme's 'tinf' ('mbht', 'lvth'...). */
+bool thme_metric(const char *tag, int *out);
+
 /* The theme's brushes (kThemeBrush 1-47) and text colours (1-46). */
 bool thme_brush_rgb(int brush, uint16_t out[3]);
 bool thme_text_rgb(int color, uint16_t out[3]);
@@ -69,7 +72,9 @@ bool thme_bevel(qrect r, int size, uint32_t state, bool on);
 bool thme_disclosure(qrect r, int value, uint32_t state, bool left);
 bool thme_little_arrows(qrect r, uint32_t state);
 bool thme_popup(qrect r, uint32_t state, bool arrow_only);
-bool thme_tab(qrect r, int style, bool small);
+bool thme_popup_arrow(qrect r, int orient, int size, uint32_t state);
+bool thme_focus_rect(qrect r);
+bool thme_tab(qrect r, int style, bool small, int dir);
 bool thme_tab_pane(qrect r, uint32_t state);
 
 /* A ThemeTrackDrawInfo's slider, progress or indeterminate bar (kind 2-4),
@@ -88,12 +93,22 @@ bool thme_track(const thme_track_info *t);
 bool thme_menu_bar(qrect r);
 bool thme_menu_title(qrect bar, qrect r, bool selected, bool enabled);
 bool thme_menu_background(qrect r, int type);
+bool thme_menu_extent(qrect r, int type, qrect *out);
 bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier);
 bool thme_menu_separator(qrect r);
 
 /* The scene: a string item ('name', 'snds' the sound set, 'patn', fonts),
  * the highlight colour, the desktop pattern painted over an area. */
 bool thme_scene_string(const char *tag, char *out, size_t n);
+bool thme_scene_int(const char *tag, int *out);
+bool thme_scene_bool(const char *tag, bool *out);
+/* A theme file draws the screen (loaded, and the appearance chosen). */
+bool thme_in_use(void);
+/* A scene font ('lgsf', 'smsf', 'vfnt') that is installed: its family and
+ * name; else -1.  The system font's family (Charcoal when the theme's
+ * isn't installed). */
+int thme_scene_font(const char *tag, char *out, size_t n);
+int thme_system_family(void);
 bool thme_highlight_rgb(uint16_t out[3]);
 bool thme_paint_desk(const hrgn *area);
 /* The sound set: its 'snd ' for a ThemeSoundKind or ThemeDragSoundKind
@@ -103,6 +118,11 @@ void thme_unload_sounds(void);
 const char *thme_sound_set(void);
 uint32_t thme_sound_mask(void);
 const uint8_t *thme_sound(uint32_t kind, int *cls, int16_t *id, uint32_t *len);
+/* The theme's icons ('tic#'): the resource ID of its icon for a system
+ * icon type, whether an ID is one of them, and its resources. */
+bool thme_icon_id(uint32_t type, int16_t *id);
+bool thme_icon_listed(int16_t id);
+const uint8_t *thme_resource(uint32_t type, int16_t id, uint32_t *len);
 /* A ThemeCursor's 'crsr' (the step'th of an animated one), or NULL. */
 const uint8_t *thme_cursor(int cursor, int step, uint32_t *len);
 

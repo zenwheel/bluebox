@@ -115,6 +115,7 @@ void qd_px_rgb_all(int depth, gaddr ctab, uint16_t (*rgb)[3]);
 uint32_t qd_rgb_px(int depth, gaddr ctab, const uint16_t rgb[3]);
 /* The standard Macintosh colour for an 8-bit index. */
 void qd_std_rgb8(int i, uint16_t rgb[3]);
+int qd_classic_family(const char *name);
 
 /* ---- Pixel access (raw values: bit, index, or 16/32-bit RGB) ---- */
 

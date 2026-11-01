@@ -438,6 +438,7 @@ bool ap_text_rgb(int color, uint16_t out[3]);
  * 'mnuo', 'wcls', 'btnr'...), when a theme's sound set is in use. */
 void appearance_sound(uint32_t kind);
 void appearance_sound_reset(void);
+void appearance_drag_sound_tick(void); /* a theme drag sound played again while the drag lasts */
 bool ap_in_color(void);
 void ap_fill_rgn(const hrgn *g, const uint16_t rgb[3]);
 void ap_fill(qrect r, const uint16_t rgb[3]);
@@ -455,7 +456,7 @@ void ap_focus_rect(qrect r, bool focus);
 void ap_group(qrect r, uint32_t state, bool primary);
 void ap_separator(qrect r, uint32_t state);
 void ap_tab_pane(qrect r, uint32_t state);
-void ap_tab(qrect r, int style, const uint8_t *title, int n);
+void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n);
 void ap_push_button(qrect r, uint32_t state, bool is_default);
 void ap_default_ring(qrect r, uint32_t state);
 void ap_check_box(qrect box, bool radio, int value, uint32_t state);

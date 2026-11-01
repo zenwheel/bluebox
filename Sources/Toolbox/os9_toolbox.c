@@ -1008,6 +1008,33 @@ static void TickleMenuBarClock(ppc_cpu *c)
 static appearance_settings settings;
 static bool settings_made;
 
+/* A theme file's scene, as choosing the theme in the control panel set
+ * them: its fonts (those installed; Charcoal and Geneva stay for others),
+ * scroll bar arrows and thumbs, font smoothing and title bar clicks. */
+static void settings_from_scene(void)
+{
+    static const struct {
+        const char *tag;
+        int which;
+    } fonts[] = { { "lgsf", kThemeFontSystem }, { "smsf", kThemeFontSmallSystem }, { "vfnt", kThemeFontViews } };
+    for (unsigned i = 0; i < 3; i++)
+        thme_scene_font(fonts[i].tag, settings.font[fonts[i].which], sizeof settings.font[0]);
+    int v;
+    bool b;
+    if (thme_scene_int("vfsz", &v) && v >= 9 && v <= 24)
+        settings.views_size = (int16_t)v;
+    if (thme_scene_int("sbar", &v) && v >= 0 && v <= 2)
+        settings.arrow_style = (uint16_t)v;
+    if (thme_scene_int("sbth", &v) && v >= 0 && v <= 1)
+        settings.thumb_style = (uint16_t)v;
+    if (thme_scene_bool("smoo", &b))
+        settings.smoothing = b;
+    if (thme_scene_int("smos", &v) && v >= 12 && v <= 24)
+        settings.smoothing_size = (uint16_t)v;
+    if (thme_scene_bool("coll", &b))
+        settings.dbl_click = b;
+}
+
 static void settings_default(void)
 {
     memset(&settings, 0, sizeof settings);
@@ -1024,6 +1051,8 @@ static void settings_default(void)
     /* A theme's sound set chosen: its sounds on, for the classes it asks. */
     settings.sounds = thme_sound_set()[0] != 0;
     settings.sound_mask = settings.sounds ? thme_sound_mask() : 0;
+    if (thme_in_use())
+        settings_from_scene();
 }
 
 appearance_settings *ap_settings(void)

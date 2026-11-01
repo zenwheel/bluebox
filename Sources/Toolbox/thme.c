@@ -41,7 +41,13 @@
  *    side masks}: a byte (version 2) or a word (version 3) per side, top,
  *    left, bottom, right, each going round counter-clockwise: the top bit
  *    is the corner the side starts at, then the first pixels, the middle,
- *    and the last pixels.
+ *    and the last pixels.  The flag bytes (the header's and each
+ *    entry's) are 0x00, 0x40, 0x80 or 0xC0; in the 219 sample themes the
+ *    entries' are set in some thirty third-party themes (Moby, Sosumi,
+ *    LUCENT...), none of Apple's, often on a bevel's highlight or shadow
+ *    sides with the same fills as unflagged entries.  What they change is
+ *    not known (no theme here draws differently with them on a real Mac
+ *    that we have seen), so they are ignored.
  *  - 'clr#' 384: the theme text colours (kThemeTextColor 1-46), RGB each.
  *  - 'tinf' 128: a flattened collection of the theme's metrics; 'tdat' 1
  *    lists the resources that make the theme; 'scen' is its desktop
@@ -64,6 +70,7 @@ static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 static int imin(int a, int b) { return a < b ? a : b; }
 static int imax(int a, int b) { return a > b ? a : b; }
+static const uint8_t *coll_item(const uint8_t *d, uint32_t len, const char *tag, uint32_t *ilen);
 
 /* ---------------------------------------------------------------------- */
 /* The theme */
@@ -889,6 +896,20 @@ static const char *res_name(uint32_t type, int16_t id)
     return "";
 }
 
+/* A metric of 'tinf' 128 (a flattened collection of 16-bit values) by
+ * its tag: 'mbht' the menu bar's height, 'lvth'/'lhtw' and 'svth'/'shtw'
+ * the scroll bars' widths, and so on (thme_dump lists them). */
+bool thme_metric(const char *tag, int *out)
+{
+    uint32_t len, il;
+    const uint8_t *d = T.on ? res(fourcc("tinf"), 128, &len) : NULL;
+    const uint8_t *v = d ? coll_item(d, len, tag, &il) : NULL;
+    if (!v || il != 2)
+        return false;
+    *out = (int16_t)be16(v);
+    return true;
+}
+
 static void dump_metrics(FILE *f)
 {
     uint32_t len;
@@ -914,12 +935,53 @@ static void dump_metrics(FILE *f)
     fprintf(f, "\n");
 }
 
+/* The scenes: each item's tag and size, strings and 16-bit values shown. */
+static void dump_scenes(FILE *f)
+{
+    for (size_t i = 0; i < T.idx.count; i++) {
+        rsrc_entry *e = &T.idx.entries[i];
+        if (e->type != fourcc("scen"))
+            continue;
+        const uint8_t *d = rsrc_data(T.fork, &T.idx, e);
+        uint32_t len = e->data_len;
+        if (len < 12)
+            continue;
+        uint32_t n = be32(d + 8), base = 12 + n * 16;
+        fprintf(f, "scen %d \"%s\":", e->id, e->name);
+        for (uint32_t k = 0; k < n && 12 + k * 16 + 16 <= len; k++) {
+            const uint8_t *x = d + 12 + k * 16;
+            uint32_t off = base + be32(x + 12);
+            char tag[5];
+            fourcc_str(be32(x), tag);
+            if (off + 4 > len)
+                continue;
+            uint32_t sz = be32(d + off);
+            const uint8_t *v = d + off + 4;
+            if (off + 4 + sz > len)
+                continue;
+            fprintf(f, " %s", tag);
+            if (sz == 2)
+                fprintf(f, "=%d", (int16_t)be16(v));
+            else if (sz == 4)
+                fprintf(f, "=%08x", be32(v));
+            else if (sz == 6)
+                fprintf(f, "=%04x%04x%04x", be16(v), be16(v + 2), be16(v + 4));
+            else if (sz && v[0] + 1u == sz)
+                fprintf(f, "=\"%.*s\"", v[0], v + 1);
+            else
+                fprintf(f, "=(%u bytes)", sz);
+        }
+        fprintf(f, "\n");
+    }
+}
+
 void thme_dump(FILE *f, bool coords)
 {
     if (!T.on)
         return;
     fprintf(f, "theme %s\n", T.name);
     dump_metrics(f);
+    dump_scenes(f);
     char ts[5];
     for (size_t i = 0; i < T.idx.count; i++) {
         rsrc_entry *e = &T.idx.entries[i];
@@ -986,6 +1048,8 @@ void thme_dump(FILE *f, bool coords)
         for (int k = 0; k < n && 12 + (uint32_t)(k + 1) * (uint32_t)es <= e->data_len; k++) {
             const uint8_t *x = d + 12 + k * es;
             fprintf(f, " [%d %d", (int8_t)x[1], (int16_t)be16(x + 2));
+            if (x[0])
+                fprintf(f, " flags %02x", x[0]);
             for (int s = 0; s < 4; s++)
                 fprintf(f, ver >= 3 ? " %04x" : " %02x", ver >= 3 ? be16(x + 4 + s * 2) : x[4 + s]);
             fprintf(f, "]");
@@ -1035,6 +1099,14 @@ static bool window_kind(int var, wkind *k)
     }
 }
 
+/* Utility windows' titles are in the small system font (Geneva, unless
+ * the theme's scene names another that is here). */
+static int small_family(void)
+{
+    int fam = thme_scene_font("smsf", NULL, 0);
+    return fam > 0 ? fam : 3;
+}
+
 /* The title, and its size in the title's font (measures 1-4: the width,
  * half of it, the height, half of it). */
 static int window_title(gaddr w, const wkind *k, uint8_t *s, int *m)
@@ -1047,7 +1119,7 @@ static int window_title(gaddr w, const wkind *k, uint8_t *s, int *m)
     gaddr port = qd_port();
     int16_t f = GrafPort_txFont(port), sz = GrafPort_txSize(port);
     uint8_t face = GrafPort_txFace(port);
-    GrafPort_set_txFont(port, k->small ? 3 : 0);
+    GrafPort_set_txFont(port, k->small ? small_family() : 0);
     GrafPort_set_txSize(port, k->small ? 9 : 12);
     GrafPort_set_txFace(port, 0);
     int tw = n ? qd_text_width(port, s, n) : 0;
@@ -1064,6 +1136,11 @@ static int window_title(gaddr w, const wkind *k, uint8_t *s, int *m)
     m[4] = (th_ + 1) / 2;
     return n;
 }
+
+/* The system's script runs right to left (TESysJust -1): windows,
+ * check boxes, radio buttons and pop-up buttons are drawn mirrored, from
+ * the theme's own right-to-left layouts and images. */
+static bool right_to_left(void) { return (int16_t)rd16(0x0BAC) == -1; }
 
 static uint32_t window_state(int var, bool goaway, bool zoom, bool titled)
 {
@@ -1096,12 +1173,12 @@ bool thme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool
     uint8_t s[256];
     int m[THME_MEASURES];
     int n = window_title(w, &k, s, m);
-    uint32_t st = window_state(var, goaway, zoom, n > 0);
+    uint32_t st = window_state(var, goaway, zoom, n > 0) | (right_to_left() ? 0x02 : 0);
     thme_draw_part(id, c, st, m, pressed);
     qrect tr;
     if (n && thme_part_rect(id, c, st, m, THME_TITLE_TEXT, &tr)) {
         gaddr port = qd_port();
-        GrafPort_set_txFont(port, k.small ? 3 : 0);
+        GrafPort_set_txFont(port, k.small ? small_family() : 0);
         GrafPort_set_txSize(port, k.small ? 9 : 12);
         GrafPort_set_txFace(port, 0);
         GrafPort_set_txMode(port, 1);
@@ -1136,7 +1213,8 @@ bool thme_window_region(gaddr w, int var, qrect c, bool goaway, bool zoom, hrgn 
     uint8_t s[256];
     int m[THME_MEASURES];
     int n = window_title(w, &k, s, m);
-    return thme_part_region(k.id, c, window_state(var, goaway, zoom, n > 0), m, THME_CONTENT, out);
+    return thme_part_region(k.id, c, window_state(var, goaway, zoom, n > 0) | (right_to_left() ? 0x02 : 0), m, THME_CONTENT,
+                            out);
 }
 
 /* 1 close box, 2 zoom box, 3 collapse box, 4 title bar or frame, 0 none, -1
@@ -1149,7 +1227,8 @@ int thme_window_hit(gaddr w, int var, qrect c, bool goaway, bool zoom, int h, in
     uint8_t s[256];
     int m[THME_MEASURES];
     int n = window_title(w, &k, s, m);
-    uint32_t hit = thme_part_hit(k.id, c, window_state(var, goaway, zoom, n > 0), m, 0xFF, h, v);
+    uint32_t hit =
+        thme_part_hit(k.id, c, window_state(var, goaway, zoom, n > 0) | (right_to_left() ? 0x02 : 0), m, 0xFF, h, v);
     if (hit & THME_CLOSE)
         return 1;
     if (hit & THME_ZOOM)
@@ -1222,7 +1301,8 @@ bool thme_check_box(qrect box, bool radio, int value, uint32_t state)
     int m[THME_MEASURES] = { 0 };
     qrect b = { box.top, (int16_t)(box.left - 2), box.bottom, (int16_t)(box.right + 2) };
     uint32_t st = (state == 0 ? 0x01 : 0) | (state == 2 ? 0x20 : 0) | (value == 1 ? 0x02 : value == 2 ? 0x04 : 0);
-    return T.on && thme_draw_part(radio ? 515 : 510, b, st, m, 0);
+    int id = (radio ? 515 : 510) + (right_to_left() && thme_has_part(radio ? 516 : 511) ? 1 : 0);
+    return T.on && thme_draw_part(id, b, st, m, 0);
 }
 
 /* A scroll bar: the arrows' images at its ends, the track's layout between
@@ -1231,8 +1311,13 @@ bool thme_check_box(qrect box, bool radio, int value, uint32_t state)
  * thumb. */
 bool thme_scroll_bar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb)
 {
-    int id = vertical ? 405 : 400;
-    int16_t a0 = vertical ? 321 : 331, a1 = vertical ? 322 : 332;
+    /* Small scroll bars (11 pixels across) have their own layouts and
+     * arrows: 410 and 415, 'pxm#' 471/472 and 481/482. */
+    int across = vertical ? r.right - r.left : r.bottom - r.top;
+    bool small = across < 14 && T.on && layout(vertical ? 415 : 410) &&
+                 thme_image_size(fourcc("pxm#"), vertical ? 471 : 481, &(int){ 0 }, &(int){ 0 }, &(int){ 0 });
+    int id = (vertical ? 405 : 400) + (small ? 10 : 0);
+    int16_t a0 = small ? (vertical ? 471 : 481) : vertical ? 321 : 331, a1 = (int16_t)(a0 + 1);
     int w0, h0, n0, w1, h1, n1;
     if (!T.on || !layout((int16_t)id) || !thme_image_size(fourcc("pxm#"), a0, &w0, &h0, &n0) ||
         !thme_image_size(fourcc("pxm#"), a1, &w1, &h1, &n1))
@@ -1284,6 +1369,53 @@ bool thme_disclosure(qrect r, int value, uint32_t state, bool left)
     return part(550, r, draw_state(state) | (value ? 0x02 : 0) | (left ? 0x04 : 0));
 }
 
+/* DrawThemePopupArrow: the theme's arrow images ('pxm#' 360-364 down, 370
+ * right, 380 left, 385 up, three to eleven pixels across), the one as tall
+ * (or, sideways, as wide) as the size's points, else the nearest below,
+ * centred; images 0 active, 1 pressed, 2 inactive.  orient is a
+ * ThemeArrowOrientation (0 left, 1 down, 2 right, 3 up); size 0-3 the 3,
+ * 5, 7 and 9 point arrows. */
+bool thme_popup_arrow(qrect r, int orient, int size, uint32_t state)
+{
+    static const int16_t base[4] = { 380, 360, 370, 385 };
+    static const int pts[4] = { 3, 5, 7, 9 };
+    if (!T.on)
+        return false;
+    int16_t best = 0;
+    int bw = 0, bh = 0, bn = 0, got = 0;
+    for (int k = 0; k < 5; k++) {
+        int w, h, n;
+        int16_t id = (int16_t)(base[orient & 3] + k);
+        if (!thme_image_size(fourcc("pxm#"), id, &w, &h, &n))
+            continue;
+        int along = (orient & 1) ? h : w, want = pts[size & 3];
+        /* the largest that fits, else the smallest */
+        bool better = !best || (along <= want ? got > want || along > got : got > want && along < got);
+        if (better) {
+            best = id;
+            bw = w, bh = h, bn = n, got = along;
+        }
+    }
+    if (!best)
+        return false;
+    int frame = state == 0 ? 2 : state == 2 ? 1 : 0;
+    if (frame >= bn)
+        frame = 0;
+    int x = r.left + (r.right - r.left - bw) / 2, y = r.top + (r.bottom - r.top - bh) / 2;
+    surface s;
+    port_surface(&s);
+    surface *old = S;
+    S = &s;
+    draw_tile(image(fourcc("pxm#"), best), frame, (qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + bh), (int16_t)(x + bw) }, 1);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
+}
+
+/* The keyboard focus round a rectangle: the theme's FocusGenericRect
+ * frame ('frme' 560, its rings outside the rectangle). */
+bool thme_focus_rect(qrect r) { return thme_frame(560, r); }
+
 /* The little arrows: state 2 the upper one pressed, 3 the lower one. */
 bool thme_little_arrows(qrect r, uint32_t state)
 {
@@ -1295,15 +1427,21 @@ bool thme_popup(qrect r, uint32_t state, bool arrow_only)
 {
     if (arrow_only && thme_has_part(525))
         return part(525, r, draw_state(state));
-    return part(520, r, draw_state(state));
+    return part(right_to_left() && thme_has_part(521) ? 521 : 520, r, draw_state(state));
 }
 
-/* A north-facing tab: ThemeTabStyle (0 non-front, 1 pressed, 2 inactive, 3
- * front, 4 front inactive, 5 and 6 unavailable); small ones are 315. */
-bool thme_tab(qrect r, int style, bool small)
+/* A tab: ThemeTabStyle (0 non-front, 1 pressed, 2 inactive, 3 front, 4
+ * front inactive, 5 and 6 unavailable), facing dir (0 north, 1 south, 2
+ * east, 3 west: layouts 310, 320, 340 and 330; the small ones 5 on). */
+bool thme_tab(qrect r, int style, bool small, int dir)
 {
+    static const int ids[4] = { 310, 320, 340, 330 };
     bool front = style == 3 || style == 4 || style == 6, inactive = style == 2 || style == 4 || style >= 5;
-    int id = small && thme_has_part(315) ? 315 : 310;
+    int id = ids[dir & 3];
+    if (!thme_has_part(id))
+        id = 310;
+    if (small && thme_has_part(id + 5))
+        id += 5;
     return part(id, r, (front ? 0x01 : 0) | (inactive ? 0x02 : 0) | (style == 1 ? 0x20 : 0));
 }
 
@@ -1371,10 +1509,28 @@ bool thme_menu_title(qrect bar, qrect r, bool selected, bool enabled)
 }
 
 /* A menu's background: 0 pull-down, 1 pop-up, 2 hierarchical. */
-bool thme_menu_background(qrect r, int type)
+static int menu_part(int type)
 {
     int id = 257 + (type == 1 ? 1 : type == 2 ? 2 : 0);
-    return part(thme_has_part(id) ? id : 257, r, 0);
+    return thme_has_part(id) ? id : 257;
+}
+
+bool thme_menu_background(qrect r, int type) { return part(menu_part(type), r, 0); }
+
+/* What a menu's background covers round r: most themes draw the frame and
+ * shadow outside the menu's rectangle (System 7's a pixel left and above,
+ * two right and below, as the classic menus; some a wide soft shadow), a
+ * few inside it.  False when the theme has no menu background. */
+bool thme_menu_extent(qrect r, int type, qrect *out)
+{
+    hrgn g;
+    int m[THME_MEASURES] = { 0 };
+    if (!T.on || !layout(257) || !thme_part_region(menu_part(type), r, 0, m, 0, &g))
+        return false;
+    qrect b = hrgn_bbox(&g);
+    hrgn_free(&g);
+    *out = b.right > b.left && b.bottom > b.top ? b : r;
+    return true;
 }
 
 /* An item's background (and the arrow of a hierarchical one): 0x02 an
@@ -1444,6 +1600,53 @@ bool thme_scene_string(const char *tag, char *out, size_t n)
     return true;
 }
 
+/* A theme file draws the screen: loaded, and the appearance chosen. */
+bool thme_in_use(void) { return T.on && g_appearance == MACHINE_APPEARANCE_THEME; }
+
+/* A font of the scene ('lgsf' the system font, 'smsf' the small one,
+ * 'vfnt' the views font) that is installed here, as its family. */
+int thme_scene_font(const char *tag, char *out, size_t n)
+{
+    char name[64];
+    if (!thme_scene_string(tag, name, sizeof name) || !name[0])
+        return -1;
+    int fam = qd_classic_family(name);
+    if (fam >= 0 && out)
+        snprintf(out, n, "%s", name);
+    return fam;
+}
+
+/* The system font a theme's screen has: its scene's, else Charcoal (Mac
+ * OS 8's, which stays when a theme names one that isn't installed, as
+ * Gizmo's Gadget and Hi-Tech's Techno are not here). */
+int thme_system_family(void)
+{
+    int fam = thme_scene_font("lgsf", NULL, 0);
+    return fam >= 0 ? fam : qd_classic_family("Charcoal");
+}
+
+/* A 16-bit number of the scene, or a Boolean (a byte, sometimes padded
+ * to two: the first). */
+bool thme_scene_int(const char *tag, int *out)
+{
+    uint32_t il;
+    const uint8_t *d = T.on ? scene_item(tag, &il) : NULL;
+    if (!d || il != 2)
+        return false;
+    *out = (int16_t)be16(d);
+    return true;
+}
+
+bool thme_scene_bool(const char *tag, bool *out)
+{
+    uint32_t il;
+    const uint8_t *d = T.on ? scene_item(tag, &il) : NULL;
+    if (!d || !il || il > 2)
+        return false;
+    *out = d[0] != 0;
+    return true;
+}
+
 /* The sound mask the scene asks for ('smsk'), else every class. */
 uint32_t thme_sound_mask(void)
 {
@@ -1496,6 +1699,59 @@ bool thme_paint_desk(const hrgn *area)
     hrgn_free(&s.clip);
     return true;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Icons: 'tic#' 384 maps the system's icon types ('fldr', 'trsh', 'stop',
+ * 'caut', 'note'...) to the theme's icon resources: u32 count, then
+ * {OSType, int16 ID} entries.  The IDs are mostly the System's own (-3999
+ * the folder), the theme holding its own icons at them. */
+
+static const uint8_t *icon_table(uint32_t *n)
+{
+    uint32_t len;
+    const uint8_t *d = T.on ? res(fourcc("tic#"), 384, &len) : NULL;
+    if (!d || len < 4)
+        return NULL;
+    *n = be32(d);
+    if (*n > (len - 4) / 6)
+        *n = (len - 4) / 6;
+    return d + 4;
+}
+
+/* Whether the theme has any of an icon family's resources at an ID. */
+static bool has_icon(int16_t id)
+{
+    static const char *const kinds[] = { "icns", "ICN#", "ics#", "icl8", "ics8", "icm#" };
+    uint32_t len;
+    for (unsigned i = 0; i < sizeof kinds / sizeof kinds[0]; i++)
+        if (res(fourcc(kinds[i]), id, &len))
+            return true;
+    return false;
+}
+
+bool thme_icon_id(uint32_t type, int16_t *id)
+{
+    uint32_t n;
+    const uint8_t *e = icon_table(&n);
+    for (uint32_t i = 0; e && i < n; i++, e += 6)
+        if (be32(e) == type && has_icon((int16_t)be16(e + 4))) {
+            *id = (int16_t)be16(e + 4);
+            return true;
+        }
+    return false;
+}
+
+bool thme_icon_listed(int16_t id)
+{
+    uint32_t n;
+    const uint8_t *e = icon_table(&n);
+    for (uint32_t i = 0; e && i < n; i++, e += 6)
+        if ((int16_t)be16(e + 4) == id)
+            return has_icon(id);
+    return false;
+}
+
+const uint8_t *thme_resource(uint32_t type, int16_t id, uint32_t *len) { return T.on ? res(type, id, len) : NULL; }
 
 /* ---------------------------------------------------------------------- */
 /* Cursors: 'crsr' 128-131 the arrows, 139 and 140 the closed and open
@@ -1681,6 +1937,45 @@ void thme_render_sheet(uint8_t *rgba, int w, int h)
         int mm[THME_MEASURES] = { 0, 0, 0, 30, 70 };
         draw_part_on(405, (qrect){ (int16_t)(490 + h0), 440, 640, (int16_t)(440 + w0) }, 0x10, mm, 0, 0);
     }
+    if (h < 900)
+        goto done;
+    /* Tabs facing each way (a front one and one behind, on their panes),
+     * small scroll bars, pop-up arrows, a focus frame and a drawer. */
+    static const int tab_ids[4] = { 310, 320, 340, 330 };
+    for (int d = 0; d < 4; d++) {
+        int x = 40 + d * 190, y = 700;
+        bool side = d >= 2;
+        qrect pane = { (int16_t)(y + (d == 0 ? 21 : 0)), (int16_t)(x + (d == 3 ? 21 : 0)),
+                       (int16_t)(y + 120 - (d == 1 ? 21 : 0)), (int16_t)(x + 170 - (d == 2 ? 21 : 0)) };
+        draw_part_on(300, pane, 0, m, 0, 0);
+        for (int k = 0; k < 2; k++) {
+            int p = (side ? y : x) + 8 + k * 50;
+            qrect t = d == 0 ? (qrect){ (int16_t)y, (int16_t)p, (int16_t)(y + 24), (int16_t)(p + 51) }
+                    : d == 1 ? (qrect){ (int16_t)(y + 96), (int16_t)p, (int16_t)(y + 120), (int16_t)(p + 51) }
+                    : d == 2 ? (qrect){ (int16_t)p, (int16_t)(x + 146), (int16_t)(p + 51), (int16_t)(x + 170) }
+                             : (qrect){ (int16_t)p, (int16_t)x, (int16_t)(p + 51), (int16_t)(x + 24) };
+            draw_part_on(layout((int16_t)tab_ids[d]) ? tab_ids[d] : 310, t, k == 0 ? 0x01 : 0, m, 0, 0);
+        }
+    }
+    int sw, sh, sn;
+    if (layout(410) && thme_image_size(fourcc("pxm#"), 481, &sw, &sh, &sn)) {
+        draw_tile(image(fourcc("pxm#"), 481), 0, (qrect){ 840, 40, (int16_t)(840 + sh), (int16_t)(40 + sw) }, 1);
+        draw_tile(image(fourcc("pxm#"), 482), 0, (qrect){ 840, 240, (int16_t)(840 + sh), (int16_t)(240 + sw) }, 1);
+        int mm[THME_MEASURES] = { 0, 0, 0, 40, 70 };
+        draw_part_on(410, (qrect){ 840, (int16_t)(40 + sw), (int16_t)(840 + sh), 240 }, 0x10, mm, 0, 0);
+    }
+    for (int o = 0; o < 4; o++)
+        for (int k = 0; k < 5; k++) {
+            static const int16_t base[4] = { 380, 360, 370, 385 };
+            const timg *im = image(fourcc("pxm#"), (int16_t)(base[o] + k));
+            if (im)
+                draw_tile(im, 0, (qrect){ (int16_t)(840 + o * 14), (int16_t)(300 + k * 16), (int16_t)(840 + o * 14 + im->h),
+                                          (int16_t)(300 + k * 16 + im->w) }, 1);
+        }
+    draw_frame(560, (qrect){ 845, 420, 865, 480 });
+    sheet_window(140, 0, 520, 830, 120, 50, false, false, 0);
+    sheet_window(141, 0, 660, 830, 120, 50, false, false, 0);
+done:
     S = old;
 }
 
@@ -1741,7 +2036,7 @@ bool machine_theme_render(const char *path, const char *png, int part, int pw, i
 {
     if (!open_file(path, err, errlen))
         return false;
-    int w = 800, h = 680;
+    int w = 800, h = part ? 680 : 900;
     uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
     if (part)
         render_states(rgba, w, h, part, pw, ph);
@@ -1753,6 +2048,15 @@ bool machine_theme_render(const char *path, const char *png, int part, int pw, i
     free(rgba);
     thme_unload();
     return ok;
+}
+
+/* The menu bar's height: the theme's, when a theme file draws it. */
+int machine_menu_bar_height(void)
+{
+    int h;
+    if (T.on && g_appearance == MACHINE_APPEARANCE_THEME && thme_metric("mbht", &h) && h >= 12 && h <= 48)
+        return h;
+    return 20;
 }
 
 bool machine_load_theme_sounds(const char *path, char *err, size_t errlen)
@@ -1767,4 +2071,4 @@ bool machine_load_theme_sounds(const char *path, char *err, size_t errlen)
     return ok;
 }
 
-bool machine_theme_sound_set_name(char *out, size_t n) { return thme_scene_string("snds", out, n); }
+bool machine_theme_sound_set_name(char *out, size_t n) { return thme_scene_string("sndt", out, n); }

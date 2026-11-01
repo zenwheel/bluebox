@@ -13,7 +13,9 @@ import AppKit
 import BlueBoxHost
 import Toolbox
 
-let classicMenuBarHeight: CGFloat = 20
+/// The classic menu bar's height (a theme file's own, else 20), hidden
+/// under the host's menu bar.
+var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
 
 /// The host area the Mac screen maps onto: the main screen's visible area
 /// when first asked (as the Mac screen's size is set at launch), and kept.

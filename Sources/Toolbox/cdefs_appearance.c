@@ -743,31 +743,57 @@ static int32_t bevel_data(gaddr ch, ap_ctl *a, const access *x, bool set)
 }
 
 /* ---------------------------------------------------------------------- */
-/* CDEF 8: tabs (north facing; the others are drawn so too) */
+/* CDEF 8: tabs, facing north, south, east or west (procIDs 128-135: the
+ * variation's low bit small tabs, the rest the ControlTabDirection) */
 
 static int tab_height(gaddr ch) { return (var_of(ch) & 1) ? 19 : 24; }
+static int tab_dir(gaddr ch) { return (var_of(ch) >> 1) & 3; }
 
-/* The tabs' row along the top, from left + 8, each as wide as its title. */
+static int tab_width(gaddr ch, ap_ctl *a, int k)
+{
+    int n = a->tabs[k - 1].name[0];
+    int w = qd_text_width(qd_port(), a->tabs[k - 1].name + 1, n) + ((var_of(ch) & 1) ? 16 : 24);
+    return w < 40 ? 40 : w;
+}
+
+/* How far tabs stand out from the pane: a tab's height whichever way
+ * they face (the themes' side tabs are images as wide as the north ones
+ * are tall). */
+static int tab_depth(gaddr ch, ap_ctl *a) { return tab_height(ch); }
+
+/* The tabs along their edge from 8 pixels in, each as long as its title
+ * (down the side, the title turned to run along it). */
 static qrect tab_rect(gaddr ch, ap_ctl *a, int i)
 {
     qrect r = crect(ch);
-    int x = r.left + 8, th = tab_height(ch);
+    int dir = tab_dir(ch), th = tab_height(ch), depth = tab_depth(ch, a);
+    int p = (dir < 2 ? r.left : r.top) + 8;
     for (int k = 1; k <= a->ntabs; k++) {
-        int n = a->tabs[k - 1].name[0];
-        int w = qd_text_width(qd_port(), a->tabs[k - 1].name + 1, n) + ((var_of(ch) & 1) ? 16 : 24);
-        if (w < 40)
-            w = 40;
-        if (k == i)
-            return (qrect){ r.top, (int16_t)x, (int16_t)(r.top + th), (int16_t)(x + w) };
-        x += w - 1;
+        int len = tab_width(ch, a, k);
+        if (k == i) {
+            switch (dir) {
+            case 1: return (qrect){ (int16_t)(r.bottom - th), (int16_t)p, r.bottom, (int16_t)(p + len) };
+            case 2: return (qrect){ (int16_t)p, (int16_t)(r.right - depth), (int16_t)(p + len), r.right };
+            case 3: return (qrect){ (int16_t)p, r.left, (int16_t)(p + len), (int16_t)(r.left + depth) };
+            default: return (qrect){ r.top, (int16_t)p, (int16_t)(r.top + th), (int16_t)(p + len) };
+            }
+        }
+        p += len - 1;
     }
     return (qrect){ 0, 0, 0, 0 };
 }
 
-static qrect tab_pane(gaddr ch)
+/* The pane, the front tab overlapping it by 3. */
+static qrect tab_pane_of(gaddr ch, ap_ctl *a)
 {
     qrect r = crect(ch);
-    r.top = (int16_t)(r.top + tab_height(ch) - 3);
+    int d = tab_depth(ch, a) - 3;
+    switch (tab_dir(ch)) {
+    case 1: r.bottom = (int16_t)(r.bottom - d); break;
+    case 2: r.right = (int16_t)(r.right - d); break;
+    case 3: r.left = (int16_t)(r.left + d); break;
+    default: r.top = (int16_t)(r.top + d); break;
+    }
     return r;
 }
 
@@ -824,10 +850,18 @@ static void tabs_draw(gaddr ch, ap_ctl *a)
     tabs_fit(ch, a);
     ctl_font_saved fs;
     tab_font(ch, &fs);
-    qrect r = crect(ch);
-    erase((qrect){ r.top, r.left, (int16_t)(r.top + tab_height(ch) - 3), r.right });
+    qrect r = crect(ch), pane = tab_pane_of(ch, a);
+    /* the strip the tabs stand in, outside the pane */
+    qrect strip = r;
+    switch (tab_dir(ch)) {
+    case 1: strip.top = pane.bottom; break;
+    case 2: strip.left = pane.right; break;
+    case 3: strip.right = pane.left; break;
+    default: strip.bottom = pane.top; break;
+    }
+    erase(strip);
     bool active = chilite(ch) != 255;
-    ap_tab_pane(tab_pane(ch), active);
+    ap_tab_pane(pane, active);
     int front = cvalue(ch);
     for (int pass = 0; pass < 2; pass++)
         for (int i = 1; i <= a->ntabs; i++) {
@@ -835,7 +869,7 @@ static void tabs_draw(gaddr ch, ap_ctl *a)
                 continue;
             bool disabled = a->tabs[i - 1].disabled || !active;
             int style = i == front ? (disabled ? 4 : 3) : disabled ? 2 : chilite(ch) == i ? 1 : 0;
-            ap_tab(tab_rect(ch, a, i), style, a->tabs[i - 1].name + 1, a->tabs[i - 1].name[0]);
+            ap_tab(tab_rect(ch, a, i), style, tab_dir(ch), a->tabs[i - 1].name + 1, a->tabs[i - 1].name[0]);
         }
     ctl_font_end(&fs);
 }
@@ -880,7 +914,7 @@ static int32_t tabs_data(gaddr ch, ap_ctl *a, const access *x, bool set)
     int i = x->part;
     switch (x->tag) {
     case TAG('r', 'e', 'c', 't'): {
-        qrect c = inset(tab_pane(ch), 4);
+        qrect c = inset(tab_pane_of(ch, a), 4);
         uint8_t b[8] = { (uint8_t)(c.top >> 8), (uint8_t)c.top, (uint8_t)(c.left >> 8), (uint8_t)c.left,
                          (uint8_t)(c.bottom >> 8), (uint8_t)c.bottom, (uint8_t)(c.right >> 8), (uint8_t)c.right };
         return set ? errDataNotSupported : give(x, b, 8);

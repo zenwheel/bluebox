@@ -26,6 +26,7 @@
 #include "icons_internal.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 enum { invalidIconRefErr = -2580, noSuchIconErr = -2581, noIconDataAvailableErr = -2582 };
 enum { kCustomIconResource = -16455, kHasCustomIcon = 0x0400 };
@@ -202,6 +203,25 @@ static bool handle_data(gaddr h, uint8_t **d, uint32_t *n)
 
 static const char *const classic[] = { "ICN#", "icl4", "icl8", "ics#", "ics4", "ics8", "icm#", "icm4", "icm8" };
 
+/* An 'icns' family's elements put into f. */
+static bool fb_merge_icns(fbuf *f, const uint8_t *d, uint32_t n)
+{
+    bool any = false;
+    if (n < 8 || be32(d) != fourcc("icns"))
+        return false;
+    if (be32(d + 4) >= 8 && be32(d + 4) < n)
+        n = be32(d + 4);
+    for (uint32_t off = 8; off + 8 <= n;) {
+        uint32_t en = be32(d + off + 4);
+        if (en < 8 || off + en > n)
+            break;
+        fb_put(f, be32(d + off), d + off + 8, en - 8);
+        any = true;
+        off += en;
+    }
+    return any;
+}
+
 /* The icon resources with an ID, from the current resource file alone or
  * the whole chain, and an 'icns' resource of that ID merged in. */
 static bool fb_from_resources(int16_t id, bool one, fbuf *f)
@@ -221,25 +241,39 @@ static bool fb_from_resources(int16_t id, bool one, fbuf *f)
     }
     gaddr h = one ? tb_Get1Resource((int32_t)fourcc("icns"), id) : tb_GetResource((int32_t)fourcc("icns"), id);
     if (handle_data(h, &d, &n)) {
-        fbuf r = { d, n };
-        if (n >= 8 && be32(d) == fourcc("icns")) {
-            if (be32(d + 4) >= 8 && be32(d + 4) < n)
-                r.n = be32(d + 4);
-            for (uint32_t off = 8; off + 8 <= r.n;) {
-                uint32_t en = be32(d + off + 4);
-                if (en < 8 || off + en > r.n)
-                    break;
-                fb_put(f, be32(d + off), d + off + 8, en - 8);
-                any = true;
-                off += en;
-            }
-        }
+        any |= fb_merge_icns(f, d, n);
         free(d);
     }
     return any;
 }
 
 static uint16_t u16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
+
+/* A theme file's icon for a system icon type (its 'tic#'), when a theme
+ * draws the screen: as the Appearance Manager put a theme's icons in
+ * place of the System's. */
+static bool fb_from_theme(uint32_t type, fbuf *f)
+{
+    int16_t id;
+    if (!thme_in_use() || !thme_icon_id(type, &id))
+        return false;
+    fb_init(f);
+    bool any = false;
+    uint32_t n;
+    const uint8_t *d;
+    for (unsigned i = 0; i < sizeof classic / sizeof classic[0]; i++)
+        if ((d = thme_resource(fourcc(classic[i]), id, &n))) {
+            fb_put(f, fourcc(classic[i]), d, n);
+            any = true;
+        }
+    if ((d = thme_resource(fourcc("icns"), id, &n)))
+        any |= fb_merge_icns(f, d, n);
+    if (!any) {
+        free(f->b);
+        f->b = NULL;
+    }
+    return any;
+}
 
 /* The icon resource ID an application's bundle gives a file type: its
  * FREF for the type names a local ID, which the BNDL's ICN# list maps. */
@@ -499,7 +533,7 @@ static isref *icon_for(uint32_t creator, uint32_t type)
     char app[1024];
     bool ok = false;
     if (creator == SYSTEM_CREATOR) {
-        ok = system_icon_id(type, &id) && fb_from_system(id, &f);
+        ok = fb_from_theme(type, &f) || (system_icon_id(type, &id) && fb_from_system(id, &f));
     } else if (creator && fm_app_for_creator(creator, app, sizeof app)) {
         ok = fb_from_path(app, type, &f);
     }

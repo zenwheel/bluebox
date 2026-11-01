@@ -18,6 +18,7 @@
 #include "icons_internal.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 enum { ttNone = 0, ttDisabled = 1, ttOffline = 2, ttOpen = 3, ttSelected = 0x4000 };
 enum { noMaskFoundErr = -1000, paramErr_ = -50 };
@@ -129,9 +130,25 @@ int16_t tb_GetIconSuite(gaddr suitep, int16_t res_id, uint32_t selector)
     gaddr suite = rd32(tmp);
     tb_DisposePtr(tmp);
     int found = 0;
+    /* A theme file's icon in place of the System's (its 'tic#' lists the
+     * ID): the theme's resources, copied. */
+    bool themed = thme_in_use() && thme_icon_listed(res_id);
     for (unsigned i = 0; i < sizeof members / sizeof members[0]; i++) {
         if (!(selector & member_bits[i]))
             continue;
+        uint32_t n;
+        const uint8_t *d = themed ? thme_resource(fourcc(members[i]), res_id, &n) : NULL;
+        if (d) {
+            gaddr h = tb_NewHandle(n, false, false);
+            if (h) {
+                gput(rd32(h), d, n);
+                suite_put(suite, fourcc(members[i]), h);
+                found++;
+            }
+            continue;
+        }
+        if (themed)
+            continue; /* not the System's other sizes beside the theme's */
         gaddr h = tb_GetResource((int32_t)fourcc(members[i]), res_id);
         if (h) {
             suite_put(suite, fourcc(members[i]), h);
