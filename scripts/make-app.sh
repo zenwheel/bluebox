@@ -55,6 +55,7 @@ fi
 
 cp "$root/LICENSE" "$app/Contents/Resources/LICENSE.txt"
 cp "$root/Sources/MACE/COPYING.LGPLv2.1" "$app/Contents/Resources/MACE COPYING.LGPLv2.1.txt"
+cp "$root/Resources/Words/LICENSE.txt" "$app/Contents/Resources/Words LICENSE.txt"
 
 # The icon.
 iconset=$(mktemp -d)/BlueBox.iconset

@@ -610,7 +610,8 @@ void speech_interrupt(void);
 bool speech_waiting(void);
 bool speech_recording(machine_speech_fn fn); /* speech_record.c */
 void speech_reset(void);
-/* A word's phonemes (the Speech Manager's opcodes) by letter-to-sound rules. */
+/* A word's phonemes (the Speech Manager's opcodes): the dictionary's, else
+ * by letter-to-sound rules. */
 int speech_word_phonemes(const uint8_t *text, int len, uint8_t *out, int max);
 /* The host's main thread served once, when the machine runs on it (threadmgr.c). */
 void machine_serve_main_thread(void);

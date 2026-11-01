@@ -120,8 +120,8 @@ extension BlueBox {
             for (i, b) in "Mom, why?".utf8.enumerated() { wr8(text + UInt32(i), b) }
             #expect(tb_SpeakText(ch, text, 9) == 0)
             #expect(tb_SpeechBusy() == 0)
-            // m AA m, w IY, then silence (MacinTalk opcodes).
-            #expect(Self.phonemes == [28, 11, 28, 38, 6, 0])
+            // m AA m, w AY (the dictionary's), then silence (MacinTalk opcodes).
+            #expect(Self.phonemes == [28, 11, 28, 38, 9, 0])
             #expect(tb_DisposeSpeechChannel(ch) == 0)
         }
 
@@ -228,20 +228,95 @@ extension BlueBox {
             #expect(tb_DisposeSpeechChannel(ch) == 0)
         }
 
-        /// Phonemes given as input ([[inpt PHON]]) are said as written,
-        /// the embedded commands left out of the words.
-        @Test func phonemeInputIsSaidAsWritten() {
+        /// Phonemes given as input ([[inpt PHON]]) move the mouth as written:
+        /// the host says words made of them, and its first ("good") is
+        /// placed back on the phonemes it came from.
+        @Test func phonemeInputMovesTheMouthAsWritten() {
             let text = "[[inpt PHON]]_gUXd\\>>>AY_m//////<<<AYt.[[inpt TEXT]]"
             let (ch, _) = timedChannel(text)
             defer { machine_set_speech_handler(nil, nil); machine_set_speech_clock(nil) }
-            machine_speech_event(0, 1, 2, 16) // "inpt PHON]]_gUXd", as macOS splits it
+            machine_speech_event(0, 1, 0, 4) // "good", the host's first word
             run(until: 101)
             #expect(Self.timed.map(\.1) == [23, 14, 20, 0]) // g UX d, closed when no word comes
             #expect(tb_DisposeSpeechChannel(ch) == 0)
         }
 
-        /// macOS no longer turns text into phonemes: TextToPhonemes has ours.
-        @Test func textToPhonemesByTheLetters() {
+        /// What a channel gave the record backend to say.
+        func said(_ text: String, inputMode: UInt32? = nil) -> String {
+            launchTestApp()
+            _ = initToolbox()
+            g_cpu!.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            let log = tempDir().appendingPathComponent("said.txt").path
+            #expect(machine_set_speech_record(log))
+            defer { machine_set_speech_handler(nil, nil) }
+            let chp = tb_NewPtr(4, false, true)
+            #expect(tb_NewSpeechChannel(0, chp) == 0)
+            if let mode = inputMode {
+                let m = tb_NewPtr(4, false, true)
+                wr32(m, mode)
+                #expect(tb_SetSpeechInfo(rd32(chp), Int32(bitPattern: 0x696E_7074), m) == 0) // 'inpt'
+            }
+            let buf = tb_NewPtr(Int32(text.utf8.count + 1), false, true)
+            for (i, b) in text.utf8.enumerated() { wr8(buf + UInt32(i), b) }
+            #expect(tb_SpeakText(rd32(chp), buf, UInt32(text.utf8.count)) == 0)
+            _ = tb_SpeechBusy()
+            #expect(tb_DisposeSpeechChannel(rd32(chp)) == 0)
+            let lines = ((try? String(contentsOfFile: log, encoding: .utf8)) ?? "").split(separator: "\n")
+            guard let line = lines.first(where: { $0.contains(" speak ") }), let colon = line.range(of: ": ") else { return "" }
+            return String(line[colon.upperBound...])
+        }
+
+        /// The host's voices read phonemes out as letters, so phonemes given
+        /// as input are said as the words they make: several words written
+        /// together, stress, pitch and length marks, doubled sounds, near
+        /// misses (a schwa for a full vowel, a dropped r) and the embedded
+        /// commands around them; what no word matches is spelt by its sounds.
+        @Test func phonemeInputIsSaidAsWords() {
+            #expect(said("[[inpt PHON]]_hEHlOW _w1UXrld.[[inpt TEXT]] Bye now.") == "hello world. Bye now.")
+            #expect(said("[[rate 200; inpt PHON]]1AYm=2sOW _sl>>>IYIYIYp1IY[[inpt TEXT]]") == "[[rate 200]]I'm so sleepy")
+            #expect(said("[[inpt PHON]]mEYkmIY AX sAEndwIHC, %%plIYz?") == "make me a sandwich, please?")
+            #expect(said("[[inpt PHON]]_D1AX _k1AEts _s1AEt _AAn _D1AX _mAEt") == "the cats sat on the mat")
+            #expect(said("[[inpt PHON]]AY tAYrd AXv wEYtIHN") == "I tired of waiting") // tired, waiting: nearly
+            #expect(said("[[inpt PHON]]+gOW") == "[[emph +]] go")
+            #expect(said("[[inpt PHON]]zgrOWfk") == "zgrohfk") // no such word: spelt by its sounds
+            #expect(said("hEHlOW wUXrld", inputMode: 0x5048_4F4E) == "hello world") // the 'PHON' input mode
+            #expect(said("Plain text, [[rate 150]]untouched.") == "Plain text, [[rate 150]]untouched.")
+        }
+
+        /// Word callbacks give the program's offsets: a word the host says
+        /// is the phonemes it came from in the program's text.
+        nonisolated(unsafe) static var words: [(UInt32, UInt16)] = []
+        static let wordProc: native_fn = { c, _ in
+            guard let c else { return }
+            let ret = cpu_pop32(c)
+            let len = cpu_pop16(c)
+            let pos = cpu_pop32(c)
+            _ = cpu_pop32(c)
+            _ = cpu_pop32(c)
+            Speech.words.append((pos, len))
+            cpu_push32(c, ret)
+        }
+
+        @Test func wordsOfPhonemesAreThePrograms() {
+            let text = "[[inpt PHON]]mEYkmIY hAEpIY"
+            let (ch, _) = timedChannel(text)
+            defer { machine_set_speech_handler(nil, nil); machine_set_speech_clock(nil) }
+            Self.words = []
+            #expect(tb_SetSpeechInfo(ch, Int32(bitPattern: 0x7764_6362), native_register(Self.wordProc, "speech word", 0)) == 0)
+            // The host says "make me happy": its words, as it counts them.
+            machine_speech_event(0, 1, 0, 4)
+            machine_speech_event(0, 1, 5, 2)
+            machine_speech_event(0, 1, 8, 5)
+            run(until: 100.2)
+            #expect(Self.words.map(\.0) == [13, 17, 21] && Self.words.map(\.1) == [4, 3, 6]) // mEYk, mIY, hAEpIY
+            #expect(Self.timed.first?.1 == 28) // m: the mouth moves to the phonemes written
+            #expect(tb_DisposeSpeechChannel(ch) == 0)
+        }
+
+        /// macOS no longer turns text into phonemes: TextToPhonemes has ours,
+        /// the dictionary's or else by the letters.  Given back as input,
+        /// they are said as the text they came from.
+        @Test func textToPhonemesOfOurOwn() {
             launchTestApp()
             _ = initToolbox()
             let chp = tb_NewPtr(4, false, true)
@@ -252,7 +327,21 @@ extension BlueBox {
             let len = tb_NewPtr(4, false, true)
             #expect(tb_TextToPhonemes(rd32(chp), text, 9, h, len) == 0)
             let n = Int(rd32(len))
-            #expect(String(decoding: (0..<n).map { rd8(rd32(h) + UInt32($0)) }, as: UTF8.self) == "mAAm, wIY?")
+            #expect(String(decoding: (0..<n).map { rd8(rd32(h) + UInt32($0)) }, as: UTF8.self) == "mAAm, wAY?")
+            for (i, b) in "Blorft".utf8.enumerated() { wr8(text + UInt32(i), b) }
+            #expect(tb_TextToPhonemes(rd32(chp), text, 6, h, len) == 0)
+            let blorft = String(decoding: (0..<Int(rd32(len))).map { rd8(rd32(h) + UInt32($0)) }, as: UTF8.self)
+            #expect(blorft == "blAArft") // not a word: by the letters
+            let log = tempDir().appendingPathComponent("t2p.txt").path
+            #expect(machine_set_speech_record(log))
+            defer { machine_set_speech_handler(nil, nil) }
+            g_cpu!.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            let input = "[[inpt PHON]]" + blorft + "[[inpt TEXT]]"
+            let buf = tb_NewPtr(64, false, true)
+            for (i, b) in input.utf8.enumerated() { wr8(buf + UInt32(i), b) }
+            #expect(tb_SpeakText(rd32(chp), buf, UInt32(input.utf8.count)) == 0)
+            _ = tb_SpeechBusy()
+            #expect(((try? String(contentsOfFile: log, encoding: .utf8)) ?? "").contains(": Blorft\n"))
             #expect(tb_DisposeSpeechChannel(rd32(chp)) == 0)
         }
 
@@ -262,7 +351,7 @@ extension BlueBox {
         /// with the SpeechRecord as the parameter block; the Reader's handle
         /// comes back at $34.  The Reader spells English in MacinTalk's code,
         /// MacinTalk() (a _Write of the phonemes) says the English it came
-        /// from, or a program's own phonemes in the host's code; Control 2
+        /// from, or a program's own phonemes as the words they make; Control 2
         /// is the rate; Close takes the entry out of the unit table.
         @Test func macinTalkOneSpeaksThroughTheSpeechManager() {
             launchTestApp()
@@ -323,7 +412,17 @@ extension BlueBox {
             io(0xA203, rec)
             let said = (try? String(contentsOfFile: log, encoding: .utf8)) ?? ""
             #expect(said.contains("rate 150.0 pitch 45.0 modulation 35.0 volume 1.00: Cat\n"))
-            #expect(said.contains("rate 200.0 pitch 45.0 modulation 35.0 volume 1.00: [[inpt PHON]]h1EHlOW[[inpt TEXT]]\n"))
+            #expect(said.contains("rate 200.0 pitch 45.0 modulation 35.0 volume 1.00: hello\n"))
+            // A phrase of the program's own, in MacinTalk's code (several words
+            // run together, doubled sounds, stress digits, its end mark).
+            let phrase = "WAH5TS FOHR DIH4NER, QXQX MAA4M? AY5M SOW SLIY6IY5IY4PIY.#"
+            let h2 = tb_NewHandle(Int32(phrase.utf8.count), false, true)
+            for (i, b) in phrase.utf8.enumerated() { wr8(rd32(h2) + UInt32(i), b) }
+            wr32(rec + 0x20, h2)
+            wr32(rec + 0x24, UInt32(phrase.utf8.count))
+            io(0xA203, rec)
+            let said2 = (try? String(contentsOfFile: log, encoding: .utf8)) ?? ""
+            #expect(said2.contains(": what's for dinner, mom? I'm so sleepy.\n"))
 
             io(0xA001, rec) // _Close (SpeechOff)
             #expect(rd16(rec + 0x10) == 0 && rd32(rd32(UInt32(LM_UTableBase)) + 4 * 25) == 0)

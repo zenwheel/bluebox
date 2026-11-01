@@ -31,3 +31,7 @@ Parts of this repository are under their own licences, given beside them:
   listed in Resources/Fonts/README.md.
 - Defs/multiversal: the Multiversal interface definitions
   (Defs/multiversal/COPYING).
+- Sources/Toolbox/phonwords_gen.c: English words and their pronunciations,
+  made from the CMU Pronouncing Dictionary (BSD-style licence) and SCOWL
+  (Kevin Atkinson's permissive licence) by Generators/phonwords.py; the
+  notices are at the top of the file and in Resources/Words/LICENSE.txt.
