@@ -844,6 +844,11 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
      * which counts from ApplLimit: Zooma Zooma wants room for its
      * recursion). */
     if (afterdark_is_module_file()) {
+        /* One with PowerPC code ran on a Power Mac, whose Gestalt it asks
+         * before calling it (Twist PPC, Quantum Vichyssoise); After Dark
+         * itself was 68k there too. */
+        if (afterdark_has_powerpc(app_path))
+            gestalt_powerpc();
         gaddr top = g_mem_24bit ? GA_A5WORLD_TOP_24 : GA_A5WORLD_TOP;
         gaddr a5 = (top - 64) & ~3u, base = a5 - 1024;
         gmemset(base, 0, top - base);

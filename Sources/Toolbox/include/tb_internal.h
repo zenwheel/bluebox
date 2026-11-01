@@ -345,6 +345,8 @@ void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
 int16_t memory_dispatch(uint16_t sel, uint32_t a0, uint32_t a1, uint32_t *a0_out);
 void raw_IdleUpdate(cpu68k *c, uint16_t tw);
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
+void raw_CodeFragmentDispatch(cpu68k *c, uint16_t tw); /* cfm.c: the CFM for 68k code on a Power Mac */
+void cfm_install_68k_trap(void); /* _CodeFragmentDispatch there, as on a Power Mac */
 /* A MacRoman character's comparison key. */
 int mac_char_key(uint8_t c, bool case_sens, bool ignore_marks);
 void intl_convert_text(gaddr text, int32_t len, bool upper, bool strip);
@@ -687,6 +689,7 @@ uint32_t ev_input_serial(void);           /* moves with each key, click and mous
  * blanking in a run. */
 bool afterdark_is_module_file(void);
 uint32_t afterdark_module_entry(void);
+bool afterdark_has_powerpc(const char *path); /* PowerPC code in the module file */
 void afterdark_idle(void);
 bool afterdark_running(void);
 void afterdark_reset(void);

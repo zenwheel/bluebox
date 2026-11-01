@@ -936,6 +936,23 @@ bool afterdark_is_module_file(void)
     return tb_Count1Resources((int32_t)fourcc("ADgm")) > 0;
 }
 
+/* Whether the module file holds PowerPC code: an accelerated 'ADgm', a
+ * PowerPC container in a resource (the 68k stubs of the "PPC" modules load
+ * one) or in its data fork (After Dark 4's). */
+bool afterdark_has_powerpc(const char *path)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return false;
+    static const uint8_t pef[8] = { 'J', 'o', 'y', '!', 'p', 'e', 'f', 'f' };
+    bool found = mf.data_len >= 8 && !memcmp(mf.data, pef, 8);
+    for (size_t i = 0; !found && mf.rsrc_len >= 8 && i + 8 <= mf.rsrc_len; i++)
+        found = mf.rsrc[i] == 'J' && !memcmp(mf.rsrc + i, pef, 8);
+    mac_file_free(&mf);
+    return found;
+}
+
 uint32_t afterdark_module_entry(void)
 {
     memset(&stats, 0, sizeof stats);

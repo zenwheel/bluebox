@@ -260,6 +260,72 @@ extension BlueBox {
             #expect(seen.count - 3 >= 10 && seen.count - 3 <= 24)
         }
 
+        /// 68k code on a Power Mac loads PowerPC code with the Code
+        /// Fragment Manager's trap, $AA5A (the "PPC" modules' stubs do):
+        /// GetMemFragment gives a connection and main's transition vector,
+        /// FindSymbol finds main by name.
+        @Test func codeFragmentDispatchFrom68k() {
+            bootMachine()
+            let unimplemented = tb_GetTrapAddress(0xA89F, true, true)
+            #expect(tb_GetTrapAddress(0xAA5A, false, false) == unimplemented) // a Quadra has no such trap
+            gestalt_powerpc()                                                 // a Power Mac does
+            #expect(tb_GetTrapAddress(0xAA5A, false, false) != unimplemented)
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            func b32(_ v: UInt32) -> [UInt8] { be32(v) }
+            func b16(_ v: UInt16) -> [UInt8] { be16(Int(v)) }
+            // A PEF: code (li r3,7; blr), a data section holding main's
+            // vector (RelocTVector8), main exported as "main".
+            let strings = Array("main".utf8) + [0, 0, 0, 0]
+            var loader = b32(1) + b32(0) + b32(UInt32(bitPattern: -1)) + b32(0) + b32(UInt32(bitPattern: -1)) + b32(0)
+            loader += b32(0) + b32(0) + b32(1) + b32(68) + b32(72) + b32(80) + b32(0) + b32(1)
+            loader += b16(1) + b16(0) + b32(1) + b32(0)                    // relocations for section 1
+            loader += b16(0x4600) + b16(0)                                 // RelocTVector8, once
+            loader += strings                                              // at 72
+            loader += b32(1 << 18 | 0)                                     // hash table: one slot, one export
+            loader += b32(4 << 16 | 0)                                     // key: length 4 (hash ignored)
+            loader += b32(UInt32(2) << 24 | 0) + b32(0) + b16(1)           // "main": a TVector, at 0 in section 1
+            while loader.count % 4 != 0 { loader.append(0) }
+            let codeOff: UInt32 = 40 + 3 * 28, dataOff = codeOff + 8, loaderOff = dataOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + b32(1) + b32(0) + b32(0) + b32(0) + b32(0) + b16(3) + b16(2) + b32(0)
+            pef += b32(UInt32(bitPattern: -1)) + b32(0) + b32(8) + b32(8) + b32(8) + b32(codeOff) + [0, 1, 2, 0]
+            pef += b32(UInt32(bitPattern: -1)) + b32(0) + b32(8) + b32(8) + b32(8) + b32(dataOff) + [1, 1, 2, 0]
+            pef += b32(UInt32(bitPattern: -1)) + b32(0) + b32(0) + b32(0) + b32(UInt32(loader.count)) + b32(loaderOff) + [4, 1, 0, 0]
+            pef += b32(0x3860_0007) + b32(0x4E80_0020) + b32(0) + b32(0) + loader
+            let mem = tb_NewPtr(Int32(pef.count), false, false)
+            for (i, b) in pef.enumerated() { wr8(mem + UInt32(i), b) }
+            let out = tb_NewPtr(64, false, true) // connID, main, err (Str255) at 8, symAddr at 4+..., symClass
+            let name = tb_NewPtr(8, false, true)
+            guestPString("main", at: name)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let reason = run68k([
+                0x4267,                                          // CLR.W -(SP)   the OSErr
+                0x2F3C, hi(mem), lo(mem),                        // memAddr
+                0x2F3C, hi(UInt32(pef.count)), lo(UInt32(pef.count)), // length
+                0x42A7,                                          // fragName nil
+                0x2F3C, 0x0000, 0x0001,                          // loadFlags kReferenceCFrag
+                0x2F3C, hi(out), lo(out),                        // *connID
+                0x2F3C, hi(out + 4), lo(out + 4),                // *mainAddr
+                0x2F3C, hi(out + 8), lo(out + 8),                // errMessage
+                0x3F3C, 0x0003, 0xAA5A,                          // GetMemFragment
+                0x33DF, hi(out + 40), lo(out + 40),              // MOVE.W (SP)+,out+40
+                0x4267,                                          // FindSymbol(connID, "main", *symAddr, *symClass)
+                0x2F39, hi(out), lo(out),
+                0x2F3C, hi(name), lo(name),
+                0x2F3C, hi(out + 44), lo(out + 44),
+                0x2F3C, hi(out + 48), lo(out + 48),
+                0x3F3C, 0x0005, 0xAA5A,
+                0x33DF, hi(out + 42), lo(out + 42),              // MOVE.W (SP)+,out+42
+                0xA9F4,                                          // ExitToShell
+            ])
+            #expect(reason.hasPrefix("ExitToShell"))
+            #expect(rd16(out + 40) == 0 && rd32(out) != 0)
+            let tv = rd32(out + 4)
+            #expect(tv != 0 && rd32(rd32(tv)) == 0x3860_0007)  // main: li r3,7
+            #expect(rd16(out + 42) == 0 && rd32(out + 44) == tv)
+        }
+
         /// A button pressed first, as in the control panel: ModuleSelected
         /// (when 'Cals' takes it), then the 'bVal' button's value.
         @Test func buttonsGoFirst() {
