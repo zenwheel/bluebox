@@ -337,7 +337,11 @@ void machine_debugger_summary(char *out, size_t n)
             out[0] = 0;
         return;
     }
-    snprintf(out, n, "debugger entered %llu time%s at %u place%s%s (last: %s)", (unsigned long long)entries,
+    if (debugger_mode() == DEBUGGER_HALT) {
+        snprintf(out, n, "debugger entered, halted (%s)", last_message);
+        return;
+    }
+    snprintf(out, n, "debugger entered %llu time%s at %u place%s, went on (last: %s)", (unsigned long long)entries,
              entries == 1 ? "" : "s", machine_debugger_places(), machine_debugger_places() == 1 ? "" : "s",
-             debugger_mode() == DEBUGGER_HALT ? "" : ", went on", last_message);
+             last_message);
 }

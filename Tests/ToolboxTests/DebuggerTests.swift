@@ -79,6 +79,9 @@ extension BlueBox {
             let s = pstring("stop here")
             #expect(run68k([0x4879, hiWord(s), loWord(s), 0xABFF, 0xA9F4]) == "DebugStr: stop here")
             #expect(run68k([0xA9FF, 0xA9F4]) == "Debugger() called")
+            var line = [CChar](repeating: 0, count: 512)
+            machine_debugger_summary(&line, line.count)
+            #expect(String(cString: line) == "debugger entered, halted (Debugger)")
         }
 
         @Test func sysBreakCodesEnterTheDebuggerAndPopTheirArgument() {
