@@ -437,6 +437,10 @@ static void g_SetA5(ppc_cpu *c)
     RETURN(old);
 }
 static void g_nothing(ppc_cpu *c) { c->pc = c->lr; }
+/* The debugger's (debugger.c); SysBreakFunc's argument a DebuggerUPP. */
+static void g_SysBreak(ppc_cpu *c) { debugger_ppc(c, "SysBreak", DEBUGGER_ARG_NONE); }
+static void g_SysBreakStr(ppc_cpu *c) { debugger_ppc(c, "SysBreakStr", DEBUGGER_ARG_PSTR); }
+static void g_SysBreakFunc(ppc_cpu *c) { debugger_ppc(c, "SysBreakFunc", DEBUGGER_ARG_ADDR); }
 static void g_noErr(ppc_cpu *c) { RETURN(0); }
 
 /* MakeDataExecutable(address, length): code was written there; the JIT
@@ -1776,7 +1780,7 @@ const ppc_export lib_exports[] = {
     { "OpenDriver", g_OpenDriver }, { "P2CStr", g_p2cstr }, { "RelString", g_RelString },
     { "SetA5", g_SetA5 }, { "SetCurrentA5", g_SetCurrentA5 }, { "SetOSTrapAddress", g_SetOSTrapAddress },
     { "SetSoundVol", g_SetSoundVol }, { "SetToolboxTrapAddress", g_SetToolboxTrapAddress },
-    { "SysBreak", g_nothing }, { "SysBreakFunc", g_nothing }, { "SysBreakStr", g_nothing },
+    { "SysBreak", g_SysBreak }, { "SysBreakFunc", g_SysBreakFunc }, { "SysBreakStr", g_SysBreakStr },
     { "SystemZone", g_SystemZone }, { "UpperString", g_UpperString }, { "X2Fix", g_X2Fix },
     { "UpperText", g_UpperText }, { "UppercaseText", g_UpperText }, { "UprText", g_UpperText }, { "LowerText", g_LowerText },
     { "LowercaseText", g_LowerText }, { "GetEvQHdr", g_GetEvQHdr }, { "GetVCBQHdr", g_GetVCBQHdr },

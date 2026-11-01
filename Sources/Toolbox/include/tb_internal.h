@@ -329,6 +329,7 @@ void raw_DrvrInstall(cpu68k *c, uint16_t tw);
 int16_t driver_install(gaddr drvr, int16_t refnum); /* drivers.c */
 void raw_ReadXPRam(cpu68k *c, uint16_t tw);
 void raw_WriteXPRam(cpu68k *c, uint16_t tw);
+void raw_SysError(cpu68k *c, uint16_t tw);
 void raw_InitZone(cpu68k *c, uint16_t tw);
 void raw_PostEvent(cpu68k *c, uint16_t tw);
 void raw_CursorDeviceDispatch(cpu68k *c, uint16_t tw);
@@ -629,6 +630,17 @@ void cfm_reset(void);   /* a launch: no fragments, no PowerPC processor yet */
 bool cfm_ppc_cpu(void); /* the PowerPC processor, set up when first needed */
 void gestalt_powerpc(void);
 const char *fm_system_folder_host(void);
+/* The debugger (debugger.c): MacsBug's flags as it set them installed,
+ * low memory as it left it (once the system zone is there), SysError's
+ * SysBreak codes (true if one was taken and the run goes on), and the
+ * PowerPC entries, their argument in r3: none, a Pascal or a C string, a
+ * routine's address. */
+enum { DEBUGGER_FLAGS = 0x74 };
+enum { DEBUGGER_ARG_NONE, DEBUGGER_ARG_PSTR, DEBUGGER_ARG_CSTR, DEBUGGER_ARG_ADDR };
+void debugger_install(void);
+void debugger_reset(void);
+bool debugger_sys_break(cpu68k *c, int16_t code);
+void debugger_ppc(struct ppc_cpu *c, const char *kind, int arg);
 /* The Appearance Manager's StandardAlert (dialog.c). */
 int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gaddr param, gaddr item_hit);
 /* Native drivers (drivers.c): opened by name, called by negative refnum. */

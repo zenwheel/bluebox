@@ -387,8 +387,10 @@ int16_t tb_DebuggerUnlockMemory(gaddr address, uint32_t count) { return noErr; }
  * in supervisor mode already. */
 int16_t tb_EnterSupervisorMode(void) { return (int16_t)(g_cpu ? g_cpu->sr | 0x2000 : 0x2000); }
 
-/* Debugger68k and DebugStr68k: the 68k debugger, as Debugger and DebugStr
- * from PowerPC code: nothing. */
+/* Debugger68k and DebugStr68k: the 68k debugger, entered as Debugger and
+ * DebugStr are (debugger.c). */
+static void ds_Debugger68k(ppc_cpu *c) { debugger_ppc(c, "Debugger68k", DEBUGGER_ARG_NONE); }
+static void ds_DebugStr68k(ppc_cpu *c) { debugger_ppc(c, "DebugStr68k", DEBUGGER_ARG_PSTR); }
 
 const ppc_export dsl_exports[] = {
     { "UpTime", ds_UpTime }, { "AbsoluteToNanoseconds", ds_AbsoluteToNanoseconds },
@@ -420,6 +422,6 @@ const ppc_export dsl_exports[] = {
     { "ReleaseMemoryData", ds_ReleaseMemoryData }, { "MakeMemoryNonResident", ds_MakeMemoryNonResident },
     { "FlushMemory", ds_FlushMemory }, { "GetVolumeVirtualMemoryInfo", ds_GetVolumeVirtualMemoryInfo },
     { "GetPhysical", ds_GetPhysical }, { "FlushInstructionCache", ds_nothing },
-    { "Debugger68k", ds_nothing }, { "DebugStr68k", ds_nothing },
+    { "Debugger68k", ds_Debugger68k }, { "DebugStr68k", ds_DebugStr68k },
 };
 const unsigned dsl_export_count = sizeof dsl_exports / sizeof dsl_exports[0];

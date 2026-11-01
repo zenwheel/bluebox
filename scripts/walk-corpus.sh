@@ -10,12 +10,15 @@
 #   The census dir holds corpus/ and census_list.txt (paths under corpus/,
 #   one a line).  Writes <work dir>/walk.tsv (program, how it ended, the
 #   last step: a menu item or, with no menu bar, a button, a target or a
-#   key; items chosen) and <work dir>/report.txt (the failures by kind,
+#   key; items chosen; a note when the program entered the debugger, which
+#   logs and goes on: "debugger entered N times at P places (last: ...)")
+#   and <work dir>/report.txt (the failures by kind,
 #   most first; a program with no menu bar that was walked as a window of
 #   buttons or as a game drawing on, or that runs only in the background,
 #   ends "menu walk finished" too, one whose screen was walked "screen walk
 #   finished", one with nothing on the screen "menu walk found no menu bar
-#   or window"); each run's output is kept in <work dir>/logs/.  A screen
+#   or window"; then, as notes, how many programs entered the debugger);
+#   each run's output is kept in <work dir>/logs/.  A screen
 #   walk's step that ended the program is avoided in a run again.
 #   HEAPCHECK=n checks the heaps every nth call (default 1; 0 for none),
 #   CODECHECK=n checks a PowerPC program's code for changes every nth
@@ -121,7 +124,8 @@ walk_one() {
 	fi
 	step=$(grep -a -E '^walk: (menu|button|target|key)' "$log" | tail -n 1 | sed 's/^walk: //')
 	items=$(grep -a -c '^walk: menu' "$log" || true)
-	printf '%s\t%s\t%s\t%s\n' "$rel${app:+ [$app]}" "${end:-none}" "${step:-}" "$items"
+	note=$(grep -a -m 1 '^debugger entered ' "$log" | sed 's/, went on//' | tr -d '\t' | cut -c1-160 || true)
+	printf '%s\t%s\t%s\t%s\t%s\n' "$rel${app:+ [$app]}" "${end:-none}" "${step:-}" "$items" "$note"
 }
 
 # One program, the fifth argument: what each of the parallel runs below does.
@@ -144,5 +148,15 @@ done | xargs -0 -n 1 -P "$jobs" sh "$0" "$dir" "$work" "$bin" "$jobs" >"$work/wa
 # waiting for input are fine.
 cut -f2 "$work/walk.tsv" | sed -E 's/^(host memory error: [^ ]+ [^ ]+).*/\1/; s/^(heap damaged by [^ ]+).*/\1/; s/^(code changed by [^ ]+).*/\1/; s/^(stopped: unimplemented: [^ ]+).*/\1/; s/^(stopped: library not found: .*) \(for [^)]*\).*/\1/; s/^(stopped: menu walk stuck in a dialog).*/\1/' |
 	grep -v -E 'menu walk finished|screen walk finished|waiting for input|not in corpus' | sort | uniq -c | sort -rn >"$work/report.txt" || true
-printf '%s programs, %s finished their walk\n' "$(wc -l <"$work/walk.tsv" | tr -d ' ')" \
-	"$(grep -c -E 'menu walk finished|screen walk finished' "$work/walk.tsv" || true)"
+# Notes, not failures: the programs that entered the debugger (Debugger,
+# DebugStr, SysBreak), which logged it and went on.
+noted=$(cut -f5 "$work/walk.tsv" | grep -c '^debugger entered' || true)
+if [ "$noted" -gt 0 ]; then
+	{
+		printf '\nnotes (not failures):\n'
+		printf '%7d entered the debugger and went on\n' "$noted"
+		cut -f1,5 "$work/walk.tsv" | grep -a "$(printf '\t')debugger entered" | sed 's/^/        /'
+	} >>"$work/report.txt"
+fi
+printf '%s programs, %s finished their walk, %s entered the debugger\n' "$(wc -l <"$work/walk.tsv" | tr -d ' ')" \
+	"$(grep -c -E 'menu walk finished|screen walk finished' "$work/walk.tsv" || true)" "$noted"

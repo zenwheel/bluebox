@@ -314,6 +314,7 @@ const raw_trap raw_traps[] = {
     { 0xA04E, "AddDrive", raw_AddDrive },
     { 0xA051, "ReadXPRam", raw_ReadXPRam },
     { 0xA052, "WriteXPRam", raw_WriteXPRam },
+    { 0xA9C9, "SysError", raw_SysError },
     { 0xA056, "LowerText", raw_LowerText },
     { 0xA05C, "MemoryDispatch", raw_MemoryDispatch },
     { 0xA06E, "SlotManager", raw_SlotManager },
