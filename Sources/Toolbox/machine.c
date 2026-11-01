@@ -296,6 +296,8 @@ void threads_reset(void);
 void startup_run_inits(void);
 bool startup_is_cdev_file(void);
 uint32_t startup_cdev_entry(void);
+bool startup_is_da_file(void);
+uint32_t startup_da_entry(void);
 void help_reset(void);
 void scriptmgr_reset(void);
 void dialog_reset(void);
@@ -838,14 +840,16 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     mm_set_appl_heap_size(partition > stack ? partition - stack : 0);
     build_app_parms();
 
-    /* A cdev file has no program: the Control Panel's host stands in. */
-    if (startup_is_cdev_file()) {
+    /* A cdev file has no program: the Control Panel's host stands in; a
+     * file of desk accessories gets the desk accessory host (dahost.c). */
+    bool cdev = startup_is_cdev_file();
+    if (cdev || startup_is_da_file()) {
         gaddr stack = tb_NewPtr(65536, false, true);
         cpu.a[7] = stack + 65536 - 16;
         g_ppc_mode = false;
         cfm_reset();
         startup_run_inits();
-        cpu.pc = startup_cdev_entry();
+        cpu.pc = cdev ? startup_cdev_entry() : startup_da_entry();
         return true;
     }
 

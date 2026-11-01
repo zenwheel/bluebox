@@ -85,6 +85,7 @@ static bool host_attached;
  * a key or the button changed since it was last written. */
 static uint16_t key_last;
 static bool key_new, button_new;
+static bool elsewhere_new; /* the user typed or clicked in another host application */
 
 /* Keyboard and mouse globals missing from lowmem_gen.h. */
 #define LM_MBTicks 0x016Eu    /* LONGINT: Ticks at the last button change */
@@ -267,10 +268,12 @@ void events_sync_lowmem(void)
     bool down = button_down;
     uint8_t keys[16];
     keys_seen(keys);
-    bool key_changed = key_new, button_changed = button_new;
+    bool key_changed = key_new, button_changed = button_new, elsewhere = elsewhere_new;
     uint16_t last = key_last;
-    key_new = button_new = false;
+    key_new = button_new = elsewhere_new = false;
     pthread_mutex_unlock(&lock);
+    if (elsewhere && !key_changed)
+        wr32(LM_KeyTime, rd32(LM_Ticks));
     gput(LM_KeyMap, keys, sizeof keys); /* games read it in place of GetKeys */
     if (key_changed) {
         wr16(LM_KeyLast, last);
@@ -288,6 +291,17 @@ void events_sync_lowmem(void)
     wr32(LM_MouseLocation2, pt);
 }
 bool events_host_attached(void) { return host_attached; }
+
+/* The user is at work in another host application (a program running in
+ * the background, its windows over the host's desktop): as far as code
+ * watching for the user to leave the Mac alone can tell (the Talking
+ * Moose, screen savers: KeyTime, the time of the last key), they typed. */
+void machine_note_user_activity(void)
+{
+    pthread_mutex_lock(&lock);
+    elsewhere_new = true;
+    pthread_mutex_unlock(&lock);
+}
 
 /* Suspend and resume (osEvt, suspendResumeMessage): the app moving to the
  * background and back; convert_clipboard says the scrap changed meanwhile. */
@@ -770,6 +784,45 @@ static bool system_took(gaddr evt)
     return true;
 }
 
+/* jGNEFilter: a routine an INIT or desk accessory put there sees every
+ * event GetNextEvent returns, null events included, after SystemEvent
+ * had its turn: A1 the event record, D0 the result, and the result word
+ * at 4(SP), which it may change (to eat the event, or make one up).  It
+ * chains to the filter it found there.  The Talking Moose speaks from its
+ * filter when the user has left the Mac alone long enough. */
+enum { LM_JGNEFilter = 0x029A };
+static bool in_gne_filter;
+
+static bool gne_filtered(gaddr evt, bool got)
+{
+    gaddr f = rd32(LM_JGNEFilter);
+    cpu68k *c = g_cpu;
+    if (!f || in_gne_filter || !c || c->halted)
+        return got;
+    uint32_t d[8], a[8];
+    memcpy(d, c->d, sizeof d);
+    memcpy(a, c->a, sizeof a);
+    uint16_t sr = c->sr;
+    cpu_push16(c, got ? 0x0100 : 0); /* a Pascal Boolean */
+    c->a[1] = evt;
+    c->d[0] = got ? 1 : 0;
+    in_gne_filter = true;
+    guest_call_regs(f);
+    in_gne_filter = false;
+    bool result = cpu_pop16(c) != 0;
+    memcpy(c->d, d, sizeof d);
+    memcpy(c->a, a, sizeof a);
+    c->sr = sr;
+    return result;
+}
+
+/* The event GetNextEvent's queue gives: SystemEvent's turn, then the filter's. */
+static bool gne_take(int16_t em, gaddr evt)
+{
+    bool got = next_event(em, evt, true, false) && !system_took(evt);
+    return gne_filtered(evt, got);
+}
+
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
     sound_pump();
@@ -780,21 +833,24 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     display_sync();
     drv68k_periodic();
     if (next_event(em, evt, true, false)) {
-        if (system_took(evt))
-            return 0;
+        if (system_took(evt)) /* a desk accessory's */
+            return gne_filtered(evt, false);
         LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evt), rd32(evt + 2), rd32(evt + 6), rd32(evt + 10), rd16(evt + 14));
         note_repeated_update(evt);
-        return 1;
+        return gne_filtered(evt, true);
     }
     /* Apps that poll GetNextEvent would spin the host CPU; a null event
      * waits up to a tick for input, as time passed on a real Mac too. */
     if (host_attached) {
         ev_wait_tick();
-        return next_event(em, evt, true, false) && !system_took(evt);
+        return gne_take(em, evt);
     }
-    machine_idle();
-    gne_idled = true;
-    return 0;
+    bool got = gne_filtered(evt, false);
+    if (!got) {
+        machine_idle();
+        gne_idled = true;
+    }
+    return got;
 }
 
 /* An empty poll of the queue by a program waiting for input in a loop of
@@ -832,7 +888,7 @@ static bool wne_event(int16_t mask, gaddr evp, bool *idled)
     gaddr patch = gne_patch();
     *idled = false;
     if (!patch)
-        return next_event(mask, evp, true, false);
+        return gne_take(mask, evp);
     cpu68k *c = g_cpu;
     cpu_push16(c, 0); /* the Boolean result */
     cpu_push16(c, (uint16_t)mask);
@@ -857,7 +913,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     display_sync();
     bool idled;
     drv68k_periodic();
-    if (wne_event(mask, evp, &idled) && !system_took(evp)) {
+    if (wne_event(mask, evp, &idled)) {
         LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evp), rd32(evp + 2), rd32(evp + 6), rd32(evp + 10), rd16(evp + 14));
         note_repeated_update(evp);
         return 1;
