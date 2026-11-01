@@ -229,7 +229,7 @@ extension BlueBox {
             run(until: 130.075)
             #expect(Self.timed.map(\.1) == [23]) // g, and nothing of the URL's left over
             run(until: 130.3)
-            #expect(Self.timed.count >= 2 && Self.timed[1].1 == 11)
+            #expect(Self.timed.count >= 2 && Self.timed[1].1 == UInt16(spoken("go")[1])) // its vowel, as said
             #expect(abs(Self.timed[1].0 - Self.timed[0].0 - 0.8 * 12.6 / 180) < 0.006) // the pace as it was
             machine_speech_event(0, 0, 0, 0)
             run(until: 130.4)
@@ -252,7 +252,9 @@ extension BlueBox {
             Self.timed = []
             machine_speech_event(0, 1, 21, 3) // "tod"
             run(until: 102.8)
-            #expect(Self.timed.map(\.1) == [35, 11, 20, 3, 0]) // t AA d EY, closed at the period
+            // "today", not "tod", closed at the period
+            #expect(spoken("today.") != spoken("tod"))
+            #expect(Self.timed.map(\.1) == (spoken("today.") + [0]).map(UInt16.init))
             Self.timed = []
             machine_speech_event(0, 1, 28, 5) // "42 kB"
             run(until: 102.9)
@@ -430,6 +432,9 @@ extension BlueBox {
             run(until: 100.2)
             #expect(Self.words.map(\.0) == [13, 17, 21] && Self.words.map(\.1) == [4, 3, 6]) // mEYk, mIY, hAEpIY
             #expect(Self.timed.first?.1 == 28) // m: the mouth moves to the phonemes written
+            run(until: 101)
+            // Each word's own phonemes, "make" not running on into "me"
+            #expect(Self.timed.map(\.1) == [28, 3, 26, 28, 6, 24, 2, 31, 6, 0]) // m EY k, m IY, h AE p IY
             #expect(tb_DisposeSpeechChannel(ch) == 0)
         }
 
