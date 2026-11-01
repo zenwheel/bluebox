@@ -791,8 +791,7 @@ func runCommand(_ args: [String]) {
         guard machine_set_floppy(floppyImage, &ferr, ferr.count) else { fail(str(ferr)) }
     }
     if let idleModule {
-        let given = FileManager.default.fileExists(atPath: idleModule) ? URL(fileURLWithPath: idleModule).standardizedFileURL.path : idleModule
-        machine_screensaver_set_idle(resolveFile(given, kinds: ["ADgm", "A4gm"]), idleMinutes)
+        machine_screensaver_set_idle(resolveModule(idleModule), idleMinutes)
     }
     for f in initFiles {
         guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }

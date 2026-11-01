@@ -15,7 +15,7 @@ nonisolated(unsafe) var hostFullScreen = false
 
 let screensaverUsage = """
   bluebox screensaver <module> [--window|--fullscreen|--headless] [--seconds N]
-            [--png-every N dir] [--sound] [--control I=V]... [--button B]... [--frames-per-tick N]
+            [--png-every N dir] [--sound] [--control I=V]... [--button B]... [--backdrop IMAGE] [--frames-per-tick N]
             [--tick-budget N] [run options: --depth, --screen, --machine, --log ...]
       Run an After Dark graphics module (a file of type ADgm, or an archive
       holding one) as After Dark did: Initialize, Blank, then DrawFrame each
@@ -27,7 +27,9 @@ let screensaverUsage = """
       --control I=V gives control I (0-3 from the top, or its ID 1000-1003)
       value V in place of the module's own setting; --button B presses
       button B first (its message, or its bVal ID 1000-1003), as in the
-      control panel (with --file-answer for the file dialog it may show).  Up to 4 frames a tick
+      control panel (with --file-answer for the file dialog it may show).
+      --backdrop IMAGE puts a picture on the screen before the module starts
+      (in place of Blue Box's desktop): what Puzzle or Spotlight work on.  Up to 4 frames a tick
       (--frames-per-tick), fewer once a frame's code has run 100000
       instructions in the tick (--tick-budget).  Sound is off unless --sound.
 """
@@ -71,6 +73,10 @@ func screensaverCommand(_ args: [String]) {
             guard let n = Int32(next()), machine_screensaver_press_button(n) else {
                 fail("--button takes a button's message (8 or more) or its bVal ID (1000 and up)")
             }
+        case "--backdrop":
+            let image = next()
+            guard let (rgba, w, h) = decodeImageRGBA(image) else { fail("--backdrop: cannot read \(image)") }
+            rgba.withUnsafeBufferPointer { machine_screensaver_set_backdrop($0.baseAddress, Int32(w), Int32(h)) }
         case "--frames-per-tick":
             guard let n = Int32(next()), n > 0 else { fail("--frames-per-tick takes a number") }
             framesPerTick = n
@@ -99,8 +105,7 @@ func screensaverCommand(_ args: [String]) {
         i += 1
     }
     guard let module else { eprint(screensaverUsage + "\n"); exit(2) }
-    let path = FileManager.default.fileExists(atPath: module) ? URL(fileURLWithPath: module).standardizedFileURL.path : module
-    let file = resolveFile(path, kinds: ["ADgm", "A4gm"])
+    let file = resolveModule(module)
     machine_screensaver_set_pace(framesPerTick, budget)
     if display == "headless" && seconds == nil { seconds = 30 }
     if let seconds { machine_screensaver_set_seconds(seconds) }
@@ -127,6 +132,43 @@ func screensaverCommand(_ args: [String]) {
     }
     screensaverRun = true
     runCommand(run)
+}
+
+/// A module by path (a file, or an archive holding one), or by name from
+/// the library and the Mac's disk.
+func resolveModule(_ spec: String) -> String {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: spec) || fm.fileExists(atPath: (spec as NSString).deletingLastPathComponent + "/._" + (spec as NSString).lastPathComponent) {
+        return resolveFile(URL(fileURLWithPath: spec).standardizedFileURL.path, kinds: ["ADgm", "A4gm"])
+    }
+    let types = [fourCCValue("ADgm"), fourCCValue("A4gm")]
+    var found: [String] = []
+    for root in [defaultLibrary(), defaultDisk()] where fm.fileExists(atPath: root) {
+        found += scan(root).filter { types.contains($0.type) && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
+    }
+    guard let first = found.first else { fail("no After Dark module \"\(spec)\" (a file, or one in the library)") }
+    if found.count > 1 { eprint("bluebox: several modules named \(spec); using \(first)\n") }
+    return first
+}
+
+/// An image file's pixels as RGBA (ImageIO reads PNG, JPEG, HEIC ...).
+func decodeImageRGBA(_ path: String) -> ([UInt8], Int, Int)? {
+    #if canImport(AppKit)
+    guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+          let image = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
+    let w = image.width, h = image.height
+    var rgba = [UInt8](repeating: 0, count: w * h * 4)
+    let drawn = rgba.withUnsafeMutableBytes { raw -> Bool in
+        guard let ctx = CGContext(data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return true
+    }
+    return drawn ? (rgba, w, h) : nil
+    #else
+    return nil
+    #endif
 }
 
 /// After a screen saver run: what the module did.

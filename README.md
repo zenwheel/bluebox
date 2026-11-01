@@ -243,6 +243,28 @@ bluebox inspect "SimpleText" --type snd --id 128 --export sounds
 `--type` and `--id` choose resources; chosen ones with no modern format are
 saved as they are (`.bin`).
 
+## After Dark
+
+After Dark's graphics modules (files of type `ADgm`: Flying Toasters, Fish!,
+the third-party ones) run as the screen saver they were written for:
+
+```sh
+bluebox screensaver "Flying Toasters"                  # in a window; any key, click or mouse move ends it
+bluebox screensaver "Flying Toasters" --fullscreen
+bluebox screensaver Fish! --seconds 10 --png-every 2 frames   # headless, a PNG every 2 seconds
+bluebox run SimpleText --screensaver "Flying Toasters" --idle 5  # blank after 5 idle minutes
+```
+
+`--control I=V` sets one of the module's four controls, `--button` presses a
+setup button first (PICS Player's Choose File, with `--file-answer`), and
+`--backdrop IMAGE` gives modules that work on the screen (Puzzle, Spotlight)
+a picture to start from. `bluebox help` has the rest.
+
+`scripts/build-saver.sh` builds `Blue Box After Dark.saver`, a macOS screen
+saver that runs the modules imported into the library. Double-click it to
+install it, choose it in System Settings > Screen Saver, and pick the module
+and its settings with Options.
+
 ## What's in the repository
 
 | | |
@@ -251,6 +273,7 @@ saved as they are (`.bin`).
 | `Sources/CPU68K`, `Sources/CPUPPC` | The 68k and PowerPC interpreters |
 | `Sources/ForkStore` | AppleDouble, MacBinary, resource forks, disk images |
 | `Sources/BlueBoxHost`, `Sources/bluebox` | The macOS host and the command-line tool (Swift) |
+| `Sources/BlueBoxSaver` | The After Dark screen saver for macOS (Swift; `scripts/build-saver.sh`) |
 | `Generators/` | Generates trap tables, glue and structure layouts from the API definitions in `Defs/` |
 | `Tests/` | Unit tests, CPU test vectors, probe programs |
 

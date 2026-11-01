@@ -161,6 +161,26 @@ bool machine_screensaver_set_control(int index, int value)
     opt.control[index] = (int16_t)value;
     return true;
 }
+/* What the screen shows before the module starts (the screen saver's
+ * desktop picture): RGBA, scaled to the screen. */
+static uint8_t *backdrop;
+static int backdrop_w, backdrop_h;
+
+void machine_screensaver_set_backdrop(const uint8_t *rgba, int w, int h)
+{
+    free(backdrop);
+    backdrop = NULL;
+    if (!rgba || w <= 0 || h <= 0)
+        return;
+    size_t n = (size_t)w * (size_t)h * 4;
+    backdrop = malloc(n);
+    if (!backdrop)
+        return;
+    memcpy(backdrop, rgba, n);
+    backdrop_w = w;
+    backdrop_h = h;
+}
+
 bool machine_screensaver_press_button(int button)
 {
     if (opt.nbuttons == 8 || button < 8)
@@ -611,12 +631,14 @@ static void restore_screen_colors(gaddr copy)
 
 /* Set everything up and call Initialize and Blank; false if the module
  * can't run (no code). */
-static bool ad_begin(int16_t rn)
+static bool ad_begin(int16_t rn, bool over_program)
 {
     cpu68k *c = g_cpu;
     register_natives();
     memset(&ad, 0, sizeof ad);
     ad.rn = rn;
+    ad.own_file = over_program;
+    ad.zone = over_program ? rd32(LM_SysZone) : 0;
     ad.brightness = 255;
     ad.color = !(rd16(LM_ROM85) & 0x4000);
     int16_t saved_res = tb_CurResFile();
@@ -657,6 +679,8 @@ static bool ad_begin(int16_t rn)
     tb_RectRgn(ad.rgn, bounds);
     tb_SetPort(ad.port);
     tb_ClipRect(bounds);
+    if (backdrop && !ad.own_file)
+        qd_draw_rgba(backdrop, backdrop_w, backdrop_h, (qrect){ .top = 0, .left = 0, .bottom = (int16_t)h, .right = (int16_t)w });
 
     ad.mons = tb_NewPtr(2 + 10, false, true);
     wr16(ad.mons, 1);
@@ -843,7 +867,7 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     tb_HideCursor();
     int16_t rn = (int16_t)rd16(LM_CurApRefNum);
     input_mark = ev_input_serial();
-    if (!ad_begin(rn)) {
+    if (!ad_begin(rn, false)) {
         cpu_halt(c, "ExitToShell (no ADgm code in the module)");
         return;
     }
@@ -937,9 +961,7 @@ void afterdark_idle(void)
     uint8_t crsr = rd8(LM_CrsrVis);
     tb_HideCursor();
     input_mark = ev_input_serial();
-    bool begun = ad_begin(rn);
-    ad.own_file = true;
-    ad.zone = rd32(LM_SysZone);
+    bool begun = ad_begin(rn, true);
     while (begun && !c->halted && !woken()) {
         if (!ad.stopped)
             ad_tick();

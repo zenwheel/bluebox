@@ -60,6 +60,10 @@ void machine_screensaver_set_snapshots(double every, const char *dir);
 /* A control's value (0-3, or its resource ID 1000-1003) in place of the
  * one the module's resources hold; false for another index. */
 bool machine_screensaver_set_control(int index, int value);
+/* What the screen shows when the module starts, as the desktop it saves
+ * (Puzzle, Spotlight and Bat Signal work on it): RGBA pixels, scaled to the
+ * screen; NULL for Blue Box's own desktop. */
+void machine_screensaver_set_backdrop(const uint8_t *rgba, int w, int h);
 /* Setup before it runs, as in After Dark's control panel: the module is
  * told it was chosen (ModuleSelected, if it takes it) and the buttons are
  * pressed in order (a message 8 or more, or a 'bVal' ID 1000 and up). */

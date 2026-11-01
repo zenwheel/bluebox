@@ -4,6 +4,9 @@ import Foundation
 import ForkStore
 import Testing
 import Toolbox
+#if canImport(ScreenSaver)
+@testable import BlueBoxSaver
+#endif
 
 /// An After Dark graphics module of our own: main logs each message it gets
 /// (a count, then the messages), keeps a copy of the parameter block, asks
@@ -155,6 +158,74 @@ extension BlueBox {
             machine_screen_rgba(300, 300, 1, 1, &px)
             #expect(Array(px.prefix(3)) == [0, 0, 0])
         }
+
+        /// The screen saver's desktop picture is what the screen shows when
+        /// the module starts (one that blanks nothing leaves it there).
+        @Test func theBackdropIsTheScreenItStartsFrom() {
+            bootMachine()
+            let log = tb_NewPtr(4096, false, true), psave = tb_NewPtr(64, false, true), evt = tb_NewPtr(16, false, true)
+            let path = moduleFile(moduleCode(log: log, psave: psave, evt: evt), in: tempDir())
+            var red = [UInt8](repeating: 0, count: 4 * 4 * 4)
+            for i in stride(from: 0, to: red.count, by: 4) { red[i] = 255; red[i + 3] = 255 }
+            machine_screensaver_set_backdrop(red, 4, 4)
+            defer { machine_screensaver_set_backdrop(nil, 0, 0) }
+            machine_screensaver_set_seconds(0.1)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+            _ = machine_run(30_000_000)
+            machine_set_instruction_limit(0)
+            var px = [UInt8](repeating: 0, count: 4)
+            machine_screen_rgba(500, 400, 1, 1, &px)
+            #expect(Array(px.prefix(3)) == [255, 0, 0])
+        }
+
+        #if canImport(ScreenSaver)
+        /// The screen saver finds modules by their file type and reads the
+        /// controls After Dark's panel showed: a slider with its units, a
+        /// pop-up menu with the MENU's items, a check box, and a control
+        /// whose 'µVal' the screen doesn't meet giving way to the next one.
+        @Test func theScreenSaverReadsAModulesControls() {
+            let dir = tempDir()
+            let units = be16(2) + be16(0) + [4] + Array("slow".utf8) + be16(50) + [4] + Array("fast".utf8)
+            let menu = cat(be16(1003), be16(0), be16(0), be16(0), be16(0), be32(0xFFFF_FFFF), [5] + Array("Light".utf8),
+                           [3] + Array("Day".utf8) + [0, 0, 0, 0], [5] + Array("Night".utf8) + [0, 0, 0, 0], [0])
+            var fork = buildFork([
+                TestResource(type: "ADgm", id: 0, data: code68k([0x4E75])),
+                TestResource(type: "STR ", id: 128, data: [6] + Array("Credit".utf8)),
+                TestResource(type: "sVal", id: 1000, name: "Speed:", data: be16(60)),
+                TestResource(type: "sUnt", id: 1000, data: units),
+                TestResource(type: "xVal", id: 1001, name: "Colour", data: be16(1)),
+                // 1002: a check box only where every screen is a CLUT device, else the slider at 2002
+                TestResource(type: "xVal", id: 1002, name: "Colour table", data: be16(0)),
+                TestResource(type: "@Val", id: 1002, data: be16(0x0040)),
+                TestResource(type: "sVal", id: 2002, name: "Depth", data: be16(5)),
+                TestResource(type: "mVal", id: 1003, name: "Light", data: be16(2)),
+                TestResource(type: "MENU", id: 1003, data: menu),
+            ])
+            // 'µVal' is $B5 'V' 'a' 'l' in MacRoman.
+            if let i = (0..<(fork.count - 4)).last(where: { Array(fork[$0..<($0 + 4)]) == Array("@Val".utf8) }) { fork[i] = 0xB5 }
+            var f = mac_file()
+            var empty: [UInt8] = []
+            var errb = [CChar](repeating: 0, count: 256)
+            let path = dir.appendingPathComponent("My Module").path
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            withUnsafeMutableBytes(of: &f.finder_info) { $0.copyBytes(from: Array("ADgmADrk".utf8)) }
+            f.has_finder_info = true
+            #expect(appledouble_write(path, &f, &errb, errb.count))
+            #expect(ModuleCatalog.scan([dir.path]) == [path])
+            let info = ModuleCatalog.info(path, config: ModuleCatalog.config(depth: 32, sound: false))
+            #expect(info.credit == "Credit")
+            let c = info.controls
+            #expect(c[0]?.kind == .slider && c[0]?.title == "Speed:" && c[0]?.value == 60)
+            #expect(c[0]?.unitLabel(10) == "slow" && c[0]?.unitLabel(60) == "fast")
+            #expect(c[1]?.kind == .checkbox && c[1]?.value == 1)
+            #expect(c[2]?.kind == .slider && c[2]?.title == "Depth") // the 'µVal' isn't met at 32 bits
+            #expect(ModuleCatalog.info(path, config: ModuleCatalog.config(depth: 8, sound: false)).controls[2]?.kind == .checkbox)
+            #expect(c[3]?.kind == .menu && c[3]?.items == ["Day", "Night"] && c[3]?.value == 2)
+        }
+        #endif
 
         /// A button pressed first, as in the control panel: ModuleSelected
         /// (when 'Cals' takes it), then the 'bVal' button's value.
