@@ -69,6 +69,70 @@ struct ForkStoreTests {
     }
     #endif
 
+    /// Listing a library reads a file's summary: the Finder info and the
+    /// types in its resource map, not the forks (a CD's worth of them).
+    @Test func summaryHasTheFinderInfoAndResourceTypes() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("App").path
+        // Past the first bytes read, so the map is read where it lies.
+        var rsrc = buildFork([TestResource(type: "CODE", id: 0, name: nil, data: [UInt8](repeating: 0x4E, count: 9000)),
+                              TestResource(type: "CODE", id: 1, name: nil, data: [0x4E, 0x75]),
+                              TestResource(type: "STR ", id: 128, name: "hi", data: [2, 0x68, 0x69])])
+        var data = [UInt8](repeating: 7, count: 100)
+        var f = mac_file()
+        data.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = $0.count }
+        rsrc.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+        withUnsafeMutableBytes(of: &f.finder_info) { fi in
+            for (i, b) in cat(be32(fourCC("APPL")), be32(fourCC("Test"))).enumerated() { fi[i] = b }
+        }
+        var err = [CChar](repeating: 0, count: 256)
+        #expect(appledouble_write(path, &f, &err, err.count))
+
+        var s = mac_file_summary()
+        #expect(appledouble_read_summary(path, true, &s))
+        defer { mac_file_summary_free(&s) }
+        let info = withUnsafeBytes(of: s.finder_info) { Array($0.prefix(8)) }
+        #expect(s.has_finder_info && info == cat(be32(fourCC("APPL")), be32(fourCC("Test"))))
+        #expect(s.rsrc_ok && s.rsrc_len == rsrc.count)
+        #expect(Array(UnsafeBufferPointer(start: s.types, count: s.ntypes)) == [fourCC("CODE"), fourCC("STR ")])
+
+        // No sidecar (as the folder's listing says): the file's own, here none.
+        var plain = mac_file_summary()
+        #expect(appledouble_read_summary(path, false, &plain))
+        #expect(!plain.has_finder_info && plain.rsrc_len == 0 && plain.ntypes == 0 && plain.rsrc_ok)
+        mac_file_summary_free(&plain)
+    }
+
+    /// What appledouble_read refuses, the summary refuses; a damaged map
+    /// is a fork without resources.
+    @Test func summaryOfDamagedSidecarsAndForks() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let bad = dir.appendingPathComponent("Bad").path
+        try Data("data".utf8).write(to: URL(fileURLWithPath: bad))
+        try Data("not AppleDouble at all, not at all".utf8).write(to: URL(fileURLWithPath: dir.appendingPathComponent("._Bad").path))
+        var s = mac_file_summary()
+        var f = mac_file()
+        var err = [CChar](repeating: 0, count: 256)
+        #expect(!appledouble_read(bad, &f, &err, err.count))
+        #expect(!appledouble_read_summary(bad, true, &s))
+
+        // A map running past the fork's end.
+        let path = dir.appendingPathComponent("Broken").path
+        var rsrc = buildFork([TestResource(type: "CODE", id: 0, name: nil, data: [0, 1, 2, 3])])
+        rsrc[15] &+= 40 // the map's length
+        var none: [UInt8] = []
+        none.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+        rsrc.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+        #expect(appledouble_write(path, &f, &err, err.count))
+        var idx = rsrc_index()
+        #expect(!rsrc_parse(rsrc, rsrc.count, &idx, &err, err.count))
+        #expect(appledouble_read_summary(path, true, &s))
+        #expect(!s.rsrc_ok && s.ntypes == 0)
+        mac_file_summary_free(&s)
+    }
+
     /// A Disk Copy 6 image whose data fork begins like a bare volume (its
     /// first chunk stored as it is) is still taken for what it is.
     @Test func ndifImagesAreKnownByTheirChunkMap() throws {

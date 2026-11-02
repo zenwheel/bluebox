@@ -144,7 +144,7 @@ func resolveModule(_ spec: String) -> String {
     let types = [fourCCValue("ADgm"), fourCCValue("A4gm")]
     var found: [String] = []
     for root in [defaultLibrary(), defaultDisk()] where fm.fileExists(atPath: root) {
-        found += scan(root).filter { types.contains($0.type) && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
+        found += scan(root, matching: { $0 == spec }).filter { types.contains($0.type) }.map(\.path)
     }
     guard let first = found.first else { fail("no After Dark module \"\(spec)\" (a file, or one in the library)") }
     if found.count > 1 { eprint("bluebox: several modules named \(spec); using \(first)\n") }
