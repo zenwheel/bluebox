@@ -237,6 +237,26 @@ extension BlueBox {
             #expect(rd32(sp - 4) == 22 && g_cpu!.pointee.a.7 == sp - 4)
         }
 
+        /// A fat descriptor called from 68k code runs its 68k routine,
+        /// unless that record says kUseNativeISA: then, on a Power Mac,
+        /// the PowerPC one (a fat After Dark module, Morphin' Shapes).
+        @Test func useNativeISAPicksPowerPC() {
+            setUp()
+            gestalt_set(fourCC("sysa"), 2)
+            let pi: UInt32 = 0x30 // pascal long f(void)
+            let one = code68k([0x2F7C, 0x0000, 0x0001, 0x0004, 0x4E75]) // MOVE.L #1,4(SP); RTS
+            let two = ppc([0x3860_0002, 0x4E80_0020])                    // li r3,2; blr
+            for (flags, want) in [(UInt16(0), UInt32(1)), (UInt16(0x04), UInt32(2))] {
+                let rd = descriptor([(pi, 0, one, 0, flags), (pi, 1, two, 0, 0)])
+                let sp = g_cpu!.pointee.a.7
+                wr32(sp - 4, 0)
+                g_cpu!.pointee.a.7 = sp - 4
+                guest_call_regs(rd)
+                #expect(rd32(sp - 4) == want && g_cpu!.pointee.a.7 == sp - 4)
+                g_cpu!.pointee.a.7 = sp
+            }
+        }
+
         /// _MixedModeDispatch: descriptors for classic 68k code, and the
         /// state the Thread Manager saves (version 1 only).
         @Test func mixedModeDispatch() {

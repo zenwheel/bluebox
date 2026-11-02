@@ -95,7 +95,7 @@ bool mm_is_68k_proc(gaddr p)
     return false;
 }
 
-enum { kSelectorsAreIndexable = 0x01, kDontPassSelector = 0x08, kRoutineIsDispatchedDefaultRoutine = 0x10 };
+enum { kSelectorsAreIndexable = 0x01, kUseNativeISA = 0x04, kDontPassSelector = 0x08, kRoutineIsDispatchedDefaultRoutine = 0x10 };
 
 /* The record a call takes: for a dispatched call (sel given), the one for
  * that selector (by index when the selectors are indexable), else the
@@ -123,10 +123,22 @@ static int pick_record(gaddr rd, int want, const uint32_t *sel)
         if (fallback >= 0)
             return fallback;
     }
-    for (unsigned i = 0; i < n; i++)
-        if ((rd8(rd + RD_RECORDS + i * RR_SIZE + RR_ISA) & 0x0F) == want)
-            return (int)i;
-    return 0;
+    int found = -1, native = -1;
+    for (unsigned i = 0; i < n; i++) {
+        int isa = rd8(rd + RD_RECORDS + i * RR_SIZE + RR_ISA) & 0x0F;
+        if (isa == want && found < 0)
+            found = (int)i;
+        if (isa == kPowerPCISA && native < 0)
+            native = (int)i;
+    }
+    /* kUseNativeISA on the record for the running code: a Power Mac takes
+     * the PowerPC routine instead (Morphin' Shapes' fat 'ADgm', called
+     * from 68k code, runs its PowerPC half). */
+    if (found >= 0 && want != kPowerPCISA && native >= 0 &&
+        (rd16(rd + RD_RECORDS + (gaddr)found * RR_SIZE + RR_FLAGS) & kUseNativeISA) &&
+        gestalt_value(fourcc("sysa"), 1) == 2)
+        return native;
+    return found >= 0 ? found : 0;
 }
 
 /* The routine of a descriptor for the ISA wanted (else its first); for a
