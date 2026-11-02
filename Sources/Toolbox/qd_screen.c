@@ -42,9 +42,28 @@ void qd_screen_load_clut(gaddr ctab)
     for (int i = 0; i < (1 << screen_depth); i++) {
         uint16_t c[3];
         qd_px_rgb(screen_depth, ctab, (uint32_t)i, c);
-        for (int k = 0; k < 3; k++)
-            clut[i][k] = (uint8_t)(c[k] >> 8);
+        qd_screen_set_hw_entry(i, c);
     }
+}
+
+/* An entry of the video hardware's table (the driver's SetEntries, which
+ * leaves the device's colour table as it is), luminance-mapped in the
+ * driver's gray mode. */
+void qd_screen_set_hw_entry(int index, const uint16_t rgb[3])
+{
+    if (index < 0 || index > 255)
+        return;
+    uint16_t c[3] = { rgb[0], rgb[1], rgb[2] };
+    if (video_gray())
+        c[0] = c[1] = c[2] = (uint16_t)(((uint32_t)c[0] * 30 + (uint32_t)c[1] * 59 + (uint32_t)c[2] * 11) / 100);
+    for (int k = 0; k < 3; k++)
+        clut[index][k] = (uint8_t)(c[k] >> 8);
+}
+
+void qd_screen_get_hw_entry(int index, uint16_t rgb[3])
+{
+    for (int k = 0; k < 3; k++)
+        rgb[k] = index >= 0 && index < 256 ? (uint16_t)(clut[index][k] * 0x101) : 0;
 }
 
 /* A color table handle: entries as (value, r, g, b). */
@@ -112,6 +131,7 @@ static void describe_screen(gaddr gd, gaddr pm)
         mode++;
     GDevice_set_gdMode(gd, mode);
     wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
+    video_mode_changed();
 }
 
 /* Whether the screen fits its space at a depth: in 24-bit mode that is
@@ -154,6 +174,7 @@ void qd_screen_init(int width, int height)
      * colour device, not set to greys: Spheres) */
     GDevice_set_gdFlags(gd, (int16_t)((1 << 15) | (1 << 13) | (1 << 12) | (1 << 11) | (1 << 10) | 1));
     GDevice_set_gdPMap(gd, pmh);
+    GDevice_set_gdRefNum(gd, (int16_t)(-1 - VIDEO_UNIT));
     qrect_put(gd + GDevice_gdRect_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
     GDevice_set_gdResPref(gd, 3);
     describe_screen(gd, pm);
@@ -361,6 +382,13 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
             }
             o[3] = 255;
         }
+    }
+    const uint8_t (*lut)[256] = video_output_lut();
+    if (lut) {
+        uint8_t *o = out;
+        for (size_t i = 0, n = (size_t)w * (size_t)h; i < n; i++, o += 4)
+            for (int k = 0; k < 3; k++)
+                o[k] = lut[k][o[k]];
     }
     if (brightness != 255)
         dim(out, (size_t)w * (size_t)h);

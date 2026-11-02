@@ -719,6 +719,21 @@ void display_sync(void); /* the host's snapshots, at a safe point */
 void drag_host_pump(void); /* drags from the host, at the program's event calls */
 uint32_t qd_screen_row_bytes(void);
 void qd_screen_set_brightness(int level); /* 0-255, the screen as shown */
+/* The video hardware's colour table, as the screen is shown (qd_screen.c). */
+void qd_screen_set_hw_entry(int index, const uint16_t rgb[3]);
+void qd_screen_get_hw_entry(int index, uint16_t rgb[3]);
+/* The screen's video driver (video.c), the main device's gdRefNum. */
+enum { VIDEO_UNIT = 50 };
+extern const native_driver video_driver;
+void video_reset(void);
+void video_mode_changed(void); /* the screen's depth changed */
+bool video_gray(void);         /* colours luminance-mapped (cscSetGray) */
+int16_t video_set_gamma(gaddr table); /* a 'gama' table, or nil for linear */
+gaddr video_copy_gamma(void);         /* a new handle holding the driver's table */
+void video_fade(int percent, gaddr zero); /* DrawSprocket's gamma fades */
+/* How each component is shown (the gamma table, the direct modes' colour
+ * table, the display off), or NULL when as it is. */
+const uint8_t (*video_output_lut(void))[256];
 uint32_t ev_input_serial(void);           /* moves with each key, click and mouse move */
 /* After Dark modules (afterdark.c): a module file as the program, and idle
  * blanking in a run. */

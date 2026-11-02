@@ -5,7 +5,8 @@
  * it (the front buffer), and a back buffer that is an offscreen GWorld of
  * the size and depth it asked for.  Swapping copies the back buffer to the
  * front.  Palettes go to the back buffer's colour table (and to the screen
- * when it is indexed); gamma fades are accepted and do nothing.
+ * when it is indexed); gamma fades dim what the screen shows (video.c),
+ * at once rather than over a second.
  *
  * DSpContextAttributes: frequency 0, displayWidth 4, displayHeight 8,
  * colorNeeds 20, colorTable 24, contextOptions 28, backBufferDepthMask 32,
@@ -109,9 +110,29 @@ static void dsp_Startup(ppc_cpu *c)
     context_make();
     RETURN(0);
 }
+/* DSpContext_FadeGamma(context, percentOfOriginalIntensity, *zeroIntensityColor),
+ * DSpContext_FadeGammaOut(context, *zeroIntensityColor), FadeGammaIn: all
+ * displays when the context is nil, and there is one. */
+static void dsp_FadeGamma(ppc_cpu *c)
+{
+    video_fade((int32_t)R(1), R(2));
+    RETURN(0);
+}
+static void dsp_FadeGammaOut(ppc_cpu *c)
+{
+    video_fade(0, R(1));
+    RETURN(0);
+}
+static void dsp_FadeGammaIn(ppc_cpu *c)
+{
+    video_fade(100, R(1));
+    RETURN(0);
+}
+
 static void dsp_Shutdown(ppc_cpu *c)
 {
     started = false;
+    video_fade(100, 0);
     RETURN(0);
 }
 /* 1.7, as a NumVersion through the result pointer in r3 */
@@ -722,9 +743,9 @@ const ppc_export dsp_exports[] = {
     { "DSpContext_Switch", dsp_noErr },
     { "DSpCanUserSelectContext", dsp_false },
     { "DSpContext_CanUserSelectContext", dsp_false },
-    { "DSpContext_FadeGamma", dsp_noErr },
-    { "DSpContext_FadeGammaIn", dsp_noErr },
-    { "DSpContext_FadeGammaOut", dsp_noErr },
+    { "DSpContext_FadeGamma", dsp_FadeGamma },
+    { "DSpContext_FadeGammaIn", dsp_FadeGammaIn },
+    { "DSpContext_FadeGammaOut", dsp_FadeGammaOut },
     { "DSpContext_GetAttributes", dsp_GetAttributes },
     { "DSpContext_GetBackBuffer", dsp_GetBackBuffer },
     { "DSpContext_GetCLUTEntries", dsp_GetCLUTEntries },

@@ -438,7 +438,7 @@ void dmgr_reset(void)
  * The display list holds the one display; there are no AV components
  * (panels, engines, devices, ports, profiles), so their lists are empty
  * and an AVID other than the display's names nothing.  The display's
- * driver keeps no gamma the Display Manager can change. */
+ * gamma is its driver's. */
 
 enum { gestaltUndefSelectorErr = -5551 };
 
@@ -462,16 +462,30 @@ int16_t tb_DMDisplayGestalt(uint32_t theDisplayID, uint32_t displayGestaltSelect
 int16_t tb_DMUseScreenPrefs(int8_t usePrefs, gaddr displayState) { return noErr; }
 int16_t tb_DMSaveScreenPrefs(uint32_t reserved1, uint32_t saveFlags, uint32_t reserved2) { return noErr; }
 
+/* The display's gamma: its video driver's table (video.c).  Set from a
+ * GammaTblHandle (nil: linear); got as a new handle the caller disposes of. */
 int16_t tb_DMSetGammaByAVID(uint32_t gammaAVID, uint32_t setGammaFlags, gaddr theGamma)
 {
-    return gammaAVID == MAIN_DISPLAY_ID ? kDMDriverNotDisplayMgrAwareErr : kDMNotFoundErr;
+    if (gammaAVID != MAIN_DISPLAY_ID)
+        return kDMNotFoundErr;
+    if (theGamma && !rd32(theGamma))
+        return nilHandleErr;
+    return video_set_gamma(theGamma ? rd32(theGamma) : 0);
 }
 
 int16_t tb_DMGetGammaByAVID(uint32_t gammaAVID, uint32_t getGammaFlags, gaddr theGamma)
 {
     if (theGamma)
         wr32(theGamma, 0);
-    return gammaAVID == MAIN_DISPLAY_ID ? kDMDriverNotDisplayMgrAwareErr : kDMNotFoundErr;
+    if (gammaAVID != MAIN_DISPLAY_ID)
+        return kDMNotFoundErr;
+    if (!theGamma)
+        return paramErr;
+    gaddr h = video_copy_gamma();
+    if (!h)
+        return memFullErr;
+    wr32(theGamma, h);
+    return noErr;
 }
 
 int16_t tb_DMGetMakeAndModelByAVID(uint32_t theAVID, gaddr theMakeAndModel) { return kDMNotFoundErr; }

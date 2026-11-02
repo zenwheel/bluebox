@@ -746,7 +746,8 @@ extension BlueBox {
             #expect(tb_DMGetNameByAVID(1, 0, name) == 0 && pstring(at: name) == "Display")
             #expect(tb_DMGetEnableByAVID(1, flag, flag + 1) == 0 && rd8(flag) == 1 && rd8(flag + 1) == 0)
             #expect(tb_DMSetEnableByAVID(1, 0, 0) == -6231)
-            #expect(tb_DMGetGammaByAVID(1, 0, name) == -6228)
+            #expect(tb_DMGetGammaByAVID(1, 0, name) == 0 && tb_GetHandleSize(rd32(name)) == 12 + 256) // the driver's table
+            #expect(tb_DMGetGammaByAVID(2, 0, name) == -6229)
             #expect(tb_DMDisplayGestalt(1, 0, name) == -5551)
             #expect(tb_DMConfirmConfiguration(0, 0, 0, 0) == 0)
 

@@ -28,7 +28,7 @@ static int16_t cd_write(gaddr pb, bool async) { return -44; /* wPrErr */ }
 static const native_driver cd_driver = { ".AppleCD", CD_UNIT, NULL, NULL, cd_control, cd_status, cd_read, cd_write, NULL };
 
 static const native_driver *const drivers[] = {
-    &cd_driver, &disk_driver, &sony_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
+    &cd_driver, &disk_driver, &sony_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3], &video_driver,
 };
 enum { NDRIVERS = sizeof drivers / sizeof drivers[0] };
 
@@ -49,6 +49,8 @@ static const native_driver *driver_for(int16_t refnum)
  * .IPP, the serial drivers) and GetDCtlEntry reads it; the calls
  * themselves still come here by reference number. */
 enum { UNITS = 64, dOpened = 0x20 };
+/* AuxDCE's fields after the DCtlEntry's */
+enum { dCtlSlot = 40, dCtlSlotId = 41, dCtlDevBase = 42, AUX_DCE_SIZE = 64 };
 static gaddr dce[NDRIVERS];
 
 void drivers_reset(void)
@@ -67,11 +69,20 @@ void drivers_reset(void)
         wr8(hdr + 18, (uint8_t)n);
         for (size_t k = 0; k < n; k++)
             wr8(hdr + 19 + (uint32_t)k, (uint8_t)d->name[k]);
-        gaddr h = tb_NewHandle(DCtlEntry_SIZEOF, true, true);
+        /* An AuxDCE: the video driver's says its slot and sResource,
+         * where programs look for the slot to install retrace tasks in. */
+        gaddr h = tb_NewHandle(AUX_DCE_SIZE, true, true);
         gaddr e = rd32(h);
         wr32(e + DCtlEntry_dCtlDriver_off, hdr);
         wr16(e + DCtlEntry_dCtlFlags_off, flags); /* a ROM-style driver: a pointer, not RAM-based */
         wr16(e + DCtlEntry_dCtlRefNum_off, (uint16_t)(-1 - d->unit));
+        if (d == &video_driver) {
+            wr8(e + dCtlSlot, 0);
+            wr8(e + dCtlSlotId, 0x80);
+            wr32(e + dCtlDevBase, GA_SCREEN);
+            flags |= dOpened; /* opened at startup */
+            wr16(e + DCtlEntry_dCtlFlags_off, flags);
+        }
         dce[i] = e;
         if (d->unit >= 0 && d->unit < UNITS)
             wr32(table + 4 * (uint32_t)d->unit, h);
