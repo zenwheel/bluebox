@@ -116,7 +116,7 @@ enum {
     PB_controls = 0, PB_monitors = 8, PB_colorQD = 12, PB_config = 14, PB_qd = 16, PB_brightness = 20,
     PB_demoRect = 22, PB_error = 30, PB_channel = 34, PB_version = 38, PB_extensions = 40, PB_SIZE = 44
 };
-enum { QDCOPY_SIZE = 130, AD_VERSION = 0x0300 };
+enum { QDCOPY_SIZE = 130, AD_VERSION = 0x0300, DL_SLOTS = 16 };
 enum { nullEvent = 0, mouseDown = 1, keyDown = 3, autoKey = 5 };
 
 /* The options (the CLI's and the screen saver's). */
@@ -219,7 +219,7 @@ typedef struct {
     gaddr code, entry;
     uint8_t cals;
     gaddr cell;          /* the Handle its storage goes in */
-    gaddr rgn, pb, mons, qd, ext, sd, mf, err, port, vbl, evt, chanp;
+    gaddr rgn, pb, mons, qd, ext, sd, mf, dl, err, port, vbl, evt, chanp;
     bool color, stopped; /* stopped: ImDone or an error; no more calls */
     bool time_up;        /* the seconds asked for have passed */
     gaddr zone;          /* the zone UseMemory gives */
@@ -234,7 +234,7 @@ typedef struct {
 
 static ad_state ad;
 static bool natives_registered; /* since the boot */
-static gaddr sd_stubs[7], mf_stubs[4], vbl_stub;
+static gaddr sd_stubs[7], mf_stubs[4], dl_stubs[DL_SLOTS], vbl_stub;
 
 /* ------------------------------------------------------------------ */
 /* The extensions */
@@ -426,6 +426,138 @@ static void vbl_native(cpu68k *c, uint16_t tw)
     }
 }
 
+/* 'ADdl', After Dark 3's linker: its 68k half links a module's own
+ * segments ('CODE', 'DATA', 'CREL', 'DREL', 'JUMP') to the "After Dark
+ * 4.0 Library"; its other half, which the PowerPC modules use (the After
+ * Dark 4.0 Shared library's MacXResourceFile), opens a module's resource
+ * databases and makes one current around each resource call:
+ *
+ *   26 OpenDatabase(params, name, *ref): OSErr  name nil: the module's own
+ *   30 CloseDatabase(ref)   34 UseDatabase(ref)   38 RestoreDatabase(): long
+ *
+ * A named database is a resource file in the module's folder, in a
+ * "Module Resources" folder beside it or one up, or in the System Folder's
+ * "After Dark Files". */
+enum { DL_DEPTH = 16, DL_FILES = 16 };
+static struct {
+    int16_t rn[DL_FILES];       /* by ref - 1; 0 free */
+    bool own[DL_FILES];         /* opened here: closed with the module */
+    int16_t stack[DL_DEPTH];    /* the files current before each Use */
+    int depth;
+} dl;
+
+static void dl_unknown(cpu68k *c, uint16_t tw)
+{
+    cpu_halt(c, "After Dark's linker: a call it doesn't know, from %08X", rd32(c->a[7]));
+}
+
+static bool dl_find(const char *dir, const char *name, char *out, size_t outsize)
+{
+    static const char *const places[] = { "%s/%s", "%s/Module Resources/%s", "%s/../Module Resources/%s",
+                                          "%s/After Dark Files/%s", "%s/After Dark Files/Module Resources/%s" };
+    for (size_t i = 0; i < sizeof places / sizeof places[0]; i++) {
+        snprintf(out, outsize, places[i], dir, name);
+        if (fm_host_exists(out))
+            return true;
+    }
+    return false;
+}
+
+static void dl_open(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    gaddr refp = cpu_pop32(c), name = cpu_pop32(c);
+    cpu_pop32(c); /* params */
+    int16_t err = 0, rn = ad.rn;
+    bool own = false;
+    char cname[256] = "";
+    if (name && rd8(name)) {
+        snprintf(cname, sizeof cname, "%.*s", rd8(name), (const char *)gptr(name + 1));
+        char module[1024], dir[1024], path[1100];
+        err = -43; /* fnfErr */
+        if (rm_host_path(ad.rn, module, sizeof module)) {
+            snprintf(dir, sizeof dir, "%s", module);
+            char *slash = strrchr(dir, '/');
+            if (slash)
+                *slash = 0;
+            bool found = dl_find(dir, cname, path, sizeof path);
+            if (!found) {
+                snprintf(dir, sizeof dir, "%s", fm_system_folder_host());
+                found = dl_find(dir, cname, path, sizeof path);
+            }
+            mac_file mf;
+            char e[256];
+            if (found && appledouble_read(path, &mf, e, sizeof e)) {
+                int16_t saved = tb_CurResFile();
+                rn = mf.rsrc_len ? rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, true) : -1;
+                tb_UseResFile(saved);
+                mac_file_free(&mf);
+                err = rn > 0 ? 0 : -39; /* eofErr: no resource fork */
+                own = rn > 0;
+            }
+        }
+    }
+    int ref = 0;
+    for (int i = 0; !err && i < DL_FILES && !ref; i++)
+        if (!dl.rn[i]) {
+            dl.rn[i] = rn;
+            dl.own[i] = own;
+            ref = i + 1;
+        }
+    if (!err && !ref)
+        err = -42; /* tmfoErr */
+    LOGF(LOG_TRAPS, "  After Dark: OpenDatabase \"%s\" -> %d (file %d)\n", cname, err ? err : ref, rn);
+    if (refp)
+        wr32(refp, (uint32_t)ref);
+    wr16(c->a[7], (uint16_t)err);
+    cpu_push32(c, ret);
+}
+
+static void dl_close_ref(int ref)
+{
+    if (ref < 1 || ref > DL_FILES || !dl.rn[ref - 1])
+        return;
+    if (dl.own[ref - 1])
+        tb_CloseResFile(dl.rn[ref - 1]);
+    dl.rn[ref - 1] = 0;
+    dl.own[ref - 1] = false;
+}
+
+static void dl_close(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    dl_close_ref((int)cpu_pop32(c));
+    cpu_push32(c, ret);
+}
+
+static void dl_use(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int ref = (int)cpu_pop32(c);
+    if (dl.depth < DL_DEPTH)
+        dl.stack[dl.depth++] = tb_CurResFile();
+    if (ref >= 1 && ref <= DL_FILES && dl.rn[ref - 1])
+        tb_UseResFile(dl.rn[ref - 1]);
+    cpu_push32(c, ret);
+}
+
+static void dl_restore(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int16_t was = tb_CurResFile();
+    if (dl.depth > 0)
+        tb_UseResFile(dl.stack[--dl.depth]);
+    wr32(c->a[7], (uint32_t)(int32_t)was);
+    cpu_push32(c, ret);
+}
+
+static void dl_end(void)
+{
+    for (int i = 1; i <= DL_FILES; i++)
+        dl_close_ref(i);
+    dl.depth = 0;
+}
+
 static void register_natives(void)
 {
     if (natives_registered)
@@ -441,6 +573,12 @@ static void register_natives(void)
     for (int i = 0; i < 4; i++)
         mf_stubs[i] = native_register(mf[i], mfn[i], 0);
     vbl_stub = native_register(vbl_native, "AD VBL", 0);
+    for (int i = 0; i < DL_SLOTS; i++)
+        dl_stubs[i] = native_register(dl_unknown, "AD linker", 0);
+    dl_stubs[6] = native_register(dl_open, "AD OpenDatabase", 0);
+    dl_stubs[7] = native_register(dl_close, "AD CloseDatabase", 0);
+    dl_stubs[8] = native_register(dl_use, "AD UseDatabase", 0);
+    dl_stubs[9] = native_register(dl_restore, "AD RestoreDatabase", 0);
 }
 
 static gaddr make_table(const gaddr *stubs, int n)
@@ -652,12 +790,17 @@ static void restore_screen_colors(gaddr copy)
     tb_DisposePtr(copy);
 }
 
+static gaddr info_record(void);
+
 /* Set everything up and call Initialize and Blank; false if the module
  * can't run (no code). */
 static bool ad_begin(int16_t rn, bool over_program)
 {
     cpu68k *c = g_cpu;
     register_natives();
+    /* After Dark 3 and 4 answered Gestalt 'aYmm' with the record the
+     * event query gets (After Dark 4's AfterDarkExists asks so). */
+    gestalt_set(fourcc("aYmm"), info_record());
     memset(&ad, 0, sizeof ad);
     ad.rn = rn;
     ad.own_file = over_program;
@@ -722,8 +865,12 @@ static bool ad_begin(int16_t rn, bool over_program)
 
     ad.sd = make_table(sd_stubs, 7);
     ad.mf = make_table(mf_stubs, 4);
-    ad.ext = tb_NewPtr(2 + 2 * 8, false, true);
-    wr16(ad.ext, 2);
+    ad.dl = make_table(dl_stubs, DL_SLOTS);
+    wr16(ad.dl, AD_VERSION); /* the linker's version, not a count */
+    ad.ext = tb_NewPtr(2 + 3 * 8, false, true);
+    wr16(ad.ext, 3);
+    wr32(ad.ext + 18, fourcc("ADdl"));
+    wr32(ad.ext + 22, ad.dl);
     wr32(ad.ext + 2, fourcc("ADSd"));
     wr32(ad.ext + 6, ad.sd);
     wr32(ad.ext + 10, fourcc("ADmf"));
@@ -875,7 +1022,8 @@ static void ad_end(void)
     else
         tb_ClosePort(ad.port);
     tb_DisposeRgn(ad.rgn);
-    gaddr ptrs[] = { ad.port, ad.mons, ad.qd, ad.sd, ad.mf, ad.ext, ad.err, ad.pb, ad.chanp, ad.cell, ad.evt, ad.vbl };
+    dl_end();
+    gaddr ptrs[] = { ad.port, ad.mons, ad.qd, ad.sd, ad.mf, ad.dl, ad.ext, ad.err, ad.pb, ad.chanp, ad.cell, ad.evt, ad.vbl };
     for (size_t i = 0; i < sizeof ptrs / sizeof ptrs[0]; i++)
         if (ptrs[i])
             tb_DisposePtr(ptrs[i]);
@@ -1054,14 +1202,20 @@ bool afterdark_running(void) { return in_saver || ad.active; }
  * version (BCD), which the module compares with the one it needs. */
 static gaddr ad_info;
 
-bool afterdark_answer(gaddr evt)
+static gaddr info_record(void)
 {
-    if (!evt || rd32(evt + 2) != fourcc("aYmm") || !(ad.active || opt.idle_module[0]))
-        return false;
     if (!ad_info) {
         ad_info = tb_NewPtr(32, true, true);
         wr16(ad_info + 12, AD_VERSION);
     }
+    return ad_info;
+}
+
+bool afterdark_answer(gaddr evt)
+{
+    if (!evt || rd32(evt + 2) != fourcc("aYmm") || !(ad.active || opt.idle_module[0]))
+        return false;
+    info_record();
     wr16(evt, 0); /* nullEvent */
     wr32(evt + 2, fourcc("ADrk"));
     wr32(evt + 10, ad_info);

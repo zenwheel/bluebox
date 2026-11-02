@@ -139,6 +139,64 @@ extension BlueBox {
             #expect(rd32(out + 4) == rd32(UInt32(LM_ApplZone)))       // the zone given
         }
 
+        /// After Dark 3 and 4 as the PowerPC modules of After Dark 4 find
+        /// them: Gestalt 'aYmm' gives the record with the version, and the
+        /// 'ADdl' extension (the linker, version $0300 and up) opens a
+        /// resource database by name from a "Module Resources" folder,
+        /// makes it current and puts the module's file back.
+        @Test func theLinkersResourceDatabases() {
+            bootMachine()
+            let dir = tempDir()
+            let res = dir.appendingPathComponent("Module Resources")
+            try? FileManager.default.createDirectory(at: res, withIntermediateDirectories: true)
+            _ = writeResourceFile([TestResource(type: "PICT", id: 128, data: [0, 1, 2, 3])], name: "Art", in: res)
+            let out = tb_NewPtr(32, true, true), name = tb_NewPtr(8, true, true)
+            guestPString("Art", at: name)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let body: [UInt16] = [
+                0x206F, 0x0004,                   // MOVEA.L 4(SP),A0      params
+                0x2068, 0x0028,                   // MOVEA.L 40(A0),A0     the extensions
+                0x2068, 0x0016,                   // MOVEA.L 22(A0),A0     the third's routines
+                0x23C8, hi(out), lo(out),         // MOVE.L A0,out
+                0x4267,                           // CLR.W -(SP)           OpenDatabase(params, "Art", &ref)
+                0x2F2F, 0x0006,                   // MOVE.L 6(SP),-(SP)
+                0x2F3C, hi(name), lo(name),
+                0x2F3C, hi(out + 4), lo(out + 4),
+                0x2079, hi(out), lo(out), 0x2068, 0x001A, 0x4E90,
+                0x33DF, hi(out + 8), lo(out + 8), // MOVE.W (SP)+,out+8
+                0x2F39, hi(out + 4), lo(out + 4), // UseDatabase(ref)
+                0x2079, hi(out), lo(out), 0x2068, 0x0022, 0x4E90,
+                0x554F, 0xA994,                   // CurResFile
+                0x33DF, hi(out + 10), lo(out + 10),
+                0x42A7,                           // RestoreDatabase()
+                0x2079, hi(out), lo(out), 0x2068, 0x0026, 0x4E90,
+                0x23DF, hi(out + 12), lo(out + 12),
+                0x554F, 0xA994,
+                0x33DF, hi(out + 16), lo(out + 16),
+            ]
+            let code = code68k([0x4A6F, 0x0008, 0x6600, UInt16(body.count * 2 + 2)] + body + [
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1, // noErr; return
+            ])
+            let path = moduleFile(code, in: dir)
+            machine_screensaver_set_seconds(0.1)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+            _ = machine_run(30_000_000)
+            machine_set_instruction_limit(0)
+            #expect(String(cString: machine_halt_reason()).contains("ran its time"))
+            let info = gestalt_value(fourCC("aYmm"), 0)
+            #expect(info != 0 && rd16(info + 12) >= 0x0300)
+            let dl = rd32(out)
+            #expect(dl != 0 && rd16(dl) >= 0x0300)
+            #expect(rd16(out + 8) == 0 && rd32(out + 4) != 0)         // opened
+            let db = Int16(bitPattern: rd16(out + 10))
+            #expect(db > 0 && db != Int16(bitPattern: rd16(UInt32(LM_CurApRefNum)))) // the database was current
+            #expect(Int32(bitPattern: rd32(out + 12)) == Int32(db))  // Restore answers the one it leaves
+            #expect(rd16(out + 16) == rd16(UInt32(LM_CurApRefNum)))  // and the module's file is back
+        }
+
         /// ImDone: no more DrawFrame calls; Close still comes.  A module
         /// whose 'Cals' leaves out Blank gets the screen blanked for it.
         @Test func imDoneStopsTheFrames() {
