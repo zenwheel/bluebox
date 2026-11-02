@@ -245,6 +245,9 @@ final class TransientView: NSView {
     var statusItem: NSStatusItem?
     var statusMenusVersion: UInt32 = .max
     var lastActivityNote = Date.distantPast
+    /// Why nobody is at the host: its displays asleep, its screen locked,
+    /// its screen saver running, the host itself asleep.
+    var awayReasons = Set<String>()
 
     init(title: String, background: Bool = false) {
         self.title = title
@@ -367,6 +370,7 @@ final class TransientView: NSView {
         launchEvents.finishLaunching()
         if background {
             installStatusItem()
+            watchAway()
         } else {
             NSApp.activate(ignoringOtherApps: true)
         }

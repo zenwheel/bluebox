@@ -177,13 +177,44 @@ extension RootlessHost {
     }
 
     /// The user at work in other applications: input the program would not
-    /// see counts as activity, at most once a second.
+    /// see counts as activity, at most once a second.  So does nobody being
+    /// at the host (see watchAway): the Talking Moose keeps its remarks
+    /// for when someone is there to hear them.
     func noteActivityElsewhere() {
         guard !NSApp.isActive, Date().timeIntervalSince(lastActivityNote) >= 1 else { return }
         let anyInput = CGEventType(rawValue: ~0)!
-        guard CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput) < 1.5 else { return }
+        guard !awayReasons.isEmpty ||
+            CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput) < 1.5 else { return }
         lastActivityNote = Date()
         machine_note_user_activity()
+    }
+
+    /// The host's displays sleeping and waking, its screen locked and
+    /// unlocked, its screen saver starting and stopping, and the host
+    /// sleeping and waking.  On the way back, activity at once: the wait
+    /// for the Mac to be left alone starts over.
+    func watchAway() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        let distributed = DistributedNotificationCenter.default()
+        let pairs: [(NotificationCenter, String, String, String)] = [
+            (workspace, NSWorkspace.screensDidSleepNotification.rawValue, NSWorkspace.screensDidWakeNotification.rawValue, "displays"),
+            (workspace, NSWorkspace.willSleepNotification.rawValue, NSWorkspace.didWakeNotification.rawValue, "host"),
+            (distributed, "com.apple.screenIsLocked", "com.apple.screenIsUnlocked", "locked"),
+            (distributed, "com.apple.screensaver.didstart", "com.apple.screensaver.didstop", "screen saver"),
+        ]
+        for (center, gone, back, reason) in pairs {
+            center.addObserver(forName: Notification.Name(gone), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { _ = self?.awayReasons.insert(reason) }
+            }
+            center.addObserver(forName: Notification.Name(back), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.awayReasons.remove(reason)
+                    self.lastActivityNote = Date()
+                    machine_note_user_activity()
+                }
+            }
+        }
     }
 }
 #endif
