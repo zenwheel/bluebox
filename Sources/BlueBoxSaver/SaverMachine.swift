@@ -19,6 +19,10 @@ struct SaverSettings: Equatable {
     var sound = false
     var backdrop = true    /* the desktop picture on the screen when it starts */
     var controls: [String: [Int]] = [:] /* by module path, from the first version: kept in the settings files now */
+    var rotate = false     /* modules take turns, as After Dark's Randomize had them */
+    var rotateMinutes = 5
+    var rotateRandom = true
+    var rotateModules: [String] = [] /* the ones taking turns; none: every module found */
 
     static func load() -> SaverSettings {
         var s = SaverSettings()
@@ -30,6 +34,10 @@ struct SaverSettings: Equatable {
         s.sound = d.bool(forKey: "sound")
         if d.object(forKey: "backdrop") != nil { s.backdrop = d.bool(forKey: "backdrop") }
         s.controls = (d.dictionary(forKey: "controls") as? [String: [Int]]) ?? [:]
+        s.rotate = d.bool(forKey: "rotate")
+        if d.object(forKey: "rotateMinutes") != nil { s.rotateMinutes = max(1, d.integer(forKey: "rotateMinutes")) }
+        if d.object(forKey: "rotateRandom") != nil { s.rotateRandom = d.bool(forKey: "rotateRandom") }
+        s.rotateModules = d.stringArray(forKey: "rotateModules") ?? []
         // For trying the bundle outside the screen saver host.
         if let m = ProcessInfo.processInfo.environment["BLUEBOX_SAVER_MODULE"] { s.module = m }
         if let f = ProcessInfo.processInfo.environment["BLUEBOX_SAVER_FOLDERS"] { s.folders = f.split(separator: ":").map(String.init) }
@@ -45,6 +53,10 @@ struct SaverSettings: Equatable {
         d.set(sound, forKey: "sound")
         d.set(backdrop, forKey: "backdrop")
         d.set(controls, forKey: "controls")
+        d.set(rotate, forKey: "rotate")
+        d.set(rotateMinutes, forKey: "rotateMinutes")
+        d.set(rotateRandom, forKey: "rotateRandom")
+        d.set(rotateModules, forKey: "rotateModules")
         d.synchronize()
     }
 
@@ -56,6 +68,13 @@ struct SaverSettings: Equatable {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.path
             ?? NSHomeDirectory() + "/Library/Application Support"
         return base + "/Blue Box After Dark/Settings"
+    }
+
+    /// The modules taking turns (when they do): those chosen that are
+    /// still there, else every one found.
+    func turnModules() -> [String] {
+        let chosen = rotateModules.filter(moduleExists)
+        return chosen.isEmpty ? ModuleCatalog.scan(allFolders) : chosen
     }
 
     /// The module to show: the one chosen, else the first found (Flying
@@ -72,6 +91,7 @@ final class SaverMachine: @unchecked Sendable {
 
     private struct Run: Equatable {
         var module: String
+        var others: [String] = [] /* taking turns after it */
         var width: Int, height: Int
         var settings: SaverSettings
     }
@@ -90,11 +110,23 @@ final class SaverMachine: @unchecked Sendable {
     /// Run the chosen module on a screen of this many Mac pixels (the
     /// machine starts again when either changes).
     func show(screenPoints: CGSize, settings: SaverSettings) {
-        guard let module = settings.chosenModule() else { return }
+        var modules: [String]
+        if settings.rotate {
+            modules = settings.turnModules()
+            if settings.rotateRandom { modules.shuffle() }
+        } else {
+            modules = settings.chosenModule().map { [$0] } ?? []
+        }
+        guard let module = modules.first else { return }
         let scale = CGFloat(max(1, settings.scale))
         let w = max(320, Int(screenPoints.width / scale)) & ~7, h = max(240, Int(screenPoints.height / scale))
-        let run = Run(module: module, width: w, height: h, settings: settings)
+        var run = Run(module: module, width: w, height: h, settings: settings)
+        run.others = Array(modules.dropFirst())
         lock.lock()
+        // The same settings and screen: what runs goes on (another shuffle isn't a change).
+        if settings.rotate, let w = wanted, w.settings == settings, w.width == run.width, w.height == run.height {
+            run = w
+        }
         if wanted != run {
             wanted = run
             if current != nil { wake() }
@@ -173,6 +205,8 @@ final class SaverMachine: @unchecked Sendable {
         machine_screensaver_reset()
         machine_screensaver_set_settings_dir(SaverSettings.settingsDir)
         machine_screensaver_set_sound(s.sound)
+        for m in run.others { _ = machine_screensaver_add_module(m) }
+        machine_screensaver_set_rotation(Double(s.rotateMinutes) * 60, s.rotateRandom)
         let values = s.controls[run.module] ?? [] // the first version's; the settings file has them now
         for (i, v) in values.enumerated() where i < 4 && v >= 0 { _ = machine_screensaver_set_control(Int32(i), Int32(v)) }
         if s.backdrop, let (rgba, w, h) = desktopPicture() {

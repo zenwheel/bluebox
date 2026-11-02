@@ -84,6 +84,11 @@ bool machine_screensaver_settings_path(const char *module, char *out, size_t out
 uint8_t *machine_screensaver_module_fork(const char *module, size_t *len);
 bool machine_screensaver_store_resource(const char *module, uint32_t type, int16_t id, const uint8_t *data,
                                         uint32_t len);
+/* Modules in turn, as After Dark's Randomize ran them: the one launched
+ * (or the idle one) and each added, every so many seconds, in order or at
+ * random (each closed, its settings kept, and the next begun). */
+bool machine_screensaver_add_module(const char *path);
+void machine_screensaver_set_rotation(double seconds, bool random);
 /* What happened: DrawFrame calls, calls by message (8: buttons), and the
  * message the module stopped with ("" if it didn't). */
 uint32_t machine_screensaver_frames(void);

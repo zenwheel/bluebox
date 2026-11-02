@@ -14,7 +14,7 @@ nonisolated(unsafe) var screensaverRun = false
 nonisolated(unsafe) var hostFullScreen = false
 
 let screensaverUsage = """
-  bluebox screensaver <module> [--window|--fullscreen|--headless] [--seconds N]
+  bluebox screensaver <module>... [--window|--fullscreen|--headless] [--seconds N] [--every N] [--random]
             [--png-every N dir] [--sound] [--control I=V]... [--button B]... [--backdrop IMAGE] [--frames-per-tick N]
             [--tick-budget N] [--settings DIR | --no-settings] [run options: --depth, --screen, --log ...]
       Run an After Dark graphics module (a file of type ADgm, or an archive
@@ -37,13 +37,18 @@ let screensaverUsage = """
       in its setup) are there the next time.  They go in a file per module
       in Blue Box's "After Dark Settings" folder (--settings DIR another;
       --no-settings: not kept); the module file itself isn't changed.
+      Several modules, or a folder of them, take turns as After Dark's
+      Randomize had them: each runs --every N seconds (default 60), in
+      the order given, or picked at random with --random.
 """
 
 func screensaverCommand(_ args: [String]) {
     var display = "window"
     var seconds: Double?
     var runArgs: [String] = []
-    var module: String?
+    var modules: [String] = []
+    var every = 60.0
+    var random = false
     var depthGiven = false
     var maxGiven = false
     var framesPerTick: Int32 = 4
@@ -89,6 +94,10 @@ func screensaverCommand(_ args: [String]) {
         case "--tick-budget":
             guard let n = UInt32(next()), n > 0 else { fail("--tick-budget takes a number of instructions") }
             budget = n
+        case "--every":
+            guard let s = Double(next()), s > 0 else { fail("--every takes a number of seconds") }
+            every = s
+        case "--random": random = true
         case "--settings": settings = next()
         case "--no-settings": settings = nil
         case "--help", "-h":
@@ -104,18 +113,20 @@ func screensaverCommand(_ args: [String]) {
                                                "--max", "--init", "--keys", "--gestalt", "--lowmem", "--fonts", "--app",
                                                "--screenshot", "--appearance", "--scale", "--file-answer"]
                 if takesValue.contains(a) { runArgs.append(next()) }
-            } else if module == nil {
-                module = a
             } else {
-                fail("one module at a time")
+                modules.append(a)
             }
         }
         i += 1
     }
-    guard let module else { eprint(screensaverUsage + "\n"); exit(2) }
-    let file = resolveModule(module)
+    guard !modules.isEmpty else { eprint(screensaverUsage + "\n"); exit(2) }
+    var files = modules.flatMap(resolveModules)
+    if random { files.shuffle() }
+    guard let file = files.first else { fail("no After Dark modules in \(modules.joined(separator: ", "))") }
     machine_screensaver_set_pace(framesPerTick, budget)
     machine_screensaver_set_settings_dir(settings)
+    for m in files.dropFirst() { _ = machine_screensaver_add_module(m) }
+    machine_screensaver_set_rotation(every, random)
     if display == "headless" && seconds == nil { seconds = 30 }
     if let seconds { machine_screensaver_set_seconds(seconds) }
     var run = [file] + runArgs
@@ -146,6 +157,18 @@ func screensaverCommand(_ args: [String]) {
 /// Where modules' settings are kept: beside Blue Box's library.
 func defaultScreensaverSettings() -> String {
     ((defaultLibrary() as NSString).deletingLastPathComponent as NSString).appendingPathComponent("After Dark Settings")
+}
+
+/// The modules a name stands for: a folder's (and its folders'), by name,
+/// or the one module resolveModule finds.
+func resolveModules(_ spec: String) -> [String] {
+    var isDir: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: spec, isDirectory: &isDir), isDir.boolValue else {
+        return [resolveModule(spec)]
+    }
+    let types = [fourCCValue("ADgm"), fourCCValue("A4gm")]
+    return scan(URL(fileURLWithPath: spec).standardizedFileURL.path).filter { types.contains($0.type) }.map(\.path)
+        .sorted { ($0 as NSString).lastPathComponent.localizedStandardCompare(($1 as NSString).lastPathComponent) == .orderedAscending }
 }
 
 /// A module by path (a file, or an archive holding one), or by name from

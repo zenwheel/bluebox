@@ -138,8 +138,11 @@ static struct {
     char settings_dir[1024]; /* where each module's changed resources are kept; "" not kept */
 } opt = { .frames_per_tick = 4, .tick_budget = 100000 };
 
+static void rotation_reset(void);
+
 void machine_screensaver_reset(void)
 {
+    rotation_reset();
     memset(&opt, 0, sizeof opt);
     opt.frames_per_tick = 4;
     opt.tick_budget = 100000;
@@ -677,6 +680,7 @@ static void mf_restore(cpu68k *c, uint16_t tw)
  * until the flag is negative). */
 static void snapshot_due(void);
 static void time_up_check(void);
+static uint32_t run_start; /* Ticks when the screen saver started (the modules' turns within it) */
 
 static void vbl_native(cpu68k *c, uint16_t tw)
 {
@@ -1199,7 +1203,6 @@ static bool ad_begin(int16_t rn, bool over_program)
     tb_VInstall(ad.vbl);
     ad.active = true;
     ad.start_tick = ad.snap_tick = rd32(LM_Ticks);
-    stats.frames = 0;
 
     LOGF(LOG_TRAPS, "After Dark: module code at %08X, Cals %02X\n", ad.entry, ad.cals);
     /* Setup first, as in the control panel: the module chosen, then its
@@ -1273,7 +1276,7 @@ static void time_up_check(void)
 {
     if (opt.seconds <= 0 || ad.time_up)
         return;
-    if (rd32(LM_Ticks) - ad.start_tick >= (uint32_t)(opt.seconds * 60 + 0.5)) {
+    if (rd32(LM_Ticks) - run_start >= (uint32_t)(opt.seconds * 60 + 0.5)) {
         ad.time_up = true;
         machine_post_key(' ', 49, 0, 1, 0);
         machine_post_key(' ', 49, 0, 0, 0);
@@ -1326,6 +1329,109 @@ static void ad_end(void)
 static uint32_t input_mark;
 static bool woken(void) { return ev_input_serial() != input_mark; }
 
+/* Modules in turn, as After Dark 3 and 4's own Randomize (and the 2.0
+ * Randomizer module) ran them: the first module (the one launched, or the
+ * idle one), then each added, every so many seconds, in order or at
+ * random.  Each one is closed (its Close, its settings kept) and the next
+ * opened from its file and begun as After Dark began it. */
+enum { MAX_ROTATION = 512 };
+static struct {
+    char *paths[MAX_ROTATION]; /* the ones after the first */
+    int n;
+    double seconds;
+    bool random;
+    int cur;                   /* 0: the first */
+    int16_t rn;                /* the file opened here for the current one; 0 the first's */
+    uint32_t seed;
+} rot;
+
+bool machine_screensaver_add_module(const char *path)
+{
+    if (!path || rot.n == MAX_ROTATION)
+        return false;
+    rot.paths[rot.n++] = strdup(path);
+    return true;
+}
+
+void machine_screensaver_set_rotation(double seconds, bool random)
+{
+    rot.seconds = seconds;
+    rot.random = random;
+}
+
+static void rotation_reset(void)
+{
+    for (int i = 0; i < rot.n; i++)
+        free(rot.paths[i]);
+    memset(&rot, 0, sizeof rot);
+}
+
+/* A module's file opened for its turn (its settings over it): its
+ * resource file, or -1. */
+static int16_t open_module(const char *path)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err) || !mf.rsrc_len) {
+        fprintf(stderr, "bluebox: %s: %s\n", path, mf.rsrc_len ? err : "no resource fork");
+        return -1;
+    }
+    int16_t saved = tb_CurResFile();
+    afterdark_apply_settings(path, mac_file_type(&mf), &mf.rsrc, &mf.rsrc_len);
+    int16_t rn = rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, true);
+    mac_file_free(&mf);
+    tb_UseResFile(saved);
+    /* One with PowerPC code runs on a Power Mac, as at a launch. */
+    if (rn > 0 && afterdark_has_powerpc(path))
+        gestalt_powerpc();
+    return rn;
+}
+
+static bool rotation_due(void)
+{
+    if (!rot.n || rot.seconds <= 0)
+        return false;
+    uint32_t ran = rd32(LM_Ticks) - ad.start_tick;
+    /* One that stopped with its message has it seen a moment, then goes. */
+    if (ad.stopped && ran >= 180)
+        return true;
+    return ran >= (uint32_t)(rot.seconds * 60 + 0.5);
+}
+
+/* The next module's turn.  first_rn is the first's file (the launched
+ * program's, or the idle module's); over_program as for ad_begin. */
+static bool rotate(int16_t first_rn, bool over_program)
+{
+    int count = rot.n + 1, next = rot.cur;
+    if (rot.random) {
+        if (!rot.seed)
+            rot.seed = rd32(LM_Ticks) * 2654435761u + 1;
+        for (int tries = 0; tries < 8 && next == rot.cur; tries++) {
+            rot.seed = rot.seed * 1103515245u + 12345u;
+            next = (int)((rot.seed >> 8) % (uint32_t)count);
+        }
+    } else {
+        next = (rot.cur + 1) % count;
+    }
+    ad_end();
+    if (rot.rn > 0)
+        tb_CloseResFile(rot.rn);
+    rot.rn = 0;
+    int16_t rn = first_rn;
+    if (next > 0) {
+        rn = open_module(rot.paths[next - 1]);
+        if (rn < 0) {
+            rn = first_rn;
+            next = 0;
+        } else {
+            rot.rn = rn;
+        }
+    }
+    rot.cur = next;
+    LOGF(LOG_TRAPS, "After Dark: the next module, %s\n", next ? rot.paths[next - 1] : "the first");
+    return ad_begin(rn, over_program);
+}
+
 /* ------------------------------------------------------------------ */
 /* A module on its own (bluebox screensaver) */
 
@@ -1344,6 +1450,8 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     tb_HideCursor();
     int16_t rn = (int16_t)rd16(LM_CurApRefNum);
     input_mark = ev_input_serial();
+    run_start = rd32(LM_Ticks);
+    rot.cur = 0;
     if (!ad_begin(rn, false)) {
         cpu_halt(c, "ExitToShell (no ADgm code in the module)");
         return;
@@ -1352,9 +1460,11 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     if (opt.snap_every > 0 && opt.snap_dir[0])
         snapshot(); /* the blanked screen */
     while (!c->halted) {
-        if (limit && rd32(LM_Ticks) - ad.start_tick >= limit)
+        if (limit && rd32(LM_Ticks) - run_start >= limit)
             break;
         if (woken())
+            break;
+        if (rotation_due() && !rotate(rn, false))
             break;
         if (!ad.stopped)
             ad_tick();
@@ -1363,8 +1473,11 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     }
     if (c->halted)
         return;
-    bool timed = ad.time_up || (limit && rd32(LM_Ticks) - ad.start_tick >= limit);
+    bool timed = ad.time_up || (limit && rd32(LM_Ticks) - run_start >= limit);
     ad_end();
+    if (rot.rn > 0)
+        tb_CloseResFile(rot.rn);
+    rot.rn = 0;
     tb_ShowCursor();
     cpu_halt(c, timed ? "ExitToShell (the screen saver ran its time)" : "ExitToShell (woken by input)");
 }
@@ -1456,14 +1569,21 @@ void afterdark_idle(void)
     uint8_t crsr = rd8(LM_CrsrVis);
     tb_HideCursor();
     input_mark = ev_input_serial();
+    run_start = rd32(LM_Ticks);
+    rot.cur = 0;
     bool begun = ad_begin(rn, true);
     while (begun && !c->halted && !woken()) {
+        if (rotation_due() && !(begun = rotate(rn, true)))
+            break;
         if (!ad.stopped)
             ad_tick();
         tb_WaitNextEvent(0, ad.evt, 1, 0); /* no events taken: the program gets the one that wakes it */
     }
     if (begun && !c->halted)
         ad_end();
+    if (rot.rn > 0)
+        tb_CloseResFile(rot.rn);
+    rot.rn = 0;
     /* The key or click that woke it was for the screen saver, not the
      * program under it. */
     tb_FlushEvents((int16_t)(1 << mouseDown | 1 << 2 /* mouseUp */ | 1 << keyDown | 1 << 4 /* keyUp */ | 1 << autoKey), 0);

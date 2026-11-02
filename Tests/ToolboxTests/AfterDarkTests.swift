@@ -306,6 +306,31 @@ extension BlueBox {
             #expect(rd16(psave2) == 12) // the same module, elsewhere: its settings follow it
         }
 
+        /// Modules in turn, as After Dark's Randomize ran them: the first
+        /// is closed when its time is up and the next begun from its file,
+        /// then the first again.
+        @Test func modulesTakeTurns() {
+            bootMachine()
+            let logA = tb_NewPtr(4096, false, true), logB = tb_NewPtr(4096, false, true)
+            let psave = tb_NewPtr(64, false, true), evt = tb_NewPtr(16, false, true)
+            let a = moduleFile(moduleCode(log: logA, psave: psave, evt: evt), in: tempDir())
+            let b = moduleFile(moduleCode(log: logB, psave: psave, evt: evt), in: tempDir())
+            #expect(machine_screensaver_add_module(b))
+            machine_screensaver_set_rotation(0.2, false)
+            machine_screensaver_set_seconds(0.5)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(a, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 60_000_000)
+            _ = machine_run(80_000_000)
+            machine_set_instruction_limit(0)
+            #expect(String(cString: machine_halt_reason()).contains("ran its time"))
+            let seenA = messages(logA), seenB = messages(logB)
+            #expect(seenA.filter { $0 == 0 }.count == 2 && seenA.filter { $0 == 1 }.count == 2) // A, B, A
+            #expect(seenB.filter { $0 == 0 }.count == 1 && seenB.filter { $0 == 1 }.count == 1)
+            #expect(Array(seenB.prefix(3)) == [0, 2, 3] && seenB.last == 1)
+            #expect(machine_screensaver_calls(0) == 3)
+        }
+
         /// ImDone: no more DrawFrame calls; Close still comes.  A module
         /// whose 'Cals' leaves out Blank gets the screen blanked for it.
         @Test func imDoneStopsTheFrames() {
