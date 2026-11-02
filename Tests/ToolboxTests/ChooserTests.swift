@@ -334,5 +334,38 @@ extension BlueBox {
             #expect(messages().last == 17)      // terminateMsg
             tb_CloseDeskAcc(rn)
         }
+
+        /// AppleShare by address: Server IP Address..., the server's address,
+        /// "Connect to the file server" as a registered user (the user name
+        /// filled in, the password typed as bullets), its volumes checked:
+        /// the volume is mounted while the program runs.
+        @Test func connectsToAnAppleShareServer() {
+            boot(user: "joe")
+            defer { restore() }
+            let afp = AFPStub(), dsi = DSIStub(afp)
+            defer { dsi.thread.finish() }
+            defer { machine_close_appleshares() }
+            let (rn, w, h, v) = open()
+            update(w)
+            click(w, (h, v), 9 + 35, 9 + 20) // AppleShare
+            // What will be typed into the dialogs: the address, the password, OK.
+            for c in "127.0.0.1:\(dsi.port)\r" + "secret\r" + "\r" {
+                machine_post_key(Int32(c.asciiValue!), 0, 0, 1, 0)
+                machine_post_key(Int32(c.asciiValue!), 0, 0, 0, 0)
+            }
+            let before = machine_volume_count()
+            // the right button: Server IP Address...
+            let ev = tb_NewPtr(16, false, true)
+            machine_post_mouse(Int32(h + 300), Int32(v + 120), 1)
+            machine_post_mouse(Int32(h + 300), Int32(v + 120), 0)
+            wr16(ev, 1)
+            wr32(ev + 10, UInt32(v + 120) << 16 | UInt32(h + 300))
+            tb_SystemClick(ev, w)
+            #expect(machine_volume_count() == before + 1)
+            var name = [CChar](repeating: 0, count: 64), root = [CChar](repeating: 0, count: 1024)
+            #expect(machine_volume_info(before, &name, 64, &root, 1024) && String(cString: name) == "StubVol")
+            #expect(afp.commands.contains(18)) // FPLogin
+            tb_CloseDeskAcc(rn)
+        }
     }
 }

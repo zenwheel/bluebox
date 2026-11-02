@@ -377,6 +377,12 @@ static void send_lookup(uint8_t id, const entity *e, uint8_t dnode)
     t[3] = NIS_SOCKET;
     t[4] = 0;
     int len = 5 + put_entity(t + 5, e);
+    /* Another zone's: a broadcast request for the router, which looks in
+     * that zone's networks. */
+    if (dnode == 255 && !zone_match(e->zone) && router_node && now_ms() - router_ticks < 60000) {
+        nbp_send(NBP_BRRQ, id, router_node, NIS_SOCKET, t, 1, len);
+        return;
+    }
     nbp_send(NBP_LKUP, id, dnode, NIS_SOCKET, t, 1, len);
 }
 
