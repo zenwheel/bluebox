@@ -527,6 +527,10 @@ void machine_set_chooser_host(machine_printers_fn printers, machine_setting_fn c
  * accessory host.) */
 int machine_open_chooser(void);
 
+/* A print job as a PostScript program (what a LaserWriter is sent),
+ * malloc'd; its length in *len. */
+char *machine_postscript(const machine_print_job *job, size_t *len);
+
 /* The host's default paper, used for new print records. */
 void machine_set_page_defaults(const machine_page_setup *ps);
 
