@@ -1008,6 +1008,7 @@ static void handle_result(int16_t r, int16_t message)
     }
     if (r == RestartMe && message != msgClose) {
         for (int tries = 0; tries < 4; tries++) {
+            mm_clear_free(ad.zone ? ad.zone : rd32(LM_TheZone));
             int16_t again = call_module(msgInitialize);
             if (again != RestartMe) {
                 handle_result(again, msgInitialize);
@@ -1236,6 +1237,10 @@ static bool ad_begin(int16_t rn, bool over_program)
         tb_PaintRgn(ad.rgn);
     }
     save_settings(); /* the controls given, and what the setup changed */
+    /* The memory it gets is as fresh as the heap After Dark made it (and
+     * again at each RestartMe: Peek-a-boo, starting over, reads a field of
+     * its new storage as nil, its sound being off). */
+    mm_clear_free(ad.zone ? ad.zone : rd32(LM_TheZone));
     int16_t r = call_module(msgInitialize);
     handle_result(r, msgInitialize);
     if (!ad.stopped) {

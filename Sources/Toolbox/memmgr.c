@@ -1308,6 +1308,17 @@ static uint32_t largest_possible(gaddr z, bool with_purge)
     return best > HDR ? best - HDR : 0;
 }
 
+/* Zero the free blocks of a zone, as a fresh heap's memory is (After
+ * Dark gave each module a heap of its own; Peek-a-boo reads a field of
+ * the storage it allocates without clearing as nil when sound is off). */
+void mm_clear_free(gaddr z)
+{
+    gaddr lim = z_lim(z);
+    for (gaddr b = z_first(z); b < lim; b = b_next(b))
+        if (b_use(b) == USE_FREE && b_psize(b) > HDR)
+            gmemset(b + HDR, 0, b_psize(b) - HDR);
+}
+
 int32_t tb_FreeMem(bool sys_p)
 {
     gaddr z = pick_zone(sys_p);

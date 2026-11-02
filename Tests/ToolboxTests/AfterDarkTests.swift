@@ -331,6 +331,21 @@ extension BlueBox {
             #expect(machine_screensaver_calls(0) == 3)
         }
 
+        /// A module begins (and starts over, RestartMe) in memory as fresh
+        /// as the heap After Dark gave it: a block it allocates without
+        /// clearing holds zeros, whatever was there before.
+        @Test func aModuleGetsFreshMemory() {
+            bootMachine()
+            let zone = rd32(UInt32(LM_TheZone))
+            let p = tb_NewPtr(256, false, false)
+            for i in 0..<256 { wr8(p + UInt32(i), 0xAA) }
+            tb_DisposePtr(p)
+            mm_clear_free(zone)
+            let q = tb_NewPtr(256, false, false)
+            #expect((0..<256).allSatisfy { rd8(q + UInt32($0)) == 0 })
+            #expect(mm_heap_valid())
+        }
+
         /// ImDone: no more DrawFrame calls; Close still comes.  A module
         /// whose 'Cals' leaves out Blank gets the screen blanked for it.
         @Test func imDoneStopsTheFrames() {
