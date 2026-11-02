@@ -30,14 +30,17 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
     /// The host voices channels were given by name (nil: the system voice).
     private var hostVoices: [Int32: NSSpeechSynthesizer.VoiceName?] = [:]
 
-    /// AVSpeechSynthesizer instead (--speech avspeech, or no NSSpeechSynthesizer voices).
-    private var useAV = false
+    /// AVSpeechSynthesizer instead (--speech avspeech, or no NSSpeechSynthesizer voices):
+    /// decided when the program first speaks, as listing the voices takes a
+    /// quarter of a second that every start waited for.
+    private var avRequested = false
+    private lazy var useAV = avRequested || NSSpeechSynthesizer.availableVoices.isEmpty
     private let av = AVSpeech()
 
     /// Route the machine's speech to the host.  BLUEBOX_SPEECH_VOLUME scales
     /// every channel's volume (0: silent, for timing runs and tests).
     public func install(avspeech: Bool = false) {
-        useAV = avspeech || NSSpeechSynthesizer.availableVoices.isEmpty
+        avRequested = avspeech
         let scale = Double(ProcessInfo.processInfo.environment["BLUEBOX_SPEECH_VOLUME"] ?? "") ?? 1
         volumeScale.storeBytes(of: max(0, scale), as: Double.self)
         machine_set_speech_handler({ rqp, ctx in
