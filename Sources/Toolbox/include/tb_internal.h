@@ -760,6 +760,7 @@ void fm_lg2phys_native(cpu68k *c, uint16_t tw);
 int16_t fm_block_io(gaddr pb, bool write);
 void disk_driver_reset(void);
 gaddr disk_floppy_icon(void); /* the floppy disk's ICN#, for .Sony's icon calls */
+extern const native_driver print_driver; /* .Print: the Printing Manager's low-level calls (print.c) */
 /* AppleTalk (appletalk.c): the .MPP driver on LocalTalk over UDP. */
 extern const native_driver mpp_driver, atp_driver, xpp_driver, dsp_driver;
 void adsp_poll(void);

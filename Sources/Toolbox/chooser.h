@@ -65,6 +65,7 @@ size_t chooser_system_resources(rsrc_spec *specs, size_t n, size_t max);
 void chooser_reset(void);
 int chooser_print_destination(machine_print_job *job);
 bool chooser_laserwriter(char *nbp, size_t size); /* the LaserWriter chosen, as an NBP name */
+void chooser_job_text(char *out, size_t size);     /* the job dialog's words for it */
 gaddr ch_pstr(const char *mac);
 gaddr ch_rect(qrect r);
 void chooser_changed(const char *key, const char *value);

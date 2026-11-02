@@ -50,12 +50,19 @@ void machine_set_page_defaults(const machine_page_setup *ps) { defaults = *ps; }
 int16_t tb_PrError(void) { return print_error; }
 void tb_PrSetError(int16_t iErr) { set_print_error(iErr); }
 void tb_PrOpen(void) { set_print_error(noErr); }
-void tb_PrClose(void) {}
-void tb_PrDrvrOpen(void) {}
-void tb_PrDrvrClose(void) {}
-void tb_PrCtlCall(int16_t iWhichCtl, int32_t lParam1, int32_t lParam2, int32_t lParam3) {}
-gaddr tb_PrDrvrDCE(void) { return 0; }
-int16_t tb_PrDrvrVers(void) { return 1; }
+static void ll_finish(void);
+void tb_PrClose(void) { ll_finish(); }
+void tb_PrDrvrOpen(void) { set_print_error(noErr); }
+void tb_PrDrvrClose(void) { ll_finish(); }
+/* The printer driver's entry, as programs that look at it find it: the
+ * .Print driver's (unit 2). */
+gaddr tb_PrDrvrDCE(void)
+{
+    gaddr table = rd32(LM_UTableBase);
+    gaddr h = table ? rd32(table + 2 * 4) : 0;
+    return h ? rd32(h) : 0;
+}
+int16_t tb_PrDrvrVers(void) { return 7; } /* the LaserWriter driver's of System 7 */
 
 /* The record's resolution: 72 dpi, or what PrGeneral's setRslOp chose. */
 static int res_of(gaddr p, int off)
@@ -282,17 +289,25 @@ static void style_item(cpu68k *c, uint16_t tw)
     cpu_push32(c, ret);
 }
 
-void print_reset(void) { job_item_stub = style_item_stub = 0; }
+static void ll_reset(void);
+void print_reset(void)
+{
+    job_item_stub = style_item_stub = 0;
+    ll_reset();
+}
 
 gaddr tb_PrJobInit(gaddr h)
 {
-    static const ditem items[] = {
+    static char where[300];
+    chooser_job_text(where, sizeof where);
+    ditem items[] = {
         { 88, 290, 108, 370, ctrlItemButton, "Print\xC9" },
         { 88, 200, 108, 280, ctrlItemButton, "Cancel" },
         { 88, 16, 108, 136, ctrlItemButton, "Save as PDF\xC9" },
-        { 12, 16, 76, 370, statTextItem, "The printer, the number of copies and the pages to print are chosen "
-                                          "in the next panel." },
+        { 12, 16, 76, 370, statTextItem, where },
     };
+    if (strncmp(g_chooser.printer, "panel", 5) && strncmp(g_chooser.printer, "driver:", 7))
+        items[0].text = "Print"; /* no panel follows */
     if (!job_item_stub)
         job_item_stub = native_register(job_item, "PrJobItemProc", 0);
     save_pdf = false;
@@ -464,10 +479,10 @@ void tb_PrOpenPage(gaddr port, gaddr pPageFrame)
 
 void tb_PrClosePage(gaddr pPrPort) { qd_rec_close_page(); }
 
-void tb_PrCloseDoc(gaddr port)
+/* The recorded pages, printed where the Chooser says on the paper the
+ * print record describes. */
+static void send_pages(gaddr p)
 {
-    if (port != job_port || !job_port)
-        return;
     const machine_print_page *pages;
     int n = qd_rec_pages(&pages);
     if (n > 0 && print_error == noErr) {
@@ -475,7 +490,6 @@ void tb_PrCloseDoc(gaddr port)
         memset(&job, 0, sizeof job);
         job.npages = n;
         job.pages = pages;
-        gaddr p = rd32(job_print);
         qrect page = qrect_get(p + 8), paper = qrect_get(p + 16);
         job.page = (mprect){ page.top, page.left, page.bottom, page.right };
         job.paper = (mprect){ paper.top, paper.left, paper.bottom, paper.right };
@@ -501,6 +515,13 @@ void tb_PrCloseDoc(gaddr port)
         else
             LOGF(LOG_UNIMPL, "Printing Manager: no host, %d page(s) not printed\n", n);
     }
+}
+
+void tb_PrCloseDoc(gaddr port)
+{
+    if (port != job_port || !job_port)
+        return;
+    send_pages(rd32(job_print));
     qd_rec_end();
     save_pdf = false;
     tb_ClosePort(port);
@@ -511,3 +532,217 @@ void tb_PrCloseDoc(gaddr port)
 }
 
 void tb_PrPicFile(gaddr h, gaddr pPrPort, gaddr pIOBuf, gaddr pDevBuf, gaddr prStatus) {}
+
+/* ---------------------------------------------------------------------- */
+/* The low-level calls: the printer driver's control calls (PrCtlCall, or
+ * Control to .Print), which printed text as it came, bitmaps, and the
+ * screen or front window (Command-Shift-4's screen dump), a page at a time:
+ * iPrDevCtl opens and closes documents and pages and feeds lines,
+ * iPrIOCtl sends text, iPrBitsCtl a bitmap, iPrEvtCtl the screen or the
+ * front window.  They are drawn into a printing port of our own and go
+ * where the Chooser says when the document closes (lPrDocClose, a reset,
+ * PrDrvrClose or PrClose). */
+enum { iPrBitsCtl = 4, iPrIOCtl = 5, iPrEvtCtl = 6, iPrDevCtl = 7 };
+enum { lPrPageEnd = 0x00020000, lPrDocOpen = 0x00010000, lPrPageOpen = 0x00040000, lPrDocClose = 0x00050000,
+       lPrLineFeed = 0x00030000, lPrLFStd = 0x0003FFFF, lPrLFEighth = 0x0003FFFE, lPrEvtAll = 0x0002FFFD,
+       lPrEvtTop = 0x0001FFFD };
+
+static struct {
+    gaddr print, port, bits;
+    bool page_open;
+    int h, v, line;
+} ll;
+
+static void ll_reset(void) { memset(&ll, 0, sizeof ll); }
+
+static void ll_begin(void)
+{
+    if (ll.port)
+        return;
+    ll.print = tb_NewHandle(TPrint_SIZE, false, true);
+    if (!ll.print)
+        return;
+    tb_PrintDefault(ll.print);
+    ll.port = tb_NewPtr(TPrPort_SIZE, false, true);
+    qrect page = qrect_get(rd32(ll.print) + 8);
+    int w = page.right - page.left, hgt = page.bottom - page.top;
+    uint32_t row = (uint32_t)((w + 15) / 16 * 2);
+    ll.bits = tb_NewPtr((int32_t)(row * (uint32_t)hgt), false, true);
+    gaddr saved = qd_port();
+    tb_OpenPort(ll.port);
+    wr32(ll.port + GrafPort_portBits_off, ll.bits);
+    wr16(ll.port + GrafPort_portBits_off + 4, (uint16_t)row);
+    qrect_put(ll.port + GrafPort_portBits_off + 6, page);
+    qrect_put(ll.port + GrafPort_portRect_off, page);
+    tb_RectRgn(GrafPort_visRgn(ll.port), ll.port + GrafPort_portRect_off);
+    tb_SetPort(saved);
+    qd_rec_begin(ll.port);
+    ll.page_open = false;
+}
+
+static void ll_page(void)
+{
+    ll_begin();
+    if (!ll.port || ll.page_open)
+        return;
+    qd_rec_open_page();
+    ll.page_open = true;
+    ll.h = 36;
+    ll.line = 12;
+    ll.v = 36 + 10;
+}
+
+static void ll_page_end(void)
+{
+    if (ll.page_open)
+        qd_rec_close_page();
+    ll.page_open = false;
+}
+
+static void ll_finish(void)
+{
+    if (!ll.port)
+        return;
+    ll_page_end();
+    send_pages(rd32(ll.print));
+    qd_rec_end();
+    tb_ClosePort(ll.port);
+    tb_DisposePtr(ll.port);
+    tb_DisposePtr(ll.bits);
+    tb_DisposeHandle(ll.print);
+    memset(&ll, 0, sizeof ll);
+}
+
+/* Text as it came: Monaco, as the ImageWriter's draft text looked; a
+ * return starts a line, a form feed a page. */
+static void ll_text(gaddr p, int32_t n)
+{
+    gaddr saved = qd_port();
+    for (int32_t i = 0; i < n; i++) {
+        ll_page();
+        if (!ll.port)
+            break;
+        tb_SetPort(ll.port);
+        tb_TextFont(4);
+        tb_TextSize(10);
+        uint8_t c = rd8(p + (uint32_t)i);
+        qrect page = qrect_get(ll.port + GrafPort_portRect_off);
+        if (c == 13 || c == 10) {
+            if (c == 13 || i == 0 || rd8(p + (uint32_t)i - 1) != 13) {
+                ll.h = 36;
+                ll.v += ll.line;
+            }
+        } else if (c == 12) {
+            ll_page_end();
+        } else if (c >= 32) {
+            if (ll.h + tb_CharWidth(c) > page.right - 36) { /* the margin: on the next line */
+                ll.h = 36;
+                ll.v += ll.line;
+            }
+            tb_MoveTo((int16_t)ll.h, (int16_t)ll.v);
+            tb_DrawChar(c);
+            ll.h += tb_CharWidth(c);
+        }
+        if (ll.v > page.bottom - 36)
+            ll_page_end();
+    }
+    tb_SetPort(saved);
+}
+
+/* A bitmap centred across the page, below what was printed. */
+static void ll_bits(gaddr bitmap, gaddr r)
+{
+    ll_page();
+    if (!ll.port || !bitmap || !r)
+        return;
+    qrect src = qrect_get(r);
+    int w = src.right - src.left, h = src.bottom - src.top;
+    qrect page = qrect_get(ll.port + GrafPort_portRect_off);
+    if (ll.v + h > page.bottom && ll.v > 46) {
+        ll_page_end();
+        ll_page();
+    }
+    int top = ll.v - 10, left = page.left + (page.right - page.left - w) / 2;
+    gaddr dst = tb_NewPtr(8, false, true);
+    qrect_put(dst, (qrect){ (int16_t)top, (int16_t)left, (int16_t)(top + h), (int16_t)(left + w) });
+    gaddr saved = qd_port();
+    tb_SetPort(ll.port);
+    tb_CopyBits(bitmap, ll.port + GrafPort_portBits_off, r, dst, 0, 0);
+    tb_SetPort(saved);
+    tb_DisposePtr(dst);
+    ll.v = top + h + 10 + ll.line;
+}
+
+void tb_PrCtlCall(int16_t iWhichCtl, int32_t lParam1, int32_t lParam2, int32_t lParam3)
+{
+    set_print_error(noErr);
+    switch (iWhichCtl) {
+    case iPrDevCtl:
+        if (lParam1 == lPrDocOpen) { /* also lPrReset: a new document */
+            ll_finish();
+            ll_begin();
+        } else if (lParam1 == lPrDocClose) {
+            ll_finish();
+        } else if (lParam1 == lPrPageOpen) {
+            ll_page();
+        } else if (lParam1 == lPrPageEnd) {
+            ll_page_end();
+        } else if (lParam1 == lPrLFStd || lParam1 == lPrLFEighth) {
+            ll_page();
+            ll.v += lParam1 == lPrLFStd ? 12 : 9;
+            ll.h = 36;
+        } else if ((lParam1 & 0xFFFF0000) == lPrLineFeed) {
+            ll_page();
+            ll.v += (int16_t)(lParam1 & 0xFFFF);
+            ll.h = 36;
+        }
+        break;
+    case iPrIOCtl: ll_text((gaddr)lParam1, lParam2 & 0xFFFF); break;
+    case iPrBitsCtl: ll_bits((gaddr)lParam1, (gaddr)lParam2); break; /* (screen or paint bits alike) */
+    case iPrEvtCtl: {
+        /* the screen, or the front window's content */
+        gaddr bm = tb_NewPtr(14, false, true), r = tb_NewPtr(8, false, true);
+        gaddr port = tb_NewPtr(GrafPort_SIZEOF, false, true);
+        gaddr saved = qd_port();
+        tb_OpenPort(port); /* a port on the screen: its bitmap */
+        gmemcpy(bm, port + GrafPort_portBits_off, 14);
+        qrect area = qrect_get(port + GrafPort_portRect_off);
+        gaddr w = tb_FrontWindow();
+        if ((lParam1 & 0xFFFF0000) == (lPrEvtTop & 0xFFFF0000) && w) {
+            qrect pr = qrect_get(w + GrafPort_portRect_off);
+            qrect b = qrect_get(w + GrafPort_portBits_off + 6);
+            area = (qrect){ (int16_t)(pr.top - b.top), (int16_t)(pr.left - b.left), (int16_t)(pr.bottom - b.top),
+                            (int16_t)(pr.right - b.left) };
+        }
+        qrect_put(r, area);
+        tb_ClosePort(port);
+        tb_SetPort(saved);
+        ll_bits(bm, r);
+        tb_DisposePtr(bm);
+        tb_DisposePtr(r);
+        tb_DisposePtr(port);
+        break;
+    }
+    default: break;
+    }
+}
+
+/* The .Print driver: Control calls are PrCtlCall's, csParam its three
+ * parameters. */
+static int16_t print_control(gaddr pb, bool async)
+{
+    (void)async;
+    int16_t code = (int16_t)rd16(pb + CntrlParam_csCode_off);
+    gaddr cp = pb + CntrlParam_csParam_off;
+    tb_PrCtlCall(code, (int32_t)rd32(cp), (int32_t)rd32(cp + 4), (int32_t)rd32(cp + 8));
+    return print_error;
+}
+
+static int16_t print_close(gaddr pb)
+{
+    (void)pb;
+    ll_finish();
+    return noErr;
+}
+
+const native_driver print_driver = { ".Print", 2, NULL, print_close, print_control, NULL, NULL, NULL, NULL };

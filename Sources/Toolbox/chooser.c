@@ -191,6 +191,30 @@ int chooser_print_destination(machine_print_job *job)
     return job->destination = MACHINE_PRINT_TO_PANEL;
 }
 
+/* The job dialog's words for where the pages go (MacRoman). */
+void chooser_job_text(char *out, size_t size)
+{
+    const char *p = g_chooser.printer;
+    char name[300] = "";
+    const char *from = !strncmp(p, "host:", 5) ? p + 5 : !strncmp(p, "laserwriter:", 12) ? p + 12 : g_chooser.folder;
+    uint8_t m[300];
+    size_t n = utf8_to_macroman(from, m, sizeof m - 1);
+    for (size_t i = 0; i < n; i++)
+        name[i] = (char)(m[i] == '_' && !strncmp(p, "host:", 5) ? ' ' : m[i]);
+    name[n] = 0;
+    char *at = !strncmp(p, "laserwriter:", 12) ? strrchr(name, '@') : NULL;
+    if (at)
+        *at = 0;
+    if (!strncmp(p, "host:", 5))
+        snprintf(out, size, "The pages are printed on \xD2%s\xD3, as chosen in the Chooser.", name);
+    else if (!strncmp(p, "laserwriter:", 12))
+        snprintf(out, size, "The pages are printed on the LaserWriter \xD2%s\xD3, as chosen in the Chooser.", name);
+    else if (!strcmp(p, "pdf") && g_chooser.folder[0])
+        snprintf(out, size, "The pages are saved as a PDF file in \xD2%s\xD3, as chosen in the Chooser.", name);
+    else
+        snprintf(out, size, "The printer, the number of copies and the pages to print are chosen in the next panel.");
+}
+
 bool chooser_laserwriter(char *nbp, size_t size)
 {
     if (strncmp(g_chooser.printer, "laserwriter:", 12))

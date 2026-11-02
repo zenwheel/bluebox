@@ -11,6 +11,7 @@ extension BlueBox {
         nonisolated(unsafe) static var changes: [(String, String)] = []
         nonisolated(unsafe) static var printers: [String] = []
         nonisolated(unsafe) static var printed: (destination: Int32, printer: String, folder: String)?
+        nonisolated(unsafe) static var counts = (pages: 0, texts: 0, images: 0)
 
         func pstr(_ s: String) -> UInt32 {
             let p = tb_NewPtr(256, false, true)
@@ -366,6 +367,50 @@ extension BlueBox {
             #expect(machine_volume_info(before, &name, 64, &root, 1024) && String(cString: name) == "StubVol")
             #expect(afp.commands.contains(18)) // FPLogin
             tb_CloseDeskAcc(rn)
+        }
+
+        /// The Printing Manager's low-level calls: the .Print driver is in
+        /// the unit table (PrDrvrDCE), text sent with iPrIOCtl and a
+        /// bitmap with iPrBitsCtl are printed when the document closes.
+        @Test func lowLevelPrinting() {
+            boot()
+            defer { restore() }
+            Chooser.counts = (0, 0, 0)
+            machine_set_print_handlers({ job, _ in
+                guard let job else { return false }
+                Chooser.counts.pages = Int(job.pointee.npages)
+                for p in 0..<Int(job.pointee.npages) {
+                    let page = job.pointee.pages[p]
+                    for i in 0..<Int(page.nops) {
+                        if Int(page.ops[i].kind) == Int(MACHINE_PRINT_TEXT) { Chooser.counts.texts += 1 }
+                        if Int(page.ops[i].kind) == Int(MACHINE_PRINT_IMAGE) { Chooser.counts.images += 1 }
+                    }
+                }
+                return true
+            }, nil, nil)
+            defer { machine_set_print_handlers(nil, nil, nil) }
+            tb_PrOpen()
+            tb_PrDrvrOpen()
+            let dce = tb_PrDrvrDCE()
+            #expect(dce != 0 && Int16(bitPattern: rd16(dce + 24)) == -3) // dCtlRefNum: unit 2
+            tb_PrCtlCall(7, 0x0001_0000, 0, 0) // iPrDevCtl, lPrDocOpen
+            let text = tb_NewPtr(64, false, true)
+            for (i, b) in Array("Low\rlevel".utf8).enumerated() { wr8(text + UInt32(i), b) }
+            tb_PrCtlCall(5, Int32(text), 9, 0) // iPrIOCtl
+            tb_PrCtlCall(7, 0x0003_FFFF, 0, 0) // a standard line feed
+            // a 16 by 16 bitmap
+            let bits = tb_NewPtr(32, false, true)
+            for i in 0..<32 { wr8(bits + UInt32(i), i & 1 == 0 ? 0xAA : 0x55) }
+            let bm = tb_NewPtr(14, false, true), r = tb_NewPtr(8, false, true)
+            wr32(bm, bits); wr16(bm + 4, 2); wr16(bm + 6, 0); wr16(bm + 8, 0); wr16(bm + 10, 16); wr16(bm + 12, 16)
+            wr16(r, 0); wr16(r + 2, 0); wr16(r + 4, 16); wr16(r + 6, 16)
+            tb_PrCtlCall(4, Int32(bm), Int32(r), 0) // iPrBitsCtl
+            tb_PrCtlCall(7, 0x0005_0000, 0, 0) // lPrDocClose
+            #expect(Chooser.counts.pages == 1)
+            #expect(Chooser.counts.texts >= 8) // a character at a time
+            #expect(Chooser.counts.images == 1)
+            tb_PrDrvrClose()
+            tb_PrClose()
         }
     }
 }
