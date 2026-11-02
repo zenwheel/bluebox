@@ -1,4 +1,5 @@
 import CCore
+import ForkStore
 import Foundation
 import Testing
 import Toolbox
@@ -258,6 +259,79 @@ extension BlueBox {
             if let path = ProcessInfo.processInfo.environment["BLUEBOX_TEST_SHOT"] {
                 _ = machine_screenshot("\(path)-chooser.png")
             }
+            tb_CloseDeskAcc(rn)
+        }
+
+        /// A Chooser extension in the Extensions folder: its 'PACK' -4096
+        /// (68k, logging each message and filling the list on fillListMsg)
+        /// gets the messages Inside Macintosh: Devices lists, in order.
+        @Test func callsAChooserExtension() throws {
+            boot()
+            defer { restore() }
+            let log = tb_NewPtr(64, true, true)
+            // flags: left button, chooserInitMsg, fillListMsg, getSelMsg,
+            // selectMsg, deselectMsg, terminateMsg
+            let flags: UInt32 = 0x0800_0000 | 0x0002_0000 | 0x0000_8000 | 0x0000_4000 | 0x0000_2000 | 0x0000_1000 | 0x0000_0800
+            var code: [UInt16] = [0x600E, 0x0000, 0x5041, 0x434B, 0xF000, 0x0001, UInt16(flags >> 16), UInt16(flags & 0xFFFF)]
+            code += [0x4E56, 0x0000,                                  // LINK A6,#0
+                     0x207C, UInt16(log >> 16), UInt16(log & 0xFFFF), // MOVEA.L #log,A0
+                     0x3010, 0x5250, 0xD040,                          // MOVE.W (A0),D0; ADDQ.W #1,(A0); ADD.W D0,D0
+                     0x31AE, 0x001A, 0x0002,                          // MOVE.W 26(A6),2(A0,D0.W): the message
+                     0x0C6E, 0x000D, 0x001A]                          // CMPI.W #fillListMsg,26(A6)
+            let bne = code.count
+            code += [0x6600]                                          // BNE.S done
+            code += [0x4267, 0x3F3C, 0x0001, 0x4267, 0x2F2E, 0x000C, 0x3F3C, 0x0008, 0xA9E7, 0x544F] // LAddRow(1, 0, list)
+            let pea = code.count
+            code += [0x487A, 0x0000,                                  // PEA name(PC)
+                     0x3F3C, 0x0004, 0x42A7, 0x2F2E, 0x000C, 0x3F3C, 0x0058, 0xA9E7] // LSetCell(name, 4, (0,0), list)
+            let done = code.count
+            code[bne] = 0x6600 | UInt16((done - bne - 1) * 2)
+            code += [0x426E, 0x001C, 0x4E5E, 0x205F, 0x4FEF, 0x0014, 0x4ED0] // result noErr; UNLK; pop 20 bytes; return
+            let name = code.count
+            code[pea + 1] = UInt16((name - pea - 1) * 2)
+            code += [0x4465, 0x7631]                                  // "Dev1"
+            func str(_ s: String) -> [UInt8] { [UInt8(s.utf8.count)] + Array(s.utf8) }
+            var icon = [UInt8](repeating: 0xFF, count: 256)
+            for i in 0..<128 where i % 4 == 0 { icon[i] = 0x80 }
+            var fork = buildFork([
+                TestResource(type: "PACK", id: -4096, data: code68k(code)),
+                TestResource(type: "STR ", id: -4091, data: str("Select a gadget:")),
+                TestResource(type: "STR ", id: -4093, data: str("Go")),
+                TestResource(type: "ICN#", id: -4096, data: icon),
+            ])
+            let dir = URL(fileURLWithPath: testSystemFolder).appendingPathComponent("Extensions")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let path = dir.appendingPathComponent("Gadget").path
+            defer { try? FileManager.default.removeItem(atPath: path) }
+            var f = mac_file()
+            var empty: [UInt8] = []
+            var err = [CChar](repeating: 0, count: 256)
+            let ok = empty.withUnsafeMutableBufferPointer { e in
+                fork.withUnsafeMutableBufferPointer { r -> Bool in
+                    f.data = e.baseAddress; f.data_len = 0
+                    f.rsrc = r.baseAddress; f.rsrc_len = r.count
+                    let info: [UInt8] = Array("RDEVgadg".utf8) + [UInt8](repeating: 0, count: 24)
+                    withUnsafeMutableBytes(of: &f.finder_info) { $0.copyBytes(from: info) }
+                    f.has_finder_info = true
+                    return appledouble_write(path, &f, &err, err.count)
+                }
+            }
+            #expect(ok)
+            let (rn, w, h, v) = open()
+            update(w)
+            func messages() -> [Int16] { (0..<Int(rd16(log))).map { Int16(bitPattern: rd16(log + 2 + UInt32($0 * 2))) } }
+            click(w, (h, v), 9 + 35, 9 + 104 + 20) // the fifth device, the third row's first: Gadget
+            #expect(messages() == [11, 13, 14]) // chooserInitMsg, fillListMsg, getSelMsg
+            click(w, (h, v), 191, 27 + 8)       // its "Dev1"
+            #expect(messages().last == 15)      // selectMsg
+            click(w, (h, v), 206 + 20, 112 + 8) // the left button, "Go"
+            #expect(messages().last == 19)      // buttonMsg
+            if let shot = ProcessInfo.processInfo.environment["BLUEBOX_TEST_SHOT"] {
+                update(w)
+                _ = machine_screenshot("\(shot)-chooser-extension.png")
+            }
+            click(w, (h, v), 9 + 35 + 70, 9 + 52 + 20) // Save as PDF
+            #expect(messages().last == 17)      // terminateMsg
             tb_CloseDeskAcc(rn)
         }
     }

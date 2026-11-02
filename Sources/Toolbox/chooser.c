@@ -377,7 +377,7 @@ enum { DEV_APPLESHARE, DEV_LASERWRITER, DEV_PRINTER, DEV_PDF, DEV_EXTENSION };
 
 static const qrect icons_frame = { 8, 8, 168, 151 }, icons_area = { 9, 9, 167, 150 };
 static const qrect icons_bar = { 8, 150, 168, 166 };
-enum { CELL_W = 70, CELL_H = 53 };
+enum { CELL_W = 70, CELL_H = 52 };
 static const qrect zones_view = { 192, 9, 244, 150 };
 static const qrect list_view = { 27, 171, 107, 386 };
 static const qrect user_text = { 149, 250, 165, 396 };
