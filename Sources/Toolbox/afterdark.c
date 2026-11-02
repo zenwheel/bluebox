@@ -77,6 +77,10 @@
  *                  sized from its resources; nil fails its Initialize)
  *                  6 ReleaseMemory(h)  10 UseMemory(h): allocations go there
  *                  14 RestoreMemory(h): back to the zone before
+ *   'ADdl' After Dark 3's linker, a version ($0300 up) where the count is,
+ *                  then its routines: After Dark 4's modules require it
+ *                  (see "The linker" below), and find After Dark itself by
+ *                  Gestalt 'aYmm', the event query's record
  *
  * The module's resources: 'sysz' 0 and 1 (memory wanted and the least it
  * needs), the controls 1000-1003 from the top ('sVal' slider 0-100 with
@@ -91,7 +95,10 @@
  * (the module's file is the program: the CPU starts in ad_host_native),
  * or over a running program after it has waited long enough for input
  * (`--screensaver M --idle N`), as After Dark's control panel did: the
- * screen's pixels and colours are kept and put back when it wakes.
+ * screen's pixels and colours are kept and put back when it wakes.  It
+ * keeps what After Dark wrote back into a module (its settings, in a file
+ * of their own), runs several modules in turn as Randomize did, and
+ * gives a module each display of the screen as one of its monitors.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -717,7 +724,7 @@ static void vbl_native(cpu68k *c, uint16_t tw)
     }
 }
 
-/* 'ADdl', After Dark 3's linker: its 68k half links a module's own
+/* The linker: 'ADdl', After Dark 3's.  Its 68k half links a module's own
  * segments ('CODE', 'DATA', 'CREL', 'DREL', 'JUMP') to the "After Dark
  * 4.0 Library"; its other half, which the PowerPC modules use (the After
  * Dark 4.0 Shared library's MacXResourceFile), opens a module's resource
@@ -728,7 +735,11 @@ static void vbl_native(cpu68k *c, uint16_t tw)
  *
  * A named database is a resource file in the module's folder, in a
  * "Module Resources" folder beside it or one up, or in the System Folder's
- * "After Dark Files". */
+ * "After Dark Files".  The 68k half (2 to 22, and 62, which links a
+ * library by its 'dll#') isn't here: After Dark 4's modules carry PowerPC
+ * code too, and a 68k one that needs it (Flying Toilets Demo) needs After
+ * Dark 3's libraries as well, which the archive doesn't have.  A call to
+ * it halts, naming the caller. */
 enum { DL_DEPTH = 16, DL_FILES = 16 };
 static struct {
     int16_t rn[DL_FILES];       /* by ref - 1; 0 free */
