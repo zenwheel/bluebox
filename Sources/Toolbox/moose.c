@@ -174,29 +174,27 @@ static void find_phrases(const char *dir, int depth)
     closedir(d);
 }
 
-/* A joke: one of the Pause phrases or the phrase files', all of them told
- * once, in a shuffled order, before any is told again, said at the next
- * null event (the Moose waits for the user to finish what they are doing). */
-bool moose_tell_joke(void)
+/* The Moose's own Pause phrases (its phonemes) and how many: the jokes
+ * numbered 1 to that, the phrase files' after them. */
+static int pause_count(gaddr m)
 {
-    gaddr m = moose_globals();
-    if (!m)
-        return false;
-    int max = (int16_t)rd16(m + moo_PauseMax);
+    int max = m ? (int16_t)rd16(m + moo_PauseMax) : 0;
     gaddr list = tb_GetResource((int32_t)fourcc("STR#"), pauseSTR);
     if (max <= 0 && list && rd32(list))
         max = (int16_t)rd16(rd32(list));
-    if (max < 0)
-        max = 0;
-    int total = max + nmore;
-    if (total <= 0)
-        return false;
+    return max > 0 ? max : 0;
+}
+
+/* The next joke: all of them told once, in a shuffled order, before any is
+ * told again. */
+static int next_joke(int total)
+{
     static int *order;
     static int count, next, last;
     if (count != total || next >= count) {
         int *o = realloc(order, (size_t)total * sizeof *o);
         if (!o)
-            return false;
+            return 1;
         order = o;
         for (int i = 0; i < total; i++)
             order[i] = i + 1;
@@ -213,10 +211,27 @@ bool moose_tell_joke(void)
         count = total;
         next = 0;
     }
-    int n = last = order[next++];
+    return last = order[next++];
+}
+
+static bool joke_asked; /* Tell a Joke's Pause phrase is on its way to MacinTalk */
+
+/* A joke: the next of the Pause phrases and the phrase files', said at the
+ * next null event (the Moose waits for the user to finish what they are
+ * doing). */
+bool moose_tell_joke(void)
+{
+    gaddr m = moose_globals();
+    if (!m)
+        return false;
+    int max = pause_count(m), total = max + nmore;
+    if (total <= 0)
+        return false;
+    int n = next_joke(total);
     if (n <= max) {
         wr16(m + moo_NowNum, (uint16_t)n);
         wr16(m + moo_NowID, pauseSTR);
+        joke_asked = true;
         return true;
     }
     const uint8_t *s = more[n - max - 1];
@@ -227,6 +242,52 @@ bool moose_tell_joke(void)
     if (old)
         tb_DisposeHandle(old);
     wr32(m + moo_NowHandle, h);
+    return true;
+}
+
+/* The Moose's idle remarks, as they reach MacinTalk: one of its Pause
+ * phrases, picked by itself, becomes the next joke of them all. */
+static bool swap_remark(const uint8_t *ph, size_t n, uint8_t **out, size_t *out_len, bool *english)
+{
+    gaddr m = moose_globals();
+    gaddr list = tb_GetResource((int32_t)fourcc("STR#"), pauseSTR);
+    if (!m || !list || !rd32(list))
+        return false;
+    gaddr p = rd32(list);
+    int count = (int16_t)rd16(p);
+    uint32_t size = (uint32_t)tb_GetHandleSize(list), at = 2;
+    while (n && *ph == ' ') { /* the Moose puts a space before its phrases */
+        ph++;
+        n--;
+    }
+    bool pause = false;
+    for (int k = 0; k < count && at < size && !pause; k++, at += 1 + rd8(p + at))
+        pause = rd8(p + at) == n && at + 1 + n <= size && !memcmp(gptr(p + at + 1), ph, n);
+    if (!pause)
+        return false;
+    if (joke_asked) { /* Tell a Joke's own pick */
+        joke_asked = false;
+        return false;
+    }
+    int max = pause_count(m), j = next_joke(max + nmore);
+    const uint8_t *s;
+    if (j <= max) { /* one of its own after all */
+        at = 2;
+        for (int k = 1; k < j && at < size; k++)
+            at += 1 + rd8(p + at);
+        if (at >= size)
+            return false;
+        *out_len = rd8(p + at);
+        *out = malloc(*out_len ? *out_len : 1);
+        gget(*out, p + at + 1, (uint32_t)*out_len);
+        *english = false;
+        return true;
+    }
+    s = more[j - max - 1];
+    *out_len = s[0];
+    *out = malloc(s[0] ? s[0] : 1);
+    memcpy(*out, s + 1, s[0]);
+    *english = true;
     return true;
 }
 
@@ -386,6 +447,9 @@ bool moose_host_start(void)
         find_phrases(dir, 0);
         LOGF(LOG_TRAPS, "Moose: %d more phrases from Uli's Moose phrase files\n", nmore);
     }
+    /* Its idle remarks from all of them, and a moment on the screen before
+     * and after it speaks, as MacinTalk took to get going on a Mac Plus. */
+    macintalk_host(nmore ? swap_remark : NULL, 0.5, 0.5);
     put_menu();
     tb_CheckItem(tb_GetMenuHandle(mooseID), itemQuiet, moose_quiet());
     return true;

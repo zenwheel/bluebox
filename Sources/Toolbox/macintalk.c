@@ -58,6 +58,8 @@ typedef struct {
 } mt_speech;
 static mt_speech speech[MAX_SPEECH];
 static int given_rate = -1, given_pitch = -1, given_robotic = -1; /* macintalk_settings' */
+static macintalk_swap_fn swap_fn; /* macintalk_host's */
+static double pause_before, pause_after;
 
 static uint32_t open_stub, prime_stub, control_stub, status_stub, close_stub, reader_stub;
 
@@ -341,6 +343,17 @@ static void apply(mt_speech *s)
     tb_DisposePtr(spec);
 }
 
+/* A wait in MacinTalk, interrupts going on (the Moose's VBL task). */
+static void wait_seconds(double secs)
+{
+    for (double end = now_seconds() + secs; now_seconds() < end;) {
+        struct timespec ts = { 0, 10000000 };
+        nanosleep(&ts, NULL);
+        machine_advance_ticks();
+        time_pump();
+    }
+}
+
 /* Prime: MacinTalk(theSpeech, phonemes), a _Write. */
 static void prime_native(cpu68k *c, uint16_t tw)
 {
@@ -370,22 +383,38 @@ static void prime_native(cpu68k *c, uint16_t tw)
     }
     if (s->chan && count) {
         uint8_t *ph = malloc(count);
+        size_t n = count;
         gget(ph, p, count);
-        /* The Reader's own phonemes say its English; others are phonemes,
-         * which the Speech Manager makes words of. */
         const uint8_t *say = NULL;
         size_t say_len = 0;
+        /* The host may say something else (English, or other phonemes). */
+        uint8_t *swapped = NULL;
+        size_t swapped_len = 0;
+        bool english = false;
+        if (swap_fn && swap_fn(ph, n, &swapped, &swapped_len, &english)) {
+            if (english) {
+                say = swapped;
+                say_len = swapped_len;
+            } else {
+                free(ph);
+                ph = swapped;
+                n = swapped_len;
+                swapped = NULL;
+            }
+        }
+        /* The Reader's own phonemes say its English; others are phonemes,
+         * which the Speech Manager makes words of. */
         for (int i = 0; i < MAX_READ && !say; i++)
-            if (reads[i].phonemes && reads[i].plen == count && !memcmp(reads[i].phonemes, ph, count)) {
+            if (reads[i].phonemes && reads[i].plen == n && !memcmp(reads[i].phonemes, ph, n)) {
                 say = reads[i].english;
                 say_len = reads[i].elen;
             }
         char *host = NULL;
         if (!say) {
-            size_t room = (size_t)count * 4 + 40;
+            size_t room = n * 4 + 40;
             host = malloc(room);
             strcpy(host, "[[inpt PHON]]");
-            mt_to_host(ph, count, host + strlen(host), room - strlen(host) - 16);
+            mt_to_host(ph, n, host + strlen(host), room - strlen(host) - 16);
             strcat(host, "[[inpt TEXT]]");
             say = (const uint8_t *)host;
             say_len = strlen(host);
@@ -396,6 +425,7 @@ static void prime_native(cpu68k *c, uint16_t tw)
         if (s->text) {
             gput(s->text, say, (uint32_t)say_len);
             apply(s);
+            wait_seconds(pause_before);
             err = tb_SpeakText(s->chan, s->text, (uint32_t)say_len);
             /* Over before MacinTalk returns, as it was. */
             gaddr st = tb_NewPtr(8, true, true);
@@ -417,8 +447,10 @@ static void prime_native(cpu68k *c, uint16_t tw)
             }
             if (st)
                 tb_DisposePtr(st);
+            wait_seconds(pause_after);
         }
         free(host);
+        free(swapped);
         free(ph);
     }
     wr32(pb + IOParam_ioActCount_off, count);
@@ -499,8 +531,16 @@ void macintalk_settings(int rate, int pitch, int robotic)
         }
 }
 
+void macintalk_host(macintalk_swap_fn swap, double before, double after)
+{
+    swap_fn = swap;
+    pause_before = before;
+    pause_after = after;
+}
+
 void macintalk_reset(void)
 {
+    macintalk_host(NULL, 0, 0);
     given_rate = given_pitch = given_robotic = -1;
     for (int i = 0; i < MAX_SPEECH; i++)
         speech[i].refnum = 0; /* the channels went with the last run's heap */

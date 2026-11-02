@@ -635,6 +635,12 @@ void macintalk_settings(int rate, int pitch, int robotic);
 /* The Reader for the host: English's phonemes in a new handle, which
  * MacinTalk then says as that English. */
 gaddr macintalk_read(const uint8_t *english, size_t len);
+/* A host's part in what MacinTalk says (the Talking Moose's): swap may
+ * give something else to say for the phonemes written, English or other
+ * phonemes (malloc'd, MacinTalk frees them); before and after are seconds
+ * of silence around each utterance, MacinTalk not yet returned. */
+typedef bool (*macintalk_swap_fn)(const uint8_t *phonemes, size_t n, uint8_t **out, size_t *out_len, bool *english);
+void macintalk_host(macintalk_swap_fn swap, double before, double after);
 
 /* Code Fragment Manager (cfm.c): PowerPC applications. */
 struct ppc_cpu;
