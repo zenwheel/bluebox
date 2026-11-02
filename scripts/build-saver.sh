@@ -1,6 +1,8 @@
 #!/bin/sh
 # Build "Blue Box After Dark.saver", the macOS screen saver that runs After
-# Dark modules in Blue Box, into a folder (default .build/saver).
+# Dark modules in Blue Box, into a folder (default .build/saver): a
+# universal bundle, for Apple silicon and Intel Macs (BLUEBOX_SAVER_ARCHS
+# names others, e.g. "arm64" alone for a quicker build).
 #
 #   scripts/build-saver.sh [out-folder]
 #
@@ -14,15 +16,24 @@ out=${1:-$root/.build/saver}
 name="Blue Box After Dark"
 version=$(git -C "$root" describe --always --dirty 2>/dev/null || echo dev)
 
-swift build -c release --product BlueBoxSaver --package-path "$root"
+archs=${BLUEBOX_SAVER_ARCHS:-arm64 x86_64}
+set --
+for a in $archs; do
+	set -- "$@" --arch "$a"
+done
 swift build -c release --product bluebox --package-path "$root"
-bin=$(swift build -c release --show-bin-path --package-path "$root")
+icontool=$(swift build -c release --show-bin-path --package-path "$root")/bluebox
+swift build -c release --product BlueBoxSaver --package-path "$root" "$@"
+bin=$(swift build -c release --show-bin-path --package-path "$root" "$@")
 
 saver="$out/$name.saver"
 rm -rf "$saver"
 mkdir -p "$saver/Contents/MacOS" "$saver/Contents/Resources"
 cp "$bin/libBlueBoxSaver.dylib" "$saver/Contents/MacOS/$name"
 install_name_tool -id "@loader_path/$name" "$saver/Contents/MacOS/$name"
+for a in $archs; do
+	lipo "$saver/Contents/MacOS/$name" -verify_arch "$a" || { echo "build-saver: no $a code in the bundle" >&2; exit 1; }
+done
 
 cat > "$saver/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -57,7 +68,7 @@ EOF
 
 # System Settings' thumbnail: Blue Box's icon on black.
 icons=$(mktemp -d)
-"$bin/bluebox" make-iconset "$icons/Blue Box.iconset" >/dev/null
+"$icontool" make-iconset "$icons/Blue Box.iconset" >/dev/null
 sips -Z 50 "$icons/Blue Box.iconset/icon_128x128.png" --out "$icons/small.png" >/dev/null
 sips -p 58 90 --padColor 000000 "$icons/small.png" --out "$saver/Contents/Resources/thumbnail.png" >/dev/null
 sips -Z 100 "$icons/Blue Box.iconset/icon_128x128@2x.png" --out "$icons/large.png" >/dev/null

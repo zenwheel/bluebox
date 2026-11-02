@@ -1,9 +1,15 @@
 // The screen saver's Options sheet: which module, its controls (as After
-// Dark's control panel showed them, from the module's resources), and the
-// screen it gets.
+// Dark's control panel showed them, from the module's resources), the
+// screen it gets, and modules taking turns.
 
 #if canImport(ScreenSaver)
 import AppKit
+import Toolbox
+
+/// A document view that lays out from the top.
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
 
 @MainActor
 final class ConfigureSheet: NSObject {
@@ -19,11 +25,18 @@ final class ConfigureSheet: NSObject {
     private let depthPopup = NSPopUpButton()
     private let soundBox = NSButton(checkboxWithTitle: "Sound", target: nil, action: nil)
     private let backdropBox = NSButton(checkboxWithTitle: "Start from the desktop picture", target: nil, action: nil)
+    private let rotateBox = NSButton(checkboxWithTitle: "Take turns: a module every", target: nil, action: nil)
+    private let minutesPopup = NSPopUpButton()
+    private let orderPopup = NSPopUpButton()
+    private let turnsStack = NSStackView()
+    private let turnsScroll = NSScrollView()
+    private var turnBoxes: [(path: String, box: NSButton)] = []
     private var controlViews: [(slot: Int, view: NSControl, info: ModuleControl)] = []
     private var info: ModuleInfo?
 
     init(onSave: @escaping (SaverSettings) -> Void) {
         self.onSave = onSave
+        machine_screensaver_set_settings_dir(SaverSettings.settingsDir)
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 430), styleMask: [.titled], backing: .buffered,
                           defer: true)
         super.init()
@@ -76,10 +89,44 @@ final class ConfigureSheet: NSObject {
         let buttons = NSStackView(views: [NSView(), cancel, ok])
         buttons.orientation = .horizontal
 
+        // Modules in turn, as After Dark's Randomize: every so many minutes,
+        // in order or at random, from the ones ticked (none: all of them).
+        rotateBox.target = self
+        rotateBox.action = #selector(rotateChanged)
+        rotateBox.state = settings.rotate ? .on : .off
+        for m in [1, 2, 5, 10, 15, 30, 60] {
+            minutesPopup.addItem(withTitle: m == 1 ? "minute" : "\(m) minutes")
+            minutesPopup.lastItem?.tag = m
+        }
+        if !minutesPopup.selectItem(withTag: settings.rotateMinutes) { minutesPopup.selectItem(withTag: 5) }
+        orderPopup.addItems(withTitles: ["at random", "in order"])
+        orderPopup.selectItem(at: settings.rotateRandom ? 0 : 1)
+        let all = NSButton(title: "All", target: self, action: #selector(turnsAll))
+        let none = NSButton(title: "None", target: self, action: #selector(turnsNone))
+        let rotateRow = NSStackView(views: [rotateBox, minutesPopup, orderPopup, all, none])
+        rotateRow.orientation = .horizontal
+        turnsStack.orientation = .vertical
+        turnsStack.alignment = .leading
+        turnsStack.spacing = 2
+        turnsStack.translatesAutoresizingMaskIntoConstraints = false
+        let doc = FlippedView()
+        doc.translatesAutoresizingMaskIntoConstraints = false
+        doc.addSubview(turnsStack)
+        turnsScroll.documentView = doc
+        turnsScroll.hasVerticalScroller = true
+        turnsScroll.borderType = .bezelBorder
+        NSLayoutConstraint.activate([
+            turnsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 6),
+            turnsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 4),
+            doc.bottomAnchor.constraint(equalTo: turnsStack.bottomAnchor, constant: 4),
+            doc.widthAnchor.constraint(equalTo: turnsScroll.contentView.widthAnchor),
+            turnsScroll.heightAnchor.constraint(equalToConstant: 130),
+        ])
+
         let separator = NSBox()
         separator.boxType = .separator
         let stack = NSStackView(views: [title, moduleRow, credit, controlsStack, separator, screenRow, soundBox, backdropBox,
-                                        buttons])
+                                        rotateRow, turnsScroll, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -94,6 +141,7 @@ final class ConfigureSheet: NSObject {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor),
             buttons.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40),
             separator.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40),
+            turnsScroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40),
             modulePopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 260),
         ])
         window.contentView = content
@@ -119,8 +167,30 @@ final class ConfigureSheet: NSObject {
             let chosen = settings.chosenModule()
             if let i = modules.firstIndex(where: { $0 == chosen }) { modulePopup.selectItem(at: i) }
         }
+        // The list taking turns: each module with a box, ticked if chosen.
+        for v in turnsStack.arrangedSubviews { turnsStack.removeArrangedSubview(v); v.removeFromSuperview() }
+        let picked = Set(settings.rotateModules)
+        turnBoxes = modules.enumerated().map { i, m in
+            let b = NSButton(checkboxWithTitle: modulePopup.item(at: i)?.title ?? (m as NSString).lastPathComponent,
+                             target: nil, action: nil)
+            b.controlSize = .small
+            b.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            b.state = picked.contains(m) ? .on : .off
+            turnsStack.addArrangedSubview(b)
+            return (m, b)
+        }
+        rotateChanged()
         moduleChosen()
     }
+
+    @objc private func rotateChanged() {
+        let on = rotateBox.state == .on
+        for c in [minutesPopup, orderPopup] as [NSControl] { c.isEnabled = on }
+        for (_, b) in turnBoxes { b.isEnabled = on }
+    }
+
+    @objc private func turnsAll() { for (_, b) in turnBoxes { b.state = .on } }
+    @objc private func turnsNone() { for (_, b) in turnBoxes { b.state = .off } }
 
     @objc private func moduleChosen() {
         for v in controlsStack.arrangedSubviews { controlsStack.removeArrangedSubview(v); v.removeFromSuperview() }
@@ -134,7 +204,7 @@ final class ConfigureSheet: NSObject {
         let mi = ModuleCatalog.info(path, config: ModuleCatalog.config(depth: depth, sound: soundBox.state == .on))
         info = mi
         credit.stringValue = mi.credit + (mi.isPowerPC ? "  (PowerPC)" : "")
-        let saved = settings.controls[path] ?? []
+        let saved = settings.controls[path] ?? [] // the first version kept them here
         for (slot, c) in mi.controls.enumerated() {
             guard let c else { continue }
             let value = slot < saved.count && saved[slot] >= 0 ? saved[slot] : c.value
@@ -164,16 +234,34 @@ final class ConfigureSheet: NSObject {
             case .text:
                 if value > 0 && value <= c.items.count { row.append(label(c.items[value - 1])) } else { continue }
             case .button:
-                continue // a setup dialog of the module's own: not shown here
+                // The module's own setup (Choose File…, Edit…), run in a sheet.
+                title.stringValue = ""
+                let b = NSButton(title: c.title.isEmpty ? "Setup…" : c.title, target: self, action: #selector(setupPressed(_:)))
+                b.tag = c.id
+                row.append(b)
             }
             let r = NSStackView(views: row)
             r.orientation = .horizontal
             controlsStack.addArrangedSubview(r)
         }
-        if controlViews.isEmpty { controlsStack.addArrangedSubview(label("This module has no settings.")) }
+        if controlsStack.arrangedSubviews.isEmpty { controlsStack.addArrangedSubview(label("This module has no settings.")) }
         if let stack = window.contentView?.subviews.first {
             window.setContentSize(NSSize(width: 520, height: stack.fittingSize.height))
         }
+    }
+
+    private var setupSheet: SetupSheet?
+
+    @objc private func setupPressed(_ b: NSButton) {
+        guard let path = modulePopup.selectedItem?.representedObject as? String else { return }
+        let s = SetupSheet(module: path, title: b.title, button: b.tag, settings: settings) { [weak self] in
+            guard let self else { return }
+            self.setupSheet = nil
+            self.moduleChosen() // what the setup changed shows
+            self.onSave(self.settings) // the preview runs again
+        }
+        setupSheet = s
+        window.beginSheet(s.window)
     }
 
     @objc private func sliderMoved(_ s: NSSlider) {
@@ -201,17 +289,25 @@ final class ConfigureSheet: NSObject {
         settings.depth = depthPopup.selectedTag()
         settings.sound = soundBox.state == .on
         settings.backdrop = backdropBox.state == .on
+        settings.rotate = rotateBox.state == .on
+        settings.rotateMinutes = minutesPopup.selectedTag()
+        settings.rotateRandom = orderPopup.indexOfSelectedItem == 0
+        settings.rotateModules = turnBoxes.filter { $0.box.state == .on }.map(\.path)
         if let path {
-            var values = [-1, -1, -1, -1]
-            for (slot, view, c) in controlViews {
+            // Into the module's settings, as After Dark's panel wrote them
+            // into the module: its resources hold its controls' values.
+            for (_, view, c) in controlViews {
+                var value: Int
                 switch c.kind {
-                case .slider: values[slot] = Int((view as? NSSlider)?.doubleValue.rounded() ?? 0)
-                case .menu: values[slot] = ((view as? NSPopUpButton)?.indexOfSelectedItem ?? 0) + 1
-                case .checkbox: values[slot] = (view as? NSButton)?.state == .on ? 1 : 0
-                default: break
+                case .slider: value = Int((view as? NSSlider)?.doubleValue.rounded() ?? 0)
+                case .menu: value = ((view as? NSPopUpButton)?.indexOfSelectedItem ?? 0) + 1
+                case .checkbox: value = (view as? NSButton)?.state == .on ? 1 : 0
+                default: continue
                 }
+                let bytes = [UInt8(truncatingIfNeeded: value >> 8), UInt8(truncatingIfNeeded: value)]
+                _ = machine_screensaver_store_resource(path, ModuleCatalog.typeCode(c.type), Int16(c.id), bytes, 2)
             }
-            settings.controls[path] = values
+            settings.controls[path] = nil
         }
         settings.save()
         onSave(settings)

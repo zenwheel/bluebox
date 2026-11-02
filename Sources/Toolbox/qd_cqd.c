@@ -262,8 +262,8 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     if (ctab)
         tb_HandToHand(&ct);
     /* The pixmap's handle is unlocked: those allocations may have moved
-     * it (PixelToy's full-screen world grows the zone, and a pointer to
-     * where the pixmap was wrote over the heap). */
+     * it (PixelToy's full-screen world grows the zone, 1995 Toyota Test
+     * Drive's strip of cars moves it), so it is found again only now. */
     gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
     PixMap_set_baseAddr(pm, bits);
     PixMap_set_pmVersion(pm, 2);

@@ -18,7 +18,11 @@ struct SaverSettings: Equatable {
     var depth = 8
     var sound = false
     var backdrop = true    /* the desktop picture on the screen when it starts */
-    var controls: [String: [Int]] = [:] /* by module path: the four values, -1 for the module's own */
+    var controls: [String: [Int]] = [:] /* by module path, from the first version: kept in the settings files now */
+    var rotate = false     /* modules take turns, as After Dark's Randomize had them */
+    var rotateMinutes = 5
+    var rotateRandom = true
+    var rotateModules: [String] = [] /* the ones taking turns; none: every module found */
 
     static func load() -> SaverSettings {
         var s = SaverSettings()
@@ -30,6 +34,10 @@ struct SaverSettings: Equatable {
         s.sound = d.bool(forKey: "sound")
         if d.object(forKey: "backdrop") != nil { s.backdrop = d.bool(forKey: "backdrop") }
         s.controls = (d.dictionary(forKey: "controls") as? [String: [Int]]) ?? [:]
+        s.rotate = d.bool(forKey: "rotate")
+        if d.object(forKey: "rotateMinutes") != nil { s.rotateMinutes = max(1, d.integer(forKey: "rotateMinutes")) }
+        if d.object(forKey: "rotateRandom") != nil { s.rotateRandom = d.bool(forKey: "rotateRandom") }
+        s.rotateModules = d.stringArray(forKey: "rotateModules") ?? []
         // For trying the bundle outside the screen saver host.
         if let m = ProcessInfo.processInfo.environment["BLUEBOX_SAVER_MODULE"] { s.module = m }
         if let f = ProcessInfo.processInfo.environment["BLUEBOX_SAVER_FOLDERS"] { s.folders = f.split(separator: ":").map(String.init) }
@@ -45,10 +53,29 @@ struct SaverSettings: Equatable {
         d.set(sound, forKey: "sound")
         d.set(backdrop, forKey: "backdrop")
         d.set(controls, forKey: "controls")
+        d.set(rotate, forKey: "rotate")
+        d.set(rotateMinutes, forKey: "rotateMinutes")
+        d.set(rotateRandom, forKey: "rotateRandom")
+        d.set(rotateModules, forKey: "rotateModules")
         d.synchronize()
     }
 
     var allFolders: [String] { defaultModuleFolders() + folders }
+
+    /// Where the modules' settings are kept (afterdark.c): the screen
+    /// saver's own container, the one place the sandbox lets it write.
+    static var settingsDir: String {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.path
+            ?? NSHomeDirectory() + "/Library/Application Support"
+        return base + "/Blue Box After Dark/Settings"
+    }
+
+    /// The modules taking turns (when they do): those chosen that are
+    /// still there, else every one found.
+    func turnModules() -> [String] {
+        let chosen = rotateModules.filter(moduleExists)
+        return chosen.isEmpty ? ModuleCatalog.scan(allFolders) : chosen
+    }
 
     /// The module to show: the one chosen, else the first found (Flying
     /// Toasters if it is there).
@@ -64,9 +91,16 @@ final class SaverMachine: @unchecked Sendable {
 
     private struct Run: Equatable {
         var module: String
+        var others: [String] = [] /* taking turns after it */
         var width: Int, height: Int
+        var monitors: [CGRect] = [] /* the displays in the Mac's screen (pixels, from its top left), main first */
         var settings: SaverSettings
+        var button: Int? /* setup: this button pressed first, as in After Dark's panel */
     }
+
+    /// The displays in host points (AppKit's global coordinates), and
+    /// where each is in the Mac's screen: After Dark's monitors.
+    private var displayRects: [(display: CGRect, mac: CGRect)] = []
 
     private let lock = NSCondition()
     private var wanted: Run?          /* what should be running */
@@ -79,14 +113,45 @@ final class SaverMachine: @unchecked Sendable {
     private var imageTime: TimeInterval = 0
     private var pixels = [UInt8]()
 
-    /// Run the chosen module on a screen of this many Mac pixels (the
-    /// machine starts again when either changes).
-    func show(screenPoints: CGSize, settings: SaverSettings) {
-        guard let module = settings.chosenModule() else { return }
-        let scale = CGFloat(max(1, settings.scale))
-        let w = max(320, Int(screenPoints.width / scale)) & ~7, h = max(240, Int(screenPoints.height / scale))
-        let run = Run(module: module, width: w, height: h, settings: settings)
+    /// Run the chosen module on a screen made of these displays (host
+    /// points, AppKit's global coordinates, the main one first): one Mac
+    /// screen around them all, each display one of After Dark's monitors,
+    /// as a Mac with several had them.  The machine starts again when the
+    /// settings or the displays change.
+    func show(displays: [CGRect], settings: SaverSettings) {
+        guard !displays.isEmpty else { return }
+        var modules: [String]
+        if settings.rotate {
+            modules = settings.turnModules()
+            if settings.rotateRandom { modules.shuffle() }
+        } else {
+            modules = settings.chosenModule().map { [$0] } ?? []
+        }
+        guard let module = modules.first else { return }
+        let minX = displays.map(\.minX).min()!, maxX = displays.map(\.maxX).max()!
+        let minY = displays.map(\.minY).min()!, maxY = displays.map(\.maxY).max()!
+        // Points per Mac pixel: the setting, or more if the screen would
+        // be larger than the Mac's largest.
+        var scale = CGFloat(max(1, settings.scale))
+        scale = max(scale, (maxX - minX) / 4096, (maxY - minY) / 4096)
+        let w = max(512, Int((maxX - minX) / scale)) & ~7, h = max(342, Int((maxY - minY) / scale))
+        var rects: [(display: CGRect, mac: CGRect)] = []
+        for d in displays {
+            let mac = CGRect(x: ((d.minX - minX) / scale).rounded(), y: ((maxY - d.maxY) / scale).rounded(),
+                             width: (d.width / scale).rounded(), height: (d.height / scale).rounded())
+                .intersection(CGRect(x: 0, y: 0, width: w, height: h))
+            rects.append((d, mac))
+        }
+        var run = Run(module: module, width: w, height: h, settings: settings)
+        run.others = Array(modules.dropFirst())
+        if displays.count > 1 { run.monitors = rects.map(\.mac) }
         lock.lock()
+        // The same settings and screen: what runs goes on (another shuffle isn't a change).
+        if settings.rotate, let w = wanted, w.settings == settings, w.width == run.width, w.height == run.height,
+           w.monitors == run.monitors {
+            run = w
+        }
+        displayRects = rects
         if wanted != run {
             wanted = run
             if current != nil { wake() }
@@ -100,6 +165,72 @@ final class SaverMachine: @unchecked Sendable {
         }
         lock.signal()
         lock.unlock()
+    }
+
+    /// A module's setup, as its button in After Dark's panel ran it: the
+    /// module is chosen and the button pressed on a classic 640 by 480
+    /// screen (the setup sheet shows it and takes the mouse and keys; a
+    /// file dialog is the host's open panel), then it runs until stopped,
+    /// when what it changed is kept with its settings.
+    func setup(module: String, button: Int, settings: SaverSettings) {
+        var s = settings
+        s.scale = 1
+        s.rotate = false
+        s.backdrop = false
+        var run = Run(module: module, width: 640, height: 480, settings: s)
+        run.button = button
+        SaverMachine.installFileHandler()
+        lock.lock()
+        wanted = run
+        finished = nil
+        if current != nil { wake() }
+        if thread == nil {
+            let t = Thread { [weak self] in self?.loop() }
+            t.name = "Blue Box"
+            t.stackSize = 8 << 20
+            thread = t
+            t.start()
+        }
+        lock.signal()
+        lock.unlock()
+    }
+
+    /// Standard File's dialogs become the host's open panel (a module's
+    /// Choose File… at its setup), run on the main thread while the
+    /// emulator waits.
+    private static var fileHandlerInstalled = false
+    static func installFileHandler() {
+        guard !fileHandlerInstalled else { return }
+        fileHandlerInstalled = true
+        machine_set_file_handler({ rqPtr, pathOut, pathSize, _ in
+            guard let rq = rqPtr?.pointee, let pathOut else { return false }
+            let prompt = withUnsafeBytes(of: rq.prompt) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+            let save = rq.save, folders = rq.folders
+            var chosen: String?
+            let ask = {
+                MainActor.assumeIsolated {
+                    let panel: NSSavePanel
+                    if save {
+                        panel = NSSavePanel()
+                    } else {
+                        let open = NSOpenPanel()
+                        open.canChooseFiles = !folders
+                        open.canChooseDirectories = folders
+                        open.allowsMultipleSelection = false
+                        panel = open
+                    }
+                    if !prompt.isEmpty { panel.message = prompt }
+                    if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
+                }
+            }
+            if Thread.isMainThread { ask() } else { DispatchQueue.main.sync(execute: ask) }
+            guard let chosen else { return false }
+            let bytes = Array(chosen.utf8)
+            guard bytes.count < pathSize else { return false }
+            for (i, b) in bytes.enumerated() { pathOut[i] = CChar(bitPattern: b) }
+            pathOut[bytes.count] = 0
+            return true
+        }, nil)
     }
 
     /// Stop the module (its Close runs) and leave the machine idle.
@@ -154,6 +285,14 @@ final class SaverMachine: @unchecked Sendable {
             lock.lock()
             current = nil
             finished = run
+            // A module that said it needs another depth ("requires
+            // Millions of colours") starts again at that one.
+            let depth = Int(machine_wanted_depth())
+            if depth > 0, depth != run.settings.depth, wanted == run {
+                var again = run
+                again.settings.depth = depth
+                wanted = again
+            }
             lock.unlock()
         }
     }
@@ -163,16 +302,24 @@ final class SaverMachine: @unchecked Sendable {
         let s = run.settings
         if ProcessInfo.processInfo.environment["BLUEBOX_SAVER_DEBUG"] != nil { NSLog("start %@ %d x %d", run.module, run.width, run.height) }
         machine_screensaver_reset()
+        machine_screensaver_set_settings_dir(SaverSettings.settingsDir)
         machine_screensaver_set_sound(s.sound)
-        let values = s.controls[run.module] ?? []
+        for m in run.others { _ = machine_screensaver_add_module(m) }
+        machine_screensaver_set_rotation(Double(s.rotateMinutes) * 60, s.rotateRandom)
+        let values = s.controls[run.module] ?? [] // the first version's; the settings file has them now
         for (i, v) in values.enumerated() where i < 4 && v >= 0 { _ = machine_screensaver_set_control(Int32(i), Int32(v)) }
+        if let b = run.button { _ = machine_screensaver_press_button(Int32(b)) }
         if s.backdrop, let (rgba, w, h) = desktopPicture() {
             rgba.withUnsafeBufferPointer { machine_screensaver_set_backdrop($0.baseAddress, Int32(w), Int32(h)) }
         } else {
             machine_screensaver_set_backdrop(nil, 0, 0)
         }
         machine_set_screen(Int32(run.width), Int32(run.height))
+        for m in run.monitors {
+            _ = machine_screensaver_add_monitor(Int32(m.minX), Int32(m.minY), Int32(m.maxX), Int32(m.maxY))
+        }
         machine_set_screen_depth(Int32(s.depth))
+        machine_set_depth_alerts(true)
         machine_set_addressing(machine_app_addressing(run.module))
         machine_set_instruction_limit(0)
         machine_attach_host(true) // real time: the clock and the waits are the host's
@@ -210,6 +357,16 @@ final class SaverMachine: @unchecked Sendable {
                         provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
         imageTime = now
         return image
+    }
+
+    /// One display's part of the screen (the whole of it for a preview, or
+    /// a display the machine doesn't know).
+    func frame(for display: CGRect?) -> CGImage? {
+        guard let image = frame() else { return nil }
+        guard let display, displayRects.count > 1,
+              let mac = displayRects.first(where: { $0.display == display })?.mac,
+              mac.width > 0, mac.height > 0 else { return image }
+        return image.cropping(to: mac) ?? image
     }
 
     /// The main display's desktop picture, as RGBA.

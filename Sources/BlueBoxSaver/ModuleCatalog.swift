@@ -5,6 +5,7 @@
 #if canImport(ScreenSaver)
 import Foundation
 import ForkStore
+import Toolbox
 
 /// The user's own home folder: the screen saver runs sandboxed, where
 /// NSHomeDirectory() is its container, but may read the whole disk.
@@ -26,6 +27,8 @@ struct ModuleControl {
     var kind: Kind
     var title: String
     var value: Int
+    var type = ""                     /* the resource holding it ('sVal' ...) and its ID */
+    var id = 0
     var units: [(Int, String)] = []   /* sUnt: from this value up, this label */
     var items: [String] = []          /* the MENU's items, or the STR# for text */
 
@@ -88,6 +91,9 @@ func moduleExists(_ path: String) -> Bool {
 enum ModuleCatalog {
     static let moduleTypes: Set<UInt32> = [fourCC("ADgm"), fourCC("A4gm")]
 
+    /// A resource type's code ('sVal' ...).
+    static func typeCode(_ s: String) -> UInt32 { fourCC(s) }
+
     /// Every module in the folders (and below them), by name.
     static func scan(_ folders: [String], limit: Int = 4000) -> [String] {
         var found: [String] = []
@@ -120,12 +126,13 @@ enum ModuleCatalog {
     /// against (afterdark.c's, for the screen it will run on).
     static func info(_ path: String, config: Int) -> ModuleInfo {
         var info = ModuleInfo(path: path, name: (path as NSString).lastPathComponent)
-        var f = mac_file()
         var err = [CChar](repeating: 0, count: 256)
-        guard appledouble_read(path, &f, &err, err.count), let fork = f.rsrc, f.rsrc_len > 0 else { return info }
-        defer { mac_file_free(&f) }
+        // Its resources with the settings kept for it over them.
+        var forkLen = 0
+        guard let fork = machine_screensaver_module_fork(path, &forkLen), forkLen > 0 else { return info }
+        defer { free(fork) }
         var idx = rsrc_index()
-        guard rsrc_parse(fork, f.rsrc_len, &idx, &err, err.count) else { return info }
+        guard rsrc_parse(fork, forkLen, &idx, &err, err.count) else { return info }
         defer { rsrc_index_free(&idx) }
         func find(_ type: String, _ id: Int) -> (UnsafePointer<UInt8>, Int, String)? {
             let t = fourCC(type)
@@ -152,7 +159,7 @@ enum ModuleCatalog {
                 for (type, kind) in [("sVal", ModuleControl.Kind.slider), ("mVal", .menu), ("xVal", .checkbox),
                                      ("tVal", .text), ("bVal", .button)] {
                     guard let (d, n, name) = find(type, id), n >= 2 else { continue }
-                    var c = ModuleControl(kind: kind, title: name, value: be16(d, 0))
+                    var c = ModuleControl(kind: kind, title: name, value: be16(d, 0), type: type, id: id)
                     if kind == .slider, let (u, un, _) = find("sUnt", id), un >= 2 {
                         var o = 2
                         for _ in 0..<max(0, be16(u, 0)) where o + 3 <= un {

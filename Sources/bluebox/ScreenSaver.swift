@@ -14,16 +14,18 @@ nonisolated(unsafe) var screensaverRun = false
 nonisolated(unsafe) var hostFullScreen = false
 
 let screensaverUsage = """
-  bluebox screensaver <module> [--window|--fullscreen|--headless] [--seconds N]
+  bluebox screensaver <module>... [--window|--fullscreen|--headless] [--seconds N] [--every N] [--random]
             [--png-every N dir] [--sound] [--control I=V]... [--button B]... [--backdrop IMAGE] [--frames-per-tick N]
-            [--tick-budget N] [run options: --depth, --screen, --machine, --log ...]
+            [--tick-budget N] [--settings DIR | --no-settings] [--monitor WxH+X+Y]...
+            [run options: --depth, --screen, --log ...]
       Run an After Dark graphics module (a file of type ADgm, or an archive
       holding one) as After Dark did: Initialize, Blank, then DrawFrame each
       tick until a key, a click or the mouse moving wakes it (or N seconds,
       --seconds).  The default is a window; --fullscreen covers the display;
       --headless (implied by --png-every) draws off-screen for N seconds
       (default 30), --png-every N writing the screen to dir/frame-NNNNN.png
-      every N seconds.  The screen is 8 bits deep unless --depth says.
+      every N seconds.  The screen is 8 bits deep unless --depth says (a
+      module that says it needs another depth runs again at that one).
       --control I=V gives control I (0-3 from the top, or its ID 1000-1003)
       value V in place of the module's own setting; --button B presses
       button B first (its message, or its bVal ID 1000-1003), as in the
@@ -32,16 +34,32 @@ let screensaverUsage = """
       (in place of Blue Box's desktop): what Puzzle or Spotlight work on.  Up to 4 frames a tick
       (--frames-per-tick), fewer once a frame's code has run 100000
       instructions in the tick (--tick-budget).  Sound is off unless --sound.
+      Settings are kept as After Dark kept them in the module: the controls
+      given and what the module changes in its own resources (at a button,
+      in its setup) are there the next time.  They go in a file per module
+      in Blue Box's "After Dark Settings" folder (--settings DIR another;
+      --no-settings: not kept); the module file itself isn't changed.
+      --monitor WxH+X+Y makes the screen several displays, as After Dark's
+      monitors (given again for each, the main one first): the module gets
+      each in its list and blanks them all; the screen is the box around
+      them unless --screen says.
+      Several modules, or a folder of them, take turns as After Dark's
+      Randomize had them: each runs --every N seconds (default 60), in
+      the order given, or picked at random with --random.
 """
 
 func screensaverCommand(_ args: [String]) {
     var display = "window"
     var seconds: Double?
     var runArgs: [String] = []
-    var module: String?
+    var modules: [String] = []
+    var every = 60.0
+    var monitorRects: [(Int, Int, Int, Int)] = [] // left, top, right, bottom
+    var random = false
     var depthGiven = false
     var maxGiven = false
     var framesPerTick: Int32 = 4
+    var settings: String? = defaultScreensaverSettings()
     var budget: UInt32 = 100_000
     var i = 0
     func next() -> String {
@@ -83,6 +101,17 @@ func screensaverCommand(_ args: [String]) {
         case "--tick-budget":
             guard let n = UInt32(next()), n > 0 else { fail("--tick-budget takes a number of instructions") }
             budget = n
+        case "--every":
+            guard let s = Double(next()), s > 0 else { fail("--every takes a number of seconds") }
+            every = s
+        case "--random": random = true
+        case "--monitor":
+            let g = next()
+            let parts = g.split(whereSeparator: { "x+".contains($0) }).compactMap { Int($0) }
+            guard parts.count == 4, parts[0] > 0, parts[1] > 0 else { fail("--monitor takes WxH+X+Y") }
+            monitorRects.append((parts[2], parts[3], parts[2] + parts[0], parts[3] + parts[1]))
+        case "--settings": settings = next()
+        case "--no-settings": settings = nil
         case "--help", "-h":
             print(screensaverUsage)
             exit(0)
@@ -96,21 +125,34 @@ func screensaverCommand(_ args: [String]) {
                                                "--max", "--init", "--keys", "--gestalt", "--lowmem", "--fonts", "--app",
                                                "--screenshot", "--appearance", "--scale", "--file-answer"]
                 if takesValue.contains(a) { runArgs.append(next()) }
-            } else if module == nil {
-                module = a
             } else {
-                fail("one module at a time")
+                modules.append(a)
             }
         }
         i += 1
     }
-    guard let module else { eprint(screensaverUsage + "\n"); exit(2) }
-    let file = resolveModule(module)
+    guard !modules.isEmpty else { eprint(screensaverUsage + "\n"); exit(2) }
+    var files = modules.flatMap(resolveModules)
+    if random { files.shuffle() }
+    guard let file = files.first else { fail("no After Dark modules in \(modules.joined(separator: ", "))") }
     machine_screensaver_set_pace(framesPerTick, budget)
+    machine_screensaver_set_settings_dir(settings)
+    for m in files.dropFirst() { _ = machine_screensaver_add_module(m) }
+    machine_screensaver_set_rotation(every, random)
+    for (l, t, r, b) in monitorRects { _ = machine_screensaver_add_monitor(Int32(l), Int32(t), Int32(r), Int32(b)) }
+    if !monitorRects.isEmpty && !runArgs.contains("--screen") {
+        let w = monitorRects.map(\.2).max()!, h = monitorRects.map(\.3).max()!
+        runArgs += ["--screen", "\((w + 7) & ~7)x\(h)"]
+    }
     if display == "headless" && seconds == nil { seconds = 30 }
     if let seconds { machine_screensaver_set_seconds(seconds) }
     var run = [file] + runArgs
-    if !depthGiven { run += ["--depth", "8"] }
+    if !depthGiven {
+        run += ["--depth", "8"]
+        // A module that says it needs another depth ("requires Millions
+        // of colours") runs again at that one.
+        depthRelaunch = (file, false)
+    }
     switch display {
     case "headless":
         run.append("--headless")
@@ -132,6 +174,23 @@ func screensaverCommand(_ args: [String]) {
     }
     screensaverRun = true
     runCommand(run)
+}
+
+/// Where modules' settings are kept: beside Blue Box's library.
+func defaultScreensaverSettings() -> String {
+    ((defaultLibrary() as NSString).deletingLastPathComponent as NSString).appendingPathComponent("After Dark Settings")
+}
+
+/// The modules a name stands for: a folder's (and its folders'), by name,
+/// or the one module resolveModule finds.
+func resolveModules(_ spec: String) -> [String] {
+    var isDir: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: spec, isDirectory: &isDir), isDir.boolValue else {
+        return [resolveModule(spec)]
+    }
+    let types = [fourCCValue("ADgm"), fourCCValue("A4gm")]
+    return scan(URL(fileURLWithPath: spec).standardizedFileURL.path).filter { types.contains($0.type) }.map(\.path)
+        .sorted { ($0 as NSString).lastPathComponent.localizedStandardCompare(($1 as NSString).lastPathComponent) == .orderedAscending }
 }
 
 /// A module by path (a file, or an archive holding one), or by name from

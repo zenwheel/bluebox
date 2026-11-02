@@ -122,7 +122,8 @@ func usage() -> Never {
                      or an archive holding one) after --idle minutes without input
                      (default 5), as After Dark did, until a key, a click or the mouse
                      moving wakes it (that input is not passed on); the program's
-                     screen comes back as it was
+                     screen comes back as it was.  Given again, or a folder of modules,
+                     the modules take turns at random, a minute each (--every N seconds)
           --init F   run the INIT resources of file F (an INIT or extension) before the program starts, as the
                      Start Manager would; may be repeated
           --cpu M    processor: 68040 (the default, as a Quadra 800), 68030 (a Mac IIci),
@@ -465,7 +466,8 @@ func runCommand(_ args: [String]) {
     var addressingBits: Int32?
     var machineName: String?
     var initFiles: [String] = []
-    var idleModule: String?
+    var idleModules: [String] = []
+    var idleEvery = 60.0
     var idleMinutes = 5.0
     var floppyImage: String?
     var printTo: String?
@@ -569,7 +571,11 @@ func runCommand(_ args: [String]) {
         case "--screensaver":
             i += 1
             guard i < args.count else { usage() }
-            idleModule = args[i]
+            idleModules.append(args[i])
+        case "--every":
+            i += 1
+            guard i < args.count, let n = Double(args[i]), n > 0 else { usage() }
+            idleEvery = n
         case "--idle":
             i += 1
             guard i < args.count, let m = Double(args[i]), m > 0 else { usage() }
@@ -832,8 +838,12 @@ func runCommand(_ args: [String]) {
         var ferr = [CChar](repeating: 0, count: 256)
         guard machine_set_floppy(floppyImage, &ferr, ferr.count) else { fail(str(ferr)) }
     }
-    if let idleModule {
-        machine_screensaver_set_idle(resolveModule(idleModule), idleMinutes)
+    let idleFiles = idleModules.flatMap(resolveModules)
+    if let first = idleFiles.first {
+        machine_screensaver_set_idle(first, idleMinutes)
+        for m in idleFiles.dropFirst() { _ = machine_screensaver_add_module(m) }
+        machine_screensaver_set_rotation(idleEvery, true)
+        machine_screensaver_set_settings_dir(defaultScreensaverSettings())
     }
     for f in initFiles {
         guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }

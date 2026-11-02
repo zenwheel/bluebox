@@ -64,6 +64,11 @@ bool machine_screensaver_set_control(int index, int value);
  * (Puzzle, Spotlight and Bat Signal work on it): RGBA pixels, scaled to the
  * screen; NULL for Blue Box's own desktop. */
 void machine_screensaver_set_backdrop(const uint8_t *rgba, int w, int h);
+/* The screen as several displays (After Dark's monitors, the main one
+ * first), each a rectangle of the screen: the module gets each in its
+ * parameter block's monitor list and blanks them all.  None: one, the
+ * whole screen.  False past 16 or for an empty rectangle. */
+bool machine_screensaver_add_monitor(int left, int top, int right, int bottom);
 /* Setup before it runs, as in After Dark's control panel: the module is
  * told it was chosen (ModuleSelected, if it takes it) and the buttons are
  * pressed in order (a message 8 or more, or a 'bVal' ID 1000 and up). */
@@ -71,6 +76,24 @@ bool machine_screensaver_press_button(int button);
 /* In a normal run: blank the screen with the module at path after the
  * minutes without input, and wake on input (empty path: none). */
 void machine_screensaver_set_idle(const char *path, double minutes);
+/* Settings, as After Dark wrote them back into a module's file: the
+ * controls given and whatever the module changes in its own resources
+ * (at a button, in its setup) are kept in dir, a file a module holding
+ * the resources that differ from its own, laid over them when it runs
+ * again ("" or NULL: not kept).  The module file isn't written. */
+void machine_screensaver_set_settings_dir(const char *dir);
+/* The file a module's settings are kept in (false if none is set). */
+bool machine_screensaver_settings_path(const char *module, char *out, size_t outsize);
+/* The module's resource fork with its settings over it (malloc'd), and
+ * one resource stored in its settings (the screen saver's Options sheet). */
+uint8_t *machine_screensaver_module_fork(const char *module, size_t *len);
+bool machine_screensaver_store_resource(const char *module, uint32_t type, int16_t id, const uint8_t *data,
+                                        uint32_t len);
+/* Modules in turn, as After Dark's Randomize ran them: the one launched
+ * (or the idle one) and each added, every so many seconds, in order or at
+ * random (each closed, its settings kept, and the next begun). */
+bool machine_screensaver_add_module(const char *path);
+void machine_screensaver_set_rotation(double seconds, bool random);
 /* What happened: DrawFrame calls, calls by message (8: buttons), and the
  * message the module stopped with ("" if it didn't). */
 uint32_t machine_screensaver_frames(void);

@@ -139,6 +139,289 @@ extension BlueBox {
             #expect(rd32(out + 4) == rd32(UInt32(LM_ApplZone)))       // the zone given
         }
 
+        /// After Dark 3 and 4 as the PowerPC modules of After Dark 4 find
+        /// them: Gestalt 'aYmm' gives the record with the version, and the
+        /// 'ADdl' extension (the linker, version $0300 and up) opens a
+        /// resource database by name from a "Module Resources" folder,
+        /// makes it current and puts the module's file back.
+        @Test func theLinkersResourceDatabases() {
+            bootMachine()
+            let dir = tempDir()
+            let res = dir.appendingPathComponent("Module Resources")
+            try? FileManager.default.createDirectory(at: res, withIntermediateDirectories: true)
+            _ = writeResourceFile([TestResource(type: "PICT", id: 128, data: [0, 1, 2, 3])], name: "Art", in: res)
+            let out = tb_NewPtr(32, true, true), name = tb_NewPtr(8, true, true)
+            guestPString("Art", at: name)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let body: [UInt16] = [
+                0x206F, 0x0004,                   // MOVEA.L 4(SP),A0      params
+                0x2068, 0x0028,                   // MOVEA.L 40(A0),A0     the extensions
+                0x2068, 0x0016,                   // MOVEA.L 22(A0),A0     the third's routines
+                0x23C8, hi(out), lo(out),         // MOVE.L A0,out
+                0x4267,                           // CLR.W -(SP)           OpenDatabase(params, "Art", &ref)
+                0x2F2F, 0x0006,                   // MOVE.L 6(SP),-(SP)
+                0x2F3C, hi(name), lo(name),
+                0x2F3C, hi(out + 4), lo(out + 4),
+                0x2079, hi(out), lo(out), 0x2068, 0x001A, 0x4E90,
+                0x33DF, hi(out + 8), lo(out + 8), // MOVE.W (SP)+,out+8
+                0x2F39, hi(out + 4), lo(out + 4), // UseDatabase(ref)
+                0x2079, hi(out), lo(out), 0x2068, 0x0022, 0x4E90,
+                0x554F, 0xA994,                   // CurResFile
+                0x33DF, hi(out + 10), lo(out + 10),
+                0x42A7,                           // RestoreDatabase()
+                0x2079, hi(out), lo(out), 0x2068, 0x0026, 0x4E90,
+                0x23DF, hi(out + 12), lo(out + 12),
+                0x554F, 0xA994,
+                0x33DF, hi(out + 16), lo(out + 16),
+            ]
+            let code = code68k([0x4A6F, 0x0008, 0x6600, UInt16(body.count * 2 + 2)] + body + [
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1, // noErr; return
+            ])
+            let path = moduleFile(code, in: dir)
+            machine_screensaver_set_seconds(0.1)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+            _ = machine_run(30_000_000)
+            machine_set_instruction_limit(0)
+            #expect(String(cString: machine_halt_reason()).contains("ran its time"))
+            let info = gestalt_value(fourCC("aYmm"), 0)
+            #expect(info != 0 && rd16(info + 12) >= 0x0300)
+            let dl = rd32(out)
+            #expect(dl != 0 && rd16(dl) >= 0x0300)
+            #expect(rd16(out + 8) == 0 && rd32(out + 4) != 0)         // opened
+            let db = Int16(bitPattern: rd16(out + 10))
+            #expect(db > 0 && db != Int16(bitPattern: rd16(UInt32(LM_CurApRefNum)))) // the database was current
+            #expect(Int32(bitPattern: rd32(out + 12)) == Int32(db))  // Restore answers the one it leaves
+            #expect(rd16(out + 16) == rd16(UInt32(LM_CurApRefNum)))  // and the module's file is back
+        }
+
+        /// Settings are kept, as After Dark kept them in the module's file:
+        /// a control given once and a resource the module changed itself
+        /// are there the next time, from a file of their own (the module
+        /// file isn't written), which the Options sheet can also set.
+        @Test func settingsAreKept() {
+            let dir = tempDir(), settings = dir.appendingPathComponent("Settings").path
+            func run(_ path: String, control: Int32? = nil) {
+                bootMachine()
+                machine_screensaver_reset()
+                machine_screensaver_set_settings_dir(settings)
+                if let control { #expect(machine_screensaver_set_control(0, control)) }
+                machine_screensaver_set_seconds(0.1)
+                var err = [CChar](repeating: 0, count: 256)
+                #expect(machine_launch(path, &err, err.count))
+                machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+                _ = machine_run(30_000_000)
+                machine_set_instruction_limit(0)
+            }
+            // A module that adds one to its 'xDat' 128 at each Initialize.
+            let code = code68k([
+                0x4A6F, 0x0008, 0x6600, 0x001A, // TST.W 8(SP); BNE.W done
+                0x598F,                         // SUBQ.L #4,SP
+                0x2F3C, 0x7844, 0x6174,         // MOVE.L #'xDat',-(SP)
+                0x3F3C, 0x0080, 0xA81F,         // MOVE.W #128,-(SP); _Get1Resource
+                0x205F, 0x2F08, 0x2050,         // MOVEA.L (SP)+,A0; MOVE.L A0,-(SP); MOVEA.L (A0),A0
+                0x5250, 0xA9AA,                 // ADDQ.W #1,(A0); _ChangedResource
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1, // done: noErr; return
+            ])
+            let counter = writeResourceFile([
+                TestResource(type: "ADgm", id: 0, data: code),
+                TestResource(type: "xDat", id: 128, data: be16(5)),
+                TestResource(type: "sVal", id: 1000, data: be16(10)),
+            ], name: "Counter", in: dir)
+            run(counter)
+            run(counter, control: 66)
+            var len = 0
+            let fork = machine_screensaver_module_fork(counter, &len)
+            defer { free(fork) }
+            var idx = rsrc_index()
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(fork != nil && rsrc_parse(fork, len, &idx, &err, err.count))
+            defer { rsrc_index_free(&idx) }
+            func word(_ type: String, _ id: Int16) -> Int? {
+                for i in 0..<idx.count {
+                    var e = idx.entries[i]
+                    if e.type == fourCC(type) && e.id == id, let d = rsrc_data(fork, &idx, &e) {
+                        return Int(UInt16(d[0]) << 8 | UInt16(d[1]))
+                    }
+                }
+                return nil
+            }
+            #expect(word("xDat", 128) == 7)  // two runs, each one more
+            #expect(word("sVal", 1000) == 66) // the control given
+            // The module file is as it was.
+            var mf = mac_file()
+            #expect(appledouble_read(counter, &mf, &err, err.count))
+            #expect(machine_screensaver_store_resource(counter, fourCC("sVal"), 1000, be16(10), 2)) // back to its own
+            var path = [CChar](repeating: 0, count: 1400)
+            #expect(machine_screensaver_settings_path(counter, &path, path.count))
+            let kept = FileManager.default.contents(atPath: String(cString: path))
+            var keptIdx = rsrc_index()
+            if let kept {
+                let ok = [UInt8](kept).withUnsafeBufferPointer { rsrc_parse($0.baseAddress, kept.count, &keptIdx, &err, err.count) }
+                #expect(ok && keptIdx.count == 1)                 // only the xDat now
+                if ok { rsrc_index_free(&keptIdx) }
+            } else {
+                Issue.record("no settings file")
+            }
+            var len2 = 0
+            let fork2 = machine_screensaver_module_fork(counter, &len2)
+            #expect(fork2 != nil && len2 > 0)
+            free(fork2)
+            mac_file_free(&mf)
+            // A module that logs its parameter block sees the kept control,
+            // and a copy of it elsewhere has the same settings.
+            func boot() -> (UInt32, UInt32, UInt32) {
+                bootMachine()
+                machine_screensaver_reset()
+                machine_screensaver_set_settings_dir(settings)
+                machine_screensaver_set_seconds(0.1)
+                return (tb_NewPtr(4096, false, true), tb_NewPtr(64, false, true), tb_NewPtr(16, false, true))
+            }
+            func go(_ path: String) {
+                var e = [CChar](repeating: 0, count: 256)
+                #expect(machine_launch(path, &e, e.count))
+                machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+                _ = machine_run(30_000_000)
+                machine_set_instruction_limit(0)
+            }
+            let (log, psave, evt) = boot()
+            let logger = moduleFile(moduleCode(log: log, psave: psave, evt: evt), extra: [
+                TestResource(type: "sVal", id: 1000, data: be16(42)),
+            ], in: tempDir())
+            #expect(machine_screensaver_set_control(0, 12))
+            go(logger)
+            #expect(rd16(psave) == 12)
+            let elsewhere = tempDir()
+            for f in ["Test Module", "._Test Module"] {
+                let from = (logger as NSString).deletingLastPathComponent + "/" + f
+                if FileManager.default.fileExists(atPath: from) {
+                    try? FileManager.default.copyItem(atPath: from, toPath: elsewhere.appendingPathComponent(f).path)
+                }
+            }
+            let (log2, psave2, evt2) = boot()
+            #expect(log2 == log && psave2 == psave && evt2 == evt) // the module's code writes there
+            go(elsewhere.appendingPathComponent("Test Module").path)
+            #expect(rd16(psave2) == 12) // the same module, elsewhere: its settings follow it
+        }
+
+        /// Modules in turn, as After Dark's Randomize ran them: the first
+        /// is closed when its time is up and the next begun from its file,
+        /// then the first again.
+        @Test func modulesTakeTurns() {
+            bootMachine()
+            let logA = tb_NewPtr(4096, false, true), logB = tb_NewPtr(4096, false, true)
+            let psave = tb_NewPtr(64, false, true), evt = tb_NewPtr(16, false, true)
+            let a = moduleFile(moduleCode(log: logA, psave: psave, evt: evt), in: tempDir())
+            let b = moduleFile(moduleCode(log: logB, psave: psave, evt: evt), in: tempDir())
+            #expect(machine_screensaver_add_module(b))
+            machine_screensaver_set_rotation(0.2, false)
+            machine_screensaver_set_seconds(0.5)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(a, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 60_000_000)
+            _ = machine_run(80_000_000)
+            machine_set_instruction_limit(0)
+            #expect(String(cString: machine_halt_reason()).contains("ran its time"))
+            let seenA = messages(logA), seenB = messages(logB)
+            #expect(seenA.filter { $0 == 0 }.count == 2 && seenA.filter { $0 == 1 }.count == 2) // A, B, A
+            #expect(seenB.filter { $0 == 0 }.count == 1 && seenB.filter { $0 == 1 }.count == 1)
+            #expect(Array(seenB.prefix(3)) == [0, 2, 3] && seenB.last == 1)
+            #expect(machine_screensaver_calls(0) == 3)
+        }
+
+        /// A module begins (and starts over, RestartMe) in memory as fresh
+        /// as the heap After Dark gave it: a block it allocates without
+        /// clearing holds zeros, whatever was there before.
+        @Test func aModuleGetsFreshMemory() {
+            bootMachine()
+            let zone = rd32(UInt32(LM_TheZone))
+            let p = tb_NewPtr(256, false, false)
+            for i in 0..<256 { wr8(p + UInt32(i), 0xAA) }
+            tb_DisposePtr(p)
+            mm_clear_free(zone)
+            let q = tb_NewPtr(256, false, false)
+            #expect((0..<256).allSatisfy { rd8(q + UInt32($0)) == 0 })
+            #expect(mm_heap_valid())
+        }
+
+        /// Several displays: the module gets each as one of After Dark's
+        /// monitors, main first, and each starts from the desktop picture;
+        /// what lies outside them is no display's.
+        @Test func eachDisplayIsAMonitor() {
+            bootMachine()
+            let out = tb_NewPtr(64, false, true)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let body: [UInt16] = [
+                0x206F, 0x0004, 0x2068, 0x0008,   // MOVEA.L 4(SP),A0; MOVEA.L 8(A0),A0   the monitors
+                0x43F9, hi(out), lo(out),         // LEA out,A1
+                0x700A, 0x32D8, 0x51C8, 0xFFFC,   // MOVEQ #10,D0; copy 11 words
+            ]
+            let code = code68k([0x4A6F, 0x0008, 0x6600, UInt16(body.count * 2 + 2)] + body + [
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1,
+            ])
+            let path = moduleFile(code, in: tempDir())
+            #expect(machine_screensaver_add_monitor(320, 0, 640, 480)) // main: the right half
+            #expect(machine_screensaver_add_monitor(0, 0, 320, 240))
+            var red = [UInt8](repeating: 0, count: 4 * 4 * 4)
+            for i in stride(from: 0, to: red.count, by: 4) { red[i] = 255; red[i + 3] = 255 }
+            machine_screensaver_set_backdrop(red, 4, 4)
+            defer { machine_screensaver_set_backdrop(nil, 0, 0) }
+            machine_screensaver_set_seconds(0.1)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+            _ = machine_run(30_000_000)
+            machine_set_instruction_limit(0)
+            #expect(rd16(out) == 2)
+            #expect((0..<4).map { rd16(out + 2 + UInt32($0 * 2)) } == [0, 320, 480, 640])   // top, left, bottom, right
+            #expect((0..<4).map { rd16(out + 12 + UInt32($0 * 2)) } == [0, 0, 240, 320])
+            func px(_ x: Int32, _ y: Int32) -> [UInt8] {
+                var p = [UInt8](repeating: 0, count: 4)
+                machine_screen_rgba(x, y, 1, 1, &p)
+                return Array(p.prefix(3))
+            }
+            #expect(px(500, 400) == [255, 0, 0] && px(100, 100) == [255, 0, 0])
+            #expect(px(100, 400) != [255, 0, 0])
+        }
+
+        /// A module that stops saying it needs another depth (Gloss's
+        /// "requires Millions of colours", or 256 here, the test screen
+        /// being millions) ends the run, when the host allows, to be
+        /// started again at that depth, as a program's alert does.
+        @Test func aModuleAsksForADepth() {
+            bootMachine()
+            let text = "Module: requires 256 colors"
+            let msg = tb_NewPtr(64, false, true)
+            guestPString(text, at: msg)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let body: [UInt16] = [
+                0x206F, 0x0004, 0x2268, 0x001E,         // MOVEA.L 4(SP),A0; MOVEA.L 30(A0),A1   errorMessage
+                0x207C, hi(msg), lo(msg),               // MOVEA.L #msg,A0
+                0x7000 | UInt16(text.utf8.count),       // MOVEQ #len,D0
+                0x12D8, 0x51C8, 0xFFFC,                 // MOVE.B (A0)+,(A1)+; DBRA D0
+                0x3F7C, 0xFFFF, 0x0012,                 // MOVE.W #ModuleError,18(SP)
+                0x225F, 0x4FEF, 0x000E, 0x4ED1,         // return
+            ]
+            let code = code68k([0x4A6F, 0x0008, 0x6600, UInt16(body.count * 2 + 2)] + body + [
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1,
+            ])
+            let path = moduleFile(code, in: tempDir())
+            machine_set_depth_alerts(true)
+            defer { machine_set_depth_alerts(false) }
+            machine_screensaver_set_seconds(0.2)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+            _ = machine_run(30_000_000)
+            machine_set_instruction_limit(0)
+            #expect(String(cString: machine_halt_reason()).contains("asks for depth 8"))
+            #expect(machine_wanted_depth() == 8)
+        }
+
         /// ImDone: no more DrawFrame calls; Close still comes.  A module
         /// whose 'Cals' leaves out Blank gets the screen blanked for it.
         @Test func imDoneStopsTheFrames() {
@@ -224,6 +507,29 @@ extension BlueBox {
             #expect(c[2]?.kind == .slider && c[2]?.title == "Depth") // the 'µVal' isn't met at 32 bits
             #expect(ModuleCatalog.info(path, config: ModuleCatalog.config(depth: 8, sound: false)).controls[2]?.kind == .checkbox)
             #expect(c[3]?.kind == .menu && c[3]?.items == ["Day", "Night"] && c[3]?.value == 2)
+        }
+        #endif
+
+        #if canImport(ScreenSaver)
+        /// The Options sheet reads a module's controls with its kept
+        /// settings over them, stores a control's value there by its
+        /// resource, and offers its buttons (their 'bVal' IDs run its setup).
+        @Test func theOptionsSheetUsesTheSettings() {
+            let dir = tempDir()
+            machine_screensaver_reset()
+            machine_screensaver_set_settings_dir(dir.appendingPathComponent("Settings").path)
+            defer { machine_screensaver_set_settings_dir(nil) }
+            let path = writeResourceFile([
+                TestResource(type: "ADgm", id: 0, data: code68k([0x4E75])),
+                TestResource(type: "sVal", id: 1000, name: "Speed:", data: be16(60)),
+                TestResource(type: "bVal", id: 1002, name: "Choose File", data: be16(9)),
+            ], name: "Settings Module", in: dir)
+            var info = ModuleCatalog.info(path, config: ModuleCatalog.config(depth: 8, sound: false))
+            #expect(info.controls[0]?.value == 60 && info.controls[0]?.type == "sVal" && info.controls[0]?.id == 1000)
+            #expect(info.controls[2]?.kind == .button && info.controls[2]?.id == 1002 && info.controls[2]?.title == "Choose File")
+            #expect(machine_screensaver_store_resource(path, ModuleCatalog.typeCode("sVal"), 1000, be16(25), 2))
+            info = ModuleCatalog.info(path, config: ModuleCatalog.config(depth: 8, sound: false))
+            #expect(info.controls[0]?.value == 25)
         }
         #endif
 

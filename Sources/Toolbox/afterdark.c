@@ -77,6 +77,10 @@
  *                  sized from its resources; nil fails its Initialize)
  *                  6 ReleaseMemory(h)  10 UseMemory(h): allocations go there
  *                  14 RestoreMemory(h): back to the zone before
+ *   'ADdl' After Dark 3's linker, a version ($0300 up) where the count is,
+ *                  then its routines: After Dark 4's modules require it
+ *                  (see "The linker" below), and find After Dark itself by
+ *                  Gestalt 'aYmm', the event query's record
  *
  * The module's resources: 'sysz' 0 and 1 (memory wanted and the least it
  * needs), the controls 1000-1003 from the top ('sVal' slider 0-100 with
@@ -91,11 +95,15 @@
  * (the module's file is the program: the CPU starts in ad_host_native),
  * or over a running program after it has waited long enough for input
  * (`--screensaver M --idle N`), as After Dark's control panel did: the
- * screen's pixels and colours are kept and put back when it wakes.
+ * screen's pixels and colours are kept and put back when it wakes.  It
+ * keeps what After Dark wrote back into a module (its settings, in a file
+ * of their own), runs several modules in turn as Randomize did, and
+ * gives a module each display of the screen as one of its monitors.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "forks.h"
 #include "m68k.h"
@@ -116,7 +124,7 @@ enum {
     PB_controls = 0, PB_monitors = 8, PB_colorQD = 12, PB_config = 14, PB_qd = 16, PB_brightness = 20,
     PB_demoRect = 22, PB_error = 30, PB_channel = 34, PB_version = 38, PB_extensions = 40, PB_SIZE = 44
 };
-enum { QDCOPY_SIZE = 130, AD_VERSION = 0x0300 };
+enum { QDCOPY_SIZE = 130, AD_VERSION = 0x0300, DL_SLOTS = 16 };
 enum { nullEvent = 0, mouseDown = 1, keyDown = 3, autoKey = 5 };
 
 /* The options (the CLI's and the screen saver's). */
@@ -134,10 +142,23 @@ static struct {
     char idle_module[1024];  /* idle blanking in a normal run */
     double idle_minutes;
     bool quiet;
+    char settings_dir[1024]; /* where each module's changed resources are kept; "" not kept */
 } opt = { .frames_per_tick = 4, .tick_budget = 100000 };
+
+/* The displays the screen is made of (After Dark's monitors), in screen
+ * coordinates, the main one first; none: the screen is one. */
+enum { MAX_MONITORS = 16 };
+static struct {
+    qrect r[MAX_MONITORS];
+    int n;
+} monitors;
+
+static void rotation_reset(void);
 
 void machine_screensaver_reset(void)
 {
+    rotation_reset();
+    monitors.n = 0;
     memset(&opt, 0, sizeof opt);
     opt.frames_per_tick = 4;
     opt.tick_budget = 100000;
@@ -184,6 +205,15 @@ void machine_screensaver_set_backdrop(const uint8_t *rgba, int w, int h)
     backdrop_h = h;
 }
 
+bool machine_screensaver_add_monitor(int left, int top, int right, int bottom)
+{
+    if (monitors.n == MAX_MONITORS || right <= left || bottom <= top)
+        return false;
+    monitors.r[monitors.n++] = (qrect){ .top = (int16_t)top, .left = (int16_t)left, .bottom = (int16_t)bottom,
+                                        .right = (int16_t)right };
+    return true;
+}
+
 bool machine_screensaver_press_button(int button)
 {
     if (opt.nbuttons == 8 || button < 8)
@@ -196,6 +226,265 @@ void machine_screensaver_set_idle(const char *module, double minutes)
 {
     snprintf(opt.idle_module, sizeof opt.idle_module, "%s", module ? module : "");
     opt.idle_minutes = minutes;
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings: what After Dark wrote back into a module's file (the controls
+ * set in its panel, and whatever the module itself changed in its
+ * resources at a button or in its setup) is kept in a file of its own,
+ * the resources that differ from the module's, and laid over the
+ * module's resources when it runs again.  The module file itself is
+ * never written: it may be read-only (the sandboxed screen saver's are)
+ * or shared.  The file is named for the module and its resources' hash,
+ * so copies of the same module share their settings and other versions
+ * don't. */
+
+void machine_screensaver_set_settings_dir(const char *dir)
+{
+    snprintf(opt.settings_dir, sizeof opt.settings_dir, "%s", dir ? dir : "");
+}
+
+static uint32_t fnv32(const uint8_t *p, size_t n)
+{
+    uint32_t h = 2166136261u;
+    for (size_t i = 0; i < n; i++)
+        h = (h ^ p[i]) * 16777619u;
+    return h;
+}
+
+static bool settings_path_for(const char *module, const uint8_t *fork, size_t len, char *out, size_t outsize)
+{
+    if (!opt.settings_dir[0])
+        return false;
+    const char *base = strrchr(module, '/');
+    base = base ? base + 1 : module;
+    snprintf(out, outsize, "%s/%s %08X.rsrc", opt.settings_dir, base, fnv32(fork, len));
+    return true;
+}
+
+bool machine_screensaver_settings_path(const char *module, char *out, size_t outsize)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(module, &mf, err, sizeof err))
+        return false;
+    bool ok = settings_path_for(module, mf.rsrc, mf.rsrc_len, out, outsize);
+    mac_file_free(&mf);
+    return ok;
+}
+
+static const rsrc_entry *find_entry(const rsrc_index *idx, uint32_t type, int16_t id)
+{
+    for (size_t i = 0; i < idx->count; i++)
+        if (idx->entries[i].type == type && idx->entries[i].id == id)
+            return &idx->entries[i];
+    return NULL;
+}
+
+/* base with over's resources replacing or added to its own (malloc'd). */
+static bool merge_forks(const uint8_t *base, size_t blen, const uint8_t *over, size_t olen, uint8_t **out,
+                        size_t *outlen)
+{
+    rsrc_index bi, oi;
+    char err[160];
+    if (!rsrc_parse(base, blen, &bi, err, sizeof err))
+        return false;
+    if (!rsrc_parse(over, olen, &oi, err, sizeof err)) {
+        rsrc_index_free(&bi);
+        return false;
+    }
+    rsrc_spec *specs = calloc(bi.count + oi.count + 1, sizeof *specs);
+    size_t n = 0;
+    for (size_t i = 0; i < bi.count; i++) {
+        const rsrc_entry *e = &bi.entries[i];
+        if (find_entry(&oi, e->type, e->id))
+            continue;
+        specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, rsrc_data(base, &bi, e), e->data_len };
+    }
+    for (size_t i = 0; i < oi.count; i++) {
+        const rsrc_entry *e = &oi.entries[i];
+        specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, rsrc_data(over, &oi, e), e->data_len };
+    }
+    bool ok = rsrc_build(specs, n, out, outlen);
+    free(specs);
+    rsrc_index_free(&bi);
+    rsrc_index_free(&oi);
+    return ok;
+}
+
+/* The module's resources with its settings over them, if it has any
+ * (malloc'd); NULL if not, or none are kept. */
+uint8_t *machine_screensaver_module_fork(const char *module, size_t *len)
+{
+    mac_file mf;
+    char err[256], path[1400];
+    *len = 0;
+    if (!appledouble_read(module, &mf, err, sizeof err))
+        return NULL;
+    uint8_t *out = NULL, *over = NULL;
+    size_t olen = 0;
+    if (mf.rsrc_len && settings_path_for(module, mf.rsrc, mf.rsrc_len, path, sizeof path) &&
+        read_file(path, &over, &olen) && !merge_forks(mf.rsrc, mf.rsrc_len, over, olen, &out, len))
+        out = NULL;
+    if (!out && mf.rsrc_len) {
+        out = malloc(mf.rsrc_len);
+        memcpy(out, mf.rsrc, mf.rsrc_len);
+        *len = mf.rsrc_len;
+    }
+    free(over);
+    mac_file_free(&mf);
+    return out;
+}
+
+/* A launch's module file: its settings laid over its resources. */
+void afterdark_apply_settings(const char *path, uint32_t type, uint8_t **rsrc, size_t *len)
+{
+    if (!opt.settings_dir[0] || !*len)
+        return;
+    if (type != fourcc("ADgm") && type != fourcc("A4gm")) {
+        /* By its resources, as afterdark_is_module_file decides. */
+        rsrc_index idx;
+        char e[160];
+        if (!rsrc_parse(*rsrc, *len, &idx, e, sizeof e))
+            return;
+        bool module = false;
+        for (size_t i = 0; i < idx.count; i++)
+            if (idx.entries[i].type == fourcc("ADgm"))
+                module = true;
+        if (find_entry(&idx, fourcc("CODE"), 0))
+            module = false;
+        rsrc_index_free(&idx);
+        if (!module)
+            return;
+    }
+    char sp[1400];
+    uint8_t *over = NULL, *out = NULL;
+    size_t olen = 0, outlen = 0;
+    if (!settings_path_for(path, *rsrc, *len, sp, sizeof sp) || !read_file(sp, &over, &olen))
+        return;
+    if (merge_forks(*rsrc, *len, over, olen, &out, &outlen)) {
+        LOGF(LOG_RSRC, "After Dark: settings from %s\n", sp);
+        free(*rsrc);
+        *rsrc = out;
+        *len = outlen;
+    }
+    free(over);
+}
+
+static void mkdirs(const char *dir)
+{
+    char p[1024];
+    snprintf(p, sizeof p, "%s", dir);
+    for (char *s = p + 1; *s; s++)
+        if (*s == '/') {
+            *s = 0;
+            mkdir(p, 0755);
+            *s = '/';
+        }
+    mkdir(p, 0755);
+}
+
+/* Keep the resources of the file (refnum rn, the module at path) that
+ * differ from the module's own; none: no settings file. */
+static void save_settings_of(int16_t rn, const char *path)
+{
+    mac_file mf;
+    char err[256], sp[1400];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return;
+    if (!settings_path_for(path, mf.rsrc, mf.rsrc_len, sp, sizeof sp)) {
+        mac_file_free(&mf);
+        return;
+    }
+    tb_UpdateResFile(rn); /* the map and the changed resources into the fork in memory */
+    const uint8_t *cur;
+    uint32_t clen;
+    rsrc_index bi, ci;
+    if (rm_fork_of(rn, &cur, &clen) && rsrc_parse(mf.rsrc, mf.rsrc_len, &bi, err, sizeof err)) {
+        if (rsrc_parse(cur, clen, &ci, err, sizeof err)) {
+            rsrc_spec *specs = calloc(ci.count + 1, sizeof *specs);
+            size_t n = 0;
+            for (size_t i = 0; i < ci.count; i++) {
+                const rsrc_entry *e = &ci.entries[i], *b = find_entry(&bi, e->type, e->id);
+                const uint8_t *d = rsrc_data(cur, &ci, e);
+                if (b && b->data_len == e->data_len && !memcmp(rsrc_data(mf.rsrc, &bi, b), d, e->data_len) &&
+                    !strcmp(b->name, e->name))
+                    continue;
+                specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, d, e->data_len };
+            }
+            uint8_t *out;
+            size_t olen;
+            if (!n) {
+                remove(sp);
+            } else if (rsrc_build(specs, n, &out, &olen)) {
+                mkdirs(opt.settings_dir);
+                FILE *fp = fopen(sp, "wb");
+                if (fp) {
+                    fwrite(out, 1, olen, fp);
+                    fclose(fp);
+                    LOGF(LOG_RSRC, "After Dark: %zu changed resources kept in %s\n", n, sp);
+                }
+                free(out);
+            }
+            free(specs);
+            rsrc_index_free(&ci);
+        }
+        rsrc_index_free(&bi);
+    }
+    mac_file_free(&mf);
+}
+
+/* Store one resource in a module's settings (the screen saver's Options
+ * sheet sets the controls so); one the same as the module's own is
+ * dropped from them. */
+bool machine_screensaver_store_resource(const char *module, uint32_t type, int16_t id, const uint8_t *data,
+                                        uint32_t len)
+{
+    mac_file mf;
+    char err[256], sp[1400];
+    if (!appledouble_read(module, &mf, err, sizeof err))
+        return false;
+    rsrc_index bi, oi = { 0 };
+    if (!settings_path_for(module, mf.rsrc, mf.rsrc_len, sp, sizeof sp) ||
+        !rsrc_parse(mf.rsrc, mf.rsrc_len, &bi, err, sizeof err)) {
+        mac_file_free(&mf);
+        return false;
+    }
+    uint8_t *over = NULL;
+    size_t olen = 0;
+    if (!read_file(sp, &over, &olen) || !rsrc_parse(over, olen, &oi, err, sizeof err))
+        memset(&oi, 0, sizeof oi);
+    const rsrc_entry *b = find_entry(&bi, type, id);
+    bool same = b && b->data_len == len && !memcmp(rsrc_data(mf.rsrc, &bi, b), data, len);
+    rsrc_spec *specs = calloc(oi.count + 2, sizeof *specs);
+    size_t n = 0;
+    for (size_t i = 0; i < oi.count; i++) {
+        const rsrc_entry *e = &oi.entries[i];
+        if (e->type != type || e->id != id)
+            specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, rsrc_data(over, &oi, e), e->data_len };
+    }
+    if (!same)
+        specs[n++] = (rsrc_spec){ type, id, b ? b->name : "", b ? b->attrs : 0, data, len };
+    bool ok = true;
+    uint8_t *out;
+    size_t outlen;
+    if (!n) {
+        remove(sp);
+    } else if ((ok = rsrc_build(specs, n, &out, &outlen))) {
+        mkdirs(opt.settings_dir);
+        FILE *fp = fopen(sp, "wb");
+        ok = fp && fwrite(out, 1, outlen, fp) == outlen;
+        if (fp)
+            fclose(fp);
+        free(out);
+    }
+    free(specs);
+    if (oi.entries)
+        rsrc_index_free(&oi);
+    rsrc_index_free(&bi);
+    free(over);
+    mac_file_free(&mf);
+    return ok;
 }
 
 /* What the module host learned, for the CLI's report and the tests. */
@@ -219,7 +508,7 @@ typedef struct {
     gaddr code, entry;
     uint8_t cals;
     gaddr cell;          /* the Handle its storage goes in */
-    gaddr rgn, pb, mons, qd, ext, sd, mf, err, port, vbl, evt, chanp;
+    gaddr rgn, pb, mons, qd, ext, sd, mf, dl, err, port, vbl, evt, chanp;
     bool color, stopped; /* stopped: ImDone or an error; no more calls */
     bool time_up;        /* the seconds asked for have passed */
     gaddr zone;          /* the zone UseMemory gives */
@@ -233,8 +522,16 @@ typedef struct {
 } ad_state;
 
 static ad_state ad;
+
+/* The module's settings kept: after its setup and when it closes. */
+static void save_settings(void)
+{
+    char path[1024];
+    if (opt.settings_dir[0] && ad.rn > 0 && rm_host_path(ad.rn, path, sizeof path))
+        save_settings_of(ad.rn, path);
+}
 static bool natives_registered; /* since the boot */
-static gaddr sd_stubs[7], mf_stubs[4], vbl_stub;
+static gaddr sd_stubs[7], mf_stubs[4], dl_stubs[DL_SLOTS], vbl_stub;
 
 /* ------------------------------------------------------------------ */
 /* The extensions */
@@ -408,6 +705,7 @@ static void mf_restore(cpu68k *c, uint16_t tw)
  * until the flag is negative). */
 static void snapshot_due(void);
 static void time_up_check(void);
+static uint32_t run_start; /* Ticks when the screen saver started (the modules' turns within it) */
 
 static void vbl_native(cpu68k *c, uint16_t tw)
 {
@@ -426,6 +724,142 @@ static void vbl_native(cpu68k *c, uint16_t tw)
     }
 }
 
+/* The linker: 'ADdl', After Dark 3's.  Its 68k half links a module's own
+ * segments ('CODE', 'DATA', 'CREL', 'DREL', 'JUMP') to the "After Dark
+ * 4.0 Library"; its other half, which the PowerPC modules use (the After
+ * Dark 4.0 Shared library's MacXResourceFile), opens a module's resource
+ * databases and makes one current around each resource call:
+ *
+ *   26 OpenDatabase(params, name, *ref): OSErr  name nil: the module's own
+ *   30 CloseDatabase(ref)   34 UseDatabase(ref)   38 RestoreDatabase(): long
+ *
+ * A named database is a resource file in the module's folder, in a
+ * "Module Resources" folder beside it or one up, or in the System Folder's
+ * "After Dark Files".  The 68k half (2 to 22, and 62, which links a
+ * library by its 'dll#') isn't here: After Dark 4's modules carry PowerPC
+ * code too, and a 68k one that needs it (Flying Toilets Demo) needs After
+ * Dark 3's libraries as well, which the archive doesn't have.  A call to
+ * it halts, naming the caller. */
+enum { DL_DEPTH = 16, DL_FILES = 16 };
+static struct {
+    int16_t rn[DL_FILES];       /* by ref - 1; 0 free */
+    bool own[DL_FILES];         /* opened here: closed with the module */
+    int16_t stack[DL_DEPTH];    /* the files current before each Use */
+    int depth;
+} dl;
+
+static void dl_unknown(cpu68k *c, uint16_t tw)
+{
+    cpu_halt(c, "After Dark's linker: a call it doesn't know, from %08X", rd32(c->a[7]));
+}
+
+static bool dl_find(const char *dir, const char *name, char *out, size_t outsize)
+{
+    static const char *const places[] = { "%s/%s", "%s/Module Resources/%s", "%s/../Module Resources/%s",
+                                          "%s/After Dark Files/%s", "%s/After Dark Files/Module Resources/%s" };
+    for (size_t i = 0; i < sizeof places / sizeof places[0]; i++) {
+        snprintf(out, outsize, places[i], dir, name);
+        if (fm_host_exists(out))
+            return true;
+    }
+    return false;
+}
+
+static void dl_open(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    gaddr refp = cpu_pop32(c), name = cpu_pop32(c);
+    cpu_pop32(c); /* params */
+    int16_t err = 0, rn = ad.rn;
+    bool own = false;
+    char cname[256] = "";
+    if (name && rd8(name)) {
+        snprintf(cname, sizeof cname, "%.*s", rd8(name), (const char *)gptr(name + 1));
+        char module[1024], dir[1024], path[1100];
+        err = -43; /* fnfErr */
+        if (rm_host_path(ad.rn, module, sizeof module)) {
+            snprintf(dir, sizeof dir, "%s", module);
+            char *slash = strrchr(dir, '/');
+            if (slash)
+                *slash = 0;
+            bool found = dl_find(dir, cname, path, sizeof path);
+            if (!found) {
+                snprintf(dir, sizeof dir, "%s", fm_system_folder_host());
+                found = dl_find(dir, cname, path, sizeof path);
+            }
+            mac_file mf;
+            char e[256];
+            if (found && appledouble_read(path, &mf, e, sizeof e)) {
+                int16_t saved = tb_CurResFile();
+                rn = mf.rsrc_len ? rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, true) : -1;
+                tb_UseResFile(saved);
+                mac_file_free(&mf);
+                err = rn > 0 ? 0 : -39; /* eofErr: no resource fork */
+                own = rn > 0;
+            }
+        }
+    }
+    int ref = 0;
+    for (int i = 0; !err && i < DL_FILES && !ref; i++)
+        if (!dl.rn[i]) {
+            dl.rn[i] = rn;
+            dl.own[i] = own;
+            ref = i + 1;
+        }
+    if (!err && !ref)
+        err = -42; /* tmfoErr */
+    LOGF(LOG_TRAPS, "  After Dark: OpenDatabase \"%s\" -> %d (file %d)\n", cname, err ? err : ref, rn);
+    if (refp)
+        wr32(refp, (uint32_t)ref);
+    wr16(c->a[7], (uint16_t)err);
+    cpu_push32(c, ret);
+}
+
+static void dl_close_ref(int ref)
+{
+    if (ref < 1 || ref > DL_FILES || !dl.rn[ref - 1])
+        return;
+    if (dl.own[ref - 1])
+        tb_CloseResFile(dl.rn[ref - 1]);
+    dl.rn[ref - 1] = 0;
+    dl.own[ref - 1] = false;
+}
+
+static void dl_close(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    dl_close_ref((int)cpu_pop32(c));
+    cpu_push32(c, ret);
+}
+
+static void dl_use(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int ref = (int)cpu_pop32(c);
+    if (dl.depth < DL_DEPTH)
+        dl.stack[dl.depth++] = tb_CurResFile();
+    if (ref >= 1 && ref <= DL_FILES && dl.rn[ref - 1])
+        tb_UseResFile(dl.rn[ref - 1]);
+    cpu_push32(c, ret);
+}
+
+static void dl_restore(cpu68k *c, uint16_t tw)
+{
+    uint32_t ret = cpu_pop32(c);
+    int16_t was = tb_CurResFile();
+    if (dl.depth > 0)
+        tb_UseResFile(dl.stack[--dl.depth]);
+    wr32(c->a[7], (uint32_t)(int32_t)was);
+    cpu_push32(c, ret);
+}
+
+static void dl_end(void)
+{
+    for (int i = 1; i <= DL_FILES; i++)
+        dl_close_ref(i);
+    dl.depth = 0;
+}
+
 static void register_natives(void)
 {
     if (natives_registered)
@@ -441,6 +875,12 @@ static void register_natives(void)
     for (int i = 0; i < 4; i++)
         mf_stubs[i] = native_register(mf[i], mfn[i], 0);
     vbl_stub = native_register(vbl_native, "AD VBL", 0);
+    for (int i = 0; i < DL_SLOTS; i++)
+        dl_stubs[i] = native_register(dl_unknown, "AD linker", 0);
+    dl_stubs[6] = native_register(dl_open, "AD OpenDatabase", 0);
+    dl_stubs[7] = native_register(dl_close, "AD CloseDatabase", 0);
+    dl_stubs[8] = native_register(dl_use, "AD UseDatabase", 0);
+    dl_stubs[9] = native_register(dl_restore, "AD RestoreDatabase", 0);
 }
 
 static gaddr make_table(const gaddr *stubs, int n)
@@ -467,10 +907,11 @@ static uint32_t mu_val_type(void) { return 0xB5000000u | ((uint32_t)'V' << 16) |
 
 /* A control's value: the first alternative (1000 IDs apart) whose 'µVal'
  * the configuration meets, else the last there is. */
-static int16_t control_value(int i, uint16_t config)
+static int16_t control_value_res(int i, uint16_t config, gaddr *res)
 {
     static const char *const kinds[] = { "sVal", "mVal", "xVal", "tVal", "bVal" };
     int16_t value = 0;
+    *res = 0;
     for (int alt = 0; alt < 9; alt++) {
         int16_t id = (int16_t)(1000 + i + alt * 1000);
         bool any = false;
@@ -481,6 +922,7 @@ static int16_t control_value(int i, uint16_t config)
             if (f) {
                 any = true;
                 v = k == 4 ? 0 : w; /* a button has no value */
+                *res = k < 3 ? tb_Get1Resource((int32_t)fourcc(kinds[k]), id) : 0; /* the ones with a value to set */
             }
         }
         if (!any)
@@ -494,6 +936,12 @@ static int16_t control_value(int i, uint16_t config)
             break;
     }
     return value;
+}
+
+static int16_t control_value(int i, uint16_t config)
+{
+    gaddr res;
+    return control_value_res(i, config, &res);
 }
 
 static uint16_t system_config(void)
@@ -578,6 +1026,8 @@ static void show_error(void)
     tb_ForeColor(33);
 }
 
+static bool rotating(void);
+
 /* A result that ends the module's run. */
 static void handle_result(int16_t r, int16_t message)
 {
@@ -589,6 +1039,7 @@ static void handle_result(int16_t r, int16_t message)
     }
     if (r == RestartMe && message != msgClose) {
         for (int tries = 0; tries < 4; tries++) {
+            mm_clear_free(ad.zone ? ad.zone : rd32(LM_TheZone));
             int16_t again = call_module(msgInitialize);
             if (again != RestartMe) {
                 handle_result(again, msgInitialize);
@@ -601,6 +1052,18 @@ static void handle_result(int16_t r, int16_t message)
      * an OSErr such as the kit's glue returns from MemError. */
     if (r > 0)
         return;
+    /* "requires Millions of colours" (Gloss, Ice, Madman's Quilt): when
+     * the host allows, the run ends to start again at that depth, as a
+     * program's alert asking for one does. */
+    gaddr msg = rd32(ad.pb + PB_error);
+    if (msg && rd8(msg)) {
+        char text[256];
+        snprintf(text, sizeof text, "%.*s", rd8(msg), (const char *)gptr(msg + 1));
+        if (!rotating() && depth_alert(text)) { /* taking turns, the next one comes instead */
+            ad.stopped = true;
+            return;
+        }
+    }
     ad.stopped = true;
     if (!rd8(rd32(ad.pb + PB_error)))
         snprintf(stats.error, sizeof stats.error, "error %d", r);
@@ -652,12 +1115,17 @@ static void restore_screen_colors(gaddr copy)
     tb_DisposePtr(copy);
 }
 
+static gaddr info_record(void);
+
 /* Set everything up and call Initialize and Blank; false if the module
  * can't run (no code). */
 static bool ad_begin(int16_t rn, bool over_program)
 {
     cpu68k *c = g_cpu;
     register_natives();
+    /* After Dark 3 and 4 answered Gestalt 'aYmm' with the record the
+     * event query gets (After Dark 4's AfterDarkExists asks so). */
+    gestalt_set(fourcc("aYmm"), info_record());
     memset(&ad, 0, sizeof ad);
     ad.rn = rn;
     ad.own_file = over_program;
@@ -698,17 +1166,37 @@ static bool ad_begin(int16_t rn, bool over_program)
     machine_screen_size(&w, &h);
     wr16(bounds + 4, (uint16_t)h);
     wr16(bounds + 6, (uint16_t)w);
-    ad.rgn = tb_NewRgn();
-    tb_RectRgn(ad.rgn, bounds);
     tb_SetPort(ad.port);
     tb_ClipRect(bounds);
-    if (backdrop && !ad.own_file)
-        qd_draw_rgba(backdrop, backdrop_w, backdrop_h, (qrect){ .top = 0, .left = 0, .bottom = (int16_t)h, .right = (int16_t)w });
 
-    ad.mons = tb_NewPtr(2 + 10, false, true);
-    wr16(ad.mons, 1);
-    gmemcpy(ad.mons + 2, bounds, 8);
-    wr8(ad.mons + 2 + 9, (uint8_t)qd_screen_depth());
+    /* The monitors, main first: the displays given, else the screen.  The
+     * region to blank is all of them, and each starts from the backdrop. */
+    int nmon = monitors.n ? monitors.n : 1;
+    ad.mons = tb_NewPtr(2 + 10 * nmon, false, true);
+    wr16(ad.mons, (uint16_t)nmon);
+    ad.rgn = tb_NewRgn();
+    gaddr one = tb_NewRgn();
+    for (int i = 0; i < nmon; i++) {
+        gaddr m = ad.mons + 2 + 10 * (uint32_t)i;
+        if (monitors.n) {
+            const qrect *r = &monitors.r[i];
+            wr16(m, (uint16_t)r->top);
+            wr16(m + 2, (uint16_t)r->left);
+            wr16(m + 4, (uint16_t)r->bottom);
+            wr16(m + 6, (uint16_t)r->right);
+        } else {
+            gmemcpy(m, bounds, 8);
+        }
+        wr8(m + 9, (uint8_t)qd_screen_depth());
+        tb_RectRgn(one, m);
+        tb_UnionRgn(ad.rgn, one, ad.rgn);
+        if (backdrop && !ad.own_file)
+            qd_draw_rgba(backdrop, backdrop_w, backdrop_h,
+                         (qrect){ .top = (int16_t)rd16(m), .left = (int16_t)rd16(m + 2), .bottom = (int16_t)rd16(m + 4),
+                                  .right = (int16_t)rd16(m + 6) });
+    }
+    tb_DisposeRgn(one);
+    tb_DisposePtr(bounds);
 
     /* The QuickDraw globals, a copy in their record's order. */
     ad.qd = tb_NewPtr(QDCOPY_SIZE, false, true);
@@ -722,8 +1210,12 @@ static bool ad_begin(int16_t rn, bool over_program)
 
     ad.sd = make_table(sd_stubs, 7);
     ad.mf = make_table(mf_stubs, 4);
-    ad.ext = tb_NewPtr(2 + 2 * 8, false, true);
-    wr16(ad.ext, 2);
+    ad.dl = make_table(dl_stubs, DL_SLOTS);
+    wr16(ad.dl, AD_VERSION); /* the linker's version, not a count */
+    ad.ext = tb_NewPtr(2 + 3 * 8, false, true);
+    wr16(ad.ext, 3);
+    wr32(ad.ext + 18, fourcc("ADdl"));
+    wr32(ad.ext + 22, ad.dl);
     wr32(ad.ext + 2, fourcc("ADSd"));
     wr32(ad.ext + 6, ad.sd);
     wr32(ad.ext + 10, fourcc("ADmf"));
@@ -732,9 +1224,20 @@ static bool ad_begin(int16_t rn, bool over_program)
 
     ad.pb = tb_NewPtr(PB_SIZE, false, true);
     uint16_t cfg = system_config();
-    for (int i = 0; i < 4; i++)
-        wr16(ad.pb + PB_controls + 2 * (uint32_t)i,
-             (uint16_t)(opt.control_given[i] ? opt.control[i] : control_value(i, cfg)));
+    for (int i = 0; i < 4; i++) {
+        gaddr res;
+        int16_t v = control_value_res(i, cfg, &res);
+        /* A value given is set in the module's resource, as After Dark's
+         * panel did: it is kept with the module's settings. */
+        if (opt.control_given[i]) {
+            v = opt.control[i];
+            if (res && rd32(res) && tb_GetHandleSize(res) >= 2 && (int16_t)rd16(mem_strip(rd32(res))) != v) {
+                wr16(mem_strip(rd32(res)), (uint16_t)v);
+                tb_ChangedResource(res);
+            }
+        }
+        wr16(ad.pb + PB_controls + 2 * (uint32_t)i, (uint16_t)v);
+    }
     wr32(ad.pb + PB_monitors, ad.mons);
     wr8(ad.pb + PB_colorQD, ad.color ? 1 : 0);
     wr16(ad.pb + PB_config, cfg);
@@ -764,7 +1267,6 @@ static bool ad_begin(int16_t rn, bool over_program)
     tb_VInstall(ad.vbl);
     ad.active = true;
     ad.start_tick = ad.snap_tick = rd32(LM_Ticks);
-    stats.frames = 0;
 
     LOGF(LOG_TRAPS, "After Dark: module code at %08X, Cals %02X\n", ad.entry, ad.cals);
     /* Setup first, as in the control panel: the module chosen, then its
@@ -797,6 +1299,11 @@ static bool ad_begin(int16_t rn, bool over_program)
         tb_ForeColor(33);
         tb_PaintRgn(ad.rgn);
     }
+    save_settings(); /* the controls given, and what the setup changed */
+    /* The memory it gets is as fresh as the heap After Dark made it (and
+     * again at each RestartMe: Peek-a-boo, starting over, reads a field of
+     * its new storage as nil, its sound being off). */
+    mm_clear_free(ad.zone ? ad.zone : rd32(LM_TheZone));
     int16_t r = call_module(msgInitialize);
     handle_result(r, msgInitialize);
     if (!ad.stopped) {
@@ -837,7 +1344,7 @@ static void time_up_check(void)
 {
     if (opt.seconds <= 0 || ad.time_up)
         return;
-    if (rd32(LM_Ticks) - ad.start_tick >= (uint32_t)(opt.seconds * 60 + 0.5)) {
+    if (rd32(LM_Ticks) - run_start >= (uint32_t)(opt.seconds * 60 + 0.5)) {
         ad.time_up = true;
         machine_post_key(' ', 49, 0, 1, 0);
         machine_post_key(' ', 49, 0, 0, 0);
@@ -865,6 +1372,7 @@ static void ad_end(void)
         return;
     if (!ad.stopped && understands(msgClose))
         call_module(msgClose);
+    save_settings();
     tb_VRemove(ad.vbl);
     if (ad.chanp && rd32(ad.chanp))
         tb_SndDisposeChannel(rd32(ad.chanp), 1);
@@ -875,7 +1383,8 @@ static void ad_end(void)
     else
         tb_ClosePort(ad.port);
     tb_DisposeRgn(ad.rgn);
-    gaddr ptrs[] = { ad.port, ad.mons, ad.qd, ad.sd, ad.mf, ad.ext, ad.err, ad.pb, ad.chanp, ad.cell, ad.evt, ad.vbl };
+    dl_end();
+    gaddr ptrs[] = { ad.port, ad.mons, ad.qd, ad.sd, ad.mf, ad.dl, ad.ext, ad.err, ad.pb, ad.chanp, ad.cell, ad.evt, ad.vbl };
     for (size_t i = 0; i < sizeof ptrs / sizeof ptrs[0]; i++)
         if (ptrs[i])
             tb_DisposePtr(ptrs[i]);
@@ -887,6 +1396,111 @@ static void ad_end(void)
 /* Input since the module started: a click, a key, or the mouse moved. */
 static uint32_t input_mark;
 static bool woken(void) { return ev_input_serial() != input_mark; }
+
+/* Modules in turn, as After Dark 3 and 4's own Randomize (and the 2.0
+ * Randomizer module) ran them: the first module (the one launched, or the
+ * idle one), then each added, every so many seconds, in order or at
+ * random.  Each one is closed (its Close, its settings kept) and the next
+ * opened from its file and begun as After Dark began it. */
+enum { MAX_ROTATION = 512 };
+static struct {
+    char *paths[MAX_ROTATION]; /* the ones after the first */
+    int n;
+    double seconds;
+    bool random;
+    int cur;                   /* 0: the first */
+    int16_t rn;                /* the file opened here for the current one; 0 the first's */
+    uint32_t seed;
+} rot;
+
+bool machine_screensaver_add_module(const char *path)
+{
+    if (!path || rot.n == MAX_ROTATION)
+        return false;
+    rot.paths[rot.n++] = strdup(path);
+    return true;
+}
+
+void machine_screensaver_set_rotation(double seconds, bool random)
+{
+    rot.seconds = seconds;
+    rot.random = random;
+}
+
+static void rotation_reset(void)
+{
+    for (int i = 0; i < rot.n; i++)
+        free(rot.paths[i]);
+    memset(&rot, 0, sizeof rot);
+}
+
+/* A module's file opened for its turn (its settings over it): its
+ * resource file, or -1. */
+static int16_t open_module(const char *path)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(path, &mf, err, sizeof err) || !mf.rsrc_len) {
+        fprintf(stderr, "bluebox: %s: %s\n", path, mf.rsrc_len ? err : "no resource fork");
+        return -1;
+    }
+    int16_t saved = tb_CurResFile();
+    afterdark_apply_settings(path, mac_file_type(&mf), &mf.rsrc, &mf.rsrc_len);
+    int16_t rn = rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, true);
+    mac_file_free(&mf);
+    tb_UseResFile(saved);
+    /* One with PowerPC code runs on a Power Mac, as at a launch. */
+    if (rn > 0 && afterdark_has_powerpc(path))
+        gestalt_powerpc();
+    return rn;
+}
+
+static bool rotating(void) { return rot.n > 0; }
+
+static bool rotation_due(void)
+{
+    if (!rot.n || rot.seconds <= 0)
+        return false;
+    uint32_t ran = rd32(LM_Ticks) - ad.start_tick;
+    /* One that stopped with its message has it seen a moment, then goes. */
+    if (ad.stopped && ran >= 180)
+        return true;
+    return ran >= (uint32_t)(rot.seconds * 60 + 0.5);
+}
+
+/* The next module's turn.  first_rn is the first's file (the launched
+ * program's, or the idle module's); over_program as for ad_begin. */
+static bool rotate(int16_t first_rn, bool over_program)
+{
+    int count = rot.n + 1, next = rot.cur;
+    if (rot.random) {
+        if (!rot.seed)
+            rot.seed = rd32(LM_Ticks) * 2654435761u + 1;
+        for (int tries = 0; tries < 8 && next == rot.cur; tries++) {
+            rot.seed = rot.seed * 1103515245u + 12345u;
+            next = (int)((rot.seed >> 8) % (uint32_t)count);
+        }
+    } else {
+        next = (rot.cur + 1) % count;
+    }
+    ad_end();
+    if (rot.rn > 0)
+        tb_CloseResFile(rot.rn);
+    rot.rn = 0;
+    int16_t rn = first_rn;
+    if (next > 0) {
+        rn = open_module(rot.paths[next - 1]);
+        if (rn < 0) {
+            rn = first_rn;
+            next = 0;
+        } else {
+            rot.rn = rn;
+        }
+    }
+    rot.cur = next;
+    LOGF(LOG_TRAPS, "After Dark: the next module, %s\n", next ? rot.paths[next - 1] : "the first");
+    return ad_begin(rn, over_program);
+}
 
 /* ------------------------------------------------------------------ */
 /* A module on its own (bluebox screensaver) */
@@ -906,6 +1520,8 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     tb_HideCursor();
     int16_t rn = (int16_t)rd16(LM_CurApRefNum);
     input_mark = ev_input_serial();
+    run_start = rd32(LM_Ticks);
+    rot.cur = 0;
     if (!ad_begin(rn, false)) {
         cpu_halt(c, "ExitToShell (no ADgm code in the module)");
         return;
@@ -914,9 +1530,11 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     if (opt.snap_every > 0 && opt.snap_dir[0])
         snapshot(); /* the blanked screen */
     while (!c->halted) {
-        if (limit && rd32(LM_Ticks) - ad.start_tick >= limit)
+        if (limit && rd32(LM_Ticks) - run_start >= limit)
             break;
         if (woken())
+            break;
+        if (rotation_due() && !rotate(rn, false))
             break;
         if (!ad.stopped)
             ad_tick();
@@ -925,8 +1543,11 @@ static void ad_host_native(cpu68k *c, uint16_t tw)
     }
     if (c->halted)
         return;
-    bool timed = ad.time_up || (limit && rd32(LM_Ticks) - ad.start_tick >= limit);
+    bool timed = ad.time_up || (limit && rd32(LM_Ticks) - run_start >= limit);
     ad_end();
+    if (rot.rn > 0)
+        tb_CloseResFile(rot.rn);
+    rot.rn = 0;
     tb_ShowCursor();
     cpu_halt(c, timed ? "ExitToShell (the screen saver ran its time)" : "ExitToShell (woken by input)");
 }
@@ -994,6 +1615,7 @@ void afterdark_idle(void)
     }
     in_saver = true;
     int16_t saved_res = tb_CurResFile();
+    afterdark_apply_settings(opt.idle_module, mac_file_type(&mf), &mf.rsrc, &mf.rsrc_len);
     int16_t rn = rm_open_host_file(opt.idle_module, mf.rsrc, (uint32_t)mf.rsrc_len, true);
     mac_file_free(&mf);
     tb_UseResFile(saved_res);
@@ -1017,14 +1639,21 @@ void afterdark_idle(void)
     uint8_t crsr = rd8(LM_CrsrVis);
     tb_HideCursor();
     input_mark = ev_input_serial();
+    run_start = rd32(LM_Ticks);
+    rot.cur = 0;
     bool begun = ad_begin(rn, true);
     while (begun && !c->halted && !woken()) {
+        if (rotation_due() && !(begun = rotate(rn, true)))
+            break;
         if (!ad.stopped)
             ad_tick();
         tb_WaitNextEvent(0, ad.evt, 1, 0); /* no events taken: the program gets the one that wakes it */
     }
     if (begun && !c->halted)
         ad_end();
+    if (rot.rn > 0)
+        tb_CloseResFile(rot.rn);
+    rot.rn = 0;
     /* The key or click that woke it was for the screen saver, not the
      * program under it. */
     tb_FlushEvents((int16_t)(1 << mouseDown | 1 << 2 /* mouseUp */ | 1 << keyDown | 1 << 4 /* keyUp */ | 1 << autoKey), 0);
@@ -1054,14 +1683,20 @@ bool afterdark_running(void) { return in_saver || ad.active; }
  * version (BCD), which the module compares with the one it needs. */
 static gaddr ad_info;
 
-bool afterdark_answer(gaddr evt)
+static gaddr info_record(void)
 {
-    if (!evt || rd32(evt + 2) != fourcc("aYmm") || !(ad.active || opt.idle_module[0]))
-        return false;
     if (!ad_info) {
         ad_info = tb_NewPtr(32, true, true);
         wr16(ad_info + 12, AD_VERSION);
     }
+    return ad_info;
+}
+
+bool afterdark_answer(gaddr evt)
+{
+    if (!evt || rd32(evt + 2) != fourcc("aYmm") || !(ad.active || opt.idle_module[0]))
+        return false;
+    info_record();
     wr16(evt, 0); /* nullEvent */
     wr32(evt + 2, fourcc("ADrk"));
     wr32(evt + 10, ad_info);

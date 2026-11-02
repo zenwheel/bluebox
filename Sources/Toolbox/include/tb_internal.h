@@ -60,6 +60,7 @@ static inline void set_res_err(int16_t e)
 
 /* Set up a zone from start to limit. */
 void mm_init_zone(gaddr zone, gaddr limit, uint16_t more_masters);
+void mm_clear_free(gaddr zone); /* a zone's free blocks zeroed */
 /* Make the application zone growable up to max_limit. */
 void mm_set_appl_growth(gaddr max_limit);
 /* The heap's share of the program's partition, which MaxApplZone grows
@@ -757,6 +758,8 @@ void afterdark_idle(void);
 bool afterdark_running(void);
 void afterdark_reset(void);
 bool afterdark_answer(gaddr evt); /* After Dark's 'aYmm' query in an event record */
+/* A module's kept settings over its resources: *rsrc replaced (malloc'd) if it has any. */
+void afterdark_apply_settings(const char *path, uint32_t type, uint8_t **rsrc, size_t *len);
 int qd_screen_depth(void);
 bool driver_refnum(int16_t refnum);
 bool driver_is_native(int16_t refnum); /* one of Blue Box's own, answered in C */

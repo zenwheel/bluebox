@@ -260,24 +260,34 @@ saved as they are (`.bin`).
 ## After Dark
 
 After Dark's graphics modules (files of type `ADgm`: Flying Toasters, Fish!,
-the third-party ones) run as the screen saver they were written for:
+the third-party ones, and After Dark 4's `A4gm` modules with the After Dark
+4.0 Shared library beside them or in the Extensions folder) run as the
+screen saver they were written for:
 
 ```sh
 bluebox screensaver "Flying Toasters"                  # in a window; any key, click or mouse move ends it
 bluebox screensaver "Flying Toasters" --fullscreen
 bluebox screensaver Fish! --seconds 10 --png-every 2 frames   # headless, a PNG every 2 seconds
+bluebox screensaver "After Dark Files" --every 120 --random  # the modules of a folder, two minutes each
+bluebox screensaver Clock --monitor 640x480+0+0 --monitor 512x384+640+0  # two displays
 bluebox run SimpleText --screensaver "Flying Toasters" --idle 5  # blank after 5 idle minutes
 ```
 
 `--control I=V` sets one of the module's four controls, `--button` presses a
 setup button first (PICS Player's Choose File, with `--file-answer`), and
 `--backdrop IMAGE` gives modules that work on the screen (Puzzle, Spotlight)
-a picture to start from. `bluebox help` has the rest.
+a picture to start from. As After Dark kept them in the module, the settings
+(the controls given, what the module's setup chose) are kept from one run
+to the next, in "After Dark Settings" beside the library; the module file
+isn't changed. A module that asks for another depth ("requires Millions of
+colours") runs again at that depth. `bluebox help` has the rest.
 
 `scripts/build-saver.sh` builds `Blue Box After Dark.saver`, a macOS screen
-saver that runs the modules imported into the library. Double-click it to
-install it, choose it in System Settings > Screen Saver, and pick the module
-and its settings with Options.
+saver (for Apple silicon and Intel Macs) that runs the modules imported into
+the library. Double-click it to install it, choose it in System Settings >
+Screen Saver, and pick the module and its settings with Options: its
+controls, its own setup buttons (run in a sheet), and modules taking turns.
+One module covers all the displays, each one of its monitors.
 
 ## What's in the repository
 

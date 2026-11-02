@@ -27,7 +27,7 @@ final class BlueBoxAfterDarkView: ScreenSaverView {
         animationTimeInterval = 1.0 / 30
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
-        layer?.contentsGravity = .resizeAspect // displays of other shapes get the same screen, not stretched
+        layer?.contentsGravity = .resizeAspect // its part of the screen, not stretched
         layer?.magnificationFilter = .nearest
         Self.observeStop()
     }
@@ -47,11 +47,17 @@ final class BlueBoxAfterDarkView: ScreenSaverView {
 
     override func startAnimation() {
         super.startAnimation()
-        // The machine's screen: the whole display's, in Mac pixels (a
-        // preview gets a classic 640 by 480).
-        let size = isPreview ? CGSize(width: 640, height: 480) : (window?.screen?.frame.size ?? bounds.size)
         let settings = SaverSettings.load()
-        SaverMachine.shared.show(screenPoints: size, settings: isPreview ? previewSettings(settings) : settings)
+        SaverMachine.shared.show(displays: displays(), settings: isPreview ? previewSettings(settings) : settings)
+    }
+
+    /// The machine's screen: every display (one module across them all, as
+    /// After Dark had it on a Mac with several monitors), main first; a
+    /// preview gets a classic 640 by 480.
+    private func displays() -> [CGRect] {
+        if isPreview { return [CGRect(x: 0, y: 0, width: 640, height: 480)] }
+        let all = NSScreen.screens.map(\.frame)
+        return all.isEmpty ? [window?.screen?.frame ?? bounds] : all
     }
 
     /// A preview shows the module at 1 point a pixel, small.
@@ -67,7 +73,7 @@ final class BlueBoxAfterDarkView: ScreenSaverView {
     }
 
     override func animateOneFrame() {
-        guard let image = SaverMachine.shared.frame() else { return }
+        guard let image = SaverMachine.shared.frame(for: isPreview ? nil : window?.screen?.frame) else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer?.contents = image
@@ -80,8 +86,7 @@ final class BlueBoxAfterDarkView: ScreenSaverView {
         let s = ConfigureSheet { [weak self] settings in
             guard let self else { return }
             if self.isAnimating {
-                let size = self.isPreview ? CGSize(width: 640, height: 480) : (self.window?.screen?.frame.size ?? self.bounds.size)
-                SaverMachine.shared.show(screenPoints: size, settings: self.isPreview ? self.previewSettings(settings) : settings)
+                SaverMachine.shared.show(displays: self.displays(), settings: self.isPreview ? self.previewSettings(settings) : settings)
             }
         }
         sheet = s
