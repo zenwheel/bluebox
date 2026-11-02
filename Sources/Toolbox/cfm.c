@@ -1485,6 +1485,23 @@ static int library_named(const char *name, char *err, size_t errlen)
     char path[1024];
     if (app_dir[0] && find_library_file(app_dir, name, 2, path, sizeof path))
         return load_from_file(path, name, err, errlen);
+    /* The folders of the fragments loaded from other files: an After Dark
+     * 4 module (GetDiskFragment from its 68k stub) imports "adxpl510",
+     * the After Dark 4.0 Shared library its installer kept beside it. */
+    for (int i = nfrags - 1; i >= 0; i--) {
+        if (frags[i].native || !frags[i].path[0])
+            continue;
+        char dir[1024];
+        snprintf(dir, sizeof dir, "%s", frags[i].path);
+        char *slash = strrchr(dir, '/');
+        if (!slash)
+            continue;
+        *slash = 0;
+        if (!strcmp(dir, app_dir))
+            continue;
+        if (find_library_file(dir, name, 0, path, sizeof path))
+            return load_from_file(path, name, err, errlen);
+    }
     /* Then the Extensions folder, as the Code Fragment Manager searched it
      * (with folders in it: Microsoft's "MS Library Folder"). */
     char ext[1100];
