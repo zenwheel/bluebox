@@ -475,6 +475,29 @@ extension BlueBox {
         }
         #endif
 
+        #if canImport(ScreenSaver)
+        /// The Options sheet reads a module's controls with its kept
+        /// settings over them, stores a control's value there by its
+        /// resource, and offers its buttons (their 'bVal' IDs run its setup).
+        @Test func theOptionsSheetUsesTheSettings() {
+            let dir = tempDir()
+            machine_screensaver_reset()
+            machine_screensaver_set_settings_dir(dir.appendingPathComponent("Settings").path)
+            defer { machine_screensaver_set_settings_dir(nil) }
+            let path = writeResourceFile([
+                TestResource(type: "ADgm", id: 0, data: code68k([0x4E75])),
+                TestResource(type: "sVal", id: 1000, name: "Speed:", data: be16(60)),
+                TestResource(type: "bVal", id: 1002, name: "Choose File", data: be16(9)),
+            ], name: "Settings Module", in: dir)
+            var info = ModuleCatalog.info(path, config: ModuleCatalog.config(depth: 8, sound: false))
+            #expect(info.controls[0]?.value == 60 && info.controls[0]?.type == "sVal" && info.controls[0]?.id == 1000)
+            #expect(info.controls[2]?.kind == .button && info.controls[2]?.id == 1002 && info.controls[2]?.title == "Choose File")
+            #expect(machine_screensaver_store_resource(path, ModuleCatalog.typeCode("sVal"), 1000, be16(25), 2))
+            info = ModuleCatalog.info(path, config: ModuleCatalog.config(depth: 8, sound: false))
+            #expect(info.controls[0]?.value == 25)
+        }
+        #endif
+
         /// A module whose main is a C function (its arguments left on the
         /// stack, the answer in D0) runs too, and the VBL task sets each
         /// monitor's synchFlag to $FF, which a module waits for in DrawFrame.

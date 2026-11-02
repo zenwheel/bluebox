@@ -234,16 +234,34 @@ final class ConfigureSheet: NSObject {
             case .text:
                 if value > 0 && value <= c.items.count { row.append(label(c.items[value - 1])) } else { continue }
             case .button:
-                continue // a setup dialog of the module's own: not shown here
+                // The module's own setup (Choose File…, Edit…), run in a sheet.
+                title.stringValue = ""
+                let b = NSButton(title: c.title.isEmpty ? "Setup…" : c.title, target: self, action: #selector(setupPressed(_:)))
+                b.tag = c.id
+                row.append(b)
             }
             let r = NSStackView(views: row)
             r.orientation = .horizontal
             controlsStack.addArrangedSubview(r)
         }
-        if controlViews.isEmpty { controlsStack.addArrangedSubview(label("This module has no settings.")) }
+        if controlsStack.arrangedSubviews.isEmpty { controlsStack.addArrangedSubview(label("This module has no settings.")) }
         if let stack = window.contentView?.subviews.first {
             window.setContentSize(NSSize(width: 520, height: stack.fittingSize.height))
         }
+    }
+
+    private var setupSheet: SetupSheet?
+
+    @objc private func setupPressed(_ b: NSButton) {
+        guard let path = modulePopup.selectedItem?.representedObject as? String else { return }
+        let s = SetupSheet(module: path, title: b.title, button: b.tag, settings: settings) { [weak self] in
+            guard let self else { return }
+            self.setupSheet = nil
+            self.moduleChosen() // what the setup changed shows
+            self.onSave(self.settings) // the preview runs again
+        }
+        setupSheet = s
+        window.beginSheet(s.window)
     }
 
     @objc private func sliderMoved(_ s: NSSlider) {

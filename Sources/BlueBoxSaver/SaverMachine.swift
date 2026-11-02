@@ -95,6 +95,7 @@ final class SaverMachine: @unchecked Sendable {
         var width: Int, height: Int
         var monitors: [CGRect] = [] /* the displays in the Mac's screen (pixels, from its top left), main first */
         var settings: SaverSettings
+        var button: Int? /* setup: this button pressed first, as in After Dark's panel */
     }
 
     /// The displays in host points (AppKit's global coordinates), and
@@ -166,6 +167,72 @@ final class SaverMachine: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// A module's setup, as its button in After Dark's panel ran it: the
+    /// module is chosen and the button pressed on a classic 640 by 480
+    /// screen (the setup sheet shows it and takes the mouse and keys; a
+    /// file dialog is the host's open panel), then it runs until stopped,
+    /// when what it changed is kept with its settings.
+    func setup(module: String, button: Int, settings: SaverSettings) {
+        var s = settings
+        s.scale = 1
+        s.rotate = false
+        s.backdrop = false
+        var run = Run(module: module, width: 640, height: 480, settings: s)
+        run.button = button
+        SaverMachine.installFileHandler()
+        lock.lock()
+        wanted = run
+        finished = nil
+        if current != nil { wake() }
+        if thread == nil {
+            let t = Thread { [weak self] in self?.loop() }
+            t.name = "Blue Box"
+            t.stackSize = 8 << 20
+            thread = t
+            t.start()
+        }
+        lock.signal()
+        lock.unlock()
+    }
+
+    /// Standard File's dialogs become the host's open panel (a module's
+    /// Choose File… at its setup), run on the main thread while the
+    /// emulator waits.
+    private static var fileHandlerInstalled = false
+    static func installFileHandler() {
+        guard !fileHandlerInstalled else { return }
+        fileHandlerInstalled = true
+        machine_set_file_handler({ rqPtr, pathOut, pathSize, _ in
+            guard let rq = rqPtr?.pointee, let pathOut else { return false }
+            let prompt = withUnsafeBytes(of: rq.prompt) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+            let save = rq.save, folders = rq.folders
+            var chosen: String?
+            let ask = {
+                MainActor.assumeIsolated {
+                    let panel: NSSavePanel
+                    if save {
+                        panel = NSSavePanel()
+                    } else {
+                        let open = NSOpenPanel()
+                        open.canChooseFiles = !folders
+                        open.canChooseDirectories = folders
+                        open.allowsMultipleSelection = false
+                        panel = open
+                    }
+                    if !prompt.isEmpty { panel.message = prompt }
+                    if panel.runModal() == .OK, let url = panel.url { chosen = url.path }
+                }
+            }
+            if Thread.isMainThread { ask() } else { DispatchQueue.main.sync(execute: ask) }
+            guard let chosen else { return false }
+            let bytes = Array(chosen.utf8)
+            guard bytes.count < pathSize else { return false }
+            for (i, b) in bytes.enumerated() { pathOut[i] = CChar(bitPattern: b) }
+            pathOut[bytes.count] = 0
+            return true
+        }, nil)
+    }
+
     /// Stop the module (its Close runs) and leave the machine idle.
     func stop() {
         lock.lock()
@@ -233,6 +300,7 @@ final class SaverMachine: @unchecked Sendable {
         machine_screensaver_set_rotation(Double(s.rotateMinutes) * 60, s.rotateRandom)
         let values = s.controls[run.module] ?? [] // the first version's; the settings file has them now
         for (i, v) in values.enumerated() where i < 4 && v >= 0 { _ = machine_screensaver_set_control(Int32(i), Int32(v)) }
+        if let b = run.button { _ = machine_screensaver_press_button(Int32(b)) }
         if s.backdrop, let (rgba, w, h) = desktopPicture() {
             rgba.withUnsafeBufferPointer { machine_screensaver_set_backdrop($0.baseAddress, Int32(w), Int32(h)) }
         } else {
