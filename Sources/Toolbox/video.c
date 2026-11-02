@@ -64,6 +64,10 @@ static uint8_t direct_lut[3][256];
  * table (or black, with the display off); identity when nothing changes
  * them. */
 static uint8_t out_lut[3][256];
+/* A fade (DrawSprocket's) over all of that: the percent of the colours
+ * shown, the rest the zero-intensity colour. */
+static int fade_percent = 100;
+static uint8_t fade_zero[3];
 static bool out_identity = true, out_dirty = true;
 
 static int depth_of_mode(int mode)
@@ -176,11 +180,23 @@ const uint8_t (*video_output_lut(void))[256]
             for (int v = 0; v < 256; v++) {
                 int in = depth == 32 ? direct_lut[k][v] : depth == 16 ? direct_lut[k][v >> 3] : v;
                 uint8_t o = off ? 0 : gamma_table ? gamma_of(k, in) : (uint8_t)in;
+                if (fade_percent != 100 && !off)
+                    o = (uint8_t)((o * fade_percent + fade_zero[k] * (100 - fade_percent)) / 100);
                 out_lut[k][v] = o;
                 out_identity &= o == v;
             }
     }
     return out_identity ? NULL : (const uint8_t (*)[256])out_lut;
+}
+
+/* The colours shown faded to a percent of themselves (0-100), towards
+ * zero (an RGBColor; nil is black). */
+void video_fade(int percent, gaddr zero)
+{
+    fade_percent = percent < 0 ? 0 : percent > 100 ? 100 : percent;
+    for (int k = 0; k < 3; k++)
+        fade_zero[k] = zero ? (uint8_t)(rd16(zero + (gaddr)k * 2) >> 8) : 0;
+    out_dirty = true;
 }
 
 /* The screen changed depth: the direct colour table starts linear again. */
@@ -196,6 +212,7 @@ void video_reset(void)
     preferred_depth_mode = 0;
     power_state = kAVPowerOn;
     clut_behavior = 0;
+    fade_percent = 100;
     gamma_table = tb_NewPtr(MAX_GAMMA, true, true);
     set_linear_gamma();
     reset_direct_lut();

@@ -730,6 +730,7 @@ void video_mode_changed(void); /* the screen's depth changed */
 bool video_gray(void);         /* colours luminance-mapped (cscSetGray) */
 int16_t video_set_gamma(gaddr table); /* a 'gama' table, or nil for linear */
 gaddr video_copy_gamma(void);         /* a new handle holding the driver's table */
+void video_fade(int percent, gaddr zero); /* DrawSprocket's gamma fades */
 /* How each component is shown (the gamma table, the direct modes' colour
  * table, the display off), or NULL when as it is. */
 const uint8_t (*video_output_lut(void))[256];

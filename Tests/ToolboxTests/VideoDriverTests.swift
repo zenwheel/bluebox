@@ -1,4 +1,5 @@
 import CCore
+import CPUPPC
 import Testing
 import Toolbox
 
@@ -244,6 +245,29 @@ extension BlueBox {
             wr32(power, 3)
             #expect(call(25, power) == 0)
             #expect(pixel(0, 0) == [255, 255, 255])
+        }
+
+        /// DrawSprocket's gamma fades dim what the screen shows towards the
+        /// zero-intensity colour; fading in brings it back.
+        @Test func drawSprocketFades() {
+            setUp(depth: 32)
+            func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+                for (i, a) in args.enumerated() {
+                    withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+                }
+                cfm_export_fn(name)!(&g_ppc)
+                return g_ppc.gpr.3
+            }
+            let base = rd32(UInt32(LM_ScrnBase))
+            wr32(base, 0x00C8_6432)
+            #expect(call("DSpContext_FadeGammaOut", [0, 0]) == 0)
+            #expect(pixel(0, 0) == [0, 0, 0])
+            let white = tb_NewPtr(6, false, true)
+            gmemset(white, 0xFF, 6)
+            #expect(call("DSpContext_FadeGamma", [0, 50, white]) == 0)
+            #expect(pixel(0, 0) == [227, 177, 152])
+            #expect(call("DSpContext_FadeGammaIn", [0, 0]) == 0)
+            #expect(pixel(0, 0) == [200, 100, 50])
         }
 
         /// The Display Manager's gamma is the driver's.
