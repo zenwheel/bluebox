@@ -1885,6 +1885,24 @@ int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y)
     return (type & itemDisable) || ControlRecord_contrlHilite(rd32(h)) == 255 ? 1 : 2;
 }
 
+/* For the menu walker: the first edit text item shown with nothing typed
+ * in it (a name a program asks for at its start), or 0; *active says
+ * whether typing goes into it now (else Tab moves on to it). */
+int dialog_empty_field(gaddr d, bool *active)
+{
+    int n = item_count(d);
+    for (int i = 1; i <= n; i++) {
+        if ((item_type(d, i) & 0x7F) != editText || item_rect(d, i).left >= 8192)
+            continue;
+        gaddr h = item_handle(d, i);
+        if (h && rd32(h) && tb_GetHandleSize(h) > 0)
+            continue;
+        *active = edit_te(d) && edit_item(d) == i;
+        return i;
+    }
+    return 0;
+}
+
 /* For the screen walk, as dialog_button: whether item n is something a
  * click may act on besides a push button (a control, a picture, an icon, a
  * user item: buttons of the program's own drawing), 2 when shown and

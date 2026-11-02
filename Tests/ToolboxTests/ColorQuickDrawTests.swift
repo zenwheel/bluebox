@@ -111,6 +111,51 @@ extension BlueBox {
             #expect(mm_check_zone(zone))
         }
 
+        /// The world's pixels can need the heap purged and compacted, which
+        /// moves the pixmap NewGWorld has just made: it is described where it
+        /// is afterwards, and the heap stays whole (PixelToy's full-screen
+        /// world wrote where its pixmap had been).
+        @Test func worldWhosePixelsMoveItsPixMap() {
+            launchTestApp()
+            _ = initToolbox()
+            let zone = rd32(UInt32(LM_ApplZone))
+            let gw = tb_NewPtr(4, false, true), bounds = rect(0, 0, 219, 300)
+            // The heap full (and grown as far as it goes), then a purgeable
+            // block in the middle with a small hole just after it for the
+            // port's handles: the pixels purge the block and compact the
+            // heap, moving the pixmap.
+            let low = tb_NewPtr(1024, false, false) // room below for the port itself
+            var fill = [UInt32]()
+            while fill.count < 100_000 {
+                let h = tb_NewHandle(16 * 1024, false, false)
+                if h == 0 { break }
+                fill.append(h)
+            }
+            #expect(fill.count > 200)
+            // 17 blocks one after another (no master pointers between).
+            let step = rd32(fill[fill.count / 2 + 1]) &- rd32(fill[fill.count / 2])
+            let k = (0..<(fill.count - 17)).first { i in
+                (0..<17).allSatisfy { rd32(fill[i + $0 + 1]) &- rd32(fill[i + $0]) == step }
+            } ?? 0
+            for h in fill[k..<(k + 17)] { tb_DisposeHandle(h) }
+            fill.removeSubrange(k..<(k + 17))
+            let purgeable = tb_NewHandle(256 * 1024 - 64, false, false)
+            #expect(purgeable != 0)
+            tb_HPurge(purgeable)
+            tb_DisposePtr(low)
+            #expect(tb_NewGWorld(gw, 32, bounds, 0, 0, 0) == 0)
+            #expect(mm_check_zone(zone))
+            let pmh = tb_GetGWorldPixMap(rd32(gw)), pm = rd32(pmh)
+            #expect(rd32(purgeable) == 0) // purged for the pixels
+            #expect(rd16(pm + 32) == 32) // pixelSize
+            #expect(rd16(pm + 4) & 0x3FFF >= 1200) // rowBytes
+            #expect(rd32(pm + 42) != 0) // pmTable
+            #expect(tb_LockPixels(pmh) != 0 && tb_GetPixBaseAddr(pmh) != 0)
+            tb_DisposeGWorld(rd32(gw))
+            #expect(mm_check_zone(zone))
+            for h in fill { tb_DisposeHandle(h) }
+        }
+
         /// At depth 0 the rectangle is global, only to choose the screen: the
         /// world starts at 0,0 (Squark draws at 0,0 into a world made from
         /// its window's global rectangle).  A given depth keeps the rectangle.

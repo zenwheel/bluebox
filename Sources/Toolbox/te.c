@@ -892,6 +892,22 @@ static void set_font_metrics(gaddr teh)
     tb_DisposePtr(info);
 }
 
+/* The records made or activated lately, to find where typing goes in a
+ * window (the menu walker fills in a field left empty in a program's own
+ * dialog). */
+enum { NRECENT = 64 };
+static gaddr recent[NRECENT];
+static int next_recent;
+
+static void note_recent(gaddr teh)
+{
+    for (int i = 0; i < NRECENT; i++)
+        if (recent[i] == teh)
+            return;
+    recent[next_recent] = teh;
+    next_recent = (next_recent + 1) % NRECENT;
+}
+
 gaddr tb_TENew(gaddr dst, gaddr view)
 {
     gaddr teh = tb_NewHandle((int32_t)(TERec_lineStarts_off + MAX_LINES_GROW * 2), false, true);
@@ -909,6 +925,7 @@ gaddr tb_TENew(gaddr dst, gaddr view)
     wr8(t + TERec_caretState_off, 0);
     set_font_metrics(teh);
     tb_TECalText(teh);
+    note_recent(teh);
     return teh;
 }
 
@@ -954,6 +971,9 @@ void tb_TEDispose(gaddr teh)
 {
     if (!te_ok(teh))
         return;
+    for (int i = 0; i < NRECENT; i++)
+        if (recent[i] == teh)
+            recent[i] = 0;
     tb_TEAutoView(0, teh);
     if (styled(teh)) {
         gaddr sh = rd32(te(teh) + TERec_txFont_off), sr = rd32(sh);
@@ -1033,10 +1053,29 @@ void tb_TESetSelect(int32_t start, int32_t stop, gaddr teh)
     leave(teh, s);
 }
 
+/* The record typing goes into in a port: the active one, else (none
+ * active: its program activates none again after a dialog in front,
+ * MediaPresenter 1.0, or makes its fields anew) an empty one, the latest. */
+gaddr te_field_in(gaddr port)
+{
+    gaddr empty = 0;
+    for (int k = 1; port && k <= NRECENT; k++) {
+        gaddr teh = recent[(next_recent - k + NRECENT) % NRECENT];
+        if (!te_ok(teh) || TERec_inPort(te(teh)) != port)
+            continue;
+        if (te16(teh, TERec_active_off))
+            return teh;
+        if (!empty && text_len(teh) == 0)
+            empty = teh;
+    }
+    return empty;
+}
+
 void tb_TEActivate(gaddr teh)
 {
     if (!te_ok(teh))
         return;
+    note_recent(teh);
     if (te16(teh, TERec_active_off))
         return;
     set16(teh, TERec_active_off, 1);
