@@ -402,7 +402,7 @@ static bool system_code_store(void)
     return z && pc >= z && pc < rd32(z);
 }
 
-static void overlay_written(gaddr base, uint32_t off)
+static void overlay_written(gaddr base, uint32_t off, uint32_t len)
 {
     uint32_t rb = qd_screen_row_bytes();
     int w, h;
@@ -421,12 +421,12 @@ static void overlay_written(gaddr base, uint32_t off)
     }
     if (off < ov_size) {
         int row = (int)(off / rb), col = (int)(off % rb);
-        for (uint32_t k = off; k < off + 4 && k < ov_size; k++)
+        for (uint32_t k = off; k < off + len && k < ov_size; k++)
             if (!ov_have[k]) {
                 ov_have[k] = 1;
                 ov_orig[k] = rd8(base + k); /* the store is still to come */
             }
-        int last = col + 3 < (int)rb ? col + 3 : (int)rb - 1;
+        int last = col + (int)len - 1 < (int)rb ? col + (int)len - 1 : (int)rb - 1;
         if (!ov_on) {
             ov_on = true;
             ov_top = ov_bottom = row;
@@ -488,7 +488,7 @@ void machine_overlay_rgba(int x, int y, int w, int h, uint8_t *out)
 }
 
 /* A store the program made into the screen (mem.h's watch). */
-static void screen_written(gaddr a)
+static void screen_written(gaddr a, uint32_t len)
 {
     gaddr base = rd32(LM_ScrnBase);
     /* The compact Macs' two pages are watched together; only the one the
@@ -504,7 +504,7 @@ static void screen_written(gaddr a)
     }
     uint32_t off = a - base, rb = qd_screen_row_bytes();
     if (system_code_store()) {
-        overlay_written(base, off);
+        overlay_written(base, off, len);
         return;
     }
     int y = (int)(off / rb), x = (int)((off % rb) * 8 / (uint32_t)qd_screen_depth());
@@ -564,11 +564,11 @@ void display_note_screen_draw(qrect r)
  * heap between two Toolbox calls (the screen is not watched meanwhile). */
 static gaddr debug_watch_lo, debug_watch_len;
 
-static void debug_watch_written(gaddr a)
+static void debug_watch_written(gaddr a, uint32_t len)
 {
     static unsigned n;
     if (n++ < 200)
-        log_printf("watch: store to %08X at 68k pc %08X, PowerPC pc %08X lr %08X\n", a, g_cpu ? g_cpu->op_pc : 0,
+        log_printf("watch: %u-byte store to %08X at 68k pc %08X, PowerPC pc %08X lr %08X\n", len, a, g_cpu ? g_cpu->op_pc : 0,
                    g_ppc.pc, g_ppc.lr);
 }
 

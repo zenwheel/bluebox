@@ -311,8 +311,8 @@ void qd_screen_set_display_base(gaddr base)
         return;
     display_base = base;
     if (g_watch_fn && g_watch_len) {
-        g_watch_fn(base);
-        g_watch_fn(base + screen_row_bytes * (uint32_t)g_screen_height - 1);
+        g_watch_fn(base, 1);
+        g_watch_fn(base + screen_row_bytes * (uint32_t)g_screen_height - 1, 1);
     }
 }
 

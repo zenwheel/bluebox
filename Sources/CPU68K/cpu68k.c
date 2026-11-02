@@ -156,7 +156,7 @@ static inline void mw8(cpu68k *c, uint32_t a, uint8_t v)
 {
     a &= c->addr_mask;
     if (hw_mapped(a)) { g_hw_write(a, 1, v); return; }
-    watch_store(a);
+    watch_store(a, 1);
     OWN_STORE(c, wr8(a, v));
 }
 static inline void mw16(cpu68k *c, uint32_t a, uint16_t v)
@@ -165,7 +165,7 @@ static inline void mw16(cpu68k *c, uint32_t a, uint16_t v)
         address_error(c, a, false, false);
     a &= c->addr_mask;
     if (hw_mapped(a)) { g_hw_write(a, 2, v); return; }
-    watch_store(a);
+    watch_store(a, 2);
     OWN_STORE(c, wr16(a, v));
 }
 static inline void mw32(cpu68k *c, uint32_t a, uint32_t v)
@@ -174,7 +174,7 @@ static inline void mw32(cpu68k *c, uint32_t a, uint32_t v)
         address_error(c, a, false, false);
     a &= c->addr_mask;
     if (hw_mapped(a)) { g_hw_write(a, 4, v); return; }
-    watch_store(a);
+    watch_store(a, 4);
     OWN_STORE(c, wr32(a, v));
 }
 

@@ -96,17 +96,17 @@ static int max_insn = MAX_INSN; /* 1 for single-instruction tests */
 
 static void st8(uint32_t a, uint32_t v)
 {
-    watch_store(a);
+    watch_store(a, 1);
     wr8(a, (uint8_t)v);
 }
 static void st16(uint32_t a, uint32_t v)
 {
-    watch_store(a);
+    watch_store(a, 2);
     wr16(a, (uint16_t)v);
 }
 static void st32(uint32_t a, uint32_t v)
 {
-    watch_store(a);
+    watch_store(a, 4);
     wr32(a, v);
 }
 static void pst8(uint32_t a, uint32_t v) { wr8(a, (uint8_t)v); }

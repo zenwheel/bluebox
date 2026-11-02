@@ -101,14 +101,14 @@ static inline uint8_t *gptr(gaddr a) { return g_mem + a; }
 
 /* A range the CPUs' own stores are watched in (the screen, for writes a
  * program makes to it directly rather than through QuickDraw): a store
- * there calls g_watch_fn.  The Toolbox's own writes aren't watched. */
+ * there calls g_watch_fn with its address and size.  The Toolbox's own writes aren't watched. */
 extern gaddr g_watch_lo, g_watch_len;
-extern void (*g_watch_fn)(gaddr a);
-static inline void watch_store(gaddr a)
+extern void (*g_watch_fn)(gaddr a, uint32_t len);
+static inline void watch_store(gaddr a, uint32_t len)
 {
     a = mem_strip(a); /* in 24-bit mode, whatever the top byte says */
     if (a - g_watch_lo < g_watch_len)
-        g_watch_fn(a);
+        g_watch_fn(a, len);
 }
 
 /* Memory-mapped devices (the VIA, SCC, IWM ... of a classic Mac, hw68k.c):

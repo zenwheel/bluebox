@@ -12,7 +12,7 @@ gaddr g_screen_size = 0u - GA_SCREEN_32, g_low_top = 0x01000000u;
 gaddr g_mem_top = GA_ROM_32, g_sysheap_end = 0x00400000u, g_appheap = 0x00400000u, g_stack_24 = 0x00100000u;
 int g_mem_layout = MEM_LAYOUT_32;
 gaddr g_watch_lo, g_watch_len;
-void (*g_watch_fn)(gaddr a);
+void (*g_watch_fn)(gaddr a, uint32_t len);
 
 uint8_t g_hw_map[4096];
 bool g_hw_jit_off;
