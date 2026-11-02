@@ -259,6 +259,10 @@ uint32_t machine_windows_version(void);
 int machine_windows(machine_window *out, int max);
 /* The window's shape: width*height bytes, 1 inside.  False if it changed. */
 bool machine_window_mask(uint32_t id, uint8_t *out, int width, int height);
+/* What of the screen from left, top is not desktop (width*height bytes, 1
+ * to show, 0 where the Window Manager's desktop is still as it painted it,
+ * outside every window).  False if no desktop was painted. */
+bool machine_desktop_mask(int left, int top, int width, int height, uint8_t *out);
 
 typedef struct {
     char text[64];               /* MacRoman */

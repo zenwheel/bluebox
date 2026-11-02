@@ -999,6 +999,7 @@ static void paint_desk(const hrgn *area)
         gget(pat, LM_DeskPattern, 8);
         qd_fill_region(wp, &r, pat, patCopy);
     }
+    display_desk_painted(&r);
     hrgn_free(&r);
     tb_SetPort(saved);
 }

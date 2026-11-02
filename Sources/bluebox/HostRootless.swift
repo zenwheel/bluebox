@@ -92,8 +92,12 @@ final class MacWindow: NSWindow {
 final class MacWindowView: NSView, MacScreenView {
     var macBounds = (top: Int16(0), left: Int16(0), bottom: Int16(0), right: Int16(0))
     var mask = [UInt8]()
+    /// The whole screen of a program in the background: its desktop left
+    /// out, so only its windows and its own drawing show over the host's.
+    var clearDesktop = false
     var lastHash = 0
     private var rgba = [UInt32]()
+    private var deskMask = [UInt8]()
 
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -141,11 +145,18 @@ final class MacWindowView: NSView, MacScreenView {
         }
         var hasher = Hasher()
         rgba.withUnsafeBytes { hasher.combine(bytes: $0) }
+        hasher.combine(clearDesktop)
         let hash = hasher.finalize()
         if !force && hash == lastHash { return }
         lastHash = hash
         // Transparent outside the window's shape.
         for k in 0..<(w * h) where mask[k] == 0 { rgba[k] = 0 }
+        if clearDesktop {
+            if deskMask.count != w * h { deskMask = [UInt8](repeating: 1, count: w * h) }
+            if machine_desktop_mask(Int32(left), Int32(top), Int32(w), Int32(h), &deskMask) {
+                for k in 0..<(w * h) where deskMask[k] == 0 { rgba[k] = 0 }
+            }
+        }
         layer?.contents = rgbaImage(rgba, width: w, height: h)
     }
 
@@ -396,7 +407,10 @@ final class TransientView: NSView {
         }
         syncWindows()
         for w in windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
-        (screenWindow?.contentView as? MacWindowView)?.refresh(force: false)
+        if let view = screenWindow?.contentView as? MacWindowView {
+            view.clearDesktop = !NSApp.isActive
+            view.refresh(force: false)
+        }
         syncTransient()
         syncOverlay()
         syncMenus()
@@ -555,6 +569,8 @@ final class TransientView: NSView {
         window.hasShadow = false
         window.isReleasedWhenClosed = false
         window.acceptsMouseMovedEvents = true
+        window.isOpaque = false /* in the background, its desktop is left out */
+        window.backgroundColor = .clear
         let view = MacWindowView(frame: NSRect(origin: .zero, size: frame.size))
         view.macBounds = (0, 0, Int16(height), Int16(width))
         view.mask = [UInt8](repeating: 1, count: width * height)

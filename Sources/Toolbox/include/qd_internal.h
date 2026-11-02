@@ -175,6 +175,8 @@ static inline uint32_t apply_mode(int mode, int s, uint32_t dst, uint32_t fg, ui
 
 /* Clip intervals of a region on row y: returns the band's x list (or NULL). */
 const int16_t *hrgn_row(const hrgn *r, int y, int *n);
+/* The Window Manager painted the desktop there (display.c keeps it). */
+void display_desk_painted(const hrgn *area);
 /* Draw with this foreground colour instead of the port's (NULL to stop);
  * for the system's own colour drawing in old-style ports. */
 void qd_set_fg_override(const uint16_t *rgb);

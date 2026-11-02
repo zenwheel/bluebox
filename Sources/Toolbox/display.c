@@ -375,6 +375,95 @@ void display_want_screen(const char *why)
 const char *machine_screen_mode_wanted(void) { return screen_reason; }
 
 /* ---------------------------------------------------------------------- */
+/* The desktop as the Window Manager painted it, for a host that shows the
+ * whole screen: while the program is in the background (a game that, sent
+ * there, hides its play area and leaves the desktop and a small window of
+ * its own, as Maelstrom does), what is still desktop is left out and the
+ * host's desktop shows instead.  Each byte painted keeps the value painted;
+ * a byte still holding it, outside every window, is desktop. */
+
+static pthread_mutex_t desk_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint8_t *desk_val, *desk_have; /* per byte of the screen */
+static uint32_t desk_size, desk_rb;
+static gaddr desk_base;
+
+void display_desk_painted(const hrgn *area)
+{
+    gaddr base = rd32(LM_ScrnBase);
+    uint32_t rb = qd_screen_row_bytes();
+    int w, h, depth = qd_screen_depth();
+    machine_screen_size(&w, &h);
+    uint32_t size = rb * (uint32_t)h;
+    pthread_mutex_lock(&desk_lock);
+    if (size != desk_size || base != desk_base || rb != desk_rb) {
+        free(desk_val);
+        free(desk_have);
+        desk_val = malloc(size);
+        desk_have = calloc(size, 1);
+        desk_size = desk_val && desk_have ? size : 0;
+        desk_base = base;
+        desk_rb = rb;
+    }
+    qrect b = hrgn_bbox(area);
+    for (int y = b.top > 0 ? b.top : 0; desk_size && y < b.bottom && y < h; y++) {
+        int n;
+        const int16_t *runs = hrgn_row(area, y, &n);
+        for (int i = 0; i + 1 < n; i += 2) {
+            int x0 = runs[i] > 0 ? runs[i] : 0, x1 = runs[i + 1] < w ? runs[i + 1] : w;
+            if (x1 <= x0)
+                continue;
+            uint32_t k0 = (uint32_t)y * rb + (uint32_t)(x0 * depth / 8);
+            uint32_t k1 = (uint32_t)y * rb + (uint32_t)((x1 * depth + 7) / 8);
+            gget(desk_val + k0, base + k0, k1 - k0);
+            memset(desk_have + k0, 1, k1 - k0);
+        }
+    }
+    pthread_mutex_unlock(&desk_lock);
+}
+
+/* What of the screen is not desktop (width*height bytes, 1 to show), for
+ * the area from left, top.  False if the desktop was never painted. */
+bool machine_desktop_mask(int left, int top, int width, int height, uint8_t *out)
+{
+    gaddr base = rd32(LM_ScrnBase);
+    int depth = qd_screen_depth();
+    memset(out, 1, (size_t)width * (size_t)height);
+    pthread_mutex_lock(&desk_lock);
+    bool ok = desk_size && base == desk_base && desk_rb == qd_screen_row_bytes();
+    for (int r = 0; ok && r < height; r++)
+        for (int c = 0; c < width; c++) {
+            int x = left + c, y = top + r;
+            uint32_t k0 = (uint32_t)y * desk_rb + (uint32_t)(x * depth / 8);
+            uint32_t k1 = (uint32_t)y * desk_rb + (uint32_t)(((x + 1) * depth + 7) / 8);
+            if (x < 0 || y < 0 || k1 > desk_size)
+                continue;
+            bool desk = true;
+            for (uint32_t k = k0; k < k1 && desk; k++)
+                desk = desk_have[k] && rd8(base + k) == desk_val[k];
+            if (desk)
+                out[(size_t)r * (size_t)width + (size_t)c] = 0;
+        }
+    pthread_mutex_unlock(&desk_lock);
+    if (!ok)
+        return false;
+    /* The windows are the program's, whatever their pixels. */
+    pthread_mutex_lock(&lock);
+    for (int i = 0; i < nwins; i++) {
+        qrect wb = wins[i].bounds;
+        int bw = wb.right - wb.left;
+        for (int y = wb.top; y < wb.bottom; y++)
+            for (int x = wb.left; x < wb.right; x++) {
+                int c = x - left, r = y - top;
+                if (c >= 0 && r >= 0 && c < width && r < height && wins[i].mask &&
+                    wins[i].mask[(size_t)(y - wb.top) * (size_t)bw + (size_t)(x - wb.left)])
+                    out[(size_t)r * (size_t)width + (size_t)c] = 1;
+            }
+    }
+    pthread_mutex_unlock(&lock);
+    return true;
+}
+
+/* ---------------------------------------------------------------------- */
 /* Drawing on the desktop by the system's own code: an INIT's or a desk
  * accessory's resident code in the system heap (the Talking Moose, which
  * draws itself on the screen with stores of its own while it speaks).
