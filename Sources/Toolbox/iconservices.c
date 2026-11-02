@@ -365,12 +365,12 @@ static const struct {
     { "hdsk", -3995 }, { "trsh", -3993 }, { "ftrh", -3984 }, { "desk", -3992 }, { "macs", -3983 },
     { "amnu", -3982 }, { "strt", -3981 }, { "ownd", -3980 }, { "drop", -3979 }, { "mntd", -3978 },
     { "shfl", -3977 }, { "ctrl", -3976 }, { "prnt", -3975 }, { "prff", -3974 }, { "extn", -3973 },
-    { "font", -3968 },
+    { "font", -3968 }, { "dfil", -3991 }, { "suit", -3970 }, { "FFIL", -3970 }, { "DFIL", -3970 },
     /* No icons of their own here: like the nearest that is. */
-    { "APPC", -3996 }, { "APPD", -3996 }, { "appe", -3996 }, { "cdev", -3996 }, { "dfil", -3996 },
+    { "APPC", -3996 }, { "APPD", -3996 }, { "appe", -3996 }, { "cdev", -3996 },
     { "cddr", -3995 }, { "ramd", -3995 }, { "srvr", -3995 }, { "shrd", -3995 },
     { "INIT", -4000 }, { "pref", -4000 }, { "sdoc", -4000 }, { "edtf", -4000 }, { "qery", -4000 },
-    { "ffil", -4000 }, { "tfil", -4000 }, { "FFIL", -4000 }, { "suit", -4000 }, { "shlb", -4000 },
+    { "ffil", -4000 }, { "tfil", -4000 }, { "shlb", -4000 },
     { "thng", -4000 }, { "clpt", -4000 }, { "clpp", -4000 }, { "pref", -4000 }, { "dbfl", -4000 },
     { "sfil", -4000 }, { "fdrp", -3999 }, { "pubf", -3999 },
 };

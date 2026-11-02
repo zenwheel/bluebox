@@ -987,6 +987,19 @@ void machine_advance_ticks(void)
         wr32(LM_Time, secs);
 }
 
+/* One of our System file's standard resources (Generators/sysres.py),
+ * for the host: the generic icons of files without their own. */
+const uint8_t *machine_system_resource(uint32_t type, int16_t id, uint32_t *len)
+{
+    for (unsigned i = 0; i < sysres_count; i++)
+        if (sysres[i].type == type && sysres[i].id == id) {
+            *len = sysres[i].len;
+            return sysres[i].data;
+        }
+    *len = 0;
+    return NULL;
+}
+
 /* SetDateTime: Time from now on counts from secs. */
 void machine_set_time(uint32_t secs)
 {

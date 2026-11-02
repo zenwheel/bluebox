@@ -267,11 +267,11 @@ DIALOGS = {
 # Finder icon families (ICN#/ics# with icl4/icl8/ics4/ics8), our own designs.
 # Drawn on a small canvas; letters are colours:
 #   k black, w white, l light grey, m mid grey, d dark grey,
-#   b folder blue (light), B folder blue (dark)
+#   b folder blue (light), B folder blue (dark), n suitcase brown
 
 COLOURS = {  # letter: (8-bit standard clut index, 4-bit index, 1-bit)
     "k": (255, 15, 1), "w": (0, 0, 0), "l": (246, 12, 0), "m": (248, 13, 0), "d": (251, 14, 1),
-    "b": (42, 12, 0), "B": (84, 6, 0),
+    "b": (42, 12, 0), "B": (84, 6, 0), "n": (94, 11, 0),
 }
 
 
@@ -446,10 +446,52 @@ def system_folder(n):
     return c
 
 
+def desk_accessory(n):
+    """A small window with a striped title bar and a few keys: an accessory."""
+    c = Canvas(n)
+    if n == 32:
+        c.frame(4, 4, 28, 28, "k", "w")
+        for y in (6, 8):                     # title bar
+            c.hline(5, 27, y, "k")
+        c.hline(4, 28, 10, "k")
+        c.frame(8, 5, 13, 10, "k", "w")      # close box
+        for row in range(3):
+            for col in range(3):
+                c.frame(8 + col * 6, 13 + row * 5, 12 + col * 6, 17 + row * 5, "k", "l")
+    else:
+        c.frame(2, 2, 14, 14, "k", "w")
+        c.hline(3, 13, 4, "k")
+        c.hline(2, 14, 6, "k")
+        for x in (4, 7, 10):
+            for y in (8, 11):
+                c.fill(x, y, x + 2, y + 2, "d")
+    return c
+
+
+def suitcase(n):
+    """A suitcase, for files of fonts or desk accessories."""
+    c = Canvas(n)
+    if n == 32:
+        c.frame(11, 5, 21, 11, "k")          # handle
+        c.frame(12, 6, 20, 11, "k")
+        c.frame(2, 10, 30, 29, "k", "n")     # body
+        c.hline(3, 29, 11, "w")
+        for x in (8, 23):                    # straps
+            c.vline(x, 10, 29, "k")
+        c.frame(14, 12, 18, 15, "k", "l")    # catch
+    else:
+        c.frame(5, 2, 11, 6, "k")
+        c.frame(1, 5, 15, 15, "k", "n")
+        for x in (4, 11):
+            c.vline(x, 5, 15, "k")
+    return c
+
+
 ICON_FAMILIES = {
     -4000: document, -3999: folder, -3998: floppy, -3997: lambda n: folder(n, open_=True),
     -3996: application, -3995: hard_disk, -3993: trash, -3992: desktop,
     -3984: lambda n: trash(n, True), -3983: system_folder,
+    -3991: desk_accessory, -3970: suitcase,
 }
 # The special folders (Apple Menu Items, Startup Items, Control Panels,
 # Preferences, Extensions, Fonts …) look like plain folders here.

@@ -8,6 +8,7 @@
 import CCore
 import Foundation
 import ForkStore
+import Toolbox
 
 /// A square RGBA image (premultiplication not needed: alpha is 0 or 255).
 public struct IconImage: Sendable {
@@ -49,6 +50,16 @@ public struct ResourceFork {
                 }
             }
             table[e.type, default: [:]][e.id] = bytes
+        }
+    }
+
+    /// The System file's icon family with this ID (its generic icons).
+    public init(systemIcons id: Int16) {
+        for type in ["ICN#", "icl4", "icl8", "ics#", "ics4", "ics8"] {
+            var len: UInt32 = 0
+            if let p = machine_system_resource(fourcc(type), id, &len) {
+                table[fourcc(type), default: [:]][id] = Array(UnsafeBufferPointer(start: p, count: Int(len)))
+            }
         }
     }
 
@@ -206,12 +217,138 @@ public func scaled(_ img: IconImage, to size: Int) -> IconImage {
     return out
 }
 
-/// The application's Finder bundle, read from its AppleDouble or MacBinary file.
+/// An image's size changed: blown up by whole pixels (icons are pixel
+/// art), made smaller by averaging, so thin lines go grey, not missing.
+public func resampled(_ img: IconImage, to size: Int) -> IconImage {
+    guard size < img.size else { return scaled(img, to: size) }
+    var out = IconImage(size: size, rgba: [UInt8](repeating: 0, count: size * size * 4))
+    for y in 0..<size {
+        for x in 0..<size {
+            var sum = [0, 0, 0, 0], n = 0
+            for sy in y * img.size / size..<max((y + 1) * img.size / size, y * img.size / size + 1) {
+                for sx in x * img.size / size..<max((x + 1) * img.size / size, x * img.size / size + 1) {
+                    let s = (sy * img.size + sx) * 4
+                    let a = Int(img.rgba[s + 3])
+                    for c in 0..<3 { sum[c] += Int(img.rgba[s + c]) * a }
+                    sum[3] += a
+                    n += 1
+                }
+            }
+            let d = (y * size + x) * 4
+            if sum[3] > 0 {
+                for c in 0..<3 { out.rgba[d + c] = UInt8(sum[c] / sum[3]) }
+            }
+            out.rgba[d + 3] = UInt8(sum[3] / n)
+        }
+    }
+    return out
+}
+
+/// The icon to show at a size: one drawn for it, else the largest resampled.
+public func icon(_ icons: [IconImage], at size: Int) -> IconImage? {
+    if let exact = icons.first(where: { $0.size == size }) { return exact }
+    guard let large = icons.max(by: { $0.size < $1.size }) else { return nil }
+    return resampled(large, to: size)
+}
+
+private enum CustomIcon {
+    static let id: Int16 = -16455 // kCustomIconResource
+    static let flag: UInt16 = 0x0400 // kHasCustomIcon
+}
+
+/// Desk accessories that draw their own picture from a bitmap in their
+/// code, by name: where it is in the DRVR (checked by the DRVR's size),
+/// its row bytes and rows, and the part of it to show.
+private let deskAccessoryPictures: [String: (drvrSize: Int, offset: Int, rowBytes: Int, rows: Int,
+                                              crop: (x: Int, y: Int, width: Int, height: Int))] = [
+    // The Moose in its box, mouth shut (1.21 and EDUCORP's New Talking Moose!).
+    "Talking Moose": (11656, 0x2756, 10, 58, (1, 6, 75, 46)),
+]
+
+/// A desk accessory's own picture, in a square, its box drawn round it.
+func deskAccessoryPicture(name: String, drvr: [UInt8]) -> IconImage? {
+    guard let p = deskAccessoryPictures[name], drvr.count == p.drvrSize,
+          p.offset + p.rowBytes * p.rows <= drvr.count else { return nil }
+    let c = p.crop
+    let side = max(c.width, c.height) + 2
+    var img = IconImage(size: side, rgba: [UInt8](repeating: 0, count: side * side * 4))
+    let left = (side - c.width) / 2, top = (side - c.height) / 2
+    for y in -1...c.height {
+        for x in -1...c.width {
+            var black = y == -1 || y == c.height || x == -1 || x == c.width
+            if !black {
+                let byte = drvr[p.offset + (c.y + y) * p.rowBytes + (c.x + x) / 8]
+                black = byte & (0x80 >> UInt8((c.x + x) % 8)) != 0
+            }
+            let d = ((top + y) * side + left + x) * 4
+            let v: UInt8 = black ? 0 : 255
+            img.rgba[d] = v
+            img.rgba[d + 1] = v
+            img.rgba[d + 2] = v
+            img.rgba[d + 3] = 255
+        }
+    }
+    return img
+}
+
+/// The icons of a file with no bundle of its own, as the Finder showed it:
+/// its custom icon, else a desk accessory's own (resources its DRVR owns,
+/// or the picture it draws), else the System's for its type: a desk
+/// accessory, or a suitcase of them (the Font/DA Mover's) or of fonts.
+public func fileIcons(fork: ResourceFork?, rsrc: UnsafePointer<UInt8>?, length: Int, type: UInt32,
+                      flags: UInt16) -> [IconImage] {
+    if let fork, flags & CustomIcon.flag != 0 {
+        let custom = icons(fork: fork, id: CustomIcon.id)
+        if !custom.isEmpty { return custom }
+    }
+    let das = deskAccessories(fork: rsrc, length: length)
+    if let fork {
+        for da in das {
+            // Owned resources: bits 15-14 set, the DRVR's ID in 13-5.
+            let first = Int16(truncatingIfNeeded: 0xC000 | (Int(da.id) & 0x3F) << 5)
+            for sub in 0..<32 {
+                let own = icons(fork: fork, id: first + Int16(sub))
+                if !own.isEmpty { return own }
+            }
+        }
+        for da in das {
+            if let drvr = fork["DRVR", da.id], let picture = deskAccessoryPicture(name: da.name, drvr: drvr) {
+                return [picture]
+            }
+        }
+    }
+    let text = fourCCText(type)
+    if text == "dfil" || (!das.isEmpty && text != "DFIL") {
+        return icons(fork: ResourceFork(systemIcons: -3991), id: -3991)
+    }
+    guard ["DFIL", "FFIL", "suit"].contains(text) else { return [] }
+    var suitcase = icons(fork: ResourceFork(systemIcons: -3970), id: -3970)
+    if text == "DFIL", let i = suitcase.firstIndex(where: { $0.size == 32 }),
+       let da = icons(fork: ResourceFork(systemIcons: -3991), id: -3991).first(where: { $0.size == 16 }) {
+        // Desk accessories': the desk accessory's mark on the suitcase.
+        for y in 0..<16 {
+            for x in 0..<16 where da.rgba[(y * 16 + x) * 4 + 3] != 0 {
+                let s = (y * 16 + x) * 4, d = ((y + 12) * 32 + x + 8) * 4
+                suitcase[i].rgba[d..<d + 4] = da.rgba[s..<s + 4]
+            }
+        }
+    }
+    return suitcase
+}
+
+/// The application's Finder bundle, read from its AppleDouble or MacBinary
+/// file; with no icon of its own there, a file's other icons.
 public func finderBundle(applicationAt path: String) -> FinderBundle {
     var mf = mac_file()
     var err = [CChar](repeating: 0, count: 256)
     guard appledouble_read(path, &mf, &err, err.count) else { return FinderBundle() }
     defer { mac_file_free(&mf) }
-    guard let fork = ResourceFork(fork: mf.rsrc, length: mf.rsrc_len) else { return FinderBundle() }
-    return finderBundle(fork: fork, creator: mac_file_creator(&mf))
+    let fork = ResourceFork(fork: mf.rsrc, length: mf.rsrc_len)
+    var result = fork.map { finderBundle(fork: $0, creator: mac_file_creator(&mf)) } ?? FinderBundle()
+    if result.appIcons.isEmpty {
+        let flags = UInt16(mf.finder_info.8) << 8 | UInt16(mf.finder_info.9)
+        result.appIcons = fileIcons(fork: fork, rsrc: mf.rsrc, length: mf.rsrc_len, type: mac_file_type(&mf),
+                                    flags: flags)
+    }
+    return result
 }

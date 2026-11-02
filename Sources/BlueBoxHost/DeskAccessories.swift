@@ -12,18 +12,23 @@ func resourceName(_ raw: UnsafeRawBufferPointer) -> String {
 
 /// The names of a resource fork's desk accessories, without the NUL.
 public func deskAccessoryNames(fork: UnsafePointer<UInt8>?, length: Int) -> [String] {
+    deskAccessories(fork: fork, length: length).map(\.name)
+}
+
+/// A resource fork's desk accessories: their DRVRs' IDs and names.
+public func deskAccessories(fork: UnsafePointer<UInt8>?, length: Int) -> [(id: Int16, name: String)] {
     guard let fork, length > 0 else { return [] }
     var idx = rsrc_index()
     var err = [CChar](repeating: 0, count: 256)
     guard rsrc_parse(fork, length, &idx, &err, err.count) else { return [] }
     defer { rsrc_index_free(&idx) }
     let drvr: UInt32 = 0x4452_5652 // 'DRVR'
-    return (0..<idx.count).compactMap { i -> String? in
+    return (0..<idx.count).compactMap { i -> (id: Int16, name: String)? in
         let e = idx.entries[i]
         guard e.type == drvr else { return nil }
-        return withUnsafeBytes(of: e.name) { raw -> String? in
+        return withUnsafeBytes(of: e.name) { raw -> (id: Int16, name: String)? in
             guard raw.count > 1, raw[0] == 0, raw[1] != 0 else { return nil }
-            return resourceName(raw)
+            return (e.id, resourceName(raw))
         }
     }
 }
