@@ -527,6 +527,7 @@ bool machine_boot(bool census)
     quicktime_reset();
     opentransport_reset();
     drivers_reset();
+    video_reset();
     mactcp_reset();
     ctb_reset(); /* the CRM's queue first: the serial ports go in it */
     serial_reset();
