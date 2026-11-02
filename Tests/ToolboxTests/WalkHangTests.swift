@@ -85,7 +85,8 @@ extension BlueBox {
         }
 
         /// A VBL task runs over an interrupt's stack: the handler's saved
-        /// registers, then the interrupted SR and PC.  A task that changes
+        /// registers, then the interrupted SR and PC, at 44(SP) as on a Mac
+        /// Plus.  A task that changes
         /// the PC there sends the interrupted code on elsewhere (MPW Shell
         /// waits in BRA.S * for its VBL task to step it past the loop).
         @Test func vblTaskCanChangeTheInterruptedPC() {
@@ -97,10 +98,10 @@ extension BlueBox {
             let after = loop + 2
             let code = tb_NewPtr(16, false, false)
             let words: [UInt16] = [
-                0x206F, 0x0026,                                  // MOVEA.L 38(A7),A0: the interrupted PC
+                0x206F, 0x002E,                                  // MOVEA.L 46(A7),A0: the interrupted PC
                 0x0C50, 0x60FE,                                  // CMPI.W #$60FE,(A0): waiting in BRA.S *?
                 0x6604,                                          // BNE.S +4
-                0x54AF, 0x0026,                                  // ADDQ.L #2,38(A7): step past it
+                0x54AF, 0x002E,                                  // ADDQ.L #2,46(A7): step past it
                 0x4E75,                                          // RTS
             ]
             for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }

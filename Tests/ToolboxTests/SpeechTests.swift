@@ -552,5 +552,78 @@ extension BlueBox {
             io(0xA001, rec) // _Close (SpeechOff)
             #expect(rd16(rec + 0x10) == 0 && rd32(rd32(UInt32(LM_UTableBase)) + 4 * 25) == 0)
         }
+
+        /// The Talking Moose's Quick Stop, as it worked with MacinTalk 1.31 on
+        /// a Mac Plus: its VBL task finds the interrupted PC (46(SP)) at
+        /// $281C to $2858 of the driver, writes -1 at A6 (MacinTalk's next
+        /// frame) and sends the return address at 50(SP) through code of its
+        /// own, which uses A0 and jumps back.  The _Write returns at once,
+        /// the speech stopped, and the driver's caller sees nothing changed.
+        @Test func macinTalkOneStopsWhenTheMooseSaysSo() {
+            launchTestApp()
+            _ = initToolbox()
+            let cpu = g_cpu!
+            let model = cpu.pointee.model
+            cpu.pointee.model = 68000 // a Plus's interrupt frame: SR and PC, no format word
+            defer { cpu.pointee.model = model }
+            cpu.pointee.a.7 = tb_NewPtr(65536, false, true) + 65536 - 16
+            machine_set_speech_handler({ _, _ in }, nil) // a voice that goes on until stopped
+            defer { machine_set_speech_handler(nil, nil) }
+            func code(_ words: [UInt16]) -> UInt32 {
+                let p = tb_NewPtr(Int32(words.count * 2), false, false)
+                for (i, w) in words.enumerated() { wr16(p + UInt32(i * 2), w) }
+                return p
+            }
+            func long(_ v: UInt32) -> [UInt16] { [UInt16(v >> 16), UInt16(v & 0xFFFF)] }
+            func pstr(_ s: String) -> UInt32 {
+                let p = tb_NewPtr(256, false, true)
+                guestPString(s, at: p)
+                return p
+            }
+            #expect(tb_OpenResFile(pstr("Macintalk")) != -1)
+            let drvr = tb_GetNamedResource(Int32(bitPattern: 0x4452_5652), pstr(".SPEECH"))
+            tb_SetResInfo(drvr, 25, 0)
+            let rec = tb_NewPtr(0x64, false, true)
+            wr32(rec + 0x12, pstr(".SPEECH"))
+            wr32(rec + 0x3C, pstr(""))
+            guest_call(code([0x41F9] + long(rec) + [0xA000, 0x4E75])) // _Open
+            #expect(Int16(bitPattern: rd16(rec + 0x10)) == 0)
+            let dce = rd32(rd32(rd32(UInt32(LM_UTableBase)) + 4 * 25))
+            let driver = rd32(rd32(dce)) // dCtlDriver, a handle
+
+            let vars = tb_NewPtr(16, false, true) // the return it sent on; whether its code ran
+            let silence = code([0x33FC, 0x0001] + long(vars + 4) +   // MOVE.W #1,ran
+                               [0x2079] + long(vars) +                // MOVEA.L saved,A0
+                               [0x4ED0])                              // JMP (A0)
+            let task = code([0x317C, 0x0002, 0x000A,                  // MOVE.W #2,vblCount(A0)
+                             0x202F, 0x002E,                          // MOVE.L 46(SP),D0: the interrupted PC
+                             0x0C80] + long(driver + 0x281C) +        // CMPI.L #driver+$281C,D0
+                            [0x6614,                                  // BNE.S out
+                             0x3CBC, 0xFFFF,                          // MOVE.W #-1,(A6)
+                             0x23EF, 0x0032] + long(vars) +           // MOVE.L 50(SP),saved
+                            [0x2F7C] + long(silence) + [0x0032,       // MOVE.L #silence,50(SP)
+                             0x4E75])                                 // out: RTS
+            let v = tb_NewPtr(Int32(VBLTask_SIZEOF), false, true)
+            wr16(v + 4, 1)
+            wr32(v + UInt32(VBLTask_vblAddr_off), task)
+            wr16(v + UInt32(VBLTask_vblCount_off), 2)
+            #expect(tb_VInstall(v) == 0)
+            defer { _ = tb_VRemove(v) }
+
+            let phrase = "/HEH4LOW"
+            let h = tb_NewHandle(Int32(phrase.utf8.count), false, true)
+            for (i, b) in phrase.utf8.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+            wr32(rec + 0x20, h)
+            wr32(rec + 0x24, UInt32(phrase.utf8.count))
+            let a0a1 = tb_NewPtr(8, false, true)
+            let started = Date()
+            guest_call(code([0x41F9] + long(rec) + [0x227C, 0x1234, 0x5678, 0xA203, // _Write, A1 $12345678
+                                                   0x23C8] + long(a0a1) + [0x23C9] + long(a0a1 + 4) + [0x4E75]))
+            #expect(Date().timeIntervalSince(started) < 10)       // not the 30 s MacinTalk gives up after
+            #expect(rd16(vars + 4) == 1)                         // its code ran on the way back
+            #expect(rd16(rec + 0x10) == 0 && rd32(rec + 0x28) == UInt32(phrase.utf8.count))
+            #expect(rd32(a0a1) == rec && rd32(a0a1 + 4) == 0x1234_5678)
+            guest_call(code([0x41F9] + long(rec) + [0xA001, 0x4E75])) // _Close
+        }
     }
 }

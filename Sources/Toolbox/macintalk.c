@@ -55,13 +55,19 @@ typedef struct {
     gaddr chan;     /* our Speech Manager channel, made at the first _Write */
     gaddr text;     /* what it is saying */
     int rate, pitch, sex, robotic;
+    /* The _Write going on */
+    bool speaking, stopped;
+    uint32_t count;
+    int16_t err;
+    double give_up;
+    gaddr stop_word; /* A6 while it waits: -1 there cuts the speech off */
 } mt_speech;
 static mt_speech speech[MAX_SPEECH];
 static int given_rate = -1, given_pitch = -1, given_robotic = -1; /* macintalk_settings' */
 static macintalk_swap_fn swap_fn; /* macintalk_host's */
 static double pause_before, pause_after;
 
-static uint32_t open_stub, prime_stub, control_stub, status_stub, close_stub, reader_stub;
+static uint32_t open_stub, prime_stub, wait_stub, finish_stub, control_stub, status_stub, close_stub, reader_stub;
 
 static mt_speech *speech_of(gaddr dce, bool make)
 {
@@ -390,15 +396,22 @@ static void put_back_drawn(void)
     drawn = NULL;
 }
 
-/* Prime: MacinTalk(theSpeech, phonemes), a _Write. */
+/* Prime: MacinTalk(theSpeech, phonemes), a _Write, in three parts: the
+ * speech begun (prime_native), waited for (wait_native) and finished
+ * (finish_native).  MacinTalk was synchronous: the _Write returns when
+ * the utterance is over, or cut off. */
 static void prime_native(cpu68k *c, uint16_t tw)
 {
     (void)tw;
     gaddr pb = c->a[0];
     mt_speech *s = speech_of(c->a[1], false);
-    int16_t err = noErr;
-    if ((rd16(pb + IOParam_ioTrap_off) & 0xFF) != 3 || !s) {
-        c->d[0] = (uint32_t)(int32_t)writErr;
+    if (!s)
+        return;
+    s->speaking = s->stopped = false;
+    s->count = 0;
+    s->err = noErr;
+    if ((rd16(pb + IOParam_ioTrap_off) & 0xFF) != 3) {
+        s->err = writErr;
         return;
     }
     gaddr h = rd32(pb + IOParam_ioBuffer_off);
@@ -411,90 +424,153 @@ static void prime_native(cpu68k *c, uint16_t tw)
         count = (uint32_t)size;
     if (!p)
         count = 0;
+    s->count = count;
     if (!s->chan) {
         gaddr out = tb_NewPtr(4, true, true);
         if (tb_NewSpeechChannel(0, out) == noErr)
             s->chan = rd32(out);
         tb_DisposePtr(out);
     }
-    if (s->chan && count) {
-        uint8_t *ph = malloc(count);
-        size_t n = count;
-        gget(ph, p, count);
-        const uint8_t *say = NULL;
-        size_t say_len = 0;
-        /* The host may say something else (English, or other phonemes). */
-        uint8_t *swapped = NULL;
-        size_t swapped_len = 0;
-        bool english = false;
-        if (swap_fn && swap_fn(ph, n, &swapped, &swapped_len, &english)) {
-            if (english) {
-                say = swapped;
-                say_len = swapped_len;
-            } else {
-                free(ph);
-                ph = swapped;
-                n = swapped_len;
-                swapped = NULL;
-            }
+    if (!s->chan || !count)
+        return;
+    uint8_t *ph = malloc(count);
+    size_t n = count;
+    gget(ph, p, count);
+    const uint8_t *say = NULL;
+    size_t say_len = 0;
+    /* The host may say something else (English, or other phonemes). */
+    uint8_t *swapped = NULL;
+    size_t swapped_len = 0;
+    bool english = false;
+    if (swap_fn && swap_fn(ph, n, &swapped, &swapped_len, &english)) {
+        if (english) {
+            say = swapped;
+            say_len = swapped_len;
+        } else {
+            free(ph);
+            ph = swapped;
+            n = swapped_len;
+            swapped = NULL;
         }
-        /* The Reader's own phonemes say its English; others are phonemes,
-         * which the Speech Manager makes words of. */
-        for (int i = 0; i < MAX_READ && !say; i++)
-            if (reads[i].phonemes && reads[i].plen == n && !memcmp(reads[i].phonemes, ph, n)) {
-                say = reads[i].english;
-                say_len = reads[i].elen;
-            }
-        char *host = NULL;
-        if (!say) {
-            size_t room = n * 4 + 40;
-            host = malloc(room);
-            strcpy(host, "[[inpt PHON]]");
-            mt_to_host(ph, n, host + strlen(host), room - strlen(host) - 16);
-            strcat(host, "[[inpt TEXT]]");
-            say = (const uint8_t *)host;
-            say_len = strlen(host);
-        }
-        if (s->text)
-            tb_DisposePtr(s->text);
-        s->text = tb_NewPtr((int32_t)say_len, true, false);
-        if (s->text) {
-            gput(s->text, say, (uint32_t)say_len);
-            apply(s);
-            if (pause_after > 0)
-                keep_drawn();
-            wait_seconds(pause_before);
-            err = tb_SpeakText(s->chan, s->text, (uint32_t)say_len);
-            /* Over before MacinTalk returns, as it was. */
-            gaddr st = tb_NewPtr(8, true, true);
-            double give_up = now_seconds() + 30 + say_len / 4.0;
-            while (err == noErr && st) {
-                tb_SpeechBusy(); /* delivers the host's news */
-                if (tb_GetSpeechInfo(s->chan, (int32_t)fourcc("stat"), st) != noErr || !rd8(st))
-                    break;
-                if (now_seconds() > give_up) {
-                    tb_StopSpeech(s->chan);
-                    break;
-                }
-                struct timespec ts = { 0, 10000000 };
-                nanosleep(&ts, NULL);
-                /* Interrupts went on while MacinTalk spoke: VBL tasks
-                 * (the Talking Moose moves its mouth from one). */
-                machine_advance_ticks();
-                time_pump();
-            }
-            if (st)
-                tb_DisposePtr(st);
-            if (pause_after > 0)
-                put_back_drawn();
-            wait_seconds(pause_after);
-        }
-        free(host);
-        free(swapped);
-        free(ph);
     }
-    wr32(pb + IOParam_ioActCount_off, count);
-    c->d[0] = (uint32_t)(int32_t)err;
+    /* The Reader's own phonemes say its English; others are phonemes,
+     * which the Speech Manager makes words of. */
+    for (int i = 0; i < MAX_READ && !say; i++)
+        if (reads[i].phonemes && reads[i].plen == n && !memcmp(reads[i].phonemes, ph, n)) {
+            say = reads[i].english;
+            say_len = reads[i].elen;
+        }
+    char *host = NULL;
+    if (!say) {
+        size_t room = n * 4 + 40;
+        host = malloc(room);
+        strcpy(host, "[[inpt PHON]]");
+        mt_to_host(ph, n, host + strlen(host), room - strlen(host) - 16);
+        strcat(host, "[[inpt TEXT]]");
+        say = (const uint8_t *)host;
+        say_len = strlen(host);
+    }
+    if (s->text)
+        tb_DisposePtr(s->text);
+    s->text = tb_NewPtr((int32_t)say_len, true, false);
+    if (s->text) {
+        gput(s->text, say, (uint32_t)say_len);
+        apply(s);
+        if (pause_after > 0)
+            keep_drawn();
+        wait_seconds(pause_before);
+        s->err = tb_SpeakText(s->chan, s->text, (uint32_t)say_len);
+        s->speaking = s->err == noErr;
+        s->give_up = now_seconds() + 30 + say_len / 4.0;
+    }
+    free(host);
+    free(swapped);
+    free(ph);
+}
+
+/* Where MacinTalk 1.31 waited for the next tick between the frames it
+ * made: interrupts during the speech are taken there.  The Talking
+ * Moose's VBL task looks for the interrupted PC at $281C to $2858 of the
+ * driver; for Quick Stop it then ends the speech by writing -1 at A6
+ * (MacinTalk's next frame, here a word that says stop) and sends the
+ * return address on the stack through its own code, which silences the
+ * sound buffer. */
+enum { mt_wait_pc = 0x281C, mt_wait_code = 0x2814 };
+
+/* Until the speech is over or cut off. */
+static void wait_native(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    mt_speech *s = speech_of(c->a[1], false);
+    if (!s || !s->speaking)
+        return;
+    gaddr dce = c->a[1];
+    gaddr drv = rd32(dce + DCtlEntry_dCtlDriver_off);
+    if (rd16(dce + DCtlEntry_dCtlFlags_off) & 0x0040) /* dRAMBased: a handle */
+        drv = rd32(drv);
+    drv = mem_strip(drv); /* a master pointer's flags aren't part of it */
+    if (!s->stop_word)
+        s->stop_word = tb_NewPtr(2, true, true);
+    gaddr st = tb_NewPtr(8, true, true);
+    uint32_t sp = c->a[7], pc = c->pc, a6 = c->a[6];
+    while (st) {
+        tb_SpeechBusy(); /* delivers the host's news */
+        if (tb_GetSpeechInfo(s->chan, (int32_t)fourcc("stat"), st) != noErr || !rd8(st))
+            break;
+        if (now_seconds() > s->give_up) {
+            tb_StopSpeech(s->chan);
+            break;
+        }
+        struct timespec ts = { 0, 10000000 };
+        nanosleep(&ts, NULL);
+        if (!events_host_attached()) /* headless, the clock follows instructions */
+            machine_skip_time(10000000);
+        /* Interrupts went on while MacinTalk spoke (the Talking Moose
+         * moves its mouth from a VBL task), taken in its wait, the return
+         * to the _Write's code on the stack. */
+        if (s->stop_word && drv) {
+            wr16(s->stop_word, 0);
+            c->a[6] = s->stop_word;
+            c->a[7] = sp + 4;
+            c->pc = drv + mt_wait_pc;
+        }
+        uint32_t back = rd32(sp);
+        machine_advance_ticks();
+        events_sync_lowmem(); /* KeyTime and MBTicks: Quick Stop watches them */
+        time_pump();
+        wr32(sp, back); /* the interrupt's frame went over it */
+        c->a[6] = a6;
+        c->a[7] = sp;
+        c->pc = pc;
+        if (s->stop_word && (rd16(s->stop_word) & 0x8000)) { /* Quick Stop */
+            tb_StopSpeech(s->chan);
+            s->stopped = true;
+            break;
+        }
+    }
+    if (st)
+        tb_DisposePtr(st);
+}
+
+static void finish_native(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    gaddr pb = c->a[0];
+    mt_speech *s = speech_of(c->a[1], false);
+    if (!s) {
+        c->d[0] = (uint32_t)(int32_t)writErr;
+        return;
+    }
+    if (s->speaking) {
+        if (pause_after > 0)
+            put_back_drawn();
+        if (!s->stopped) /* cut off: gone at once */
+            wait_seconds(pause_after);
+        s->speaking = false;
+    }
+    if (s->err != writErr)
+        wr32(pb + IOParam_ioActCount_off, s->count);
+    c->d[0] = (uint32_t)(int32_t)s->err;
 }
 
 /* SpeechSex (0), SpeechRate (2), the pitch mode (3) and SpeechPitch (4);
@@ -536,6 +612,8 @@ static void close_native(cpu68k *c, uint16_t tw)
         }
         if (s->text)
             tb_DisposePtr(s->text);
+        if (s->stop_word)
+            tb_DisposePtr(s->stop_word);
         if (s->exceptions)
             tb_CloseResFile(s->exceptions);
         memset(s, 0, sizeof *s);
@@ -591,6 +669,8 @@ void macintalk_reset(void)
     memset(reads, 0, sizeof reads);
     open_stub = native_register(open_native, "MacinTalk Open", 0);
     prime_stub = native_register(prime_native, "MacinTalk Prime", 0);
+    wait_stub = native_register(wait_native, "MacinTalk Wait", 0);
+    finish_stub = native_register(finish_native, "MacinTalk Finish", 0);
     control_stub = native_register(control_native, "MacinTalk Control", 0);
     status_stub = native_register(status_native, "MacinTalk Status", 0);
     close_stub = native_register(close_native, "MacinTalk Close", 0);
@@ -607,12 +687,25 @@ static void put32(uint8_t *p, uint32_t v)
     p[3] = (uint8_t)v;
 }
 
+static size_t put_jsr(uint8_t *d, size_t k, uint32_t stub)
+{
+    d[k] = 0x4E;
+    d[k + 1] = 0xB9; /* JSR stub */
+    put32(d + k + 2, stub);
+    return k + 6;
+}
+
 /* The driver: header, then JSR to each native; Prime, Control and Status
- * end through jIODone, Open and Close with RTS. */
+ * end through jIODone, Open and Close with RTS.  Prime's wait is a
+ * routine of its own, below where MacinTalk 1.31's was (mt_wait_pc), the
+ * driver as long as MacinTalk's code to there. */
+enum { driver_size = mt_wait_pc + 0x40 };
+
 static size_t driver_code(uint8_t *d)
 {
     static const uint8_t name[8] = { 7, '.', 'S', 'P', 'E', 'E', 'C', 'H' };
-    memset(d, 0, 26);
+    static const uint8_t iodone[6] = { 0x2F, 0x38, 0x08, 0xFC, 0x4E, 0x75 }; /* MOVE.L jIODone,-(SP); RTS */
+    memset(d, 0, driver_size);
     d[0] = 0x46; /* dNeedLock, dCtlEnable, dWritEnable: MacinTalk's flags */
     memcpy(d + 18, name, sizeof name);
     size_t k = 26;
@@ -620,20 +713,37 @@ static size_t driver_code(uint8_t *d)
     for (int r = 0; r < 5; r++) {
         d[8 + 2 * r] = (uint8_t)(k >> 8);
         d[9 + 2 * r] = (uint8_t)k;
-        d[k] = 0x4E;
-        d[k + 1] = 0xB9; /* JSR stub */
-        put32(d + k + 2, stubs[r]);
-        k += 6;
-        if (r >= 1 && r <= 3) { /* MOVE.L jIODone,-(SP) */
-            static const uint8_t iodone[4] = { 0x2F, 0x38, 0x08, 0xFC };
-            memcpy(d + k, iodone, 4);
+        k = put_jsr(d, k, stubs[r]);
+        if (r == 1) {
+            /* The wait, D3/A0/A1 kept: the Moose's Quick Stop returns
+             * through code that uses them. */
+            static const uint8_t save[4] = { 0x48, 0xE7, 0x10, 0xC0 }; /* MOVEM.L D3/A0-A1,-(SP) */
+            static const uint8_t restore[4] = { 0x4C, 0xDF, 0x03, 0x08 }; /* MOVEM.L (SP)+,D3/A0-A1 */
+            memcpy(d + k, save, 4);
             k += 4;
+            d[k] = 0x61;
+            d[k + 1] = 0x00; /* BSR.W wait */
+            int32_t disp = (int32_t)mt_wait_code - (int32_t)(k + 2);
+            d[k + 2] = (uint8_t)(disp >> 8);
+            d[k + 3] = (uint8_t)disp;
+            k += 4;
+            memcpy(d + k, restore, 4);
+            k += 4;
+            k = put_jsr(d, k, finish_stub);
         }
-        d[k] = 0x4E;
-        d[k + 1] = 0x75; /* RTS */
-        k += 2;
+        if (r >= 1 && r <= 3) {
+            memcpy(d + k, iodone, sizeof iodone);
+            k += sizeof iodone;
+        } else {
+            d[k] = 0x4E;
+            d[k + 1] = 0x75; /* RTS */
+            k += 2;
+        }
     }
-    return k;
+    k = put_jsr(d, mt_wait_code, wait_stub);
+    d[k] = 0x4E;
+    d[k + 1] = 0x75; /* RTS */
+    return driver_size;
 }
 
 /* "MacinTalk" in the System Folder, unless it is there already: ours as
@@ -643,7 +753,7 @@ void macintalk_install_file(void)
 {
     if (!open_stub)
         return;
-    uint8_t drvr[128];
+    static uint8_t drvr[driver_size];
     size_t dlen = driver_code(drvr);
     uint8_t talk[6] = { 0x4E, 0xF9 }; /* JMP reader */
     put32(talk + 2, reader_stub);

@@ -177,8 +177,11 @@ int16_t tb_SlotVRemove(gaddr vtaskp, int16_t slot) { return tb_VRemove(vtaskp); 
  * registers the handler saved (D0-D3/A0-A3).  A task may change the PC
  * there to send the interrupted code elsewhere when the interrupt
  * returns: MPW Shell's waits for the next tick in BRA.S *, and its VBL
- * task finds that PC on the stack and steps it past the loop. */
-static void interrupt_call_arg(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr arg)
+ * task finds that PC on the stack and steps it past the loop.  A 68000's
+ * frame has no format word.  Between the saved registers and the task,
+ * depth longs stand for the returns of the routines that dispatched the
+ * interrupt to it. */
+static void interrupt_call_at(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr arg, int depth)
 {
     cpu68k *c = g_cpu;
     uint32_t d[8], a[8];
@@ -186,7 +189,8 @@ static void interrupt_call_arg(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr 
     memcpy(a, c->a, sizeof a);
     uint16_t sr = c->sr;
     uint32_t pc = c->pc;
-    cpu_push16(c, 0x0064); /* format 0, vector 25 */
+    if (c->model != 68000)
+        cpu_push16(c, 0x0064); /* format 0, vector 25 */
     cpu_push32(c, pc);
     cpu_push16(c, sr);
     gaddr frame = c->a[7];
@@ -194,6 +198,8 @@ static void interrupt_call_arg(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr 
         cpu_push32(c, a[i]);
     for (int i = 3; i >= 0; i--)
         cpu_push32(c, d[i]);
+    while (depth-- > 0)
+        cpu_push32(c, 0);
     if (arg)
         cpu_push32(c, arg);
     c->d[0] = d0;
@@ -209,6 +215,10 @@ static void interrupt_call_arg(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr 
         c->pc = back;
 }
 
+static void interrupt_call_arg(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr arg)
+{
+    interrupt_call_at(fn, a0, a1, d0, arg, 0);
+}
 static void interrupt_call_d0(gaddr fn, gaddr a0, gaddr a1, uint32_t d0) { interrupt_call_arg(fn, a0, a1, d0, 0); }
 static void interrupt_call(gaddr fn, gaddr a0, gaddr a1) { interrupt_call_d0(fn, a0, a1, 0); }
 
@@ -360,8 +370,12 @@ static void vbl_tick(void)
         if (count <= 0)
             continue;
         wr16(v + VBLTask_vblCount_off, (uint16_t)(count - 1));
+        /* As the Mac Plus's VBL interrupt reached it, through the level 1
+         * dispatch table and the retrace handler: its SR at 44(SP).  The
+         * Talking Moose's Quick Stop finds the interrupted PC at 46(SP) and
+         * the interrupted code's return address at 50(SP) (on a 68000). */
         if (count == 1)
-            interrupt_call(rd32(v + VBLTask_vblAddr_off), v, 0);
+            interrupt_call_at(rd32(v + VBLTask_vblAddr_off), v, 0, 0, 0, 2);
     }
 }
 

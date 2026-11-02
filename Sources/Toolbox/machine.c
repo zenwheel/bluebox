@@ -403,7 +403,8 @@ static bool open_system_file(void)
 static void hardware_globals(void)
 {
     /* The chips are at their machine's addresses (hw68k.c). */
-    wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 370 * 2, true));
+    /* 370 words, and one more: the Talking Moose silences 371. */
+    wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 371 * 2, true));
     /* ScrapName: the Clipboard file's name. */
     static const uint8_t scrap[] = "\016Clipboard File";
     gaddr name = mm_new_ptr_in(GA_SYSHEAP, sizeof scrap, true);

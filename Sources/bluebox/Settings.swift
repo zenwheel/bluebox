@@ -213,6 +213,21 @@ func requiredDepth(application path: String, over depth: Int?) -> Int? {
     return requiredDepth(creator: mac_file_creator(&mf), over: depth)
 }
 
+/// Desk accessories that need a processor, by name: the Talking Moose's
+/// Quick Stop reads the interrupted PC and return address from a 68000's
+/// interrupt stack (a 68020's has a format word after the PC).
+let knownDeskAccessoryCPUs: [String: Int] = [
+    "Talking Moose": 68000,
+]
+
+func requiredCPU(application path: String) -> Int? {
+    var mf = mac_file()
+    var err = [CChar](repeating: 0, count: 256)
+    guard appledouble_read(path, &mf, &err, err.count) else { return nil }
+    defer { mac_file_free(&mf) }
+    return deskAccessoryNames(fork: mf.rsrc, length: mf.rsrc_len).lazy.compactMap { knownDeskAccessoryCPUs[$0] }.first
+}
+
 /// An RGB highlight colour from "#RRGGBB" as 16-bit components.
 func parseHighlight(_ s: String) -> (UInt16, UInt16, UInt16)? {
     guard s.hasPrefix("#"), s.count == 7, let v = UInt32(s.dropFirst(), radix: 16) else { return nil }
