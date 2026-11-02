@@ -221,6 +221,22 @@ static void remember(const uint8_t *english, size_t elen, const char *phonemes, 
     reads[0].plen = plen;
 }
 
+/* The Reader for the host: English's phonemes in a new handle (0 if there
+ * is no room), remembered, so that saying them says the English. */
+gaddr macintalk_read(const uint8_t *english, size_t len)
+{
+    size_t room = len * 6 + 16;
+    char *ph = malloc(room);
+    size_t n = english_to_mt(english, len, ph, room);
+    gaddr h = tb_NewHandle((int32_t)n, true, false); /* the system heap: kept by code that lives there */
+    if (h && rd32(h)) {
+        gput(rd32(h), ph, (uint32_t)n);
+        remember(english, len, ph, n);
+    }
+    free(ph);
+    return h;
+}
+
 /* ---------------------------------------------------------------------- */
 /* The Reader ('TALK' 1): Reader(englishInput, inputLength, phoneticOutput)
  * once the glue has taken the speech handle off; Pascal, an OSErr. */

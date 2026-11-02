@@ -632,6 +632,9 @@ void macintalk_install_file(void);
  * now and to come, as a program's settings that never reach MacinTalk
  * through its calls (the Talking Moose's); -1 leaves one as it is. */
 void macintalk_settings(int rate, int pitch, int robotic);
+/* The Reader for the host: English's phonemes in a new handle, which
+ * MacinTalk then says as that English. */
+gaddr macintalk_read(const uint8_t *english, size_t len);
 
 /* Code Fragment Manager (cfm.c): PowerPC applications. */
 struct ppc_cpu;

@@ -18,11 +18,13 @@
  * 'STR#' at the next null event, SayCode for its own phrases, MoosFlags'
  * PauseMask for the idle remarks, and DoMoose (CallMooseToSpeak).
  */
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
+#include "forks.h"
 #include "m68k.h"
 #include "machine.h"
 #include "tb_internal.h"
@@ -41,6 +43,8 @@ enum { sayTime = 1, sayGoodBye = 2, saySwitch = 3, sayHello = 4 };
 enum { pauseSTR = 1988 }; /* the Moose Phrases file's "Pause" 'STR#' */
 enum { mooseID = 131 };
 enum { itemJoke = 1, itemQuiet = 2, itemSettings = 4 };
+
+extern char g_app_path[];
 
 static const uint8_t moose_name[] = "\016\000Talking Moose"; /* the DA's name, as MooseUnit opens it */
 
@@ -101,9 +105,78 @@ static void moose_call(gaddr m)
     memcpy(c->a, a, sizeof a);
 }
 
-/* A joke: one of the Pause phrases, all of them told once, in a shuffled
- * order, before any is told again, said at the next null event (the Moose
- * waits for the user to finish what they are doing). */
+/* ---- More phrases ----
+ *
+ * Phrase files of Uli's Moose (creator 'MOSe': Moose Phraseology's Cats,
+ * Geekdom, Witticisms ...) hold English in 'STR#' resources.  Those in
+ * the Moose's folder, or a folder in it, are jokes too: MacinTalk's Reader
+ * makes their phonemes, which the Moose says from its NowHandle. */
+
+static uint8_t (*more)[256]; /* Pascal strings */
+static int nmore, more_room;
+
+static void add_phrases(const char *path)
+{
+    mac_file f;
+    char err[128];
+    memset(&f, 0, sizeof f);
+    if (!appledouble_read_meta(path, &f))
+        return;
+    rsrc_index idx;
+    if (mac_file_creator(&f) == fourcc("MOSe") && f.rsrc && rsrc_parse(f.rsrc, f.rsrc_len, &idx, err, sizeof err)) {
+        for (size_t i = 0; i < idx.count; i++) {
+            const rsrc_entry *e = &idx.entries[i];
+            if (e->type != fourcc("STR#") || e->data_len < 2)
+                continue;
+            const uint8_t *d = rsrc_data(f.rsrc, &idx, e);
+            int n = d[0] << 8 | d[1];
+            uint32_t at = 2;
+            for (int k = 0; k < n && at < e->data_len && at + 1 + d[at] <= e->data_len; k++, at += 1 + d[at]) {
+                if (!d[at])
+                    continue;
+                if (nmore == more_room) {
+                    int room = more_room ? more_room * 2 : 256;
+                    void *grown = realloc(more, (size_t)room * sizeof *more);
+                    if (!grown)
+                        break;
+                    more = grown;
+                    more_room = room;
+                }
+                memcpy(more[nmore++], d + at, 1 + (size_t)d[at]);
+            }
+        }
+        rsrc_index_free(&idx);
+    }
+    mac_file_free(&f);
+}
+
+static void find_phrases(const char *dir, int depth)
+{
+    DIR *d = opendir(dir);
+    if (!d)
+        return;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (e->d_name[0] == '.')
+            continue;
+        char path[1024];
+        snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
+        struct stat st;
+        if (stat(path, &st) != 0)
+            continue;
+        if (S_ISDIR(st.st_mode)) {
+            if (depth < 2)
+                find_phrases(path, depth + 1);
+        } else if (S_ISREG(st.st_mode)) {
+            add_phrases(path);
+        }
+    }
+    closedir(d);
+}
+
+/* A joke: one of the Pause phrases or the phrase files', all of them told
+ * once, in a shuffled order, before any is told again, said at the next
+ * null event (the Moose waits for the user to finish what they are doing). */
 bool moose_tell_joke(void)
 {
     gaddr m = moose_globals();
@@ -113,31 +186,47 @@ bool moose_tell_joke(void)
     gaddr list = tb_GetResource((int32_t)fourcc("STR#"), pauseSTR);
     if (max <= 0 && list && rd32(list))
         max = (int16_t)rd16(rd32(list));
-    if (max <= 0)
+    if (max < 0)
+        max = 0;
+    int total = max + nmore;
+    if (total <= 0)
         return false;
-    static uint8_t order[255];
+    static int *order;
     static int count, next, last;
-    if (max > 255)
-        max = 255;
-    if (count != max || next >= count) {
-        for (int i = 0; i < max; i++)
-            order[i] = (uint8_t)(i + 1);
-        for (int i = max - 1; i > 0; i--) {
+    if (count != total || next >= count) {
+        int *o = realloc(order, (size_t)total * sizeof *o);
+        if (!o)
+            return false;
+        order = o;
+        for (int i = 0; i < total; i++)
+            order[i] = i + 1;
+        for (int i = total - 1; i > 0; i--) {
             int j = (int)arc4random_uniform((uint32_t)i + 1);
-            uint8_t t = order[i];
+            int t = order[i];
             order[i] = order[j];
             order[j] = t;
         }
-        if (max > 1 && order[0] == last) { /* not the last round's last joke again */
-            order[0] = order[max - 1];
-            order[max - 1] = (uint8_t)last;
+        if (total > 1 && order[0] == last) { /* not the last round's last joke again */
+            order[0] = order[total - 1];
+            order[total - 1] = last;
         }
-        count = max;
+        count = total;
         next = 0;
     }
     int n = last = order[next++];
-    wr16(m + moo_NowNum, (uint16_t)n);
-    wr16(m + moo_NowID, pauseSTR);
+    if (n <= max) {
+        wr16(m + moo_NowNum, (uint16_t)n);
+        wr16(m + moo_NowID, pauseSTR);
+        return true;
+    }
+    const uint8_t *s = more[n - max - 1];
+    gaddr h = macintalk_read(s + 1, s[0]);
+    if (!h)
+        return false;
+    gaddr old = rd32(m + moo_NowHandle);
+    if (old)
+        tb_DisposeHandle(old);
+    wr32(m + moo_NowHandle, h);
     return true;
 }
 
@@ -288,6 +377,14 @@ bool moose_host_start(void)
         pass_settings(m);
         current_values(m, saved_values);
         have_saved = true; /* as they were read: nothing to write yet */
+    }
+    char dir[1024];
+    snprintf(dir, sizeof dir, "%s", g_app_path);
+    char *slash = strrchr(dir, '/');
+    if (slash) {
+        *slash = 0;
+        find_phrases(dir, 0);
+        LOGF(LOG_TRAPS, "Moose: %d more phrases from Uli's Moose phrase files\n", nmore);
     }
     put_menu();
     tb_CheckItem(tb_GetMenuHandle(mooseID), itemQuiet, moose_quiet());
