@@ -230,7 +230,6 @@ static uint32_t row_bytes_for(int w, int depth) { return (uint32_t)((w * depth +
 
 static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
 {
-    gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
     int w = r.right - r.left, h = r.bottom - r.top;
     if (w <= 0 || h <= 0)
         return false;
@@ -256,6 +255,16 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
         return false;
     if (depth == 32)
         gmemset(rd32(bits), 0xFF, rb * (uint32_t)h); /* white */
+    /* The world's colour table (a copy of the one asked for, or the
+     * standard one for the depth; a direct-colour world gets the 8-bit
+     * table), which DisposeGWorld disposes. */
+    uint32_t ct = ctab ? ctab : tb_GetCTable((int16_t)(depth <= 8 ? depth : 8));
+    if (ctab)
+        tb_HandToHand(&ct);
+    /* The pixmap's handle is unlocked: those allocations may have moved
+     * it (PixelToy's full-screen world grows the zone, and a pointer to
+     * where the pixmap was wrote over the heap). */
+    gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
     PixMap_set_baseAddr(pm, bits);
     PixMap_set_pmVersion(pm, 2);
     PixMap_set_rowBytes(pm, (int16_t)(rb | 0x8000));
@@ -264,12 +273,6 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     PixMap_set_pixelType(pm, depth > 8 ? 16 : 0);
     PixMap_set_cmpCount(pm, depth > 8 ? 3 : 1);
     PixMap_set_cmpSize(pm, (int16_t)(depth == 32 ? 8 : depth == 16 ? 5 : depth));
-    /* The GWorld owns its colour table (a copy of the one asked for, or
-     * the standard one for the depth; a direct-colour world gets the 8-bit
-     * table), and DisposeGWorld disposes it. */
-    uint32_t ct = ctab ? ctab : tb_GetCTable((int16_t)(depth <= 8 ? depth : 8));
-    if (ctab)
-        tb_HandToHand(&ct);
     if (PixMap_pmTable(pm))
         tb_DisposeHandle(PixMap_pmTable(pm));
     PixMap_set_pmTable(pm, ct);
