@@ -447,9 +447,10 @@ bool moose_host_start(void)
         find_phrases(dir, 0);
         LOGF(LOG_TRAPS, "Moose: %d more phrases from Uli's Moose phrase files\n", nmore);
     }
-    /* Its idle remarks from all of them, and a moment on the screen before
-     * and after it speaks, as MacinTalk took to get going on a Mac Plus. */
-    macintalk_host(nmore ? swap_remark : NULL, 0.5, 0.5);
+    /* Its idle remarks from all of them, and a moment on the screen, quiet
+     * and still, before it speaks (as MacinTalk took to get going on a Mac
+     * Plus) and after. */
+    macintalk_host(nmore ? swap_remark : NULL, 0.5, 1.0);
     put_menu();
     tb_CheckItem(tb_GetMenuHandle(mooseID), itemQuiet, moose_quiet());
     return true;

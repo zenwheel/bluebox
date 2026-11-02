@@ -343,15 +343,51 @@ static void apply(mt_speech *s)
     tb_DisposePtr(spec);
 }
 
-/* A wait in MacinTalk, interrupts going on (the Moose's VBL task). */
+/* A quiet moment in MacinTalk: no interrupt tasks, which would take it
+ * for speech (the Talking Moose moves its mouth from a VBL task whenever
+ * MacinTalk is at work). */
 static void wait_seconds(double secs)
 {
     for (double end = now_seconds() + secs; now_seconds() < end;) {
         struct timespec ts = { 0, 10000000 };
         nanosleep(&ts, NULL);
-        machine_advance_ticks();
-        time_pump();
     }
+}
+
+/* What the system code drew on the screen (the Moose itself, its mouth
+ * shut) as the speech began, to put back for the moment after it. */
+static uint8_t *drawn;
+static int16_t drawn_rect[4];
+
+static void keep_drawn(void)
+{
+    free(drawn);
+    drawn = NULL;
+    bool on;
+    machine_overlay(drawn_rect, &on);
+    if (!on)
+        return;
+    gaddr base = rd32(LM_ScrnBase);
+    uint32_t rb = qd_screen_row_bytes(), depth = (uint32_t)qd_screen_depth();
+    uint32_t left = (uint32_t)drawn_rect[1] * depth / 8, right = ((uint32_t)drawn_rect[3] * depth + 7) / 8;
+    uint32_t rows = (uint32_t)(drawn_rect[2] - drawn_rect[0]);
+    if (right <= left || !rows || !(drawn = malloc((size_t)(right - left) * rows)))
+        return;
+    for (uint32_t y = 0; y < rows; y++)
+        gget(drawn + (size_t)y * (right - left), base + ((uint32_t)drawn_rect[0] + y) * rb + left, right - left);
+}
+
+static void put_back_drawn(void)
+{
+    if (!drawn)
+        return;
+    gaddr base = rd32(LM_ScrnBase);
+    uint32_t rb = qd_screen_row_bytes(), depth = (uint32_t)qd_screen_depth();
+    uint32_t left = (uint32_t)drawn_rect[1] * depth / 8, right = ((uint32_t)drawn_rect[3] * depth + 7) / 8;
+    for (uint32_t y = 0; y < (uint32_t)(drawn_rect[2] - drawn_rect[0]); y++)
+        gput(base + ((uint32_t)drawn_rect[0] + y) * rb + left, drawn + (size_t)y * (right - left), right - left);
+    free(drawn);
+    drawn = NULL;
 }
 
 /* Prime: MacinTalk(theSpeech, phonemes), a _Write. */
@@ -425,6 +461,8 @@ static void prime_native(cpu68k *c, uint16_t tw)
         if (s->text) {
             gput(s->text, say, (uint32_t)say_len);
             apply(s);
+            if (pause_after > 0)
+                keep_drawn();
             wait_seconds(pause_before);
             err = tb_SpeakText(s->chan, s->text, (uint32_t)say_len);
             /* Over before MacinTalk returns, as it was. */
@@ -447,6 +485,8 @@ static void prime_native(cpu68k *c, uint16_t tw)
             }
             if (st)
                 tb_DisposePtr(st);
+            if (pause_after > 0)
+                put_back_drawn();
             wait_seconds(pause_after);
         }
         free(host);
