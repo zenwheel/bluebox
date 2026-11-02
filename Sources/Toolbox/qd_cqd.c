@@ -230,11 +230,7 @@ static uint32_t row_bytes_for(int w, int depth) { return (uint32_t)((w * depth +
 
 static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
 {
-    /* The pixel map is a handle's block, which allocating the pixels and
-     * the colour table may move: it is found again after each.  (Office
-     * 98's demo, freeing a world and making one, had its new world's
-     * pixel map left a copy of the screen's, drawing on the screen.) */
-    gaddr pmh = rd32(port + CGrafPort_portPixMap_off);
+    gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
     int w = r.right - r.left, h = r.bottom - r.top;
     if (w <= 0 || h <= 0)
         return false;
@@ -260,7 +256,6 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
         return false;
     if (depth == 32)
         gmemset(rd32(bits), 0xFF, rb * (uint32_t)h); /* white */
-    gaddr pm = rd32(pmh);
     PixMap_set_baseAddr(pm, bits);
     PixMap_set_pmVersion(pm, 2);
     PixMap_set_rowBytes(pm, (int16_t)(rb | 0x8000));
@@ -275,7 +270,6 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     uint32_t ct = ctab ? ctab : tb_GetCTable((int16_t)(depth <= 8 ? depth : 8));
     if (ctab)
         tb_HandToHand(&ct);
-    pm = rd32(pmh);
     if (PixMap_pmTable(pm))
         tb_DisposeHandle(PixMap_pmTable(pm));
     PixMap_set_pmTable(pm, ct);
