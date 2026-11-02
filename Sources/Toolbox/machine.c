@@ -403,7 +403,8 @@ static bool open_system_file(void)
 static void hardware_globals(void)
 {
     /* The chips are at their machine's addresses (hw68k.c). */
-    wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 370 * 2, true));
+    /* 370 words, and one more: the Talking Moose silences 371. */
+    wr32(LM_SoundBase, mm_new_ptr_in(GA_SYSHEAP, 371 * 2, true));
     /* ScrapName: the Clipboard file's name. */
     static const uint8_t scrap[] = "\016Clipboard File";
     gaddr name = mm_new_ptr_in(GA_SYSHEAP, sizeof scrap, true);
@@ -985,6 +986,19 @@ void machine_advance_ticks(void)
     uint32_t secs = boot_time + (uint32_t)(ns / 1000000000u);
     if (secs > rd32(LM_Time))
         wr32(LM_Time, secs);
+}
+
+/* One of our System file's standard resources (Generators/sysres.py),
+ * for the host: the generic icons of files without their own. */
+const uint8_t *machine_system_resource(uint32_t type, int16_t id, uint32_t *len)
+{
+    for (unsigned i = 0; i < sysres_count; i++)
+        if (sysres[i].type == type && sysres[i].id == id) {
+            *len = sysres[i].len;
+            return sysres[i].data;
+        }
+    *len = 0;
+    return NULL;
 }
 
 /* SetDateTime: Time from now on counts from secs. */

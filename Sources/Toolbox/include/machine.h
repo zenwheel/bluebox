@@ -504,6 +504,10 @@ void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn pa
 /* The host's default paper, used for new print records. */
 void machine_set_page_defaults(const machine_page_setup *ps);
 
+/* One of the System file's standard resources (cursors, generic icons
+ * ...), or NULL. */
+const uint8_t *machine_system_resource(uint32_t type, int16_t id, uint32_t *len);
+
 /* ---- Speech (the Speech Manager's host side) ---- */
 
 enum {

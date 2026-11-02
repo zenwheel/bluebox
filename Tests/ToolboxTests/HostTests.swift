@@ -75,9 +75,60 @@ import Carbon
             o += Int(UInt32(b[o + 4]) << 24 | UInt32(b[o + 5]) << 16 | UInt32(b[o + 6]) << 8 | UInt32(b[o + 7]))
         }
         #expect(o == b.count)
-        for t in ["ic07", "ic08", "ic09", "ic10", "ic11", "ic12", "ic13", "ic14"] { #expect(types.contains(t)) }
+        for t in ["ic04", "ic05", "ic07", "ic08", "ic09", "ic10", "ic11", "ic12", "ic13", "ic14"] { #expect(types.contains(t)) }
+        // 16 and 32 pixels as ARGB planes: "ARGB", then runs of the alpha plane.
+        let at = try #require(b.firstRange(of: Array("ic05".utf8))).lowerBound
+        #expect(Array(b[at + 8..<at + 12]) == Array("ARGB".utf8))
     }
     #endif
+
+    /// A desk accessory file with no bundle (a Font/DA Mover suitcase): the
+    /// icons its DRVR owns, else a known desk accessory's picture of itself,
+    /// else the System's: a suitcase with the desk accessory's mark; a lone
+    /// desk accessory ('dfil') and a font suitcase have theirs.
+    @Test func deskAccessoryFilesHaveIcons() throws {
+        func icons(_ resources: [TestResource], type: String) -> [IconImage] {
+            let bytes = buildFork(resources)
+            return bytes.withUnsafeBufferPointer {
+                fileIcons(fork: ResourceFork(fork: $0.baseAddress, length: $0.count), rsrc: $0.baseAddress,
+                          length: $0.count, type: fourCC(type), flags: 0)
+            }
+        }
+        let drvr = TestResource(type: "DRVR", id: 12, name: "\u{0}Calc", data: [UInt8](repeating: 0, count: 64))
+        // ICN# owned by DRVR 12: bits 15-14 set, 12 in bits 13-5, sub-ID 1.
+        let owned = Int16(bitPattern: 0xC000 | 12 << 5 | 1)
+        let own = icons([drvr, TestResource(type: "ICN#", id: owned, data: [UInt8](repeating: 0xFF, count: 256))],
+                        type: "DFIL")
+        #expect(own.count == 1 && own[0].size == 32 && Array(own[0].rgba[0..<4]) == [0, 0, 0, 255])
+
+        let suitcase = icons([drvr], type: "DFIL")
+        #expect(Set(suitcase.map(\.size)) == [16, 32])
+        let fonts = icons([TestResource(type: "FOND", id: 128, data: [0])], type: "FFIL")
+        #expect(Set(fonts.map(\.size)) == [16, 32])
+        let big = try #require(suitcase.first { $0.size == 32 }), plain = try #require(fonts.first { $0.size == 32 })
+        #expect(big.rgba != plain.rgba)                  // the desk accessory's mark on it
+        #expect(Set(icons([drvr], type: "dfil").map(\.size)) == [16, 32])
+        #expect(icons([TestResource(type: "FOND", id: 128, data: [0])], type: "TEXT").isEmpty)
+
+        // The Talking Moose draws itself from a bitmap in its DRVR: its box.
+        var moose = [UInt8](repeating: 0, count: 11656)
+        for i in 0..<10 { moose[0x2756 + i] = 0xFF }      // the box's top
+        let picture = icons([TestResource(type: "DRVR", id: 29, name: "\u{0}Talking Moose", data: moose)], type: "DFIL")
+        #expect(picture.count == 1 && picture[0].size == 77)
+        let p = picture[0]
+        let mid = ((p.size / 2) * p.size + p.size / 2) * 4
+        #expect(Array(p.rgba[mid..<mid + 4]) == [255, 255, 255, 255]) // white inside its box
+        #expect(Array(p.rgba[(15 * p.size + 0) * 4..<(15 * p.size + 0) * 4 + 4]) == [0, 0, 0, 255])
+    }
+
+    /// Smaller sizes average the pixels: a one-pixel line goes grey, not missing.
+    @Test func shrinkingAverages() {
+        var img = IconImage(size: 4, rgba: [UInt8](repeating: 255, count: 64))
+        for x in 0..<4 { img.rgba[(1 * 4 + x) * 4..<(1 * 4 + x) * 4 + 3] = [0, 0, 0] }
+        let small = resampled(img, to: 2)
+        #expect(Array(small.rgba[0..<4]) == [127, 127, 127, 255])
+        #expect(icon([img], at: 4)?.rgba == img.rgba)
+    }
 }
 
 #if canImport(AppKit)

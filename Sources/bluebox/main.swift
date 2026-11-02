@@ -751,8 +751,9 @@ func runCommand(_ args: [String]) {
     }
     // The processor: a fat application runs its PowerPC code unless a 68k
     // model is chosen (on the command line or in its settings), which runs
-    // its 68k code on that model; a 68k application gets the default 68040.
-    let processor = cpuModel ?? saved.cpu.map(Int32.init)
+    // its 68k code on that model; a 68k application gets the default 68040,
+    // a desk accessory known to need another (the Talking Moose) that one.
+    let processor = cpuModel ?? saved.cpu.map(Int32.init) ?? requiredCPU(application: app).map(Int32.init)
     if let m = processor, m != Int32(powerPCSetting) { machine_set_cpu(m) }
     if let f = fpuModel ?? saved.fpu.map(Int32.init) { machine_set_fpu(f) }
     // Addressing: as chosen, else the named machine's, else what the
