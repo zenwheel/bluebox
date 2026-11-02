@@ -89,6 +89,22 @@ final class ScreenView: NSView, MacScreenView {
         rgba.withUnsafeMutableBytes { raw in
             machine_screen_rgba(0, 0, w, h, raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
         }
+        // In the background, a program's desktop is left out (Maelstrom,
+        // sent there, hides its play area and leaves only a small window):
+        // the host's desktop shows through the window instead.  Not the
+        // Finder's: the desktop is what it shows.
+        let clear = !NSApp.isActive && !hostFullScreen && !machine_is_finder()
+        if clear {
+            if deskMask.count != rgba.count { deskMask = [UInt8](repeating: 1, count: rgba.count) }
+            if machine_desktop_mask(0, 0, w, h, &deskMask) {
+                for k in 0..<rgba.count where deskMask[k] == 0 { rgba[k] = 0 }
+            }
+        }
+        if clear != clearing {
+            clearing = clear
+            window?.isOpaque = !clear
+            window?.backgroundColor = clear ? .clear : .windowBackgroundColor
+        }
         var hasher = Hasher()
         rgba.withUnsafeBytes { hasher.combine(bytes: $0) }
         let sum = hasher.finalize()
@@ -97,6 +113,9 @@ final class ScreenView: NSView, MacScreenView {
             needsDisplay = true
         }
     }
+
+    private var deskMask = [UInt8]()
+    private var clearing = false
 
     override func draw(_ dirtyRect: NSRect) {
         var w: Int32 = 0, h: Int32 = 0
