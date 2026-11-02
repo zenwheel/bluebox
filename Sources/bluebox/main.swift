@@ -1084,7 +1084,7 @@ func findListedApplication(_ spec: String) -> String? {
     if spec.contains("/") { return nil }
     var found: [String] = []
     for root in [library, disk] where fm.fileExists(atPath: root) {
-        found += scan(root).filter { $0.isLaunchable && ($0.path as NSString).lastPathComponent == spec }.map(\.path)
+        found += scan(root, matching: { $0 == spec }).filter { $0.isLaunchable }.map(\.path)
     }
     if found.count > 1 {
         eprint("several applications named \(spec):\n")
@@ -1223,9 +1223,9 @@ func appsCommand(_ args: [String]) {
 }
 
 /// Kaleidoscope schemes ('Colr'/'Acid' files) and Mac OS 8.5 theme files
-/// ('thme') in a library.
-func themes(in library: String) -> [String] {
-    scan(library).filter {
+/// ('thme') in a library (those whose names `matching` accepts).
+func themes(in library: String, matching: ((String) -> Bool)? = nil) -> [String] {
+    scan(library, matching: matching).filter {
         (fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid") || fourCCString($0.type) == "thme"
     }.map(\.path)
 }
@@ -1259,7 +1259,7 @@ func findTheme(_ spec: String) -> String? {
             return name
         }
     }
-    let all = themes(in: defaultLibrary())
+    let all = themes(in: defaultLibrary(), matching: { $0.range(of: name, options: .caseInsensitive) != nil })
     return all.first { ($0 as NSString).lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }
         ?? all.first { ($0 as NSString).lastPathComponent.range(of: name, options: .caseInsensitive) != nil }
 }
@@ -1271,13 +1271,12 @@ func themeSoundSet(for theme: String) -> String? {
     let name = machine_theme_sound_set_name(&buf, buf.count) ? str(buf) : ""
     let dir = (theme as NSString).deletingLastPathComponent
     let near = scan(dir).filter { fourCCString($0.type) == "tsnd" }.map(\.path)
-    let named = { (paths: [String]) in
-        paths.first { !name.isEmpty && ($0 as NSString).lastPathComponent.caseInsensitiveCompare(name) == .orderedSame }
-    }
+    let isNamed = { (file: String) in !name.isEmpty && file.caseInsensitiveCompare(name) == .orderedSame }
+    let named = { (paths: [String]) in paths.first { isNamed(($0 as NSString).lastPathComponent) } }
     if let p = named(near) { return p }
     let library = defaultLibrary()
     if FileManager.default.fileExists(atPath: library),
-       let p = named(scan(library).filter { fourCCString($0.type) == "tsnd" }.map(\.path)) {
+       let p = named(scan(library, matching: isNamed).filter { fourCCString($0.type) == "tsnd" }.map(\.path)) {
         return p
     }
     return near.count == 1 ? near[0] : nil

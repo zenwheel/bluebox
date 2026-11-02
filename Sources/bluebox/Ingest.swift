@@ -419,8 +419,10 @@ func walkFiles(_ root: String) -> [String] {
     return out
 }
 
-/// Every Mac file (data file + optional sidecar) under a folder.
-func scan(_ root: String) -> [IngestedFile] {
+/// Every Mac file (data file + optional sidecar) under a folder, or only
+/// those whose names `matching` accepts, whose forks alone are read
+/// (finding a program by name in a library of CDs).
+func scan(_ root: String, matching: ((String) -> Bool)? = nil) -> [IngestedFile] {
     let fm = FileManager.default
     var out = [IngestedFile]()
     let rels = walkFiles(root)
@@ -439,6 +441,7 @@ func scan(_ root: String) -> [IngestedFile] {
         } else if name == ".classic-source" || name.hasPrefix(".") {
             continue
         }
+        if let matching, !matching(name) { continue }
         // The Finder info and the resource map only, and from what the
         // listing says is there: reading every file whole (a CD's movies,
         // disk images and big resource forks) made running a program by
