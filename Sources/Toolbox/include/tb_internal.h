@@ -686,6 +686,7 @@ typedef struct {
 enum { ioInProgress = 1 };
 bool driver_open(gaddr pb, int16_t *err); /* false: no driver of that name */
 enum { DISK_DRIVER_UNIT = 32 };              /* the main volume's disk, as SCSI ID 0 (.Sony keeps -5 for floppies) */
+enum { VIDEO_UNIT = 50 };                 /* .Display_Video_Apple_BlueBox, the screen's (video.c) */
 enum { CD_UNIT = 35 };                    /* .AppleCD, the mounted volumes' driver */
 /* Drive numbers: 1 is the internal floppy drive (.Sony), as on every Mac with one; 1-4 are the
  * floppy drives' (and the HD20's), so the main volume's SCSI disk is the next, 5, and each mounted
@@ -747,6 +748,14 @@ int16_t sony_eject(void);
 void sony_reset(void);
 /* The Sound Driver (.Sound) of the first Macs (sound.c). */
 extern const native_driver sound_driver;
+extern const native_driver video_driver;
+void video_reset(void);
+/* The video hardware's colour and gamma tables (qd_screen.c), which the
+ * video driver loads. */
+void qd_screen_set_hw_entry(int index, const uint8_t rgb[3]);
+void qd_screen_hw_entry(int index, uint8_t rgb[3]);
+void qd_screen_set_gamma(const uint8_t lut[3][256]);
+void qd_screen_set_gray_mode(bool on);
 /* The main volume's disk driver (diskdriver.c), and the icon and status
  * calls the CD driver shares with it. */
 extern const native_driver disk_driver;

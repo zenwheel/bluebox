@@ -28,7 +28,7 @@ static int16_t cd_write(gaddr pb, bool async) { return -44; /* wPrErr */ }
 static const native_driver cd_driver = { ".AppleCD", CD_UNIT, NULL, NULL, cd_control, cd_status, cd_read, cd_write, NULL };
 
 static const native_driver *const drivers[] = {
-    &cd_driver, &disk_driver, &sony_driver, &sound_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
+    &cd_driver, &disk_driver, &sony_driver, &sound_driver, &video_driver, &mactcp_driver, &mpp_driver, &atp_driver, &xpp_driver, &dsp_driver, &serial_drivers[0], &serial_drivers[1], &serial_drivers[2], &serial_drivers[3],
 };
 enum { NDRIVERS = sizeof drivers / sizeof drivers[0] };
 
@@ -48,7 +48,7 @@ static const native_driver *driver_for(int16_t refnum)
  * Programs look there to see whether a driver is installed (MacTCP's
  * .IPP, the serial drivers) and GetDCtlEntry reads it; the calls
  * themselves still come here by reference number. */
-enum { UNITS = 64, dOpened = 0x20 };
+enum { UNITS = 64, dOpened = 0x20, AUX_DCE_SIZE = 56 };
 static gaddr dce[NDRIVERS];
 
 void drivers_reset(void)
@@ -60,18 +60,30 @@ void drivers_reset(void)
     for (int i = 0; i < NDRIVERS; i++) {
         const native_driver *d = drivers[i];
         size_t n = strlen(d->name);
-        gaddr hdr = tb_NewPtr((int32_t)(18 + 1 + n), true, true);
+        /* The header, the name, and the version word after it (word
+         * aligned), as a DRVR resource has them: TestGDVideo prints it. */
+        uint32_t version_at = (uint32_t)(18 + 1 + n + 1) & ~1u;
+        gaddr hdr = tb_NewPtr((int32_t)(version_at + 2), true, true);
+        wr16(hdr + version_at, 1);
         uint16_t flags = (uint16_t)((d->read ? 0x0100 : 0) | (d->write ? 0x0200 : 0) | (d->control ? 0x0400 : 0) |
                                     (d->status ? 0x0800 : 0));
         wr16(hdr, flags); /* drvrFlags; its routines' offsets stay 0: calls come to us */
         wr8(hdr + 18, (uint8_t)n);
         for (size_t k = 0; k < n; k++)
             wr8(hdr + 19 + (uint32_t)k, (uint8_t)d->name[k]);
-        gaddr h = tb_NewHandle(DCtlEntry_SIZEOF, true, true);
+        /* An AuxDCE, as the Slot Manager's systems had for every driver:
+         * the video driver's says its slot and the screen's base. */
+        gaddr h = tb_NewHandle(AUX_DCE_SIZE, true, true);
         gaddr e = rd32(h);
         wr32(e + DCtlEntry_dCtlDriver_off, hdr);
         wr16(e + DCtlEntry_dCtlFlags_off, flags); /* a ROM-style driver: a pointer, not RAM-based */
         wr16(e + DCtlEntry_dCtlRefNum_off, (uint16_t)(-1 - d->unit));
+        if (d == &video_driver) {
+            wr8(e + 40, 0);                    /* dCtlSlot */
+            wr8(e + 41, 0x80);                 /* dCtlSlotId: its sResource */
+            wr32(e + 42, rd32(LM_ScrnBase));   /* dCtlDevBase */
+            wr16(e + DCtlEntry_dCtlFlags_off, flags | dOpened); /* opened at start (fOpenAtStart) */
+        }
         dce[i] = e;
         if (d->unit >= 0 && d->unit < UNITS)
             wr32(table + 4 * (uint32_t)d->unit, h);
