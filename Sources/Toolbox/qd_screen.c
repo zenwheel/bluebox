@@ -42,67 +42,9 @@ void qd_screen_load_clut(gaddr ctab)
     for (int i = 0; i < (1 << screen_depth); i++) {
         uint16_t c[3];
         qd_px_rgb(screen_depth, ctab, (uint32_t)i, c);
-        uint8_t rgb[3] = { (uint8_t)(c[0] >> 8), (uint8_t)(c[1] >> 8), (uint8_t)(c[2] >> 8) };
-        qd_screen_set_hw_entry(i, rgb);
-    }
-}
-
-/* The video hardware's tables, which the driver (video.c) loads: in direct
- * colour each component's own (32 steps at 16 bits, 256 at 32), and the
- * gamma table every colour goes through on its way to the display.  The
- * driver's gray mode loads colours as their luminance. */
-static uint8_t direct16[3][32], direct32[3][256], gamma_lut[3][256];
-static bool gamma_loaded, gray_mode;
-
-static void direct_reset(void)
-{
-    for (int k = 0; k < 3; k++) {
-        for (int i = 0; i < 32; i++)
-            direct16[k][i] = (uint8_t)(i << 3 | i >> 2);
-        for (int i = 0; i < 256; i++)
-            direct32[k][i] = (uint8_t)i;
-    }
-}
-
-void qd_screen_set_gray_mode(bool on) { gray_mode = on; }
-
-void qd_screen_set_hw_entry(int index, const uint8_t rgb[3])
-{
-    uint8_t c[3] = { rgb[0], rgb[1], rgb[2] };
-    if (gray_mode)
-        c[0] = c[1] = c[2] = (uint8_t)((rgb[0] * 30 + rgb[1] * 59 + rgb[2] * 11) / 100);
-    if (screen_depth == 16 && index >= 0 && index < 32) {
         for (int k = 0; k < 3; k++)
-            direct16[k][index] = c[k];
-    } else if (screen_depth == 32 && index >= 0 && index < 256) {
-        for (int k = 0; k < 3; k++)
-            direct32[k][index] = c[k];
-    } else if (index >= 0 && index < 256) {
-        memcpy(clut[index], c, 3);
+            clut[i][k] = (uint8_t)(c[k] >> 8);
     }
-}
-
-void qd_screen_hw_entry(int index, uint8_t rgb[3])
-{
-    if (screen_depth == 16 && index >= 0 && index < 32) {
-        for (int k = 0; k < 3; k++)
-            rgb[k] = direct16[k][index];
-    } else if (screen_depth == 32 && index >= 0 && index < 256) {
-        for (int k = 0; k < 3; k++)
-            rgb[k] = direct32[k][index];
-    } else {
-        memcpy(rgb, clut[index & 255], 3);
-    }
-}
-
-void qd_screen_set_gamma(const uint8_t lut[3][256])
-{
-    memcpy(gamma_lut, lut, sizeof gamma_lut);
-    gamma_loaded = false;
-    for (int k = 0; k < 3; k++)
-        for (int i = 0; i < 256; i++)
-            if (lut[k][i] != i)
-                gamma_loaded = true;
 }
 
 /* A color table handle: entries as (value, r, g, b). */
@@ -185,8 +127,6 @@ static gaddr display_base; /* see qd_screen_set_display_base; qd_screen_init set
 void qd_screen_init(int width, int height)
 {
     display_base = GA_SCREEN;
-    direct_reset();
-    gray_mode = false;
     g_screen_width = width;
     g_screen_height = height;
     screen_depth = depth_pref;
@@ -216,7 +156,6 @@ void qd_screen_init(int width, int height)
     GDevice_set_gdPMap(gd, pmh);
     qrect_put(gd + GDevice_gdRect_off, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
     GDevice_set_gdResPref(gd, 3);
-    GDevice_set_gdRefNum(gd, (int16_t)(-1 - VIDEO_UNIT)); /* the video driver's */
     describe_screen(gd, pm);
 
     wr32(LM_MainDevice, gdh);
@@ -271,7 +210,6 @@ bool qd_screen_set_depth(int depth)
         return true;
     uint32_t old_rb = screen_row_bytes;
     screen_depth = depth;
-    direct_reset();
     screen_row_bytes = row_bytes_for(depth, g_screen_width);
     gmemset(GA_SCREEN, depth >= 16 ? 0xFF : 0, screen_row_bytes * (uint32_t)g_screen_height);
     gaddr gd = rd32(rd32(LM_MainDevice));
@@ -406,13 +344,14 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
             }
             uint32_t v = get_px(&d, sx, sy);
             if (screen_depth == 32) {
-                o[0] = direct32[0][(v >> 16) & 255];
-                o[1] = direct32[1][(v >> 8) & 255];
-                o[2] = direct32[2][v & 255];
+                o[0] = (uint8_t)(v >> 16);
+                o[1] = (uint8_t)(v >> 8);
+                o[2] = (uint8_t)v;
             } else if (screen_depth == 16) { /* x1555 */
-                o[0] = direct16[0][(v >> 10) & 31];
-                o[1] = direct16[1][(v >> 5) & 31];
-                o[2] = direct16[2][v & 31];
+                uint8_t r5 = (v >> 10) & 31, g5 = (v >> 5) & 31, b5 = v & 31;
+                o[0] = (uint8_t)(r5 << 3 | r5 >> 2);
+                o[1] = (uint8_t)(g5 << 3 | g5 >> 2);
+                o[2] = (uint8_t)(b5 << 3 | b5 >> 2);
             } else if (screen_depth > 1) {
                 o[0] = clut[v][0];
                 o[1] = clut[v][1];
@@ -422,12 +361,6 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
             }
             o[3] = 255;
         }
-    }
-    if (gamma_loaded) {
-        uint8_t *o = out;
-        for (size_t i = 0, n = (size_t)w * (size_t)h; i < n; i++, o += 4)
-            for (int k = 0; k < 3; k++)
-                o[k] = gamma_lut[k][o[k]];
     }
     if (brightness != 255)
         dim(out, (size_t)w * (size_t)h);
