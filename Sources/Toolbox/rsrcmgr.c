@@ -997,6 +997,12 @@ static int16_t open_path_perm(const char *path, int perm)
         set_res_err(-39);
         return -1;
     }
+    char ours[1024];
+    if (macintalk_substitute(mf.rsrc, mf.rsrc_len, ours, sizeof ours) && strcmp(ours, path)) {
+        mac_file_free(&mf);
+        LOGF(LOG_TRAPS, "  %s is Apple's MacinTalk, silent without a compact Mac's sound: ours instead\n", path);
+        return open_path_perm(ours, perm);
+    }
     int16_t rn = rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, false);
     mac_file_free(&mf);
     if (rn >= 0)

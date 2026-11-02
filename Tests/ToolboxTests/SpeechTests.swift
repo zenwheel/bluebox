@@ -1,6 +1,7 @@
 import CCore
 import CPU68K
 import Foundation
+import ForkStore
 import Testing
 import Toolbox
 
@@ -551,6 +552,37 @@ extension BlueBox {
 
             io(0xA001, rec) // _Close (SpeechOff)
             #expect(rd16(rec + 0x10) == 0 && rd32(rd32(UInt32(LM_UTableBase)) + 4 * 25) == 0)
+        }
+
+        /// A program's own copy of Apple's MacinTalk beside it (EDUCORP's New
+        /// Talking Moose! has 1.31), which OpenResFile finds first, makes its
+        /// sound only in a compact Mac's sound buffer: elsewhere the program
+        /// gets ours from the System Folder, and its file is left alone.
+        @Test func applesMacinTalkBesideAProgramIsOursUnlessItCanSpeak() throws {
+            let dir = launchTestApp()
+            _ = initToolbox()
+            let apples = buildFork([TestResource(type: "DRVR", id: 31, name: ".SPEECH", data: [0x4F, 0, 0, 0] + [UInt8](repeating: 0, count: 60)),
+                                    TestResource(type: "TALK", id: 1, data: [0x4E, 0x75])])
+            let path = dir.appendingPathComponent("Macintalk").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            var fork = apples
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+            let name = tb_NewPtr(256, false, true)
+            guestPString("Macintalk", at: name)
+            let rn = tb_OpenResFile(name)
+            #expect(rn != -1)
+            guestPString(".SPEECH", at: name)
+            let drvr = tb_Get1NamedResource(Int32(bitPattern: 0x4452_5652), name)
+            #expect(drvr != 0 && tb_GetHandleSize(drvr) > 0x281C && rd8(rd32(drvr)) == 0x46) // ours
+            tb_CloseResFile(rn)
+            var back = mac_file()
+            #expect(appledouble_read(path, &back, &err, err.count))
+            #expect(Array(UnsafeBufferPointer(start: back.rsrc, count: back.rsrc_len)) == apples)
+            mac_file_free(&back)
         }
 
         /// The Talking Moose's Quick Stop, as it worked with MacinTalk 1.31 on

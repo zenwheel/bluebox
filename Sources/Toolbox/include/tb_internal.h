@@ -641,6 +641,9 @@ gaddr macintalk_read(const uint8_t *english, size_t len);
  * of silence around each utterance, MacinTalk not yet returned. */
 typedef bool (*macintalk_swap_fn)(const uint8_t *phonemes, size_t n, uint8_t **out, size_t *out_len, bool *english);
 void macintalk_host(macintalk_swap_fn swap, double before, double after);
+/* A resource fork being opened that is Apple's MacinTalk driver, which is
+ * silent here: our file's path in out, to open instead. */
+bool macintalk_substitute(const uint8_t *rsrc, size_t len, char *out, size_t outsize);
 
 /* Code Fragment Manager (cfm.c): PowerPC applications. */
 struct ppc_cpu;

@@ -41,6 +41,7 @@
 #include <time.h>
 
 #include "forks.h"
+#include "hw68k.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -744,6 +745,38 @@ static size_t driver_code(uint8_t *d)
     d[k] = 0x4E;
     d[k + 1] = 0x75; /* RTS */
     return driver_size;
+}
+
+/* Apple's MacinTalk (1.31 and the others, a file a program keeps beside
+ * it, which OpenResFile finds before the System Folder's) makes its sound
+ * in a compact Mac's sound buffer, which the VIA's video circuitry plays,
+ * and nowhere else: on a machine without that hardware it is silent.  A
+ * program opening it there gets ours; the file is left as it is.  (On
+ * --machine plus, se or classic it speaks, and is left to.) */
+bool macintalk_substitute(const uint8_t *rsrc, size_t len, char *out, size_t outsize)
+{
+    const hw_profile *hw = hw_machine();
+    if (!open_stub || !rsrc || !len || (hw && hw->via_sound))
+        return false;
+    rsrc_index idx;
+    char err[128];
+    if (!rsrc_parse(rsrc, len, &idx, err, sizeof err))
+        return false;
+    bool speech = false, ours = false;
+    for (size_t i = 0; i < idx.count; i++) {
+        const rsrc_entry *e = &idx.entries[i];
+        if (e->type == fourcc("DRVR") && !strcasecmp(e->name, ".SPEECH"))
+            speech = true;
+        if (e->type == fourcc("STR ") && e->id == 14 && e->data_len == sizeof marker &&
+            !memcmp(rsrc_data(rsrc, &idx, e) + 1, marker, sizeof marker - 1))
+            ours = true;
+    }
+    rsrc_index_free(&idx);
+    if (!speech || ours)
+        return false;
+    macintalk_install_file();
+    snprintf(out, outsize, "%s/MacinTalk", fm_system_folder_host());
+    return fm_host_exists(out);
 }
 
 /* "MacinTalk" in the System Folder, unless it is there already: ours as
