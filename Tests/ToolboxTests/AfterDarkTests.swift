@@ -197,6 +197,115 @@ extension BlueBox {
             #expect(rd16(out + 16) == rd16(UInt32(LM_CurApRefNum)))  // and the module's file is back
         }
 
+        /// Settings are kept, as After Dark kept them in the module's file:
+        /// a control given once and a resource the module changed itself
+        /// are there the next time, from a file of their own (the module
+        /// file isn't written), which the Options sheet can also set.
+        @Test func settingsAreKept() {
+            let dir = tempDir(), settings = dir.appendingPathComponent("Settings").path
+            func run(_ path: String, control: Int32? = nil) {
+                bootMachine()
+                machine_screensaver_reset()
+                machine_screensaver_set_settings_dir(settings)
+                if let control { #expect(machine_screensaver_set_control(0, control)) }
+                machine_screensaver_set_seconds(0.1)
+                var err = [CChar](repeating: 0, count: 256)
+                #expect(machine_launch(path, &err, err.count))
+                machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+                _ = machine_run(30_000_000)
+                machine_set_instruction_limit(0)
+            }
+            // A module that adds one to its 'xDat' 128 at each Initialize.
+            let code = code68k([
+                0x4A6F, 0x0008, 0x6600, 0x001A, // TST.W 8(SP); BNE.W done
+                0x598F,                         // SUBQ.L #4,SP
+                0x2F3C, 0x7844, 0x6174,         // MOVE.L #'xDat',-(SP)
+                0x3F3C, 0x0080, 0xA81F,         // MOVE.W #128,-(SP); _Get1Resource
+                0x205F, 0x2F08, 0x2050,         // MOVEA.L (SP)+,A0; MOVE.L A0,-(SP); MOVEA.L (A0),A0
+                0x5250, 0xA9AA,                 // ADDQ.W #1,(A0); _ChangedResource
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1, // done: noErr; return
+            ])
+            let counter = writeResourceFile([
+                TestResource(type: "ADgm", id: 0, data: code),
+                TestResource(type: "xDat", id: 128, data: be16(5)),
+                TestResource(type: "sVal", id: 1000, data: be16(10)),
+            ], name: "Counter", in: dir)
+            run(counter)
+            run(counter, control: 66)
+            var len = 0
+            let fork = machine_screensaver_module_fork(counter, &len)
+            defer { free(fork) }
+            var idx = rsrc_index()
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(fork != nil && rsrc_parse(fork, len, &idx, &err, err.count))
+            defer { rsrc_index_free(&idx) }
+            func word(_ type: String, _ id: Int16) -> Int? {
+                for i in 0..<idx.count {
+                    var e = idx.entries[i]
+                    if e.type == fourCC(type) && e.id == id, let d = rsrc_data(fork, &idx, &e) {
+                        return Int(UInt16(d[0]) << 8 | UInt16(d[1]))
+                    }
+                }
+                return nil
+            }
+            #expect(word("xDat", 128) == 7)  // two runs, each one more
+            #expect(word("sVal", 1000) == 66) // the control given
+            // The module file is as it was.
+            var mf = mac_file()
+            #expect(appledouble_read(counter, &mf, &err, err.count))
+            #expect(machine_screensaver_store_resource(counter, fourCC("sVal"), 1000, be16(10), 2)) // back to its own
+            var path = [CChar](repeating: 0, count: 1400)
+            #expect(machine_screensaver_settings_path(counter, &path, path.count))
+            let kept = FileManager.default.contents(atPath: String(cString: path))
+            var keptIdx = rsrc_index()
+            if let kept {
+                let ok = [UInt8](kept).withUnsafeBufferPointer { rsrc_parse($0.baseAddress, kept.count, &keptIdx, &err, err.count) }
+                #expect(ok && keptIdx.count == 1)                 // only the xDat now
+                if ok { rsrc_index_free(&keptIdx) }
+            } else {
+                Issue.record("no settings file")
+            }
+            var len2 = 0
+            let fork2 = machine_screensaver_module_fork(counter, &len2)
+            #expect(fork2 != nil && len2 > 0)
+            free(fork2)
+            mac_file_free(&mf)
+            // A module that logs its parameter block sees the kept control,
+            // and a copy of it elsewhere has the same settings.
+            func boot() -> (UInt32, UInt32, UInt32) {
+                bootMachine()
+                machine_screensaver_reset()
+                machine_screensaver_set_settings_dir(settings)
+                machine_screensaver_set_seconds(0.1)
+                return (tb_NewPtr(4096, false, true), tb_NewPtr(64, false, true), tb_NewPtr(16, false, true))
+            }
+            func go(_ path: String) {
+                var e = [CChar](repeating: 0, count: 256)
+                #expect(machine_launch(path, &e, e.count))
+                machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+                _ = machine_run(30_000_000)
+                machine_set_instruction_limit(0)
+            }
+            let (log, psave, evt) = boot()
+            let logger = moduleFile(moduleCode(log: log, psave: psave, evt: evt), extra: [
+                TestResource(type: "sVal", id: 1000, data: be16(42)),
+            ], in: tempDir())
+            #expect(machine_screensaver_set_control(0, 12))
+            go(logger)
+            #expect(rd16(psave) == 12)
+            let elsewhere = tempDir()
+            for f in ["Test Module", "._Test Module"] {
+                let from = (logger as NSString).deletingLastPathComponent + "/" + f
+                if FileManager.default.fileExists(atPath: from) {
+                    try? FileManager.default.copyItem(atPath: from, toPath: elsewhere.appendingPathComponent(f).path)
+                }
+            }
+            let (log2, psave2, evt2) = boot()
+            #expect(log2 == log && psave2 == psave && evt2 == evt) // the module's code writes there
+            go(elsewhere.appendingPathComponent("Test Module").path)
+            #expect(rd16(psave2) == 12) // the same module, elsewhere: its settings follow it
+        }
+
         /// ImDone: no more DrawFrame calls; Close still comes.  A module
         /// whose 'Cals' leaves out Blank gets the screen blanked for it.
         @Test func imDoneStopsTheFrames() {

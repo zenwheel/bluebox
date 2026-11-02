@@ -818,6 +818,7 @@ func runCommand(_ args: [String]) {
     }
     if let idleModule {
         machine_screensaver_set_idle(resolveModule(idleModule), idleMinutes)
+        machine_screensaver_set_settings_dir(defaultScreensaverSettings())
     }
     for f in initFiles {
         guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }

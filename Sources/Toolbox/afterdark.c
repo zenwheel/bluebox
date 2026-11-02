@@ -96,6 +96,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "forks.h"
 #include "m68k.h"
@@ -134,6 +135,7 @@ static struct {
     char idle_module[1024];  /* idle blanking in a normal run */
     double idle_minutes;
     bool quiet;
+    char settings_dir[1024]; /* where each module's changed resources are kept; "" not kept */
 } opt = { .frames_per_tick = 4, .tick_budget = 100000 };
 
 void machine_screensaver_reset(void)
@@ -198,6 +200,265 @@ void machine_screensaver_set_idle(const char *module, double minutes)
     opt.idle_minutes = minutes;
 }
 
+/* ------------------------------------------------------------------ */
+/* Settings: what After Dark wrote back into a module's file (the controls
+ * set in its panel, and whatever the module itself changed in its
+ * resources at a button or in its setup) is kept in a file of its own,
+ * the resources that differ from the module's, and laid over the
+ * module's resources when it runs again.  The module file itself is
+ * never written: it may be read-only (the sandboxed screen saver's are)
+ * or shared.  The file is named for the module and its resources' hash,
+ * so copies of the same module share their settings and other versions
+ * don't. */
+
+void machine_screensaver_set_settings_dir(const char *dir)
+{
+    snprintf(opt.settings_dir, sizeof opt.settings_dir, "%s", dir ? dir : "");
+}
+
+static uint32_t fnv32(const uint8_t *p, size_t n)
+{
+    uint32_t h = 2166136261u;
+    for (size_t i = 0; i < n; i++)
+        h = (h ^ p[i]) * 16777619u;
+    return h;
+}
+
+static bool settings_path_for(const char *module, const uint8_t *fork, size_t len, char *out, size_t outsize)
+{
+    if (!opt.settings_dir[0])
+        return false;
+    const char *base = strrchr(module, '/');
+    base = base ? base + 1 : module;
+    snprintf(out, outsize, "%s/%s %08X.rsrc", opt.settings_dir, base, fnv32(fork, len));
+    return true;
+}
+
+bool machine_screensaver_settings_path(const char *module, char *out, size_t outsize)
+{
+    mac_file mf;
+    char err[256];
+    if (!appledouble_read(module, &mf, err, sizeof err))
+        return false;
+    bool ok = settings_path_for(module, mf.rsrc, mf.rsrc_len, out, outsize);
+    mac_file_free(&mf);
+    return ok;
+}
+
+static const rsrc_entry *find_entry(const rsrc_index *idx, uint32_t type, int16_t id)
+{
+    for (size_t i = 0; i < idx->count; i++)
+        if (idx->entries[i].type == type && idx->entries[i].id == id)
+            return &idx->entries[i];
+    return NULL;
+}
+
+/* base with over's resources replacing or added to its own (malloc'd). */
+static bool merge_forks(const uint8_t *base, size_t blen, const uint8_t *over, size_t olen, uint8_t **out,
+                        size_t *outlen)
+{
+    rsrc_index bi, oi;
+    char err[160];
+    if (!rsrc_parse(base, blen, &bi, err, sizeof err))
+        return false;
+    if (!rsrc_parse(over, olen, &oi, err, sizeof err)) {
+        rsrc_index_free(&bi);
+        return false;
+    }
+    rsrc_spec *specs = calloc(bi.count + oi.count + 1, sizeof *specs);
+    size_t n = 0;
+    for (size_t i = 0; i < bi.count; i++) {
+        const rsrc_entry *e = &bi.entries[i];
+        if (find_entry(&oi, e->type, e->id))
+            continue;
+        specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, rsrc_data(base, &bi, e), e->data_len };
+    }
+    for (size_t i = 0; i < oi.count; i++) {
+        const rsrc_entry *e = &oi.entries[i];
+        specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, rsrc_data(over, &oi, e), e->data_len };
+    }
+    bool ok = rsrc_build(specs, n, out, outlen);
+    free(specs);
+    rsrc_index_free(&bi);
+    rsrc_index_free(&oi);
+    return ok;
+}
+
+/* The module's resources with its settings over them, if it has any
+ * (malloc'd); NULL if not, or none are kept. */
+uint8_t *machine_screensaver_module_fork(const char *module, size_t *len)
+{
+    mac_file mf;
+    char err[256], path[1400];
+    *len = 0;
+    if (!appledouble_read(module, &mf, err, sizeof err))
+        return NULL;
+    uint8_t *out = NULL, *over = NULL;
+    size_t olen = 0;
+    if (mf.rsrc_len && settings_path_for(module, mf.rsrc, mf.rsrc_len, path, sizeof path) &&
+        read_file(path, &over, &olen) && !merge_forks(mf.rsrc, mf.rsrc_len, over, olen, &out, len))
+        out = NULL;
+    if (!out && mf.rsrc_len) {
+        out = malloc(mf.rsrc_len);
+        memcpy(out, mf.rsrc, mf.rsrc_len);
+        *len = mf.rsrc_len;
+    }
+    free(over);
+    mac_file_free(&mf);
+    return out;
+}
+
+/* A launch's module file: its settings laid over its resources. */
+void afterdark_apply_settings(const char *path, uint32_t type, uint8_t **rsrc, size_t *len)
+{
+    if (!opt.settings_dir[0] || !*len)
+        return;
+    if (type != fourcc("ADgm") && type != fourcc("A4gm")) {
+        /* By its resources, as afterdark_is_module_file decides. */
+        rsrc_index idx;
+        char e[160];
+        if (!rsrc_parse(*rsrc, *len, &idx, e, sizeof e))
+            return;
+        bool module = false;
+        for (size_t i = 0; i < idx.count; i++)
+            if (idx.entries[i].type == fourcc("ADgm"))
+                module = true;
+        if (find_entry(&idx, fourcc("CODE"), 0))
+            module = false;
+        rsrc_index_free(&idx);
+        if (!module)
+            return;
+    }
+    char sp[1400];
+    uint8_t *over = NULL, *out = NULL;
+    size_t olen = 0, outlen = 0;
+    if (!settings_path_for(path, *rsrc, *len, sp, sizeof sp) || !read_file(sp, &over, &olen))
+        return;
+    if (merge_forks(*rsrc, *len, over, olen, &out, &outlen)) {
+        LOGF(LOG_RSRC, "After Dark: settings from %s\n", sp);
+        free(*rsrc);
+        *rsrc = out;
+        *len = outlen;
+    }
+    free(over);
+}
+
+static void mkdirs(const char *dir)
+{
+    char p[1024];
+    snprintf(p, sizeof p, "%s", dir);
+    for (char *s = p + 1; *s; s++)
+        if (*s == '/') {
+            *s = 0;
+            mkdir(p, 0755);
+            *s = '/';
+        }
+    mkdir(p, 0755);
+}
+
+/* Keep the resources of the file (refnum rn, the module at path) that
+ * differ from the module's own; none: no settings file. */
+static void save_settings_of(int16_t rn, const char *path)
+{
+    mac_file mf;
+    char err[256], sp[1400];
+    if (!appledouble_read(path, &mf, err, sizeof err))
+        return;
+    if (!settings_path_for(path, mf.rsrc, mf.rsrc_len, sp, sizeof sp)) {
+        mac_file_free(&mf);
+        return;
+    }
+    tb_UpdateResFile(rn); /* the map and the changed resources into the fork in memory */
+    const uint8_t *cur;
+    uint32_t clen;
+    rsrc_index bi, ci;
+    if (rm_fork_of(rn, &cur, &clen) && rsrc_parse(mf.rsrc, mf.rsrc_len, &bi, err, sizeof err)) {
+        if (rsrc_parse(cur, clen, &ci, err, sizeof err)) {
+            rsrc_spec *specs = calloc(ci.count + 1, sizeof *specs);
+            size_t n = 0;
+            for (size_t i = 0; i < ci.count; i++) {
+                const rsrc_entry *e = &ci.entries[i], *b = find_entry(&bi, e->type, e->id);
+                const uint8_t *d = rsrc_data(cur, &ci, e);
+                if (b && b->data_len == e->data_len && !memcmp(rsrc_data(mf.rsrc, &bi, b), d, e->data_len) &&
+                    !strcmp(b->name, e->name))
+                    continue;
+                specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, d, e->data_len };
+            }
+            uint8_t *out;
+            size_t olen;
+            if (!n) {
+                remove(sp);
+            } else if (rsrc_build(specs, n, &out, &olen)) {
+                mkdirs(opt.settings_dir);
+                FILE *fp = fopen(sp, "wb");
+                if (fp) {
+                    fwrite(out, 1, olen, fp);
+                    fclose(fp);
+                    LOGF(LOG_RSRC, "After Dark: %zu changed resources kept in %s\n", n, sp);
+                }
+                free(out);
+            }
+            free(specs);
+            rsrc_index_free(&ci);
+        }
+        rsrc_index_free(&bi);
+    }
+    mac_file_free(&mf);
+}
+
+/* Store one resource in a module's settings (the screen saver's Options
+ * sheet sets the controls so); one the same as the module's own is
+ * dropped from them. */
+bool machine_screensaver_store_resource(const char *module, uint32_t type, int16_t id, const uint8_t *data,
+                                        uint32_t len)
+{
+    mac_file mf;
+    char err[256], sp[1400];
+    if (!appledouble_read(module, &mf, err, sizeof err))
+        return false;
+    rsrc_index bi, oi = { 0 };
+    if (!settings_path_for(module, mf.rsrc, mf.rsrc_len, sp, sizeof sp) ||
+        !rsrc_parse(mf.rsrc, mf.rsrc_len, &bi, err, sizeof err)) {
+        mac_file_free(&mf);
+        return false;
+    }
+    uint8_t *over = NULL;
+    size_t olen = 0;
+    if (!read_file(sp, &over, &olen) || !rsrc_parse(over, olen, &oi, err, sizeof err))
+        memset(&oi, 0, sizeof oi);
+    const rsrc_entry *b = find_entry(&bi, type, id);
+    bool same = b && b->data_len == len && !memcmp(rsrc_data(mf.rsrc, &bi, b), data, len);
+    rsrc_spec *specs = calloc(oi.count + 2, sizeof *specs);
+    size_t n = 0;
+    for (size_t i = 0; i < oi.count; i++) {
+        const rsrc_entry *e = &oi.entries[i];
+        if (e->type != type || e->id != id)
+            specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, rsrc_data(over, &oi, e), e->data_len };
+    }
+    if (!same)
+        specs[n++] = (rsrc_spec){ type, id, b ? b->name : "", b ? b->attrs : 0, data, len };
+    bool ok = true;
+    uint8_t *out;
+    size_t outlen;
+    if (!n) {
+        remove(sp);
+    } else if ((ok = rsrc_build(specs, n, &out, &outlen))) {
+        mkdirs(opt.settings_dir);
+        FILE *fp = fopen(sp, "wb");
+        ok = fp && fwrite(out, 1, outlen, fp) == outlen;
+        if (fp)
+            fclose(fp);
+        free(out);
+    }
+    free(specs);
+    if (oi.entries)
+        rsrc_index_free(&oi);
+    rsrc_index_free(&bi);
+    free(over);
+    mac_file_free(&mf);
+    return ok;
+}
+
 /* What the module host learned, for the CLI's report and the tests. */
 static struct {
     uint32_t calls[9];       /* by message (8: any button) */
@@ -233,6 +494,14 @@ typedef struct {
 } ad_state;
 
 static ad_state ad;
+
+/* The module's settings kept: after its setup and when it closes. */
+static void save_settings(void)
+{
+    char path[1024];
+    if (opt.settings_dir[0] && ad.rn > 0 && rm_host_path(ad.rn, path, sizeof path))
+        save_settings_of(ad.rn, path);
+}
 static bool natives_registered; /* since the boot */
 static gaddr sd_stubs[7], mf_stubs[4], dl_stubs[DL_SLOTS], vbl_stub;
 
@@ -605,10 +874,11 @@ static uint32_t mu_val_type(void) { return 0xB5000000u | ((uint32_t)'V' << 16) |
 
 /* A control's value: the first alternative (1000 IDs apart) whose 'µVal'
  * the configuration meets, else the last there is. */
-static int16_t control_value(int i, uint16_t config)
+static int16_t control_value_res(int i, uint16_t config, gaddr *res)
 {
     static const char *const kinds[] = { "sVal", "mVal", "xVal", "tVal", "bVal" };
     int16_t value = 0;
+    *res = 0;
     for (int alt = 0; alt < 9; alt++) {
         int16_t id = (int16_t)(1000 + i + alt * 1000);
         bool any = false;
@@ -619,6 +889,7 @@ static int16_t control_value(int i, uint16_t config)
             if (f) {
                 any = true;
                 v = k == 4 ? 0 : w; /* a button has no value */
+                *res = k < 3 ? tb_Get1Resource((int32_t)fourcc(kinds[k]), id) : 0; /* the ones with a value to set */
             }
         }
         if (!any)
@@ -632,6 +903,12 @@ static int16_t control_value(int i, uint16_t config)
             break;
     }
     return value;
+}
+
+static int16_t control_value(int i, uint16_t config)
+{
+    gaddr res;
+    return control_value_res(i, config, &res);
 }
 
 static uint16_t system_config(void)
@@ -879,9 +1156,20 @@ static bool ad_begin(int16_t rn, bool over_program)
 
     ad.pb = tb_NewPtr(PB_SIZE, false, true);
     uint16_t cfg = system_config();
-    for (int i = 0; i < 4; i++)
-        wr16(ad.pb + PB_controls + 2 * (uint32_t)i,
-             (uint16_t)(opt.control_given[i] ? opt.control[i] : control_value(i, cfg)));
+    for (int i = 0; i < 4; i++) {
+        gaddr res;
+        int16_t v = control_value_res(i, cfg, &res);
+        /* A value given is set in the module's resource, as After Dark's
+         * panel did: it is kept with the module's settings. */
+        if (opt.control_given[i]) {
+            v = opt.control[i];
+            if (res && rd32(res) && tb_GetHandleSize(res) >= 2 && (int16_t)rd16(mem_strip(rd32(res))) != v) {
+                wr16(mem_strip(rd32(res)), (uint16_t)v);
+                tb_ChangedResource(res);
+            }
+        }
+        wr16(ad.pb + PB_controls + 2 * (uint32_t)i, (uint16_t)v);
+    }
     wr32(ad.pb + PB_monitors, ad.mons);
     wr8(ad.pb + PB_colorQD, ad.color ? 1 : 0);
     wr16(ad.pb + PB_config, cfg);
@@ -944,6 +1232,7 @@ static bool ad_begin(int16_t rn, bool over_program)
         tb_ForeColor(33);
         tb_PaintRgn(ad.rgn);
     }
+    save_settings(); /* the controls given, and what the setup changed */
     int16_t r = call_module(msgInitialize);
     handle_result(r, msgInitialize);
     if (!ad.stopped) {
@@ -1012,6 +1301,7 @@ static void ad_end(void)
         return;
     if (!ad.stopped && understands(msgClose))
         call_module(msgClose);
+    save_settings();
     tb_VRemove(ad.vbl);
     if (ad.chanp && rd32(ad.chanp))
         tb_SndDisposeChannel(rd32(ad.chanp), 1);
@@ -1142,6 +1432,7 @@ void afterdark_idle(void)
     }
     in_saver = true;
     int16_t saved_res = tb_CurResFile();
+    afterdark_apply_settings(opt.idle_module, mac_file_type(&mf), &mf.rsrc, &mf.rsrc_len);
     int16_t rn = rm_open_host_file(opt.idle_module, mf.rsrc, (uint32_t)mf.rsrc_len, true);
     mac_file_free(&mf);
     tb_UseResFile(saved_res);

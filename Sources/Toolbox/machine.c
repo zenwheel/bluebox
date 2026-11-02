@@ -821,6 +821,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
     if (rd8(LM_CurApName) > 31)
         wr8(LM_CurApName, 31);
 
+    afterdark_apply_settings(app_path, mac_file_type(&mf), &mf.rsrc, &mf.rsrc_len); /* a module's kept settings */
     int16_t rn = rm_open_host_file(app_path, mf.rsrc, (uint32_t)mf.rsrc_len, true);
     mac_file_free(&mf);
     if (rn < 0) {

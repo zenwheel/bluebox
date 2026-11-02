@@ -16,7 +16,7 @@ nonisolated(unsafe) var hostFullScreen = false
 let screensaverUsage = """
   bluebox screensaver <module> [--window|--fullscreen|--headless] [--seconds N]
             [--png-every N dir] [--sound] [--control I=V]... [--button B]... [--backdrop IMAGE] [--frames-per-tick N]
-            [--tick-budget N] [run options: --depth, --screen, --machine, --log ...]
+            [--tick-budget N] [--settings DIR | --no-settings] [run options: --depth, --screen, --log ...]
       Run an After Dark graphics module (a file of type ADgm, or an archive
       holding one) as After Dark did: Initialize, Blank, then DrawFrame each
       tick until a key, a click or the mouse moving wakes it (or N seconds,
@@ -32,6 +32,11 @@ let screensaverUsage = """
       (in place of Blue Box's desktop): what Puzzle or Spotlight work on.  Up to 4 frames a tick
       (--frames-per-tick), fewer once a frame's code has run 100000
       instructions in the tick (--tick-budget).  Sound is off unless --sound.
+      Settings are kept as After Dark kept them in the module: the controls
+      given and what the module changes in its own resources (at a button,
+      in its setup) are there the next time.  They go in a file per module
+      in Blue Box's "After Dark Settings" folder (--settings DIR another;
+      --no-settings: not kept); the module file itself isn't changed.
 """
 
 func screensaverCommand(_ args: [String]) {
@@ -42,6 +47,7 @@ func screensaverCommand(_ args: [String]) {
     var depthGiven = false
     var maxGiven = false
     var framesPerTick: Int32 = 4
+    var settings: String? = defaultScreensaverSettings()
     var budget: UInt32 = 100_000
     var i = 0
     func next() -> String {
@@ -83,6 +89,8 @@ func screensaverCommand(_ args: [String]) {
         case "--tick-budget":
             guard let n = UInt32(next()), n > 0 else { fail("--tick-budget takes a number of instructions") }
             budget = n
+        case "--settings": settings = next()
+        case "--no-settings": settings = nil
         case "--help", "-h":
             print(screensaverUsage)
             exit(0)
@@ -107,6 +115,7 @@ func screensaverCommand(_ args: [String]) {
     guard let module else { eprint(screensaverUsage + "\n"); exit(2) }
     let file = resolveModule(module)
     machine_screensaver_set_pace(framesPerTick, budget)
+    machine_screensaver_set_settings_dir(settings)
     if display == "headless" && seconds == nil { seconds = 30 }
     if let seconds { machine_screensaver_set_seconds(seconds) }
     var run = [file] + runArgs
@@ -132,6 +141,11 @@ func screensaverCommand(_ args: [String]) {
     }
     screensaverRun = true
     runCommand(run)
+}
+
+/// Where modules' settings are kept: beside Blue Box's library.
+func defaultScreensaverSettings() -> String {
+    ((defaultLibrary() as NSString).deletingLastPathComponent as NSString).appendingPathComponent("After Dark Settings")
 }
 
 /// A module by path (a file, or an archive holding one), or by name from

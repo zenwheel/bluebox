@@ -18,7 +18,7 @@ struct SaverSettings: Equatable {
     var depth = 8
     var sound = false
     var backdrop = true    /* the desktop picture on the screen when it starts */
-    var controls: [String: [Int]] = [:] /* by module path: the four values, -1 for the module's own */
+    var controls: [String: [Int]] = [:] /* by module path, from the first version: kept in the settings files now */
 
     static func load() -> SaverSettings {
         var s = SaverSettings()
@@ -49,6 +49,14 @@ struct SaverSettings: Equatable {
     }
 
     var allFolders: [String] { defaultModuleFolders() + folders }
+
+    /// Where the modules' settings are kept (afterdark.c): the screen
+    /// saver's own container, the one place the sandbox lets it write.
+    static var settingsDir: String {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.path
+            ?? NSHomeDirectory() + "/Library/Application Support"
+        return base + "/Blue Box After Dark/Settings"
+    }
 
     /// The module to show: the one chosen, else the first found (Flying
     /// Toasters if it is there).
@@ -163,8 +171,9 @@ final class SaverMachine: @unchecked Sendable {
         let s = run.settings
         if ProcessInfo.processInfo.environment["BLUEBOX_SAVER_DEBUG"] != nil { NSLog("start %@ %d x %d", run.module, run.width, run.height) }
         machine_screensaver_reset()
+        machine_screensaver_set_settings_dir(SaverSettings.settingsDir)
         machine_screensaver_set_sound(s.sound)
-        let values = s.controls[run.module] ?? []
+        let values = s.controls[run.module] ?? [] // the first version's; the settings file has them now
         for (i, v) in values.enumerated() where i < 4 && v >= 0 { _ = machine_screensaver_set_control(Int32(i), Int32(v)) }
         if s.backdrop, let (rgba, w, h) = desktopPicture() {
             rgba.withUnsafeBufferPointer { machine_screensaver_set_backdrop($0.baseAddress, Int32(w), Int32(h)) }

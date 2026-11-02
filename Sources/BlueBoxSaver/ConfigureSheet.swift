@@ -4,6 +4,7 @@
 
 #if canImport(ScreenSaver)
 import AppKit
+import Toolbox
 
 @MainActor
 final class ConfigureSheet: NSObject {
@@ -24,6 +25,7 @@ final class ConfigureSheet: NSObject {
 
     init(onSave: @escaping (SaverSettings) -> Void) {
         self.onSave = onSave
+        machine_screensaver_set_settings_dir(SaverSettings.settingsDir)
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 430), styleMask: [.titled], backing: .buffered,
                           defer: true)
         super.init()
@@ -134,7 +136,7 @@ final class ConfigureSheet: NSObject {
         let mi = ModuleCatalog.info(path, config: ModuleCatalog.config(depth: depth, sound: soundBox.state == .on))
         info = mi
         credit.stringValue = mi.credit + (mi.isPowerPC ? "  (PowerPC)" : "")
-        let saved = settings.controls[path] ?? []
+        let saved = settings.controls[path] ?? [] // the first version kept them here
         for (slot, c) in mi.controls.enumerated() {
             guard let c else { continue }
             let value = slot < saved.count && saved[slot] >= 0 ? saved[slot] : c.value
@@ -202,16 +204,20 @@ final class ConfigureSheet: NSObject {
         settings.sound = soundBox.state == .on
         settings.backdrop = backdropBox.state == .on
         if let path {
-            var values = [-1, -1, -1, -1]
-            for (slot, view, c) in controlViews {
+            // Into the module's settings, as After Dark's panel wrote them
+            // into the module: its resources hold its controls' values.
+            for (_, view, c) in controlViews {
+                var value: Int
                 switch c.kind {
-                case .slider: values[slot] = Int((view as? NSSlider)?.doubleValue.rounded() ?? 0)
-                case .menu: values[slot] = ((view as? NSPopUpButton)?.indexOfSelectedItem ?? 0) + 1
-                case .checkbox: values[slot] = (view as? NSButton)?.state == .on ? 1 : 0
-                default: break
+                case .slider: value = Int((view as? NSSlider)?.doubleValue.rounded() ?? 0)
+                case .menu: value = ((view as? NSPopUpButton)?.indexOfSelectedItem ?? 0) + 1
+                case .checkbox: value = (view as? NSButton)?.state == .on ? 1 : 0
+                default: continue
                 }
+                let bytes = [UInt8(truncatingIfNeeded: value >> 8), UInt8(truncatingIfNeeded: value)]
+                _ = machine_screensaver_store_resource(path, ModuleCatalog.typeCode(c.type), Int16(c.id), bytes, 2)
             }
-            settings.controls[path] = values
+            settings.controls[path] = nil
         }
         settings.save()
         onSave(settings)
