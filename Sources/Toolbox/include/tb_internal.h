@@ -880,6 +880,7 @@ void wm_set_floats_active(bool on);
 bool wm_floats_active(void);
 void wm_set_menu_bar_height(int16_t h);
 void wm_rebuild_desk(void);
+void wm_make_ports(void);
 /* For MenusLib: the standard menu definition and the menu bar's, and a
  * menu's own definition called. */
 void menu_standard_mdef(int16_t msg, gaddr mh, gaddr rect, uint32_t hit, gaddr which);

@@ -52,6 +52,28 @@ extension BlueBox {
             #expect(rd32(out) == rd32(def))
         }
 
+        /// The Window Manager's ports are there for a program that asks
+        /// before InitGraf, covering the screen: Alley 19 sizes its window
+        /// from the port's rectangle first thing (and made it empty and far
+        /// off the screen from what was at address 0).  InitWindows keeps them.
+        @Test func windowManagerPortsAreThereBeforeInitWindows() {
+            launchTestApp()
+            let out = tb_NewPtr(4, false, true)
+            tb_GetWMgrPort(out)
+            let wp = rd32(out)
+            tb_GetCWMgrPort(out)
+            let cp = rd32(out)
+            #expect(wp != 0 && cp != 0)
+            for p in [wp, cp] {
+                let r = p + UInt32(GrafPort_portRect_off)
+                #expect(rd16(r) == 0 && rd16(r + 2) == 0)
+                #expect(Int(rd16(r + 4)) == Int(g_screen_height) && Int(rd16(r + 6)) == Int(g_screen_width))
+            }
+            #expect(rd32(wp + UInt32(GrafPort_portBits_off)) == rd32(UInt32(LM_ScrnBase)))
+            _ = initToolbox()
+            #expect(rd32(UInt32(LM_WMgrPort)) == wp && rd32(UInt32(LM_WMgrCPort)) == cp)
+        }
+
         /// The desktop's region is there before any program runs: Web
         /// Archer, background-only, never calls InitWindows, and its
         /// search bar's window shows through GrayRgn.
