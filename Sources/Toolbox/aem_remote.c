@@ -14,6 +14,7 @@
  */
 #include <errno.h>
 #include <dirent.h>
+#include <limits.h>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
@@ -129,10 +130,48 @@ static bool read_message(int fd, int timeout_ms, uint32_t *word, uint8_t **data,
 
 static char socket_path[600];
 
+/* Beside each socket, "<pid>.<signature>.info": what the run tells the
+ * others of itself for GetProcessInformation: its name (a Pascal string),
+ * its type ('APPL', or 'FNDR' for a Finder) and its application's host
+ * path. */
+static void info_path(char *out, size_t size, const char *socket)
+{
+    snprintf(out, size, "%s.info", socket);
+}
+
 static void unlink_socket(void)
 {
-    if (socket_path[0])
+    if (socket_path[0]) {
+        char info[620];
+        info_path(info, sizeof info, socket_path);
         unlink(socket_path);
+        unlink(info);
+    }
+}
+
+extern char g_app_path[];
+
+/* Written before the socket is made, so a run listed is a run described;
+ * whole or not at all (renamed into place). */
+static void write_info(void)
+{
+    char info[620], tmp[640];
+    info_path(info, sizeof info, socket_path);
+    snprintf(tmp, sizeof tmp, "%s.%d", info, (int)getpid());
+    FILE *f = fopen(tmp, "wb");
+    if (!f)
+        return;
+    uint8_t name[32], type[4];
+    gget(name, LM_CurApName, 32);
+    if (name[0] > 31)
+        name[0] = 31;
+    put32(type, T(g_is_finder ? "FNDR" : "APPL"));
+    fwrite(name, 1, 1 + (size_t)name[0], f);
+    fwrite(type, 1, 4, f);
+    char full[PATH_MAX]; /* the others' current folder is not ours */
+    fputs(g_app_path[0] && realpath(g_app_path, full) ? full : g_app_path, f);
+    if (fclose(f) != 0 || rename(tmp, info) != 0)
+        unlink(tmp);
 }
 
 static void reply_to_connection(void *ctx, const uint8_t *data, uint32_t len, int16_t err)
@@ -179,10 +218,12 @@ bool machine_listen_for_apple_events(void)
     }
     strcpy(sa.sun_path, socket_path);
     unlink(socket_path);
+    write_info();
     int sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock < 0 || bind(sock, (struct sockaddr *)&sa, sizeof sa) != 0 || listen(sock, 8) != 0) {
         if (sock >= 0)
             close(sock);
+        unlink_socket();
         socket_path[0] = 0;
         return false;
     }
@@ -211,15 +252,40 @@ int machine_ae_processes(machine_ae_process *out, int max)
         if (sscanf(e->d_name, "%d.%8X%c", &pid, &sig, &extra) != 2)
             continue;
         if (kill(pid, 0) != 0 && errno == ESRCH) { /* left by a run that ended badly */
-            char path[600];
+            char path[600], info[620];
             snprintf(path, sizeof path, "%s/%s", folder(), e->d_name);
+            info_path(info, sizeof info, path);
             unlink(path);
+            unlink(info);
             continue;
         }
         out[n++] = (machine_ae_process){ pid, sig };
     }
     closedir(d);
     return n;
+}
+
+bool machine_ae_process_info(int pid, uint32_t sig, uint8_t name[32], uint32_t *type, char *path, size_t size)
+{
+    char sock[600], info[620];
+    snprintf(sock, sizeof sock, "%s/%d.%08X", folder(), pid, sig);
+    info_path(info, sizeof info, sock);
+    FILE *f = fopen(info, "rb");
+    if (!f)
+        return false;
+    uint8_t buf[1100];
+    size_t n = fread(buf, 1, sizeof buf - 1, f);
+    fclose(f);
+    if (n < 1 || buf[0] > 31 || n < 1u + buf[0] + 4 || !size)
+        return false;
+    memcpy(name, buf, 1 + (size_t)buf[0]);
+    *type = be32(buf + 1 + buf[0]);
+    size_t at = 1 + (size_t)buf[0] + 4, len = n - at;
+    if (len >= size)
+        len = size - 1;
+    memcpy(path, buf + at, len);
+    path[len] = 0;
+    return true;
 }
 
 static int connect_to(int pid, uint32_t sig)
@@ -305,13 +371,19 @@ static bool find_target(const uint8_t *addr, uint32_t type, uint32_t len, machin
         sig = be32(addr + TargetID_name_off + PPCPortRec_u_port_creator_off);
     else
         return false;
-    machine_ae_process procs[64];
-    int n = machine_ae_processes(procs, 64);
-    for (int i = 0; i < n; i++)
-        if (procs[i].pid != getpid() && (pid ? procs[i].pid == pid : procs[i].signature == sig)) {
-            *found = procs[i];
-            return true;
-        }
+    /* A run just launched is waited for: the event is the program's
+     * first, as a launched process's queue holds it on a Mac. */
+    for (int tries = 0; tries < 2; tries++) {
+        machine_ae_process procs[64];
+        int n = machine_ae_processes(procs, 64);
+        for (int i = 0; i < n; i++)
+            if (procs[i].pid != getpid() && (pid ? procs[i].pid == pid : procs[i].signature == sig)) {
+                *found = procs[i];
+                return true;
+            }
+        if (!pid || !process_await_launched(pid))
+            break;
+    }
     return false;
 }
 

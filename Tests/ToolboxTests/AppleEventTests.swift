@@ -816,8 +816,85 @@ extension BlueBox {
             _ = tb_AECreateAppleEvent(code("misc"), code("dosc"), target, -1, 0, evt)
             #expect(tb_AESend(evt, reply, 3, 0, -1, 0, 0) == -600)
         }
+
+        /// LaunchApplication answers with the started run's serial number,
+        /// which names it before it listens (the Process Manager waits for
+        /// it), and the run tells the others its name, type and file.
+        @Test func launchedRunIsNamedBySerialNumber() throws {
+            let dir = launchTestApp()
+            guestStack()
+            #expect(machine_listen_for_apple_events())
+            let folder = FileManager.default.temporaryDirectory.path
+            guard let ours = (try? FileManager.default.contentsOfDirectory(atPath: folder))?
+                .filter({ $0.hasPrefix("bluebox-ae-") })
+                .map({ folder + "/" + $0 })
+                .first(where: { ((try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? []).contains { $0.hasPrefix("\(getpid()).") } })
+            else {
+                Issue.record("no socket folder")
+                return
+            }
+            // This run describes itself beside its socket.
+            let mine = (try? FileManager.default.contentsOfDirectory(atPath: ours)) ?? []
+            #expect(mine.contains { $0.hasPrefix("\(getpid()).") && $0.hasSuffix(".info") })
+
+            let app = dir.appendingPathComponent("Other App")
+            try Data().write(to: app)
+            // The run started: a stand-in process that lists itself a moment later.
+            let sleeper = Process()
+            sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+            sleeper.arguments = ["10"]
+            try sleeper.run()
+            let pid = sleeper.processIdentifier
+            let entry = ours + "/\(pid).4F544852" // 'OTHR'
+            defer {
+                try? FileManager.default.removeItem(atPath: entry)
+                try? FileManager.default.removeItem(atPath: entry + ".info")
+                sleeper.terminate()
+            }
+            launchedPID = pid
+            machine_set_launch_handler({ _, _, _, _ in
+                machine_launched_process(launchedPID)
+                return true
+            }, nil)
+            defer { machine_set_launch_handler(nil, nil) }
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            fm_spec_for_path(app.path, spec)
+            let pb = tb_NewPtr(Int32(LaunchParamBlockRec_SIZEOF), false, true)
+            wr16(pb + UInt32(LaunchParamBlockRec_launchBlockID_off), 0x4C43)
+            wr16(pb + UInt32(LaunchParamBlockRec_launchControlFlags_off), 0x4000) // launchContinue
+            wr32(pb + UInt32(LaunchParamBlockRec_launchAppSpec_off), spec)
+            #expect(tb_LaunchApplication(pb) == 0)
+            let psn = pb + UInt32(LaunchParamBlockRec_launchProcessSN_off)
+            #expect(rd32(psn) == 1 && rd32(psn + 4) == UInt32(pid))
+
+            let appPath = app.path
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+                let name = Array("Other App".utf8)
+                let info = [UInt8(name.count)] + name + Array("APPL".utf8) + Array(appPath.utf8)
+                FileManager.default.createFile(atPath: entry + ".info", contents: Data(info))
+                FileManager.default.createFile(atPath: entry, contents: nil)
+            }
+            let info = tb_NewPtr(Int32(ProcessInfoRec_SIZEOF), false, true)
+            let name = tb_NewPtr(32, false, true), appSpec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            wr32(info + UInt32(ProcessInfoRec_processInfoLength_off), UInt32(ProcessInfoRec_SIZEOF))
+            wr32(info + UInt32(ProcessInfoRec_processName_off), name)
+            wr32(info + UInt32(ProcessInfoRec_processAppSpec_off), appSpec)
+            #expect(tb_GetProcessInformation(psn, info) == 0)
+            #expect(rd32(info + UInt32(ProcessInfoRec_processSignature_off)) == fourCC("OTHR"))
+            #expect(rd32(info + UInt32(ProcessInfoRec_processType_off)) == fourCC("APPL"))
+            #expect(pstring(at: name) == "Other App")
+            #expect(pstring(at: appSpec + UInt32(FSSpec_name_off)) == "Other App")
+            #expect(rd32(appSpec + UInt32(FSSpec_parID_off)) == rd32(spec + UInt32(FSSpec_parID_off)))
+
+            // Reported only (a headless run starts nothing): no serial number.
+            machine_set_launch_handler({ _, _, _, _ in true }, nil)
+            #expect(tb_LaunchApplication(pb) == 0)
+            #expect(rd32(psn) == 0 && rd32(psn + 4) == 0)
+        }
     }
 }
+
+private nonisolated(unsafe) var launchedPID: Int32 = 0
 
 private nonisolated(unsafe) var launched: [String] = []
 private nonisolated(unsafe) var hostReplies: [([UInt8], Int16)] = []

@@ -133,6 +133,9 @@ int16_t rm_open_empty_system(void);
 bool process_launch(const char *app, const char *const *docs, int ndocs);
 bool process_is_finder(uint32_t hi, uint32_t lo); /* the Finder's serial number */
 bool process_is_us(uint32_t hi, uint32_t lo); /* this run's serial number or kCurrentProcess */
+/* A run this one launched, waited for until it listens for events (true)
+ * or ends; false at once for any other process. */
+bool process_await_launched(int pid);
 bool process_open_url(const char *url);
 /* Internet Config's ICLaunchURL: the URL in data[a..b) (all len bytes when
  * the selection is empty) opened by the host; an Internet Config error. */

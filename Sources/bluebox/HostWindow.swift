@@ -928,6 +928,8 @@ func installLaunchHandler() {
         env["__CFBundleIdentifier"] = nil // its own name, not its launcher's
         p.environment = env
         do { try p.run() } catch { return false }
+        // Its serial number for the launcher's events to it.
+        machine_launched_process(p.processIdentifier)
         return true
     }, nil)
     // A URL a program opens (Internet Config's ICLaunchURL) goes to the
