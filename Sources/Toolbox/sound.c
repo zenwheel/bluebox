@@ -1406,18 +1406,25 @@ static void sd_done(int16_t result)
         io_complete_later(pb, result);
 }
 
-/* KillIO: the sound stops, and the write's completion runs now. */
+/* KillIO: the sound stops, and the write's completion runs now.  The
+ * Device Manager's KillIO went on until the driver's queue was empty, so
+ * a write a completion routine makes then is killed too: Down Hill
+ * Racer's sound routines queue the next piece of a sound from the
+ * completion, and free the pieces as soon as KillIO returns. */
 static void sd_kill_now(void)
 {
-    gaddr pb = sd_pb;
-    stop_host(&sd_chan);
-    sd_pb = sd_ft = 0;
-    sd_lowmem(0);
-    if (!pb)
-        return;
-    wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
-    if (sd_async)
+    for (int n = 0; n < 100000; n++) {
+        gaddr pb = sd_pb;
+        stop_host(&sd_chan);
+        sd_pb = sd_ft = 0;
+        sd_lowmem(0);
+        if (!pb)
+            return;
+        wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
+        if (!sd_async)
+            return;
         io_complete_now(pb, abortErr);
+    }
 }
 
 /* From the sound pump: four-tone goes on a tick at a time while its
@@ -1520,14 +1527,21 @@ static int16_t sd_write(gaddr pb, bool async)
 
 static int16_t sd_kill(gaddr pb)
 {
-    sd_kill_now();
+    /* Writes that finished but whose completions have not run yet: those
+     * run now, and what they write is killed as well. */
+    for (int n = 0; n < 100000; n++) {
+        sd_kill_now();
+        io_complete_now_for(-4);
+        if (!sd_pb)
+            break;
+    }
     return noErr;
 }
 
 static int16_t sd_control(gaddr pb, bool async)
 {
     if ((int16_t)rd16(pb + CntrlParam_csCode_off) == 1) /* killCode */
-        sd_kill_now();
+        sd_kill(pb);
     return noErr;
 }
 
