@@ -1433,6 +1433,7 @@ static void close_window(gaddr w, bool keep_parts)
     call_wdef(w, wDispose, 0);
     unlink_window(w);
     remove_aux(w);
+    wm_set_self_drawn(w, NULL);
     if (same_window(active_window, w))
         active_window = 0;
     if (same_window(old_window, w))
@@ -1901,6 +1902,43 @@ void tb_EndUpdate(gaddr w)
     update_window = 0;
 }
 
+/* Windows Blue Box puts up as a screen (AGL's and DrawSprocket's full
+ * screen): on a Mac the program drew on the display itself, with no window
+ * to update, so it handles no update event for them.  Their makers redraw
+ * them. */
+enum { NSELF_DRAWN = 8 };
+static struct {
+    gaddr w;
+    void (*redraw)(gaddr w);
+} self_drawn[NSELF_DRAWN];
+
+void wm_set_self_drawn(gaddr w, void (*redraw)(gaddr w))
+{
+    int free_slot = -1;
+    for (int i = 0; i < NSELF_DRAWN; i++) {
+        if (self_drawn[i].w == w) {
+            self_drawn[i].redraw = redraw;
+            if (!redraw)
+                self_drawn[i].w = 0;
+            return;
+        }
+        if (!self_drawn[i].w && free_slot < 0)
+            free_slot = i;
+    }
+    if (redraw && free_slot >= 0) {
+        self_drawn[free_slot].w = w;
+        self_drawn[free_slot].redraw = redraw;
+    }
+}
+
+static void (*self_drawn_redraw(gaddr w))(gaddr)
+{
+    for (int i = 0; i < NSELF_DRAWN; i++)
+        if (w && self_drawn[i].w == w)
+            return self_drawn[i].redraw;
+    return NULL;
+}
+
 int8_t tb_CheckUpdate(gaddr ev)
 {
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
@@ -1908,6 +1946,16 @@ int8_t tb_CheckUpdate(gaddr ev)
             continue;
         if (tb_EmptyRgn(WindowRecord_updateRgn(w)))
             continue;
+        void (*redraw)(gaddr) = self_drawn_redraw(w);
+        if (redraw) {
+            gaddr saved = qd_port();
+            tb_SetPort(w);
+            tb_BeginUpdate(w);
+            redraw(w);
+            tb_EndUpdate(w);
+            tb_SetPort(saved);
+            continue;
+        }
         /* A window with a picture is the Window Manager's to draw, with no
          * update event (ACE!'s splash, waiting for its updates to end). */
         gaddr pic = WindowRecord_windowPic(w);
@@ -2535,6 +2583,7 @@ void tb_InitWindows(void)
     old_window = 0;
     floats_hidden = false;
     desk_window = 0;
+    memset(self_drawn, 0, sizeof self_drawn);
     float_layer = false;
     floats_inactive = false;
     nhidden_floats = 0;

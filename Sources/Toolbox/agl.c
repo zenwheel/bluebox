@@ -542,14 +542,28 @@ static void agl_SetOffScreen(ppc_cpu *c)
     RETURN(1);
 }
 
+static void fullscreen_redraw(gaddr w);
+
 /* aglSetFullScreen(ctx, width, height, freq, device): a black window over
- * the whole screen. */
+ * the whole screen, which the program gets no update events for (it drew
+ * on the display, with no window). */
 static void agl_SetFullScreen(ppc_cpu *c)
 {
     actx *a = ctx_of(R(0));
     if (!a) {
         set_error(AGL_BAD_CONTEXT);
         RETURN(0);
+        return;
+    }
+    /* Already full screen: the same screen, at the size now asked for.
+     * A new window would activate, and a program that goes full screen
+     * on each activate event (glTron) would get another, frame after
+     * frame, never a null event. */
+    if (a->kind == DRAW_FULLSCREEN && a->port) {
+        a->width = (int32_t)R(1) > 0 ? (int)R(1) : g_screen_width;
+        a->height = (int32_t)R(2) > 0 ? (int)R(2) : g_screen_height;
+        size_to_drawable(a);
+        RETURN(1);
         return;
     }
     close_fullscreen(a);
@@ -569,6 +583,7 @@ static void agl_SetFullScreen(ppc_cpu *c)
     tb_RGBForeColor(black);
     tb_PaintRect(r);
     tb_SetPort(rd32(saved));
+    wm_set_self_drawn(w, fullscreen_redraw);
     a->kind = DRAW_FULLSCREEN;
     a->port = w;
     a->width = (int32_t)R(1) > 0 ? (int)R(1) : g_screen_width;
@@ -625,6 +640,76 @@ static bool frame_for(actx *a)
     return true;
 }
 
+/* The frame's rectangle s to d in the drawable. */
+static void show_frame(actx *a, qrect s, qrect d)
+{
+    gaddr src = a->scratch, dst = a->scratch + 8, saved = a->scratch + 16, fg = a->scratch + 24,
+          bg = a->scratch + 30, black = a->scratch + 36, white = a->scratch + 42;
+    qrect_put(src, s);
+    qrect_put(dst, d);
+
+    /* Into the port as it is but for its colours and clipping, which
+     * aren't the frame's business. */
+    tb_GetGWorld(saved, saved + 4);
+    tb_SetGWorld(a->port, 0);
+    tb_GetForeColor(fg);
+    tb_GetBackColor(bg);
+    memset(gptr(black), 0, 6);
+    memset(gptr(white), 0xFF, 6);
+    tb_RGBForeColor(black);
+    tb_RGBBackColor(white);
+    gaddr clip = tb_NewRgn();
+    if (clip) {
+        tb_GetClip(clip);
+        tb_ClipRect(a->port + GrafPort_portRect_off);
+    }
+    tb_CopyBits(a->frame, a->port + CGrafPort_portPixMap_off, src, dst, 0 /* srcCopy */, 0);
+    if (clip) {
+        tb_SetClip(clip);
+        tb_DisposeRgn(clip);
+    }
+    tb_RGBForeColor(fg);
+    tb_RGBBackColor(bg);
+    tb_SetGWorld(rd32(saved), rd32(saved + 4));
+}
+
+/* A full-screen frame's place: scaled to fill the screen as the display
+ * would have taken its size. */
+static qrect fullscreen_dest(actx *a)
+{
+    qrect pr = qrect_get(a->port + GrafPort_portRect_off), d;
+    int sw = pr.right - pr.left, sh = pr.bottom - pr.top;
+    int dw = sw, dh = (int)((long)sw * a->height / a->width);
+    if (dh > sh) {
+        dh = sh;
+        dw = (int)((long)sh * a->width / a->height);
+    }
+    d = (qrect){ (int16_t)(pr.top + (sh - dh) / 2), (int16_t)(pr.left + (sw - dw) / 2), 0, 0 };
+    d.bottom = (int16_t)(d.top + dh);
+    d.right = (int16_t)(d.left + dw);
+    return d;
+}
+
+/* The full screen's window uncovered (the port current, between
+ * BeginUpdate and EndUpdate): black, and the last frame shown again. */
+static void fullscreen_redraw(gaddr w)
+{
+    actx *a = NULL;
+    for (int i = 0; i < MAX_OBJECTS && !a; i++)
+        if (ctxs[i] && ctxs[i]->kind == DRAW_FULLSCREEN && ctxs[i]->port == w)
+            a = ctxs[i];
+    if (!a)
+        return;
+    gaddr black = a->scratch + 48, fg = a->scratch + 56;
+    tb_GetForeColor(fg);
+    memset(gptr(black), 0, 6);
+    tb_RGBForeColor(black);
+    tb_PaintRect(w + GrafPort_portRect_off);
+    tb_RGBForeColor(fg);
+    if (a->frame && a->frame_w == a->width && a->frame_h == a->height)
+        show_frame(a, (qrect){ 0, 0, (int16_t)a->height, (int16_t)a->width }, fullscreen_dest(a));
+}
+
 /* The frame (or the swap rectangle of it) to the drawable. */
 static void present(actx *a)
 {
@@ -652,55 +737,19 @@ static void present(actx *a)
     uint32_t rb = (uint32_t)a->width * 4;
     hostgl_read_frame(a->h, x, y, w, h, PixMap_baseAddr(a->frame) + (uint32_t)top * rb + (uint32_t)x * 4, rb);
 
-    gaddr src = a->scratch, dst = a->scratch + 8, saved = a->scratch + 16, fg = a->scratch + 24,
-          bg = a->scratch + 30, black = a->scratch + 36, white = a->scratch + 42;
     qrect pr = qrect_get(a->port + GrafPort_portRect_off), d;
     qrect s = { (int16_t)top, (int16_t)x, (int16_t)(top + h), (int16_t)(x + w) };
     if (a->kind == DRAW_FULLSCREEN) {
-        /* The whole frame, scaled to fill the screen as the display would
-         * have taken its size; the swap rectangle is moot. */
-        int sw = pr.right - pr.left, sh = pr.bottom - pr.top;
-        int dw = sw, dh = (int)((long)sw * a->height / a->width);
-        if (dh > sh) {
-            dh = sh;
-            dw = (int)((long)sh * a->width / a->height);
-        }
+        /* The whole frame; the swap rectangle is moot. */
         s = (qrect){ 0, 0, (int16_t)a->height, (int16_t)a->width };
-        d = (qrect){ (int16_t)(pr.top + (sh - dh) / 2), (int16_t)(pr.left + (sw - dw) / 2), 0, 0 };
-        d.bottom = (int16_t)(d.top + dh);
-        d.right = (int16_t)(d.left + dw);
+        d = fullscreen_dest(a);
     } else {
         int bx = a->buffer_rect_on ? a->buffer_rect[0] : 0, by = a->buffer_rect_on ? a->buffer_rect[1] : 0;
         int16_t ftop = (int16_t)(a->buffer_rect_on ? pr.bottom - by - a->height : pr.top);
         d = (qrect){ (int16_t)(ftop + s.top), (int16_t)(pr.left + bx + s.left), (int16_t)(ftop + s.bottom),
                      (int16_t)(pr.left + bx + s.right) };
     }
-    qrect_put(src, s);
-    qrect_put(dst, d);
-
-    /* Into the port as it is but for its colours and clipping, which
-     * aren't the frame's business. */
-    tb_GetGWorld(saved, saved + 4);
-    tb_SetGWorld(a->port, 0);
-    tb_GetForeColor(fg);
-    tb_GetBackColor(bg);
-    memset(gptr(black), 0, 6);
-    memset(gptr(white), 0xFF, 6);
-    tb_RGBForeColor(black);
-    tb_RGBBackColor(white);
-    gaddr clip = tb_NewRgn();
-    if (clip) {
-        tb_GetClip(clip);
-        tb_ClipRect(a->port + GrafPort_portRect_off);
-    }
-    tb_CopyBits(a->frame, a->port + CGrafPort_portPixMap_off, src, dst, 0 /* srcCopy */, 0);
-    if (clip) {
-        tb_SetClip(clip);
-        tb_DisposeRgn(clip);
-    }
-    tb_RGBForeColor(fg);
-    tb_RGBBackColor(bg);
-    tb_SetGWorld(rd32(saved), rd32(saved + 4));
+    show_frame(a, s, d);
 }
 
 static void agl_SwapBuffers(ppc_cpu *c)

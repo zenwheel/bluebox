@@ -117,6 +117,41 @@ extension BlueBox {
             tb_DisposeWindow(w)
         }
 
+        /// The full screen is the display, not a window of the program's:
+        /// set again it stays the same (glTron goes full screen on each
+        /// activate event), and uncovered it is redrawn with the last frame,
+        /// with no update event for the program to handle.
+        @Test func fullScreenStaysAndRedrawsItself() {
+            launchTestApp()
+            _ = initToolbox()
+            let ctx = context()
+            #expect(gl("aglSetFullScreen", [ctx, 0, 0, 0, 0]) == 1)
+            let w = tb_FrontWindow()
+            #expect(w != 0)
+            gl("glClearColor", fp: [0, 0, 1, 1])
+            gl("glClear", [Self.GL_COLOR_BUFFER_BIT])
+            #expect(gl("aglSwapBuffers", [ctx]) == 0)
+            tb_SetPort(w) // below the menu bar
+            #expect(pixel(100, 100) == (0, 0, 0xFFFF))
+            #expect(gl("aglSetFullScreen", [ctx, 0, 0, 0, 0]) == 1)
+            #expect(tb_FrontWindow() == w)
+
+            tb_SetPort(w)
+            let r = rect(50, 50, 150, 150)
+            tb_EraseRect(r)
+            #expect(pixel(100, 100) == (0xFFFF, 0xFFFF, 0xFFFF))
+            tb_InvalRect(r)
+            let ev = tb_NewPtr(16, true, true)
+            #expect(tb_CheckUpdate(ev) == 0)
+            tb_SetPort(w)
+            #expect(pixel(100, 100) == (0, 0, 0xFFFF))
+
+            #expect(gl("aglSetDrawable", [ctx, 0]) == 1)
+            #expect(tb_FrontWindow() != w)
+            #expect(gl("aglSetCurrentContext", [0]) == 1)
+            #expect(gl("aglDestroyContext", [ctx]) == 1)
+        }
+
         /// agl_macro.h's way in (Cro-Mag Rally): gl through the context's
         /// own table, the renderer word first, each entry a transition
         /// vector; clear_color is the thirteenth, read_pixels's eighth

@@ -251,6 +251,41 @@ extension BlueBox {
             #expect(call("DSpContext_Release", [ctx]) == 0)
         }
 
+        /// A context's state is a long (an enum, always int in the
+        /// interfaces): all four bytes written, active (0) once it is up,
+        /// inactive (2) after.  Diablo read a half-written one as paused.
+        @Test func stateIsALong() {
+            launchTestApp()
+            _ = initToolbox()
+            let attrs = tb_NewPtr(72, false, true), ctxp = tb_NewPtr(4, false, true), st = tb_NewPtr(4, false, true)
+            wr32(attrs + 4, 640)
+            wr32(attrs + 8, 480)
+            wr32(attrs + 36, 8)
+            wr32(attrs + 44, 8)
+            wr32(attrs + 48, 2)
+            func call(_ name: String, _ args: [UInt32]) -> UInt32 {
+                for (i, a) in args.enumerated() {
+                    withUnsafeMutableBytes(of: &g_ppc.gpr) { $0.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+                }
+                cfm_export_fn(name)!(&g_ppc)
+                return g_ppc.gpr.3
+            }
+            #expect(call("DSpStartup", []) == 0)
+            #expect(call("DSpFindBestContext", [attrs, ctxp]) == 0)
+            let ctx = rd32(ctxp)
+            #expect(call("DSpContext_Reserve", [ctx, attrs]) == 0)
+            #expect(call("DSpContext_SetState", [ctx, 0]) == 0)
+            wr32(st, 0xDEAD_BEEF)
+            #expect(call("DSpContext_GetState", [ctx, st]) == 0)
+            #expect(rd32(st) == 0)
+            #expect(call("DSpContext_SetState", [ctx, 2]) == 0)
+            wr32(st, 0xDEAD_BEEF)
+            #expect(call("DSpContext_GetState", [ctx, st]) == 0)
+            #expect(rd32(st) == 2)
+            #expect(Int32(bitPattern: call("DSpContext_GetState", [ctx + 4, st])) == -30442)
+            #expect(call("DSpContext_Release", [ctx]) == 0)
+        }
+
         /// Alternate buffers are GWorlds of the context's depth; a blit
         /// between them with a source key leaves the keyed pixels alone.
         @Test func altBuffersAndKeyedBlits() {

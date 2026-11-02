@@ -287,6 +287,9 @@ gaddr wm_window_at(uint32_t p);
 /* The Finder's desktop window (outside the window list; FindWindow answers inDesk there). */
 gaddr wm_new_desk_window(void);
 gaddr wm_desk_window(void);
+/* A window of Blue Box's own standing for the screen (a full-screen
+ * context's): its maker redraws it, with no update event (NULL: no more). */
+void wm_set_self_drawn(gaddr w, void (*redraw)(gaddr w));
 void drag_reset(void); /* Drag Manager (drag.c): a fresh machine */
 void print_reset(void); /* Printing Manager (print.c) */
 /* A print record's page setup in points, and one put in at a resolution
