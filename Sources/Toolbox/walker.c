@@ -6,7 +6,8 @@
  * have passed since the last step, the walker takes one: a dialog in
  * front is dismissed (Escape, Command-period, Return, Enter; the default
  * button first before anything has been chosen; then a click on each of
- * its buttons), otherwise the next enabled item of the menu bar is
+ * its buttons; at the program's start, a field it left empty first has a
+ * name typed in), otherwise the next enabled item of the menu bar is
  * chosen, as the user would.  Items and buttons that would end the run or
  * touch the host's disks (Quit, Restart, Shut Down, Erase, Format) are
  * passed over, as are submenus and the Apple menu's desk accessories.  Each step is printed,
@@ -61,10 +62,23 @@ static struct {
     int tries;        /* keys pressed */
     uint64_t clicked; /* buttons clicked, by item */
     int waited;       /* steps waiting for a dimmed button */
+    int typed;        /* steps filling in its empty fields */
+    unsigned seen;    /* the step it was last in front at */
+    bool again;       /* it went and came back: the program asks again */
     bool quits;       /* a button passed over as Quit */
 } open_dialogs[NDIALOGS];
 static int nopen;
 static uint64_t next_at, menus_at, started_at;
+static unsigned steps;   /* the walk's steps taken, counted for open_dialogs' seen */
+static unsigned dialogs_shown; /* dialogs come to the front, new or again */
+/* A dialog window of the program's own with a field left empty (see
+ * fill_in_window): the window, the dialogs shown when it was first
+ * seen, and the names typed into it. */
+static gaddr field_window;
+static unsigned field_dialogs;
+static int field_x, field_y; /* the field's middle on the screen */
+static int window_typed;
+static bool return_next; /* a name typed: Return at the next step, as the user would */
 static unsigned chosen, dialogs, left;
 static unsigned targets_clicked; /* by the screen walk (below) */
 static char last[128];
@@ -110,7 +124,10 @@ void machine_set_menu_walk(bool on)
     walking = on;
     menu_i = 0;
     item_n = 1;
-    waits = nopen = 0;
+    waits = nopen = window_typed = 0;
+    steps = field_dialogs = dialogs_shown = 0;
+    field_window = 0;
+    return_next = false;
     next_at = menus_at = started_at = 0;
     chosen = dialogs = left = pressed = pictured = 0;
     left_open = 0;
@@ -1306,6 +1323,85 @@ static void stays_up(int at)
     cpu_halt(g_cpu, "menu walk stuck in a dialog after %s", last);
 }
 
+/* A field left empty at the program's start that the program will not go
+ * on without (a name to personalize the copy with: MediaPresenter asks
+ * again until it has one) has a name typed in, as the user would; then
+ * the dialog is dismissed as any other.  Only once the program has asked
+ * again: a field may be left empty on purpose (Bolo RandomMap's, for a
+ * value of its own choosing), and a registration's (HexaSuper's) has a
+ * Not Yet to press instead. */
+static void type_name(void)
+{
+    static const char name[] = "Blue Box";
+    /* The keys of its letters (the ANSI keyboard's). */
+    static const uint8_t letter_code[26] = { 0x00, 0x0B, 0x08, 0x02, 0x0E, 0x03, 0x05, 0x04, 0x22,
+                                             0x26, 0x28, 0x25, 0x2E, 0x2D, 0x1F, 0x23, 0x0C, 0x0F,
+                                             0x01, 0x11, 0x20, 0x09, 0x0D, 0x07, 0x10, 0x06 };
+    say("text \"Blue Box\" (an empty field)");
+    for (const char *c = name; *c; c++) {
+        int l = (*c | 0x20) - 'a';
+        bool upper = *c >= 'A' && *c <= 'Z';
+        key(*c, l >= 0 && l < 26 ? letter_code[l] : 0x31, upper ? 0x0200 : 0); /* else the space bar */
+    }
+    return_next = true;
+}
+
+/* In a modal dialog put up again: a field a step, Tab moving on to the
+ * next. */
+static bool fill_in(gaddr d, int at)
+{
+    bool active = false;
+    if (begun() || !open_dialogs[at].again || !dialog_modal(d) || open_dialogs[at].typed >= 8 ||
+        !dialog_empty_field(d, &active))
+        return false;
+    open_dialogs[at].typed++;
+    if (active) {
+        type_name();
+    } else {
+        say("key tab (an empty field)");
+        key('\t', 0x30, 0);
+    }
+    return true;
+}
+
+/* In a dialog window of the program's own (its own items and TextEdit
+ * records: MediaPresenter's) seen with a field empty, once a dialog has
+ * come and gone in front of it (the program's "You must enter your
+ * Name."), unless the field typed into now has text.  (MediaPresenter
+ * 1.0 keeps a field's text itself, its TextEdit records gone by then.)
+ * Return follows at the next step. */
+static bool fill_in_window(void)
+{
+    static gaddr front;
+    gaddr w = tb_FrontWindow();
+    bool was_front = w == front;
+    front = w;
+    if (begun() || !w || dialog_in_front() || !WindowRecord_visible(w) || window_typed >= 8)
+        return false;
+    int16_t variant = tb_GetWVariant(w);
+    if (variant != 1 && variant != 5)
+        return false; /* not a dBoxProc or movableDBoxProc */
+    gaddr te = te_field_in(w);
+    bool empty = te && (int16_t)TERec_teLength(rd32(te)) <= 0;
+    if (empty && w != field_window) {
+        qrect r = qrect_get(rd32(te) + TERec_viewRect_off);
+        pixdst px = qd_port_pixels(w);
+        field_window = w;
+        field_dialogs = dialogs_shown;
+        field_x = (r.left + r.right) / 2 - px.bounds.left;
+        field_y = (r.top + r.bottom) / 2 - px.bounds.top;
+    }
+    /* In front a step already: keys typed as it comes back from behind
+     * the dialog are lost (MediaPresenter 1.0 flushes them). */
+    if (w != field_window || dialogs_shown == field_dialogs || (te && !empty) || !was_front)
+        return false;
+    field_dialogs = dialogs_shown;
+    window_typed++;
+    click(field_x, field_y); /* into the field again: the walk's clicks may have left another one current */
+    type_name();
+    return true;
+}
+
 /* The machine's time to the walk's next step, 0 when it is due or there
  * is no walk: a program asleep in WaitNextEvent is woken by that step as
  * by any input, so its sleep ends there. */
@@ -1324,6 +1420,12 @@ void walker_idle(uint64_t icount)
     if (!walking || !g_cpu || g_cpu->halted || now < next_at)
         return;
     next_at = now + SETTLE;
+    steps++;
+    if (return_next) {
+        return_next = false;
+        key(0x0D, 0x24, 0);
+        return;
+    }
     gaddr d = dialog_in_front();
     uint32_t sig = d ? dialog_signature(d) : 0;
     if (d && sig != left_open) {
@@ -1335,11 +1437,21 @@ void walker_idle(uint64_t icount)
                 memmove(&open_dialogs[0], &open_dialogs[1], (size_t)--nopen * sizeof open_dialogs[0]);
             at = nopen++;
             open_dialogs[at].sig = sig;
-            open_dialogs[at].tries = open_dialogs[at].waited = 0;
+            open_dialogs[at].tries = open_dialogs[at].waited = open_dialogs[at].typed = 0;
             open_dialogs[at].clicked = 0;
             open_dialogs[at].quits = false;
+            open_dialogs[at].again = false;
+            open_dialogs[at].seen = steps;
             dialogs++;
+            dialogs_shown++;
         }
+        if (open_dialogs[at].seen + 1 < steps) {
+            open_dialogs[at].again = true;
+            dialogs_shown++;
+        }
+        open_dialogs[at].seen = steps;
+        if (fill_in(d, at))
+            return;
         int *tries = &open_dialogs[at].tries;
         /* Before the walk's first choice, a dialog is the program's own
          * start (a splash, a registration notice, Bolo's game setup), whose
@@ -1406,6 +1518,8 @@ void walker_idle(uint64_t icount)
         }
         }
     }
+    if (fill_in_window())
+        return;
     if (!started_at)
         started_at = now;
     if (!menu_bar_count()) {

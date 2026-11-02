@@ -410,5 +410,142 @@ extension BlueBox {
             #expect(machine_run(400_000_000) == RUN_HALTED)
             #expect(String(cString: machine_halt_reason()) == "ExitToShell")
         }
+        /// A dialog item list: (rectangle, type, text) each.
+        func itemList(_ items: [([Int], UInt8, String)]) -> UInt32 {
+            var ditl = be16(items.count - 1)
+            for (r, type, text) in items {
+                var b = cat(be32(0), be16(r[0]), be16(r[1]), be16(r[2]), be16(r[3]),
+                            [type, UInt8(text.utf8.count)], Array(text.utf8))
+                if b.count % 2 == 1 { b.append(0) }
+                ditl += b
+            }
+            let h = tb_NewHandle(Int32(ditl.count), false, true)
+            for (i, b) in ditl.enumerated() { wr8(rd32(h) + UInt32(i), b) }
+            return h
+        }
+
+        /// A dialog window of the program's own at its start, with the
+        /// field it types into (a TextEdit record of its own) left empty
+        /// and a complaint at Return (a dialog of the Dialog Manager's, as
+        /// MediaPresenter's "You must enter your Name."), has a name typed
+        /// in once it has complained: the program here ends once the field
+        /// holds the name.  (It takes letters only, not the walk's other
+        /// keys.)
+        @Test func anEmptyFieldOfTheProgramsOwnIsFilledIn() throws {
+            let dir = try launch(cat(
+                be16(0x4267),                 // loop: CLR.W -(SP)
+                be16(0x3F3C), be16(8),        // MOVE.W #keyDownMask,-(SP)
+                be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+                be16(0xA970),                 // _GetNextEvent
+                be16(0x4A1F),                 // TST.B (SP)+
+                be16(0x67F0),                 // BEQ loop
+                be16(0x0C2D), be16(13), be16(0xFFE5), // CMPI.B #13,event.message+3(A5)
+                be16(0x6616),                 // BNE letter
+                be16(0x2F2D), be16(0xFFF0),   // MOVE.L complaint(A5),-(SP)
+                be16(0xA915),                 // _ShowWindow
+                be16(0x42A7),                 // CLR.L -(SP): no filter
+                be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+                be16(0xA991),                 // _ModalDialog
+                be16(0x2F2D), be16(0xFFF0),   // MOVE.L complaint(A5),-(SP)
+                be16(0xA916),                 // _HideWindow
+                be16(0x60D2),                 // BRA loop
+                be16(0x0C2D), be16(0x41), be16(0xFFE5), // letter: CMPI.B #'A',event.message+3(A5)
+                be16(0x6DCA),                 // BLT loop
+                be16(0x3F2D), be16(0xFFE4),   // MOVE.W event.message+2(A5),-(SP)
+                be16(0x2F2D), be16(0xFFF4),   // MOVE.L te(A5),-(SP)
+                be16(0xA9DC),                 // _TEKey
+                be16(0x206D), be16(0xFFF4),   // MOVEA.L te(A5),A0
+                be16(0x2050),                 // MOVEA.L (A0),A0
+                be16(0x0C68), be16(7), be16(60), // CMPI.W #7,teLength(A0): "BlueBox"
+                be16(0x6DB2),                 // BLT loop
+                be16(0xA9F4)))                // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            let w = tb_NewWindow(0, rect([100, 100, 200, 400]), title("Personalize"), 1, 1, 0xFFFF_FFFF, 0, 0)
+            tb_SetPort(w)
+            let field = rect([20, 20, 36, 280])
+            let te = tb_TENew(field, field)
+            tb_TEActivate(te)
+            let a5 = rd32(UInt32(LM_CurrentA5))
+            wr32(a5 - 12, te)
+            let complaint = tb_NewDialog(0, rect([150, 150, 220, 450]), title(""), 0, 1, 0xFFFF_FFFF, 0, 0,
+                                         itemList([([40, 220, 60, 290], 4, "OK")]))
+            wr32(a5 - 16, complaint)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+
+        /// A field the program goes on without (Bolo RandomMap's, left
+        /// empty for a value of its own choosing) is left empty: the
+        /// program here ends at its Return, the field as it was.
+        @Test func anEmptyFieldTheProgramTakesIsLeftEmpty() throws {
+            let dir = try launch(cat(
+                be16(0x42A7),                 // CLR.L -(SP): no filter
+                be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+                be16(0xA991),                 // _ModalDialog
+                be16(0xA9F4)))                // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            let d = tb_NewDialog(0, rect([100, 100, 200, 400]), title(""), 1, 1, 0xFFFF_FFFF, 0, 0,
+                                 itemList([([70, 200, 90, 270], 4, "OK"), ([10, 80, 26, 270], 16, "")]))
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            let kind = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), box = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, 2, kind, h, box)
+            #expect(tb_GetHandleSize(rd32(h)) == 0)
+        }
+
+        /// A modal dialog at the start put up again after its OK (the
+        /// program asking again) has each empty edit text item filled in
+        /// with the name, Tab moving on from one to the next.
+        @Test func emptyEditTextItemsAreFilledInWhenAskedAgain() throws {
+            let dir = try launch(cat(
+                be16(0x42A7),                 // loop: CLR.L -(SP): no filter
+                be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+                be16(0xA991),                 // _ModalDialog
+                be16(0x2F2D), be16(0xFFF4),   // MOVE.L dialog(A5),-(SP)
+                be16(0xA916),                 // _HideWindow
+                be16(0x42A7),                 // CLR.L -(SP)
+                be16(0xA975),                 // _TickCount
+                be16(0x2E1F),                 // MOVE.L (SP)+,D7
+                be16(0x0687), be32(60),       // ADDI.L #60,D7: a second away
+                be16(0x4267),                 // wait: CLR.W -(SP)
+                be16(0x3F3C), be16(0xFFFF),   // MOVE.W #everyEvent,-(SP): the walk's keys taken
+                be16(0x486D), be16(0xFFE0),   // PEA event(A5)
+                be16(0xA970),                 // _GetNextEvent
+                be16(0x544F),                 // ADDQ #2,SP
+                be16(0x42A7),                 // CLR.L -(SP)
+                be16(0xA975),                 // _TickCount
+                be16(0xBE9F),                 // CMP.L (SP)+,D7
+                be16(0x6EEA),                 // BGT wait
+                be16(0x2F2D), be16(0xFFF4),   // MOVE.L dialog(A5),-(SP)
+                be16(0xA915),                 // _ShowWindow
+                be16(0x60C8)))                // BRA loop
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            let d = tb_NewDialog(0, rect([100, 100, 200, 400]), title(""), 1, 1, 0xFFFF_FFFF, 0, 0,
+                                 itemList([([70, 200, 90, 270], 4, "OK"), ([10, 80, 26, 270], 0x90, ""),
+                                           ([36, 80, 52, 270], 0x90, "")])) // disabled: only OK returns
+            wr32(rd32(UInt32(LM_CurrentA5)) - 12, d)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            _ = machine_run(400_000_000)
+            for n in [2, 3] {
+                let kind = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), box = tb_NewPtr(8, false, true)
+                tb_GetDialogItem(d, Int16(n), kind, h, box)
+                let text = rd32(rd32(h))
+                let got = (0..<Int(tb_GetHandleSize(rd32(h)))).map { rd8(text + UInt32($0)) }
+                // The last has the walk's keys after (the dialog stays up
+                // here whatever its OK, and the walk ends at it).
+                #expect(String(decoding: got, as: UTF8.self).hasPrefix("Blue Box"))
+            }
+        }
     }
 }
