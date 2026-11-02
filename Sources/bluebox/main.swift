@@ -756,6 +756,9 @@ func runCommand(_ args: [String]) {
     // A classic Mac by name: its screen, processor and FPU, addressing, ROM
     // and chips (hardware programs address them by number); --depth, --cpu,
     // --fpu and --addressing still win.
+    if machineName == nil && cpuModel == nil && saved.cpu == nil, let m = requiredMachine(application: app) {
+        machineName = m
+    }
     if let machineName { _ = hw_select_machine(machineName) }
     if let screenDepth {
         machine_set_screen_depth(screenDepth)

@@ -50,6 +50,11 @@ enum { fsCurPerm = 0, fsRdPerm, fsWrPerm, fsRdWrPerm, fsRdWrShPerm };
 #define MAX_WDS 64
 #define FCB_FIRST 32 /* refnum slots below this belong to the Resource Manager */
 #define MAX_FCBS 300
+/* The startup volume's free allocation blocks (of 32K, out of 65535): a
+ * gigabyte, below 32768 because programs read the word signed (EvocatioN
+ * multiplies it out with MOVEA.W, and at $C000 found "not enough room"
+ * on the disk). */
+#define HOST_FREE_BLOCKS 0x7FFF
 #define FCB_SLOTS (FCB_FIRST + MAX_FCBS)
 #define FCB_LEN 94
 
@@ -984,7 +989,7 @@ static void guest_tables_init(void)
     wr16(v + VCB_vcbNmAlBlks_off, 0xFFFF);
     wr32(v + VCB_vcbAlBlkSiz_off, 32768);
     wr32(v + VCB_vcbClpSiz_off, 32768);
-    wr16(v + VCB_vcbFreeBks_off, 0xC000);
+    wr16(v + VCB_vcbFreeBks_off, HOST_FREE_BLOCKS);
     gput(v + VCB_vcbVN_off, vol_name, (uint32_t)vol_name[0] + 1);
     wr16(v + VCB_vcbDrvNum_off, BOOT_DRIVE);
     wr16(v + VCB_vcbDRefNum_off, (uint16_t)(-1 - DISK_DRIVER_UNIT));
@@ -2442,7 +2447,7 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
     wr32(pb + VolumeParam_ioVClpSiz_off, 32768);
     wr16(pb + VolumeParam_ioAlBlSt_off, 0);
     wr32(pb + HVolumeParam_ioVNxtCNID_off, (uint32_t)ndirs + 0x20000);
-    wr16(pb + VolumeParam_ioVFrBlk_off, 0xC000);
+    wr16(pb + VolumeParam_ioVFrBlk_off, HOST_FREE_BLOCKS);
     if (hfs) {
         wr16(pb + HVolumeParam_ioVSigWord_off, 0x4244);
         wr16(pb + HVolumeParam_ioVDrvInfo_off, (uint16_t)(m ? m->drive : BOOT_DRIVE));

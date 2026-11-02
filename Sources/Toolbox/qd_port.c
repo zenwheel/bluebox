@@ -1044,8 +1044,19 @@ void tb_ShieldCursor(gaddr rp, uint32_t p)
 
 /* ---- Window Manager port (also needed by QuickDraw-level code) ---- */
 
-void tb_GetWMgrPort(gaddr wp) { wr32(wp, rd32(LM_WMgrPort)); }
-void tb_GetCWMgrPort(gaddr wp) { wr32(wp, rd32(LM_WMgrCPort)); }
+/* Asked for before InitWindows, the ports are made then, as the system's
+ * were always there. */
+void tb_GetWMgrPort(gaddr wp)
+{
+    wm_make_ports();
+    wr32(wp, rd32(LM_WMgrPort));
+}
+
+void tb_GetCWMgrPort(gaddr wp)
+{
+    wm_make_ports();
+    wr32(wp, rd32(LM_WMgrCPort));
+}
 
 /* ---- Coordinate conversion ---- */
 

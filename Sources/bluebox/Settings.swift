@@ -234,6 +234,23 @@ func requiredCPU(application path: String) -> Int? {
     return deskAccessoryNames(fork: mf.rsrc, length: mf.rsrc_len).lazy.compactMap { knownDeskAccessoryCPUs[$0] }.first
 }
 
+/// Programs that need a compact Mac, by creator (PLAN M22): written for
+/// the Plus, they draw on its 512×342 one-bit screen themselves, rows of
+/// 64 bytes from ScrnBase, and on a bigger, deeper screen showed garbage.
+/// They run as a Plus unless a machine or processor is chosen.
+let knownMachineRequirements: [UInt32: String] = [
+    0x3F7A_2422: "plus", /* ?z$" Wave 15 (1985) */
+    0x5350_2020: "plus", /* SP   PaintScroll 1.0 (1986) */
+]
+
+func requiredMachine(application path: String) -> String? {
+    var mf = mac_file()
+    var err = [CChar](repeating: 0, count: 256)
+    guard appledouble_read(path, &mf, &err, err.count) else { return nil }
+    defer { mac_file_free(&mf) }
+    return knownMachineRequirements[mac_file_creator(&mf)]
+}
+
 /// An RGB highlight colour from "#RRGGBB" as 16-bit components.
 func parseHighlight(_ s: String) -> (UInt16, UInt16, UInt16)? {
     guard s.hasPrefix("#"), s.count == 7, let v = UInt32(s.dropFirst(), radix: 16) else { return nil }

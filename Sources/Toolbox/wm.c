@@ -2558,20 +2558,40 @@ void tb_SetDeskCPat(gaddr p) {}
 /* ---------------------------------------------------------------------- */
 /* Initialisation */
 
+/* The Window Manager's ports, covering the screen.  On a Mac they were the
+ * system's, there before a program ran, so one may ask for them before its
+ * InitGraf (Alley 19 sizes its window from the port's rectangle first
+ * thing): their bits and rectangles are the screen's own, not taken from
+ * QuickDraw globals the program may not have set up yet. */
+void wm_make_ports(void)
+{
+    if (rd32(LM_WMgrPort))
+        return;
+    gaddr wp = tb_NewPtr(GrafPort_SIZEOF, true, true);
+    gaddr cp = tb_NewPtr(GrafPort_SIZEOF, true, true);
+    if (!wp || !cp)
+        return;
+    wr32(LM_WMgrPort, wp);
+    wr32(LM_WMgrCPort, cp);
+    gaddr saved = qd_port();
+    tb_OpenCPort(cp);
+    tb_OpenPort(wp);
+    tb_SetPort(saved);
+    qrect screen = { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width };
+    BitMap_set_baseAddr(wp + GrafPort_portBits_off, rd32(LM_ScrnBase));
+    BitMap_set_rowBytes(wp + GrafPort_portBits_off, (int16_t)qd_screen_row_bytes());
+    qrect_put(wp + GrafPort_portBits_off + BitMap_bounds_off, screen);
+    gaddr ports[2] = { wp, cp };
+    for (int i = 0; i < 2; i++) {
+        qrect_put(ports[i] + GrafPort_portRect_off, screen);
+        tb_RectRgn(GrafPort_visRgn(ports[i]), ports[i] + GrafPort_portRect_off);
+    }
+}
+
 void tb_InitWindows(void)
 {
-    /* Window Manager ports covering the screen. */
+    wm_make_ports();
     gaddr wp = rd32(LM_WMgrPort);
-    if (!wp) {
-        wp = tb_NewPtr(GrafPort_SIZEOF, true, true);
-        wr32(LM_WMgrPort, wp);
-        gaddr cp = tb_NewPtr(GrafPort_SIZEOF, true, true);
-        wr32(LM_WMgrCPort, cp);
-        gaddr saved = qd_port();
-        tb_OpenCPort(cp);
-        tb_OpenPort(wp);
-        tb_SetPort(saved);
-    }
     if (rd32(LM_WindowList)) {
         /* Called again with windows open (Installer 4's licence viewer does
            this after making its dialog, and goes on drawing in it): the

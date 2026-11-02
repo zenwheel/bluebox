@@ -662,6 +662,37 @@ extension BlueBox {
             #expect(rd16(flag) == 1)                     // ran inside KillIO
         }
 
+        /// A write a completion routine makes while KillIO runs is killed
+        /// too, as KillIO went on until the driver's queue was empty: Down
+        /// Hill Racer queues the next piece of a sound from its completion
+        /// and frees the pieces as soon as KillIO returns.
+        @Test func killIOKillsWritesItsCompletionsMake() {
+            launchTestApp()
+            let count = tb_NewPtr(2, false, true)
+            let hi = UInt16(count >> 16), lo = UInt16(count & 0xFFFF)
+            let words: [UInt16] = [0x5279, hi, lo,           // ADDQ.W #1,count
+                                   0x0C79, 0x0003, hi, lo,   // CMPI.W #3,count
+                                   0x6C02,                   // BGE.S done
+                                   0xA403,                   // _Write ,ASYNC (A0 the block)
+                                   0x4E75]                   // done: RTS
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let rec = tb_NewPtr(6 + 22254, false, true)  // a second of free-form sound
+            wr32(rec + 2, 0x0001_0000)
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            wr32(pb + 12, code)                          // ioCompletion
+            wr32(pb + UInt32(IOParam_ioBuffer_off), rec)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 6 + 22254)
+            #expect(tb_PBWrite(pb, true) == 1)           // playing
+            let kill = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(kill + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            _ = tb_PBKillIO(kill, false)
+            #expect(rd16(count) == 3)                    // each write it made was killed in turn
+            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -27) // none left playing
+            #expect(rd8(0x27E) == 0)                     // SoundActive
+        }
+
         /// A synchronous write's ioCompletion is not called: the Reversi
         /// games' parameter block is on the stack with garbage there.
         @Test func synchronousWritesRunNoCompletion() {
