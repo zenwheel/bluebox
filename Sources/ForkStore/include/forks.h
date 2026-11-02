@@ -57,6 +57,23 @@ bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen)
 /* Everything but the data fork (left empty): the Finder info and the
  * resource fork, from the sidecar or the file's own. */
 bool appledouble_read_meta(const char *path, mac_file *out);
+/* What listing a folder of programs needs of a file, read without its
+ * forks: the Finder info, the resource fork's length and the types of its
+ * resources, from the map alone (rsrc_ok: the map is sound; rsrc_parse
+ * also checks each resource's length, in the data).  sidecar: whether
+ * "._" + name exists (a folder's listing says), else the file's own forks
+ * are read.  False where appledouble_read would fail on the sidecar.  Free
+ * with mac_file_summary_free. */
+typedef struct {
+    uint8_t finder_info[32];
+    bool has_finder_info;
+    size_t rsrc_len;
+    bool rsrc_ok;
+    uint32_t *types;
+    size_t ntypes;
+} mac_file_summary;
+bool appledouble_read_summary(const char *path, bool sidecar, mac_file_summary *out);
+void mac_file_summary_free(mac_file_summary *s);
 /* The file's own Finder info (macOS), and whether it has any typed Finder
  * info or resource fork of its own. */
 bool appledouble_native_finder_info(const char *path, uint8_t out[32]);

@@ -396,7 +396,6 @@ func ingest(_ source: String, library: String, force: Bool = false) throws -> (e
     return (entry, notes)
 }
 
-/// Every Mac file (data file + optional sidecar) under a folder.
 /// Every file under root, relative paths, including "._" sidecars (which
 /// Foundation's directory listings hide).
 func walkFiles(_ root: String) -> [String] {
@@ -420,39 +419,58 @@ func walkFiles(_ root: String) -> [String] {
     return out
 }
 
+/// Every Mac file (data file + optional sidecar) under a folder.
 func scan(_ root: String) -> [IngestedFile] {
     let fm = FileManager.default
     var out = [IngestedFile]()
-    for rel in walkFiles(root) {
+    let rels = walkFiles(root)
+    let listed = Set(rels)
+    for rel in rels {
         var name = (rel as NSString).lastPathComponent
         var path = root + "/" + rel
+        let dir = (rel as NSString).deletingLastPathComponent
+        func sibling(_ n: String) -> String { dir.isEmpty ? n : dir + "/" + n }
         if name.hasPrefix("._") {
             // A sidecar whose file has no data fork stands for that file.
-            let bare = (path as NSString).deletingLastPathComponent + "/" + String(name.dropFirst(2))
-            if fm.fileExists(atPath: bare) { continue }
-            path = bare
-            name = String(name.dropFirst(2))
+            let bare = String(name.dropFirst(2))
+            if listed.contains(sibling(bare)) || fm.fileExists(atPath: root + "/" + sibling(bare)) { continue }
+            path = root + "/" + sibling(bare)
+            name = bare
         } else if name == ".classic-source" || name.hasPrefix(".") {
             continue
         }
-        var isDir: ObjCBool = false
-        fm.fileExists(atPath: path, isDirectory: &isDir)
-        if isDir.boolValue { continue }
-        var f = mac_file()
-        var err = [CChar](repeating: 0, count: 256)
-        guard appledouble_read(path, &f, &err, err.count) else { continue }
-        defer { mac_file_free(&f) }
-        var hasCODE = false, hasCfrg = false
-        var idx = rsrc_index()
-        if f.rsrc_len > 0, rsrc_parse(f.rsrc, f.rsrc_len, &idx, &err, err.count) {
-            for i in 0..<idx.count {
-                if idx.entries[i].type == fourCCValue("CODE") { hasCODE = true }
-                if idx.entries[i].type == fourCCValue("cfrg") { hasCfrg = true }
+        // The Finder info and the resource map only, and from what the
+        // listing says is there: reading every file whole (a CD's movies,
+        // disk images and big resource forks) made running a program by
+        // name take seconds with a few CDs in the library.
+        var st = stat()
+        let hasData = stat(path, &st) == 0
+        if hasData && (st.st_mode & S_IFMT) == S_IFDIR { continue }
+        var f = mac_file_summary()
+        guard appledouble_read_summary(path, listed.contains(sibling("._" + name)), &f) else { continue }
+        defer { mac_file_summary_free(&f) }
+        let types = UnsafeBufferPointer(start: f.types, count: f.ntypes)
+        var hasCODE = types.contains(fourCCValue("CODE")), hasCfrg = types.contains(fourCCValue("cfrg"))
+        if hasCODE || hasCfrg {
+            // Code only in a fork whose every resource is in range, as
+            // the Resource Manager will find it: a damaged one is not a
+            // program to run.
+            var whole = mac_file()
+            var idx = rsrc_index()
+            var err = [CChar](repeating: 0, count: 256)
+            if appledouble_read_meta(path, &whole), rsrc_parse(whole.rsrc, whole.rsrc_len, &idx, &err, err.count) {
+                rsrc_index_free(&idx)
+            } else {
+                hasCODE = false
+                hasCfrg = false
             }
-            rsrc_index_free(&idx)
+            mac_file_free(&whole)
         }
-        out.append(IngestedFile(path: path, type: mac_file_type(&f), creator: mac_file_creator(&f),
-                                dataSize: f.data_len, rsrcSize: f.rsrc_len, hasCODE: hasCODE, hasCfrg: hasCfrg))
+        let finder = withUnsafeBytes(of: f.finder_info) { Array($0) }
+        func be32(_ at: Int) -> UInt32 { finder[at..<at + 4].reduce(0) { $0 << 8 | UInt32($1) } }
+        out.append(IngestedFile(path: path, type: be32(0), creator: be32(4),
+                                dataSize: hasData ? Int(st.st_size) : 0, rsrcSize: f.rsrc_len,
+                                hasCODE: hasCODE, hasCfrg: hasCfrg))
     }
     return out.sorted { $0.path < $1.path }
 }

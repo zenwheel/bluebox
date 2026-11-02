@@ -1,9 +1,11 @@
 #include "forks.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #ifdef __APPLE__
 #include <sys/xattr.h>
@@ -293,5 +295,184 @@ bool appledouble_write(const char *path, const mac_file *f, char *err, size_t er
         snprintf(err, errlen, "out of memory");
     free(side);
     free(spath);
+    return ok;
+}
+
+/* ---- A file's summary, without its forks ---- */
+
+/* Where a resource fork's bytes come from: a span of the sidecar (whose
+ * first bytes are read once: the entry table, the Finder info and often
+ * the fork's header), or the file's own resource fork (an extended
+ * attribute macOS reads at an offset). */
+typedef struct {
+    int fd;           /* the sidecar, or -1 for the file's own fork */
+    const char *path; /* the file, for its own fork */
+    uint64_t base;    /* where the fork starts in the sidecar */
+    const uint8_t *head;
+    size_t head_len;
+} fork_reader;
+
+static bool side_read(const fork_reader *r, uint64_t at, void *buf, size_t n)
+{
+    if (at + n <= r->head_len) {
+        memcpy(buf, r->head + at, n);
+        return true;
+    }
+    return pread(r->fd, buf, n, (off_t)at) == (ssize_t)n;
+}
+
+static bool fork_read(const fork_reader *r, uint64_t off, void *buf, size_t n)
+{
+    if (n == 0)
+        return true;
+    if (r->fd >= 0)
+        return side_read(r, r->base + off, buf, n);
+#ifdef __APPLE__
+    if (off > UINT32_MAX)
+        return false;
+    return getxattr(r->path, "com.apple.ResourceFork", buf, n, (uint32_t)off, 0) == (ssize_t)n;
+#else
+    return false;
+#endif
+}
+
+/* The types in a resource fork's map, checked as rsrc_parse checks it
+ * (all but each resource's length, which is in the data). */
+static bool fork_types(const fork_reader *r, uint64_t len, uint32_t **types, size_t *ntypes)
+{
+    *types = NULL;
+    *ntypes = 0;
+    if (len == 0)
+        return true;
+    uint8_t h[16];
+    if (len < 16 || !fork_read(r, 0, h, 16))
+        return false;
+    uint32_t data_start = be32(h), map_start = be32(h + 4), data_len = be32(h + 8), map_len = be32(h + 12);
+    if ((uint64_t)data_start + data_len > len || (uint64_t)map_start + map_len > len || map_len < 30)
+        return false;
+    uint8_t *m = malloc(map_len);
+    if (!m || !fork_read(r, map_start, m, map_len)) {
+        free(m);
+        return false;
+    }
+    bool ok = false;
+    uint16_t tlo = be16(m + 24);
+    if ((size_t)tlo + 2 > map_len)
+        goto out;
+    unsigned n = be16(m + tlo) == 0xFFFF ? 0 : (unsigned)be16(m + tlo) + 1;
+    uint32_t *t = malloc((n ? n : 1) * sizeof *t);
+    if (!t)
+        goto out;
+    for (unsigned i = 0; i < n; i++) {
+        size_t te = (size_t)tlo + 2 + i * 8;
+        if (te + 8 > map_len) {
+            free(t);
+            goto out;
+        }
+        unsigned count = (unsigned)be16(m + te + 4) + 1;
+        size_t rl = (size_t)tlo + be16(m + te + 6);
+        for (unsigned j = 0; j < count; j++) {
+            size_t re = rl + j * 12;
+            if (re + 12 > map_len || (uint64_t)(be32(m + re + 4) & 0x00FFFFFF) + 4 > data_len) {
+                free(t);
+                goto out;
+            }
+        }
+        t[i] = be32(m + te);
+    }
+    *types = t;
+    *ntypes = n;
+    ok = true;
+out:
+    free(m);
+    return ok;
+}
+
+void mac_file_summary_free(mac_file_summary *s)
+{
+    free(s->types);
+    s->types = NULL;
+    s->ntypes = 0;
+}
+
+/* The file's own Finder info and resource fork. */
+static void native_summary(const char *path, mac_file_summary *out)
+{
+    out->rsrc_ok = true;
+#ifdef __APPLE__
+    /* Most files have neither: one call to find that out. */
+    char names[4096];
+    ssize_t n = listxattr(path, names, sizeof names, 0);
+    bool finder = n < 0, fork = n < 0; /* too many to list: ask for each */
+    for (ssize_t i = 0; i < n; i += (ssize_t)strlen(names + i) + 1) {
+        finder = finder || !strcmp(names + i, "com.apple.FinderInfo");
+        fork = fork || !strcmp(names + i, "com.apple.ResourceFork");
+    }
+    if (finder)
+        out->has_finder_info = appledouble_native_finder_info(path, out->finder_info);
+    ssize_t len = fork ? getxattr(path, "com.apple.ResourceFork", NULL, 0, 0, 0) : 0;
+    if (len > 0 && len < (64 << 20)) {
+        fork_reader r = { .fd = -1, .path = path };
+        out->rsrc_len = (size_t)len;
+        out->rsrc_ok = fork_types(&r, (uint64_t)len, &out->types, &out->ntypes);
+    }
+#else
+    (void)path;
+#endif
+}
+
+bool appledouble_read_summary(const char *path, bool sidecar, mac_file_summary *out)
+{
+    memset(out, 0, sizeof *out);
+    int fd = -1;
+    if (sidecar) {
+        char *side = appledouble_sidecar_path(path);
+        if (!side)
+            return false;
+        fd = open(side, O_RDONLY);
+        free(side);
+    }
+    struct stat st;
+    if (fd >= 0 && (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode))) {
+        close(fd);
+        fd = -1;
+    }
+    if (fd < 0) {
+        native_summary(path, out);
+        return true;
+    }
+    /* The sidecar's entry table, checked as appledouble_decode checks it. */
+    uint64_t len = (uint64_t)st.st_size;
+    uint8_t head[4096];
+    ssize_t got = pread(fd, head, len < sizeof head ? (size_t)len : sizeof head, 0);
+    fork_reader r = { .fd = fd, .head = head, .head_len = got > 0 ? (size_t)got : 0 };
+    bool ok = r.head_len >= 26 && be32(head) == AD_MAGIC && (be32(head + 4) == AD_VERSION || be32(head + 4) == 0x00010000);
+    unsigned n = ok ? be16(head + 24) : 0;
+    ok = ok && 26 + (uint64_t)n * 12 <= len;
+    uint64_t rsrc_off = 0, rsrc_len = 0;
+    for (unsigned i = 0; ok && i < n; i++) {
+        uint8_t e[12];
+        if (!side_read(&r, 26 + (uint64_t)i * 12, e, 12)) {
+            ok = false;
+            break;
+        }
+        uint32_t id = be32(e), off = be32(e + 4), elen = be32(e + 8);
+        if ((uint64_t)off + elen > len) {
+            ok = false;
+        } else if (id == AD_RSRC) {
+            rsrc_off = off;
+            rsrc_len = elen;
+        } else if (id == AD_FINDER) {
+            memset(out->finder_info, 0, 32);
+            ok = side_read(&r, off, out->finder_info, elen < 32 ? elen : 32);
+            out->has_finder_info = true;
+        }
+    }
+    if (ok) {
+        r.base = rsrc_off;
+        out->rsrc_len = (size_t)rsrc_len;
+        out->rsrc_ok = fork_types(&r, rsrc_len, &out->types, &out->ntypes);
+    }
+    close(fd);
     return ok;
 }
