@@ -179,6 +179,33 @@ extension BlueBox {
             tb_DisposeGWorld(rd32(gw))
         }
 
+        /// Making room for a world's pixels may move its pixmap (a handle,
+        /// unlocked): the bounds and the rest go in the pixmap where it
+        /// ends up, not where it was (1995 Toyota Test Drive's 7450-pixel
+        /// strip of cars, in a crowded heap, damaged it).  Here a NewHandle
+        /// patch moves the new port's pixmap first.
+        @Test func gworldPixmapThatMovesIsFilledIn() {
+            launchTestApp()
+            _ = initToolbox()
+            let old = tb_GetTrapAddress(0xA122, true, false)
+            let words: [UInt16] = [0x2F00,                                // MOVE.L D0,-(SP)
+                                   0x2255, 0x2251, 0x2069, 0x0002,        // MOVEA.L (A5),A1; (A1),A1; 2(A1),A0: thePort's pixmap
+                                   0xA064,                                // _MoveHHi
+                                   0x201F,                                // MOVE.L (SP)+,D0
+                                   0x4EF9, hiWord(old), loWord(old)]      // JMP old
+            let patch = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(patch + UInt32(i * 2), w) }
+            tb_SetTrapAddress(patch, 0xA122, true, false)
+            defer { tb_SetTrapAddress(old, 0xA122, true, false) }
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 8, rect(-1, -1, 73, 1999), 0, 0, 0) == 0)
+            let pm = rd32(tb_GetGWorldPixMap(rd32(gw)))
+            #expect((0..<4).map { Int16(bitPattern: rd16(pm + 6 + UInt32($0 * 2))) } == [-1, -1, 73, 1999])
+            #expect(rd16(pm + 32) == 8) // pixelSize
+            #expect(mm_heap_valid())
+            tb_DisposeGWorld(rd32(gw))
+        }
+
         /// System 7.5's QuickDraw and later round rows up to 16 bytes: the
         /// Mac OS 8 that PowerPC programs see (Angel Egg reads backgrounds
         /// saved 400 bytes a row straight into a 384-pixel 8-bit world).

@@ -230,7 +230,6 @@ static uint32_t row_bytes_for(int w, int depth) { return (uint32_t)((w * depth +
 
 static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
 {
-    gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
     int w = r.right - r.left, h = r.bottom - r.top;
     if (w <= 0 || h <= 0)
         return false;
@@ -254,6 +253,10 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     gaddr bits = trap_new_handle_clear((int32_t)(rb * (uint32_t)(h + 1)));
     if (!bits || !rd32(bits))
         return false;
+    /* The pixmap is a handle, unlocked: making room for the pixels may
+     * have moved it (1995 Toyota Test Drive's 7450-pixel strip of cars
+     * moved it, and its bounds went where it had been). */
+    gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
     if (depth == 32)
         gmemset(rd32(bits), 0xFF, rb * (uint32_t)h); /* white */
     PixMap_set_baseAddr(pm, bits);
@@ -270,6 +273,7 @@ static bool set_pixels(gaddr port, qrect r, int depth, gaddr ctab)
     uint32_t ct = ctab ? ctab : tb_GetCTable((int16_t)(depth <= 8 ? depth : 8));
     if (ctab)
         tb_HandToHand(&ct);
+    pm = rd32(rd32(port + CGrafPort_portPixMap_off)); /* again, after those allocations */
     if (PixMap_pmTable(pm))
         tb_DisposeHandle(PixMap_pmTable(pm));
     PixMap_set_pmTable(pm, ct);
