@@ -93,8 +93,13 @@ final class SaverMachine: @unchecked Sendable {
         var module: String
         var others: [String] = [] /* taking turns after it */
         var width: Int, height: Int
+        var monitors: [CGRect] = [] /* the displays in the Mac's screen (pixels, from its top left), main first */
         var settings: SaverSettings
     }
+
+    /// The displays in host points (AppKit's global coordinates), and
+    /// where each is in the Mac's screen: After Dark's monitors.
+    private var displayRects: [(display: CGRect, mac: CGRect)] = []
 
     private let lock = NSCondition()
     private var wanted: Run?          /* what should be running */
@@ -107,9 +112,13 @@ final class SaverMachine: @unchecked Sendable {
     private var imageTime: TimeInterval = 0
     private var pixels = [UInt8]()
 
-    /// Run the chosen module on a screen of this many Mac pixels (the
-    /// machine starts again when either changes).
-    func show(screenPoints: CGSize, settings: SaverSettings) {
+    /// Run the chosen module on a screen made of these displays (host
+    /// points, AppKit's global coordinates, the main one first): one Mac
+    /// screen around them all, each display one of After Dark's monitors,
+    /// as a Mac with several had them.  The machine starts again when the
+    /// settings or the displays change.
+    func show(displays: [CGRect], settings: SaverSettings) {
+        guard !displays.isEmpty else { return }
         var modules: [String]
         if settings.rotate {
             modules = settings.turnModules()
@@ -118,15 +127,30 @@ final class SaverMachine: @unchecked Sendable {
             modules = settings.chosenModule().map { [$0] } ?? []
         }
         guard let module = modules.first else { return }
-        let scale = CGFloat(max(1, settings.scale))
-        let w = max(320, Int(screenPoints.width / scale)) & ~7, h = max(240, Int(screenPoints.height / scale))
+        let minX = displays.map(\.minX).min()!, maxX = displays.map(\.maxX).max()!
+        let minY = displays.map(\.minY).min()!, maxY = displays.map(\.maxY).max()!
+        // Points per Mac pixel: the setting, or more if the screen would
+        // be larger than the Mac's largest.
+        var scale = CGFloat(max(1, settings.scale))
+        scale = max(scale, (maxX - minX) / 4096, (maxY - minY) / 4096)
+        let w = max(512, Int((maxX - minX) / scale)) & ~7, h = max(342, Int((maxY - minY) / scale))
+        var rects: [(display: CGRect, mac: CGRect)] = []
+        for d in displays {
+            let mac = CGRect(x: ((d.minX - minX) / scale).rounded(), y: ((maxY - d.maxY) / scale).rounded(),
+                             width: (d.width / scale).rounded(), height: (d.height / scale).rounded())
+                .intersection(CGRect(x: 0, y: 0, width: w, height: h))
+            rects.append((d, mac))
+        }
         var run = Run(module: module, width: w, height: h, settings: settings)
         run.others = Array(modules.dropFirst())
+        if displays.count > 1 { run.monitors = rects.map(\.mac) }
         lock.lock()
         // The same settings and screen: what runs goes on (another shuffle isn't a change).
-        if settings.rotate, let w = wanted, w.settings == settings, w.width == run.width, w.height == run.height {
+        if settings.rotate, let w = wanted, w.settings == settings, w.width == run.width, w.height == run.height,
+           w.monitors == run.monitors {
             run = w
         }
+        displayRects = rects
         if wanted != run {
             wanted = run
             if current != nil { wake() }
@@ -215,6 +239,9 @@ final class SaverMachine: @unchecked Sendable {
             machine_screensaver_set_backdrop(nil, 0, 0)
         }
         machine_set_screen(Int32(run.width), Int32(run.height))
+        for m in run.monitors {
+            _ = machine_screensaver_add_monitor(Int32(m.minX), Int32(m.minY), Int32(m.maxX), Int32(m.maxY))
+        }
         machine_set_screen_depth(Int32(s.depth))
         machine_set_addressing(machine_app_addressing(run.module))
         machine_set_instruction_limit(0)
@@ -253,6 +280,16 @@ final class SaverMachine: @unchecked Sendable {
                         provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
         imageTime = now
         return image
+    }
+
+    /// One display's part of the screen (the whole of it for a preview, or
+    /// a display the machine doesn't know).
+    func frame(for display: CGRect?) -> CGImage? {
+        guard let image = frame() else { return nil }
+        guard let display, displayRects.count > 1,
+              let mac = displayRects.first(where: { $0.display == display })?.mac,
+              mac.width > 0, mac.height > 0 else { return image }
+        return image.cropping(to: mac) ?? image
     }
 
     /// The main display's desktop picture, as RGBA.

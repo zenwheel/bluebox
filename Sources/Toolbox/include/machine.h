@@ -64,6 +64,11 @@ bool machine_screensaver_set_control(int index, int value);
  * (Puzzle, Spotlight and Bat Signal work on it): RGBA pixels, scaled to the
  * screen; NULL for Blue Box's own desktop. */
 void machine_screensaver_set_backdrop(const uint8_t *rgba, int w, int h);
+/* The screen as several displays (After Dark's monitors, the main one
+ * first), each a rectangle of the screen: the module gets each in its
+ * parameter block's monitor list and blanks them all.  None: one, the
+ * whole screen.  False past 16 or for an empty rectangle. */
+bool machine_screensaver_add_monitor(int left, int top, int right, int bottom);
 /* Setup before it runs, as in After Dark's control panel: the module is
  * told it was chosen (ModuleSelected, if it takes it) and the buttons are
  * pressed in order (a message 8 or more, or a 'bVal' ID 1000 and up). */

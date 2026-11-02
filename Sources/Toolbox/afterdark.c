@@ -138,11 +138,20 @@ static struct {
     char settings_dir[1024]; /* where each module's changed resources are kept; "" not kept */
 } opt = { .frames_per_tick = 4, .tick_budget = 100000 };
 
+/* The displays the screen is made of (After Dark's monitors), in screen
+ * coordinates, the main one first; none: the screen is one. */
+enum { MAX_MONITORS = 16 };
+static struct {
+    qrect r[MAX_MONITORS];
+    int n;
+} monitors;
+
 static void rotation_reset(void);
 
 void machine_screensaver_reset(void)
 {
     rotation_reset();
+    monitors.n = 0;
     memset(&opt, 0, sizeof opt);
     opt.frames_per_tick = 4;
     opt.tick_budget = 100000;
@@ -187,6 +196,15 @@ void machine_screensaver_set_backdrop(const uint8_t *rgba, int w, int h)
     memcpy(backdrop, rgba, n);
     backdrop_w = w;
     backdrop_h = h;
+}
+
+bool machine_screensaver_add_monitor(int left, int top, int right, int bottom)
+{
+    if (monitors.n == MAX_MONITORS || right <= left || bottom <= top)
+        return false;
+    monitors.r[monitors.n++] = (qrect){ .top = (int16_t)top, .left = (int16_t)left, .bottom = (int16_t)bottom,
+                                        .right = (int16_t)right };
+    return true;
 }
 
 bool machine_screensaver_press_button(int button)
@@ -1123,17 +1141,37 @@ static bool ad_begin(int16_t rn, bool over_program)
     machine_screen_size(&w, &h);
     wr16(bounds + 4, (uint16_t)h);
     wr16(bounds + 6, (uint16_t)w);
-    ad.rgn = tb_NewRgn();
-    tb_RectRgn(ad.rgn, bounds);
     tb_SetPort(ad.port);
     tb_ClipRect(bounds);
-    if (backdrop && !ad.own_file)
-        qd_draw_rgba(backdrop, backdrop_w, backdrop_h, (qrect){ .top = 0, .left = 0, .bottom = (int16_t)h, .right = (int16_t)w });
 
-    ad.mons = tb_NewPtr(2 + 10, false, true);
-    wr16(ad.mons, 1);
-    gmemcpy(ad.mons + 2, bounds, 8);
-    wr8(ad.mons + 2 + 9, (uint8_t)qd_screen_depth());
+    /* The monitors, main first: the displays given, else the screen.  The
+     * region to blank is all of them, and each starts from the backdrop. */
+    int nmon = monitors.n ? monitors.n : 1;
+    ad.mons = tb_NewPtr(2 + 10 * nmon, false, true);
+    wr16(ad.mons, (uint16_t)nmon);
+    ad.rgn = tb_NewRgn();
+    gaddr one = tb_NewRgn();
+    for (int i = 0; i < nmon; i++) {
+        gaddr m = ad.mons + 2 + 10 * (uint32_t)i;
+        if (monitors.n) {
+            const qrect *r = &monitors.r[i];
+            wr16(m, (uint16_t)r->top);
+            wr16(m + 2, (uint16_t)r->left);
+            wr16(m + 4, (uint16_t)r->bottom);
+            wr16(m + 6, (uint16_t)r->right);
+        } else {
+            gmemcpy(m, bounds, 8);
+        }
+        wr8(m + 9, (uint8_t)qd_screen_depth());
+        tb_RectRgn(one, m);
+        tb_UnionRgn(ad.rgn, one, ad.rgn);
+        if (backdrop && !ad.own_file)
+            qd_draw_rgba(backdrop, backdrop_w, backdrop_h,
+                         (qrect){ .top = (int16_t)rd16(m), .left = (int16_t)rd16(m + 2), .bottom = (int16_t)rd16(m + 4),
+                                  .right = (int16_t)rd16(m + 6) });
+    }
+    tb_DisposeRgn(one);
+    tb_DisposePtr(bounds);
 
     /* The QuickDraw globals, a copy in their record's order. */
     ad.qd = tb_NewPtr(QDCOPY_SIZE, false, true);

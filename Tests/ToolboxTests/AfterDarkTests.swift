@@ -346,6 +346,47 @@ extension BlueBox {
             #expect(mm_heap_valid())
         }
 
+        /// Several displays: the module gets each as one of After Dark's
+        /// monitors, main first, and each starts from the desktop picture;
+        /// what lies outside them is no display's.
+        @Test func eachDisplayIsAMonitor() {
+            bootMachine()
+            let out = tb_NewPtr(64, false, true)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let body: [UInt16] = [
+                0x206F, 0x0004, 0x2068, 0x0008,   // MOVEA.L 4(SP),A0; MOVEA.L 8(A0),A0   the monitors
+                0x43F9, hi(out), lo(out),         // LEA out,A1
+                0x700A, 0x32D8, 0x51C8, 0xFFFC,   // MOVEQ #10,D0; copy 11 words
+            ]
+            let code = code68k([0x4A6F, 0x0008, 0x6600, UInt16(body.count * 2 + 2)] + body + [
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1,
+            ])
+            let path = moduleFile(code, in: tempDir())
+            #expect(machine_screensaver_add_monitor(320, 0, 640, 480)) // main: the right half
+            #expect(machine_screensaver_add_monitor(0, 0, 320, 240))
+            var red = [UInt8](repeating: 0, count: 4 * 4 * 4)
+            for i in stride(from: 0, to: red.count, by: 4) { red[i] = 255; red[i + 3] = 255 }
+            machine_screensaver_set_backdrop(red, 4, 4)
+            defer { machine_screensaver_set_backdrop(nil, 0, 0) }
+            machine_screensaver_set_seconds(0.1)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+            _ = machine_run(30_000_000)
+            machine_set_instruction_limit(0)
+            #expect(rd16(out) == 2)
+            #expect((0..<4).map { rd16(out + 2 + UInt32($0 * 2)) } == [0, 320, 480, 640])   // top, left, bottom, right
+            #expect((0..<4).map { rd16(out + 12 + UInt32($0 * 2)) } == [0, 0, 240, 320])
+            func px(_ x: Int32, _ y: Int32) -> [UInt8] {
+                var p = [UInt8](repeating: 0, count: 4)
+                machine_screen_rgba(x, y, 1, 1, &p)
+                return Array(p.prefix(3))
+            }
+            #expect(px(500, 400) == [255, 0, 0] && px(100, 100) == [255, 0, 0])
+            #expect(px(100, 400) != [255, 0, 0])
+        }
+
         /// ImDone: no more DrawFrame calls; Close still comes.  A module
         /// whose 'Cals' leaves out Blank gets the screen blanked for it.
         @Test func imDoneStopsTheFrames() {

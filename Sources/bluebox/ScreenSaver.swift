@@ -16,7 +16,8 @@ nonisolated(unsafe) var hostFullScreen = false
 let screensaverUsage = """
   bluebox screensaver <module>... [--window|--fullscreen|--headless] [--seconds N] [--every N] [--random]
             [--png-every N dir] [--sound] [--control I=V]... [--button B]... [--backdrop IMAGE] [--frames-per-tick N]
-            [--tick-budget N] [--settings DIR | --no-settings] [run options: --depth, --screen, --log ...]
+            [--tick-budget N] [--settings DIR | --no-settings] [--monitor WxH+X+Y]...
+            [run options: --depth, --screen, --log ...]
       Run an After Dark graphics module (a file of type ADgm, or an archive
       holding one) as After Dark did: Initialize, Blank, then DrawFrame each
       tick until a key, a click or the mouse moving wakes it (or N seconds,
@@ -37,6 +38,10 @@ let screensaverUsage = """
       in its setup) are there the next time.  They go in a file per module
       in Blue Box's "After Dark Settings" folder (--settings DIR another;
       --no-settings: not kept); the module file itself isn't changed.
+      --monitor WxH+X+Y makes the screen several displays, as After Dark's
+      monitors (given again for each, the main one first): the module gets
+      each in its list and blanks them all; the screen is the box around
+      them unless --screen says.
       Several modules, or a folder of them, take turns as After Dark's
       Randomize had them: each runs --every N seconds (default 60), in
       the order given, or picked at random with --random.
@@ -48,6 +53,7 @@ func screensaverCommand(_ args: [String]) {
     var runArgs: [String] = []
     var modules: [String] = []
     var every = 60.0
+    var monitorRects: [(Int, Int, Int, Int)] = [] // left, top, right, bottom
     var random = false
     var depthGiven = false
     var maxGiven = false
@@ -98,6 +104,11 @@ func screensaverCommand(_ args: [String]) {
             guard let s = Double(next()), s > 0 else { fail("--every takes a number of seconds") }
             every = s
         case "--random": random = true
+        case "--monitor":
+            let g = next()
+            let parts = g.split(whereSeparator: { "x+".contains($0) }).compactMap { Int($0) }
+            guard parts.count == 4, parts[0] > 0, parts[1] > 0 else { fail("--monitor takes WxH+X+Y") }
+            monitorRects.append((parts[2], parts[3], parts[2] + parts[0], parts[3] + parts[1]))
         case "--settings": settings = next()
         case "--no-settings": settings = nil
         case "--help", "-h":
@@ -127,6 +138,11 @@ func screensaverCommand(_ args: [String]) {
     machine_screensaver_set_settings_dir(settings)
     for m in files.dropFirst() { _ = machine_screensaver_add_module(m) }
     machine_screensaver_set_rotation(every, random)
+    for (l, t, r, b) in monitorRects { _ = machine_screensaver_add_monitor(Int32(l), Int32(t), Int32(r), Int32(b)) }
+    if !monitorRects.isEmpty && !runArgs.contains("--screen") {
+        let w = monitorRects.map(\.2).max()!, h = monitorRects.map(\.3).max()!
+        runArgs += ["--screen", "\((w + 7) & ~7)x\(h)"]
+    }
     if display == "headless" && seconds == nil { seconds = 30 }
     if let seconds { machine_screensaver_set_seconds(seconds) }
     var run = [file] + runArgs
