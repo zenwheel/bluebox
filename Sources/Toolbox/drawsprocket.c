@@ -266,10 +266,19 @@ static void dsp_SetState(ppc_cpu *c)
     wr16(ctx + CTX_STATE, (uint16_t)state);
     RETURN(0);
 }
+/* DSpContext_GetState(context, *state): a DSpContextState is an enum, a
+ * long (the interfaces have enums always int); a word left half of it as
+ * it was, and Diablo took the context for paused and its own cursor
+ * drawing then wrote through a screen it had not looked up, into low
+ * memory (Ticks). */
 static void dsp_GetState(ppc_cpu *c)
 {
+    if (!is_context(R(0))) {
+        RETURN(kDSpInvalidContextErr);
+        return;
+    }
     if (R(1))
-        wr16(R(1), rd16(ctx + CTX_STATE));
+        wr32(R(1), rd16(ctx + CTX_STATE));
     RETURN(0);
 }
 static void dsp_Release(ppc_cpu *c)
