@@ -8,6 +8,8 @@
  * file), it is that Finder process, first in the list.  Temporary memory
  * comes from the growable application heap.
  */
+#include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
@@ -41,19 +43,51 @@ int16_t tb_GetCurrentProcess(gaddr psn)
     return noErr;
 }
 
+/* The runs LaunchApplication started, by process ID: a Mac's Process
+ * Manager lists a process from its launch, but a run is listed only once
+ * it listens for events, a moment later. */
+static int launched[32];
+static int nlaunched, last_launched;
+
+void machine_launched_process(int pid) { last_launched = pid; }
+
+static bool listed(int pid, machine_ae_process *found)
+{
+    machine_ae_process procs[64];
+    int n = machine_ae_processes(procs, 64);
+    for (int i = 0; i < n; i++)
+        if (procs[i].pid == pid) {
+            *found = procs[i];
+            return true;
+        }
+    return false;
+}
+
+bool process_await_launched(int pid)
+{
+    bool ours = false;
+    for (int i = 0; i < nlaunched; i++)
+        ours |= launched[i] == pid;
+    if (!ours || pid <= 0)
+        return false;
+    machine_ae_process p;
+    for (int waited = 0; waited < 30000; waited += 20) { /* a program starting up, at most half a minute */
+        if (listed(pid, &p))
+            return true;
+        if (kill(pid, 0) != 0 && errno == ESRCH)
+            return false;
+        usleep(20000);
+    }
+    return false;
+}
+
 /* Another run, by its serial number: its listing entry. */
 static bool other_run(gaddr psn, machine_ae_process *found)
 {
     if (rd32(psn) != 1)
         return false;
-    machine_ae_process procs[64];
-    int n = machine_ae_processes(procs, 64);
-    for (int i = 0; i < n; i++)
-        if ((uint32_t)procs[i].pid == rd32(psn + 4)) {
-            *found = procs[i];
-            return true;
-        }
-    return false;
+    int pid = (int)rd32(psn + 4);
+    return listed(pid, found) || (process_await_launched(pid) && listed(pid, found));
 }
 
 int16_t tb_GetNextProcess(gaddr psn)
@@ -98,12 +132,18 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
 {
     machine_ae_process other;
     if (other_run(psn, &other)) {
-        /* What the listing says: its signature (its name stays empty). */
+        /* What the listing says: its signature, and what the run tells of
+         * itself: its name, type and application file (Cumulus's Slide
+         * Show opens the running Cumulus's file by it). */
+        uint8_t other_name[32] = { 0 };
+        uint32_t other_type = fourcc("APPL");
+        char other_path[1024] = "";
+        machine_ae_process_info(other.pid, other.signature, other_name, &other_type, other_path, sizeof other_path);
         gaddr name = ProcessInfoRec_processName(info);
         if (name)
-            wr8(name, 0);
+            gput(name, other_name, 1 + (uint32_t)other_name[0]);
         gmemcpy(info + ProcessInfoRec_processNumber_off, psn, 8);
-        ProcessInfoRec_set_processType(info, fourcc("APPL"));
+        ProcessInfoRec_set_processType(info, other_type);
         ProcessInfoRec_set_processSignature(info, (int32_t)other.signature);
         ProcessInfoRec_set_processMode(info, 0x0040); /* takes high-level events */
         ProcessInfoRec_set_processLocation(info, 0);
@@ -116,8 +156,11 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
         ProcessInfoRec_set_processLaunchDate(info, 0);
         ProcessInfoRec_set_processActiveTime(info, 0);
         gaddr spec = ProcessInfoRec_processAppSpec(info);
-        if (spec)
+        if (spec) {
             gmemset(spec, 0, FSSpec_SIZEOF);
+            if (other_path[0] == '/' && access(other_path, F_OK) == 0)
+                fm_spec_for_path(other_path, spec);
+        }
         return noErr;
     }
     if (is_finder(psn)) {
@@ -165,7 +208,7 @@ int16_t tb_GetProcessInformation(gaddr psn, gaddr info)
 void hfs_make_fsref(gaddr ref, const char *path); /* hfsplus.c */
 
 /* GetProcessBundleLocation (CarbonLib): the FSRef of the process's
- * application file.  The Finder and the other runs have none here. */
+ * application file, another run's as it tells it; the Finder has none here. */
 int16_t process_bundle_location(gaddr psn, gaddr ref)
 {
     machine_ae_process other;
@@ -178,7 +221,17 @@ int16_t process_bundle_location(gaddr psn, gaddr ref)
         hfs_make_fsref(ref, full);
         return noErr;
     }
-    return is_finder(psn) || other_run(psn, &other) ? fnfErr : procNotFound;
+    if (other_run(psn, &other)) {
+        uint8_t name[32];
+        uint32_t type;
+        char path[1024];
+        if (!machine_ae_process_info(other.pid, other.signature, name, &type, path, sizeof path) || path[0] != '/' ||
+            access(path, F_OK) != 0)
+            return fnfErr;
+        hfs_make_fsref(ref, path);
+        return noErr;
+    }
+    return is_finder(psn) ? fnfErr : procNotFound;
 }
 
 /* A process's name as GetProcessInformation gives it (a Pascal string,
@@ -197,7 +250,13 @@ int16_t process_name(gaddr psn, uint8_t *name)
         memcpy(name, "\006Finder", 7);
         return noErr;
     }
-    return other_run(psn, &other) ? noErr : procNotFound;
+    if (!other_run(psn, &other))
+        return procNotFound;
+    uint32_t type;
+    char path[1024];
+    if (!machine_ae_process_info(other.pid, other.signature, name, &type, path, sizeof path))
+        name[0] = 0;
+    return noErr;
 }
 
 int16_t tb_SameProcess(gaddr a, gaddr b, gaddr same_out)
@@ -329,7 +388,15 @@ void machine_set_launch_handler(machine_launch_fn fn, void *ctx)
 
 bool process_launch(const char *app, const char *const *docs, int ndocs)
 {
-    return launch_fn && launch_fn(app, docs, ndocs, launch_ctx);
+    last_launched = 0;
+    if (!launch_fn || !launch_fn(app, docs, ndocs, launch_ctx))
+        return false;
+    if (last_launched > 0) {
+        if (nlaunched == (int)(sizeof launched / sizeof launched[0]))
+            memmove(launched, launched + 1, sizeof launched - sizeof launched[0]), nlaunched--;
+        launched[nlaunched++] = last_launched;
+    }
+    return true;
 }
 
 static machine_url_fn url_fn;
@@ -375,7 +442,12 @@ int16_t tb_LaunchApplication(gaddr pb)
     free(docs);
     if (!ok)
         return -600; /* procNotFound: nothing could be started */
-    gmemset(pb + LaunchParamBlockRec_launchProcessSN_off, 0, 8);
+    /* The new run's serial number, as the other runs are listed ({1, its
+     * process ID}), for the events the caller sends it (Cumulus's Slide
+     * Show asks the Cumulus it launched for its catalog's records); none
+     * when the run was only reported (headless). */
+    wr32(pb + LaunchParamBlockRec_launchProcessSN_off, last_launched > 0 ? 1 : 0);
+    wr32(pb + LaunchParamBlockRec_launchProcessSN_off + 4, last_launched > 0 ? (uint32_t)last_launched : 0);
     /* The Finder keeps running whatever it asks: the program is its own
      * run beside it. */
     if (!(flags & 0x4000) && !g_is_finder) { /* launchContinue */

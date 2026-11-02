@@ -575,6 +575,10 @@ void machine_set_main_thread_pump(void (*fn)(void));
 /* Start another application (with the documents it is to open). */
 typedef bool (*machine_launch_fn)(const char *path, const char *const *documents, int ndocuments, void *ctx);
 void machine_set_launch_handler(machine_launch_fn fn, void *ctx);
+/* Called by the handler with the process ID of the run it started (none
+ * if it only reported the launch): LaunchApplication answers with that
+ * run's serial number, and events sent to it wait for it to listen. */
+void machine_launched_process(int pid);
 /* Open a URL (Internet Config's ICLaunchURL): in the host's own browser or
  * whatever handles its scheme.  Returns false if it could not. */
 typedef bool (*machine_url_fn)(const char *url, void *ctx);
@@ -832,6 +836,10 @@ typedef struct {
     uint32_t signature;
 } machine_ae_process;
 int machine_ae_processes(machine_ae_process *out, int max);
+/* What a listed run says of itself: its name (a Pascal string), its type
+ * ('APPL', or 'FNDR' for a Finder) and its application's host path; false
+ * if it says nothing. */
+bool machine_ae_process_info(int pid, uint32_t sig, uint8_t name[32], uint32_t *type, char *path, size_t size);
 /* Send a run an event as machine_send_apple_event builds them; with wait,
  * its result (the reply's direct object as text, or the error's message)
  * and keyErrorNumber come back.  The handler's result, or procNotFound,
