@@ -291,13 +291,16 @@ enum ShellItem: Hashable {
     /// Scan the library and the disk again (after an import or an install).
     func refresh() {
         var found: [ShellApp] = []
-        // Theme archives (Kaleidoscope schemes) often carry an application of
-        // their own; their entries are themes, not applications to list.
-        let themePaths = classicThemes(in: library)
+        // The library is read once (it may hold CDs): its applications and
+        // its themes.  Theme archives (Kaleidoscope schemes) often carry an
+        // application of their own; their entries are themes, not
+        // applications to list.
+        let libraryFiles = FileManager.default.fileExists(atPath: library) ? scan(library) : []
+        let themePaths = libraryFiles.filter(\.isTheme).map(\.path)
         let themeEntries = Set(themePaths.map { String($0.dropFirst(library.count + 1)).split(separator: "/").first.map(String.init) ?? "" })
         for (root, place) in [(library, "Library"), (defaultDisk(), "Macintosh HD")] {
             guard FileManager.default.fileExists(atPath: root) else { continue }
-            for a in scan(root).filter({ $0.isLaunchable }) {
+            for a in (root == library ? libraryFiles : scan(root)).filter({ $0.isLaunchable }) {
                 let rel = String(a.path.dropFirst(root.count + 1))
                 if rel.hasPrefix("System Folder/") && !rel.hasPrefix("System Folder/Apple Menu Items/") && !a.isFinder {
                     continue
@@ -502,15 +505,6 @@ enum ShellItem: Hashable {
             }
         }
     }
-}
-
-/// Kaleidoscope schemes (Colr/Acid files) and Mac OS 8.5 theme files
-/// ('thme') in a library.
-func classicThemes(in library: String) -> [String] {
-    guard FileManager.default.fileExists(atPath: library) else { return [] }
-    return scan(library).filter {
-        (fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid") || fourCCString($0.type) == "thme"
-    }.map(\.path)
 }
 
 // MARK: - Views

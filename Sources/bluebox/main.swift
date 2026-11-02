@@ -1226,9 +1226,7 @@ func appsCommand(_ args: [String]) {
 /// Kaleidoscope schemes ('Colr'/'Acid' files) and Mac OS 8.5 theme files
 /// ('thme') in a library (those whose names `matching` accepts).
 func themes(in library: String, matching: ((String) -> Bool)? = nil) -> [String] {
-    scan(library, matching: matching).filter {
-        (fourCCString($0.type) == "Colr" && fourCCString($0.creator) == "Acid") || fourCCString($0.type) == "thme"
-    }.map(\.path)
+    scan(library, matching: matching).filter(\.isTheme).map(\.path)
 }
 
 /// A theme by path (a scheme file, or an archive or disk image holding

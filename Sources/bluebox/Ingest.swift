@@ -24,6 +24,10 @@ struct IngestedFile {
     var isFinder: Bool { type == fourCCValue("FNDR") }
     /// What `bluebox run` can start: an application or the Finder.
     var isLaunchable: Bool { isApplication || isFinder }
+    /// A Kaleidoscope scheme ('Colr'/'Acid') or a Mac OS 8.5 theme file ('thme').
+    var isTheme: Bool {
+        (type == fourCCValue("Colr") && creator == fourCCValue("Acid")) || type == fourCCValue("thme")
+    }
     var architecture: String {
         switch (hasCODE, hasCfrg) {
         case (true, true): return "68k+PPC"
