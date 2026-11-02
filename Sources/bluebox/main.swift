@@ -443,6 +443,7 @@ func runCommand(_ args: [String]) {
     var keyScript: [String] = []
     var headless = false
     var background = false
+    var appArgument: String? // the application as given, before it is resolved
     var screenWindow = false
     var appletalkGiven = false
     var portsGiven = Set<Int32>()
@@ -666,7 +667,7 @@ func runCommand(_ args: [String]) {
             // (Starry Night's "Sky Data", a HyperCard standalone's stack)
             // through paths made from its own, which a relative one broke.
             let path = FileManager.default.fileExists(atPath: a) ? URL(fileURLWithPath: a).standardizedFileURL.path : a
-            if app == nil { app = path } else { documents.append(path) }
+            if app == nil { app = path; appArgument = a } else { documents.append(path) }
         }
         i += 1
     }
@@ -688,7 +689,7 @@ func runCommand(_ args: [String]) {
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
     if background && !interactive { background = false }
-    if interactive && !background { reexecInNamedBundle(app: app) }
+    if interactive && !background { reexecInNamedBundle(app: app, given: appArgument) }
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
         MainActor.assumeIsolated { displayScale = CGFloat(scale) }

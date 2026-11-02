@@ -282,7 +282,7 @@ func installCommand(_ args: [String]) {
 /// "local.bluebox.", which marks an installed application's bundle.
 let shellBundleIdentifier = "local.bluebox-shell"
 
-func reexecInNamedBundle(app: String) {
+func reexecInNamedBundle(app: String, given: String? = nil) {
     let env = ProcessInfo.processInfo.environment
     // Started by Launch Services from a `bluebox install` bundle: the Dock
     // already has that bundle's name (and it may hold documents to open).
@@ -331,7 +331,10 @@ func reexecInNamedBundle(app: String) {
     } catch {
         return
     }
-    let args = [exe] + CommandLine.arguments.dropFirst()
+    // The application as resolved, so the bundle's run does not look for
+    // it again (in a library of CDs, by name) or check its archive.
+    var args = [exe] + CommandLine.arguments.dropFirst()
+    if let given, let at = args.indices.dropFirst(2).first(where: { args[$0] == given }) { args[at] = app }
     var cargs = args.map { strdup($0) } + [nil]
     execv(exe, &cargs)
     cargs.forEach { free($0) }
