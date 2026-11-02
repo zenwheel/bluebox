@@ -387,6 +387,41 @@ extension BlueBox {
             #expect(px(100, 400) != [255, 0, 0])
         }
 
+        /// A module that stops saying it needs another depth (Gloss's
+        /// "requires Millions of colours", or 256 here, the test screen
+        /// being millions) ends the run, when the host allows, to be
+        /// started again at that depth, as a program's alert does.
+        @Test func aModuleAsksForADepth() {
+            bootMachine()
+            let text = "Module: requires 256 colors"
+            let msg = tb_NewPtr(64, false, true)
+            guestPString(text, at: msg)
+            func hi(_ a: UInt32) -> UInt16 { UInt16(a >> 16) }
+            func lo(_ a: UInt32) -> UInt16 { UInt16(a & 0xFFFF) }
+            let body: [UInt16] = [
+                0x206F, 0x0004, 0x2268, 0x001E,         // MOVEA.L 4(SP),A0; MOVEA.L 30(A0),A1   errorMessage
+                0x207C, hi(msg), lo(msg),               // MOVEA.L #msg,A0
+                0x7000 | UInt16(text.utf8.count),       // MOVEQ #len,D0
+                0x12D8, 0x51C8, 0xFFFC,                 // MOVE.B (A0)+,(A1)+; DBRA D0
+                0x3F7C, 0xFFFF, 0x0012,                 // MOVE.W #ModuleError,18(SP)
+                0x225F, 0x4FEF, 0x000E, 0x4ED1,         // return
+            ]
+            let code = code68k([0x4A6F, 0x0008, 0x6600, UInt16(body.count * 2 + 2)] + body + [
+                0x426F, 0x0012, 0x225F, 0x4FEF, 0x000E, 0x4ED1,
+            ])
+            let path = moduleFile(code, in: tempDir())
+            machine_set_depth_alerts(true)
+            defer { machine_set_depth_alerts(false) }
+            machine_screensaver_set_seconds(0.2)
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_launch(path, &err, err.count))
+            machine_set_instruction_limit(g_cpu!.pointee.icount + 20_000_000)
+            _ = machine_run(30_000_000)
+            machine_set_instruction_limit(0)
+            #expect(String(cString: machine_halt_reason()).contains("asks for depth 8"))
+            #expect(machine_wanted_depth() == 8)
+        }
+
         /// ImDone: no more DrawFrame calls; Close still comes.  A module
         /// whose 'Cals' leaves out Blank gets the screen blanked for it.
         @Test func imDoneStopsTheFrames() {

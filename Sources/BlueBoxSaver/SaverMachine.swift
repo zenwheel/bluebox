@@ -285,6 +285,14 @@ final class SaverMachine: @unchecked Sendable {
             lock.lock()
             current = nil
             finished = run
+            // A module that said it needs another depth ("requires
+            // Millions of colours") starts again at that one.
+            let depth = Int(machine_wanted_depth())
+            if depth > 0, depth != run.settings.depth, wanted == run {
+                var again = run
+                again.settings.depth = depth
+                wanted = again
+            }
             lock.unlock()
         }
     }
@@ -311,6 +319,7 @@ final class SaverMachine: @unchecked Sendable {
             _ = machine_screensaver_add_monitor(Int32(m.minX), Int32(m.minY), Int32(m.maxX), Int32(m.maxY))
         }
         machine_set_screen_depth(Int32(s.depth))
+        machine_set_depth_alerts(true)
         machine_set_addressing(machine_app_addressing(run.module))
         machine_set_instruction_limit(0)
         machine_attach_host(true) // real time: the clock and the waits are the host's

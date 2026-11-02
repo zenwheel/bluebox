@@ -123,6 +123,7 @@ static void standard_beeper(cpu68k *c, uint16_t tw)
 void dialog_reset(void)
 {
     have_answered = false;
+    wanted_depth = 0; /* a new boot: nothing asked yet */
     repeats = 0;
     wr32(LM_DABeeper, native_register(standard_beeper, "StandardBeeper", 0));
 }

@@ -1015,6 +1015,8 @@ static void show_error(void)
     tb_ForeColor(33);
 }
 
+static bool rotating(void);
+
 /* A result that ends the module's run. */
 static void handle_result(int16_t r, int16_t message)
 {
@@ -1039,6 +1041,18 @@ static void handle_result(int16_t r, int16_t message)
      * an OSErr such as the kit's glue returns from MemError. */
     if (r > 0)
         return;
+    /* "requires Millions of colours" (Gloss, Ice, Madman's Quilt): when
+     * the host allows, the run ends to start again at that depth, as a
+     * program's alert asking for one does. */
+    gaddr msg = rd32(ad.pb + PB_error);
+    if (msg && rd8(msg)) {
+        char text[256];
+        snprintf(text, sizeof text, "%.*s", rd8(msg), (const char *)gptr(msg + 1));
+        if (!rotating() && depth_alert(text)) { /* taking turns, the next one comes instead */
+            ad.stopped = true;
+            return;
+        }
+    }
     ad.stopped = true;
     if (!rd8(rd32(ad.pb + PB_error)))
         snprintf(stats.error, sizeof stats.error, "error %d", r);
@@ -1429,6 +1443,8 @@ static int16_t open_module(const char *path)
         gestalt_powerpc();
     return rn;
 }
+
+static bool rotating(void) { return rot.n > 0; }
 
 static bool rotation_due(void)
 {

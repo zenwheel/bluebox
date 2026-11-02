@@ -24,7 +24,8 @@ let screensaverUsage = """
       --seconds).  The default is a window; --fullscreen covers the display;
       --headless (implied by --png-every) draws off-screen for N seconds
       (default 30), --png-every N writing the screen to dir/frame-NNNNN.png
-      every N seconds.  The screen is 8 bits deep unless --depth says.
+      every N seconds.  The screen is 8 bits deep unless --depth says (a
+      module that says it needs another depth runs again at that one).
       --control I=V gives control I (0-3 from the top, or its ID 1000-1003)
       value V in place of the module's own setting; --button B presses
       button B first (its message, or its bVal ID 1000-1003), as in the
@@ -146,7 +147,12 @@ func screensaverCommand(_ args: [String]) {
     if display == "headless" && seconds == nil { seconds = 30 }
     if let seconds { machine_screensaver_set_seconds(seconds) }
     var run = [file] + runArgs
-    if !depthGiven { run += ["--depth", "8"] }
+    if !depthGiven {
+        run += ["--depth", "8"]
+        // A module that says it needs another depth ("requires Millions
+        // of colours") runs again at that one.
+        depthRelaunch = (file, false)
+    }
     switch display {
     case "headless":
         run.append("--headless")
