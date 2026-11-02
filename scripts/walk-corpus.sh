@@ -112,7 +112,11 @@ walk_one() {
 	elif [ "$status" -ge 128 ] || [ "$status" -eq 124 ]; then
 		end="host exit $status"
 	else
-		end=$(grep -a -m 1 -E '^stopped:|^bluebox:|^instruction limit|^several applications' "$log" | sed -E 's/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//' | cut -c1-120)
+		# How the run stopped; a "bluebox:" line only when there is none
+		# (others are notes, such as pages a headless run did not print).
+		end=$(grep -a -m 1 -E '^stopped:|^instruction limit|^several applications' "$log")
+		[ -n "$end" ] || end=$(grep -a -m 1 '^bluebox:' "$log")
+		end=$(printf '%s\n' "$end" | sed -E 's/ after [0-9]+ instructions//; s/\(pc [0-9A-F]+\)//' | cut -c1-120)
 	fi
 	# An archive of several applications: each of them in turn, by its
 	# path inside the archive (names alone can be the same).
