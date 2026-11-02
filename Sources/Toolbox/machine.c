@@ -506,6 +506,10 @@ bool machine_boot(bool census)
         return false;
     wr32(LM_TheZone, GA_APPHEAP);
     events_reset();
+    /* The desktop's region, as the system had it before any program ran:
+     * a background-only program that never calls InitWindows still shows
+     * its windows through it (Web Archer's search bar). */
+    wm_rebuild_desk();
     display_reset();
     speech_reset();
     macintalk_reset();

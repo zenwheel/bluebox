@@ -52,6 +52,24 @@ extension BlueBox {
             #expect(rd32(out) == rd32(def))
         }
 
+        /// The desktop's region is there before any program runs: Web
+        /// Archer, background-only, never calls InitWindows, and its
+        /// search bar's window shows through GrayRgn.
+        @Test func windowsShowWithoutInitWindows() {
+            launchTestApp()
+            let globals = tb_NewPtr(512, false, true)
+            tb_InitGraf(globals + 400)
+            tb_InitFonts()
+            tb_InitMenus()
+            let gray = rd32(UInt32(LM_GrayRgn))
+            #expect(gray != 0)
+            let bbox = rd32(gray) + 2
+            #expect(rd16(bbox) == rd16(UInt32(LM_MBarHeight)) && Int(rd16(bbox + 6)) == Int(g_screen_width))
+            let w = tb_NewWindow(0, rect(100, 100, 140, 300), pstr(""), 1, 2, 0xFFFF_FFFF, 0, 0)
+            let vis = rd32(rd32(w + UInt32(GrafPort_visRgn_off))) + 2
+            #expect(rd16(vis + 4) > rd16(vis) && rd16(vis + 6) > rd16(vis + 2)) // not empty
+        }
+
         /// The Window Manager does the same for a WDEF.
         @Test func wdefIsEnteredWithA0AtItsCode() {
             launchTestApp()
