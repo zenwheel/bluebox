@@ -331,6 +331,16 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// PurgeSpace's total counts the room the zone may grow into, as its
+        /// largest block does, so it is never the smaller (Sifter's
+        /// was 1.2 MB beside a 128 MB block).
+        @Test func purgeSpaceTotalIsAtLeastItsLargestBlock() {
+            var total: UInt32 = 0, contig: UInt32 = 0
+            tb_PurgeSpace(&total, &contig, false)
+            #expect(contig > 0 && total >= contig)
+            #expect(Int64(total) >= Int64(tb_FreeMem(false)))
+        }
+
         /// A zone's allocPtr that a program set itself, not at a block's
         /// start (HyperCard's standalones point it 8 bytes before the data
         /// of a handle they have just disposed of), isn't searched from:

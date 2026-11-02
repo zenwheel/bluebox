@@ -1347,10 +1347,13 @@ void tb_PurgeMem(int32_t needed, bool sys_p)
     set_mem_err(largest >= (uint32_t)needed + HDR ? noErr : memFullErr);
 }
 
+/* The free space purging would leave, and the largest block in it; both
+ * count the room the application zone may still grow into, as FreeMem
+ * and MaxBlock do, so the total is never less than the block. */
 void tb_PurgeSpace(uint32_t *totalp, uint32_t *contigp, bool sys_p)
 {
     gaddr z = pick_zone(sys_p);
-    uint32_t total = total_free(z);
+    uint32_t total = total_free(z) + growth_room(z);
     gaddr lim = z_lim(z);
     for (gaddr b = z_first(z); b < lim; b = b_next(b))
         if (b_use(b) == USE_REL && (blk_state(z, b) & (ST_PURGE | ST_LOCK)) == ST_PURGE)
