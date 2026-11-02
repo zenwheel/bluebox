@@ -38,13 +38,16 @@ struct AppSettings: Codable {
     var modemPort: String? /* what the modem port connects to (machine_set_serial's specs) */
     var printerPort: String?
     var printFolder: String? /* printed pages saved there as PDF files, without the print panel ("": the panel) */
+    var printer: String? /* the Chooser's printer: panel, pdf (the print folder), host:NAME, laserwriter:NAME@ZONE, driver:FILE */
+    var userName: String? /* the Chooser's user name (the owner's, 'STR ' -16096); unset: the host account's full name */
     var appleShare: String? /* an AppleShare volume to mount (machine_mount_appleshare's spec; "": none) */
     var display: String? /* rootless, or screen (the whole Mac screen in one window); chosen by itself when unset */
     var jit: Bool? /* translate the program's code to host code (--jit) */
     var internet: InternetSettings? /* Internet Config's preferences */
     var isEmpty: Bool {
         depth == nil && cpu == nil && fpu == nil && addressing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
-            && modemPort == nil && printerPort == nil && printFolder == nil && appleShare == nil && display == nil
+            && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
+            && appleShare == nil && display == nil
             && jit == nil
             && (internet?.isEmpty ?? true)
     }
@@ -58,6 +61,8 @@ struct AppSettings: Codable {
             + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
             + "printer-port \(printerPort ?? "default (none)"), "
             + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)"), "
+            + "printer \(printer ?? "default (the print panel, or PDF files when there is a print folder)"), "
+            + "user-name \(userName.map { "\"\($0)\"" } ?? "default (this account's full name)"), "
             + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)"), "
             + "display \(display ?? "default (rootless, the whole screen when the program wants it)"), "
             + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (off)")"
@@ -72,6 +77,7 @@ struct AppSettings: Codable {
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
+                           printer: printer ?? f.printer, userName: userName ?? f.userName,
                            appleShare: appleShare ?? f.appleShare, display: display ?? f.display, jit: jit ?? f.jit,
                            internet: internet.map { $0.over(f.internet) } ?? f.internet)
     }
@@ -254,7 +260,8 @@ func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
-///     [print-folder <folder>|panel|default] [appleshare <spec>|none|default] [display rootless|screen|default]
+///     [print-folder <folder>|panel|default] [printer <spec>|default] [user-name <name>|default]
+///     [appleshare <spec>|none|default] [display rootless|screen|default]
 ///     [jit on|off|default]
 ///     [real-name|email|organization|mail-account|smtp-host|news-host|home-page|search-page <text>|default]
 ///     [http-proxy|ftp-proxy|gopher-proxy|socks <host:port>|none|default] [no-proxy <domains>|default]
@@ -361,6 +368,16 @@ func setCommand(_ args: [String]) {
                 }
                 s.printFolder = (path as NSString).standardizingPath
             }
+        case "printer":
+            if value == "default" {
+                s.printer = nil
+            } else if validPrinter(value) {
+                s.printer = value
+            } else {
+                fail("printer expects panel, pdf, host:NAME, laserwriter:NAME@ZONE, driver:FILE or default")
+            }
+        case "user-name":
+            s.userName = value == "default" ? nil : String(value.prefix(31))
         case "appleshare":
             if value == "default" {
                 s.appleShare = nil
@@ -392,7 +409,7 @@ func setCommand(_ args: [String]) {
             s.internet = i.isEmpty ? nil : i
         default:
             fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
-                 + "modem-port, printer-port, print-folder, appleshare, display, jit, "
+                 + "modem-port, printer-port, print-folder, printer, user-name, appleshare, display, jit, "
                  + InternetSettings.fields.map(\.name).joined(separator: ", ") + ", passive-ftp)")
         }
     }
@@ -400,6 +417,35 @@ func setCommand(_ args: [String]) {
     all[key] = s.isEmpty ? nil : s
     saveSettings(all, library: library)
     print("\(key): \(s.summary)")
+}
+
+/// A printer as the Chooser chooses one (machine_set_printer's specs).
+func validPrinter(_ s: String) -> Bool {
+    ["panel", "pdf"].contains(s) || (s.hasPrefix("host:") && s.count > 5) || (s.hasPrefix("driver:") && s.count > 7)
+        || (s.hasPrefix("laserwriter:") && s.dropFirst(12).contains("@"))
+}
+
+/// What the Chooser changed, kept where the run's setting came from: the
+/// program's own settings when it has that setting, else the defaults.
+func keepChooserSetting(app: String, key: String, value: String) {
+    let library = defaultLibrary()
+    var all = loadSettings(library)
+    let mine = settingsKey(app)
+    var own = all[mine] ?? AppSettings()
+    var defaults = all[defaultSettingsKey] ?? AppSettings()
+    func update(_ path: WritableKeyPath<AppSettings, String?>, _ v: String) {
+        if own[keyPath: path] != nil { own[keyPath: path] = v } else { defaults[keyPath: path] = v }
+    }
+    switch key {
+    case "user-name": update(\.userName, value)
+    case "printer": update(\.printer, value)
+    case "print-folder": update(\.printFolder, value)
+    case "appletalk": update(\.appletalk, value)
+    default: return
+    }
+    all[mine] = own.isEmpty ? nil : own
+    all[defaultSettingsKey] = defaults.isEmpty ? nil : defaults
+    saveSettings(all, library: library)
 }
 
 /// A proxy's address: host, or host:port (port 1–65535).

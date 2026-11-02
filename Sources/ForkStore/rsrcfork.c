@@ -125,8 +125,8 @@ bool rsrc_build(const rsrc_spec *specs, size_t n, uint8_t **out, size_t *out_len
         if (!seen)
             types[ntypes++] = specs[i].type;
         data_len += 4 + specs[i].len;
-        if (specs[i].name && specs[i].name[0])
-            names_len += 1 + strlen(specs[i].name);
+        if (specs[i].name && (specs[i].name_len || specs[i].name[0]))
+            names_len += 1 + (specs[i].name_len ? specs[i].name_len : strlen(specs[i].name));
     }
     size_t tl = 2 + ntypes * 8;
     size_t names_at = 28 + tl + n * 12;
@@ -155,8 +155,8 @@ bool rsrc_build(const rsrc_spec *specs, size_t n, uint8_t **out, size_t *out_len
                 continue;
             uint8_t *r = map + 28 + tl + ref * 12;
             put16(r, (uint16_t)e->id);
-            if (e->name && e->name[0]) {
-                size_t nl = strlen(e->name);
+            if (e->name && (e->name_len || e->name[0])) {
+                size_t nl = e->name_len ? e->name_len : strlen(e->name);
                 if (nl > 255)
                     nl = 255;
                 put16(r + 2, (uint16_t)noff);

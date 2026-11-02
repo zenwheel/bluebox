@@ -106,7 +106,7 @@ extension BlueBox {
                 p.initialize(from: bytes, count: bytes.count)
                 datas.append(p)
                 specs.append(rsrc_spec(type: fourCC(type), id: Int16(id), name: nil, attrs: 0, data: p,
-                                       len: UInt32(bytes.count)))
+                                       len: UInt32(bytes.count), name_len: 0))
             }
             var out: UnsafeMutablePointer<UInt8>?
             var len = 0
@@ -278,8 +278,8 @@ extension BlueBox {
                 p.initialize(from: bytes, count: bytes.count)
                 return p
             }
-            specs.append(rsrc_spec(type: fourCC("snd#"), id: 1000, name: nil, attrs: 0, data: datas[0], len: UInt32(table.count)))
-            specs.append(rsrc_spec(type: fourCC("snd "), id: 130, name: nil, attrs: 0, data: datas[1], len: UInt32(snd.count)))
+            specs.append(rsrc_spec(type: fourCC("snd#"), id: 1000, name: nil, attrs: 0, data: datas[0], len: UInt32(table.count), name_len: 0))
+            specs.append(rsrc_spec(type: fourCC("snd "), id: 130, name: nil, attrs: 0, data: datas[1], len: UInt32(snd.count), name_len: 0))
             var out: UnsafeMutablePointer<UInt8>?
             var len = 0
             #expect(rsrc_build(specs, specs.count, &out, &len))

@@ -84,7 +84,16 @@ static void mac_name(const char *host, char *out, size_t n)
 
 /* ---- mounting ---- */
 
-bool machine_mount_appleshare(const char *spec, char *err, size_t errlen)
+static bool mount_share(const char *spec, bool now, char *err, size_t errlen);
+static bool connected(share *sh);
+
+bool machine_mount_appleshare(const char *spec, char *err, size_t errlen) { return mount_share(spec, false, err, errlen); }
+
+/* While the program runs (the Chooser's AppleShare): mounted at once, and
+ * connected to see that it can be; a disk-inserted event says so. */
+bool appleshare_mount_now(const char *spec, char *err, size_t errlen) { return mount_share(spec, true, err, errlen); }
+
+static bool mount_share(const char *spec, bool now, char *err, size_t errlen)
 {
     share *sh = NULL;
     for (int i = 0; i < MAX_SHARES && !sh; i++)
@@ -150,7 +159,21 @@ bool machine_mount_appleshare(const char *spec, char *err, size_t errlen)
     char real[1024];
     if (realpath(sh->root, real))
         snprintf(sh->root, sizeof sh->root, "%s", real);
-    machine_mount_folder(sh->root, vh);
+    if (!now) {
+        machine_mount_folder(sh->root, vh);
+        return true;
+    }
+    if (!connected(sh)) {
+        snprintf(err, errlen, "the server did not answer");
+        sh->used = false;
+        return false;
+    }
+    int16_t drive = 0;
+    if (!fm_mount_folder_now(sh->root, vh, &drive)) {
+        snprintf(err, errlen, "too many volumes");
+        return false;
+    }
+    tb_PostEvent(7 /* diskEvt */, drive); /* the volume is there, no error */
     return true;
 }
 

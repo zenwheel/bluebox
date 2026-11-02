@@ -359,6 +359,8 @@ void tb_TextUtilFunctions(gaddr textp, int16_t len, int16_t script, int16_t sele
  * D0 = count << 16 | first address. */
 static uint8_t xpram[256];
 
+void xpram_set(int at, uint8_t v) { xpram[at & 0xFF] = v; }
+
 void raw_ReadXPRam(cpu68k *c, uint16_t tw)
 {
     uint32_t n = c->d[0] >> 16, at = c->d[0] & 0xFFFF;

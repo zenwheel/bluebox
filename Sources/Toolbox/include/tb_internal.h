@@ -239,6 +239,8 @@ void as_dir_created(const char *path);
 void as_deleted(const char *path);
 void as_moved(const char *from, const char *to);
 void as_idle(void); /* at event calls: idle sessions kept open */
+bool appleshare_mount_now(const char *spec, char *err, size_t errlen); /* mounted while the program runs */
+int16_t fm_mount_folder_now(const char *root, const char *name, int16_t *drive); /* a folder as a volume, now */
 void notify_host(int id, const char *text); /* a host notification of ours (notify.c) */
 /* Components of our own (components.c). */
 uint32_t components_register_native(uint32_t type, uint32_t subtype, uint32_t manufacturer, gaddr entry);
@@ -829,6 +831,15 @@ void atp_reset(void);
 void appletalk_poll(void);
 void appletalk_reset(void);
 bool appletalk_enabled(void);
+/* The Chooser's AppleTalk Active and Inactive: the link closed or allowed
+ * again (in the mode it had); the mode now ("off", "local" ...). */
+const char *appletalk_set_active(bool on);
+bool appletalk_in_use(void); /* sockets of the program's open */
+/* ZIP: the zones a router knows (0 with none), and this node's zone ("*"
+ * without a router). */
+int at_zone_list(char (*names)[33], int max);
+void at_my_zone(char out[33]);
+bool at_router(uint16_t *net, uint8_t *node); /* the router RTMP heard, if any */
 /* The Serial Driver (serial.c): .AIn, .AOut, .BIn and .BOut. */
 extern const native_driver serial_drivers[4];
 void serial_poll(void);
@@ -846,6 +857,8 @@ void serial_port_dtr(int port, bool on);
 int serial_port_fd(int port);
 bool serial_port_online(int port);
 bool serial_port_in_use(int port);
+bool serial_port_connected(int port); /* set up to connect to anything */
+void xpram_set(int at, uint8_t v);    /* extended parameter RAM (osutil.c) */
 /* The Communications Toolbox (ctb.c): _CommToolboxDispatch and the
  * managers' routines by selector, for 68k and PowerPC programs alike. */
 void ctb_reset(void);

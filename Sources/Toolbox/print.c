@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "chooser.h"
 #include "machine.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
@@ -482,7 +483,20 @@ void tb_PrCloseDoc(gaddr port)
         job.vres = res_of(p, 4);
         job.hres = res_of(p, 6);
         job.save_pdf = save_pdf;
-        if (print_fn)
+        /* Where the Chooser says: a host printer, PDF files, the panel (the
+         * job dialog's Save as PDF still asks where). */
+        chooser_print_destination(&job);
+        gaddr front = tb_FrontWindow();
+        gaddr th = front ? rd32(front + WindowRecord_titleHandle_off) : 0;
+        if (th && rd32(th)) {
+            char t[256];
+            pstr_to_c(rd32(th), t, sizeof t);
+            macroman_to_utf8((const uint8_t *)t, strlen(t), job.title, sizeof job.title);
+        }
+        char lw[200];
+        if (!save_pdf && chooser_laserwriter(lw, sizeof lw))
+            pap_print(&job, lw);
+        else if (print_fn)
             print_fn(&job, print_ctx);
         else
             LOGF(LOG_UNIMPL, "Printing Manager: no host, %d page(s) not printed\n", n);

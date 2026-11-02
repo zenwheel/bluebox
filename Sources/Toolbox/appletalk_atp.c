@@ -554,23 +554,109 @@ const native_driver atp_driver = { ".ATP", 10, atp_open, NULL, atp_control, NULL
 enum { xCall = 246, zipGetLocalZones = 5, zipGetZoneList = 6, zipGetMyZone = 7 };
 enum { X_SUBCODE = 28, X_BUFF = 34, X_NUMZONES = 38, X_LASTFLAG = 40 };
 
+/* ZIP's ATP calls to the router RTMP heard (socket 6): GetMyZone (7),
+ * GetZoneList (8) and GetLocalZones (9) from a 1-based index; the reply's
+ * user bytes are LastFlag, 0, the count; its data the zones' names. */
+static int zip_ask(int fn, int start, uint8_t *data, int cap, int *count, bool *last)
+{
+    uint16_t rnet;
+    uint8_t rnode;
+    if (!at_router(&rnet, &rnode))
+        return noBridgeErr;
+    int skt = atp_host_open(NULL, NULL);
+    if (!skt)
+        return noBridgeErr;
+    static atp_reply r;
+    uint32_t user = (uint32_t)fn << 24 | (uint16_t)start;
+    int16_t err = atp_host_request(skt, rnode, 6, user, NULL, 0, false, 1, 1000, 3, &r);
+    atp_host_close(skt);
+    if (err != noErr || r.count < 1)
+        return err ? err : noBridgeErr;
+    *last = (r.user[0] >> 24) != 0;
+    *count = (int)(r.user[0] & 0xFFFF);
+    int n = r.len[0] < cap ? r.len[0] : cap;
+    memcpy(data, r.data[0], (size_t)n);
+    return n;
+}
+
+int at_zone_list(char (*names)[33], int max)
+{
+    int n = 0;
+    bool last = false;
+    while (!last && n < max) {
+        uint8_t data[578];
+        int count = 0;
+        int len = zip_ask(8, n + 1, data, sizeof data, &count, &last);
+        if (len < 0 || count <= 0)
+            break;
+        for (int i = 0, k = 0; i < count && k < len && n < max; i++) {
+            int l = data[k] > 32 ? 32 : data[k];
+            if (k + 1 + l > len)
+                break;
+            memcpy(names[n], data + k + 1, (size_t)l);
+            names[n++][l] = 0;
+            k += 1 + data[k];
+        }
+    }
+    return n;
+}
+
+void at_my_zone(char out[33])
+{
+    uint8_t data[578];
+    int count = 0;
+    bool last;
+    int len = zip_ask(7, 0, data, sizeof data, &count, &last);
+    if (len > 0 && count > 0 && data[0] && data[0] < len) {
+        int l = data[0] > 32 ? 32 : data[0];
+        memcpy(out, data + 1, (size_t)l);
+        out[l] = 0;
+    } else {
+        strcpy(out, "*");
+    }
+}
+
+/* A program's ZIP call: the names packed into its buffer, from the
+ * index it asks for (zipLastFlag set with the last of them). */
+static int16_t zip_call(gaddr pb, int fn)
+{
+    uint8_t data[578];
+    int count = 0;
+    bool last = true;
+    /* zipInfoField (42): the program clears it for the first call; the
+     * zones given so far are kept in it. */
+    int done = fn == 7 ? 0 : (int16_t)rd16(pb + 42);
+    if (done < 0)
+        done = 0;
+    int len = zip_ask(fn, done + 1, data, sizeof data, &count, &last);
+    if (len < 0) {
+        if (fn == 7) { /* no router: this zone is "*" */
+            static const uint8_t star[2] = { 1, '*' };
+            gput(rd32(pb + X_BUFF), star, 2);
+            wr16(pb + X_NUMZONES, 1);
+            wr8(pb + X_LASTFLAG, 1);
+            return noErr;
+        }
+        wr16(pb + X_NUMZONES, 0);
+        wr8(pb + X_LASTFLAG, 1);
+        return (int16_t)len;
+    }
+    gput(rd32(pb + X_BUFF), data, (uint32_t)len);
+    wr16(pb + X_NUMZONES, (uint16_t)count);
+    if (fn != 7)
+        wr16(pb + 42, (uint16_t)(done + count));
+    wr8(pb + X_LASTFLAG, last || fn == 7);
+    return noErr;
+}
+
 static int16_t xpp_control(gaddr pb, bool async)
 {
     if ((int16_t)rd16(pb + CntrlParam_csCode_off) != xCall)
         return xpp_asp_control(pb, async); /* ASP and AFP (xpp.c) */
     switch ((int16_t)rd16(pb + X_SUBCODE)) {
-    case zipGetMyZone: {
-        static const uint8_t star[2] = { 1, '*' };
-        gput(rd32(pb + X_BUFF), star, 2);
-        wr16(pb + X_NUMZONES, 1);
-        wr8(pb + X_LASTFLAG, 1);
-        return noErr;
-    }
-    case zipGetLocalZones:
-    case zipGetZoneList:
-        wr16(pb + X_NUMZONES, 0);
-        wr8(pb + X_LASTFLAG, 1);
-        return noBridgeErr;
+    case zipGetMyZone: return zip_call(pb, 7);
+    case zipGetLocalZones: return zip_call(pb, 9);
+    case zipGetZoneList: return zip_call(pb, 8);
     default: return -17;
     }
 }

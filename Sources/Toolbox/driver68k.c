@@ -231,6 +231,14 @@ static gaddr find_drvr_resource(gaddr namep)
                 wr8(tmp + 1 + (uint32_t)((lead >= 0 ? 1 : 0) + i), body[i]);
         }
         res = tb_GetNamedResource((int32_t)fourcc("DRVR"), tmp);
+        if (res && (!rd32(res) || tb_GetHandleSize(res) == 0)) {
+            /* An empty one stands for the System's of the name (a file
+             * that runs one of ours with the desk accessory host). */
+            int16_t cur = tb_CurResFile();
+            tb_UseResFile((int16_t)rd16(LM_SysMap));
+            res = tb_Get1NamedResource((int32_t)fourcc("DRVR"), tmp);
+            tb_UseResFile(cur);
+        }
         if (res && !rd32(res))
             res = 0;
     }

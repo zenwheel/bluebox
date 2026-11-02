@@ -1005,6 +1005,10 @@ bool machine_set_serial(int port, const char *spec)
     return ok;
 }
 
+/* Whether a port connects to anything (the printer port is free for
+ * AppleTalk when it doesn't). */
+bool serial_port_connected(int port) { return port >= 0 && port < NPORTS && strcmp(specs[port], "none") != 0; }
+
 static int kind_of(const char *spec)
 {
     if (!strncmp(spec, "modem", 5))

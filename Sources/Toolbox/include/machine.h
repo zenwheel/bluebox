@@ -483,7 +483,14 @@ typedef struct {
     int copies;
     int vres, hres;              /* the drawing's resolution, dpi (72: points) */
     bool save_pdf;               /* the classic job dialog's Save as PDF: a save panel */
+    /* Where the Chooser sends it: the print panel, a host printer by name
+     * (no panel), PDF files in a folder (no panel). */
+    int destination;             /* MACHINE_PRINT_TO_... */
+    char printer[256];           /* MACHINE_PRINT_TO_HOST: the host printer's name (UTF-8) */
+    char folder[1024];           /* MACHINE_PRINT_TO_PDF: the folder */
+    char title[256];             /* the document: the front window's title (UTF-8), or empty */
 } machine_print_job;
+enum { MACHINE_PRINT_TO_PANEL, MACHINE_PRINT_TO_HOST, MACHINE_PRINT_TO_PDF };
 
 /* Page setup as the host's page layout panel describes it, in points. */
 typedef struct {
@@ -497,6 +504,29 @@ typedef bool (*machine_print_fn)(const machine_print_job *job, void *ctx);
 /* Run the host's page setup panel, starting from and updating ps; false if cancelled. */
 typedef bool (*machine_page_setup_fn)(machine_page_setup *ps, void *ctx);
 void machine_set_print_handlers(machine_print_fn print, machine_page_setup_fn page_setup, void *ctx);
+/* ---- The Chooser (chooser.c) ----
+ * Its choices are the run's settings: before boot, the user name (UTF-8;
+ * the System's 'STR ' -16096), the printer and the folder PDF files go to.
+ * A printer is "panel" (the host's print panel, the default), "pdf" (a PDF
+ * file in the print folder), "host:NAME" (the host's printer NAME, without
+ * a panel), "laserwriter:NAME@ZONE" (a LaserWriter on AppleTalk, over PAP)
+ * or "driver:FILE" (a Chooser extension's printer in the System Folder,
+ * printed through the panel); false if the spec is none of these. */
+void machine_set_user_name(const char *utf8);
+bool machine_set_printer(const char *spec);
+void machine_set_print_folder(const char *path);
+/* The host's side: its printers' names (UTF-8, up to max; the count), and
+ * a setting the Chooser changed ("user-name", "printer", "print-folder",
+ * or "appletalk": "off" or the mode it is on in), for the host to keep. */
+typedef int (*machine_printers_fn)(char (*names)[256], int max, void *ctx);
+typedef void (*machine_setting_fn)(const char *key, const char *value, void *ctx);
+void machine_set_chooser_host(machine_printers_fn printers, machine_setting_fn changed, void *ctx);
+/* Open the Chooser now, as its Apple menu item does; its refnum, or 0.
+ * (A desk accessory file whose DRVR is empty stands for the System's desk
+ * accessory of that name: `bluebox chooser` runs one with the desk
+ * accessory host.) */
+int machine_open_chooser(void);
+
 /* The host's default paper, used for new print records. */
 void machine_set_page_defaults(const machine_page_setup *ps);
 

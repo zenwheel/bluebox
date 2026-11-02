@@ -60,6 +60,10 @@ enum {
 enum { SYS_LAP_ADDR = 0, TO_RHA = 1, SYS_NET_NUM = 0x1A, VARS_SIZE = 64 };
 
 static int mode = 1; /* 0 off, 1 this host, 2 the local network, 3 EtherTalk (bridged) */
+static int mode_on = 1; /* the mode the Chooser's Active turns on again */
+static uint16_t router_net; /* the router heard last (RTMP), node 0 if none */
+static uint8_t router_node;
+static uint64_t router_ticks;
 static uint16_t net;  /* this network's number: 0 on LocalTalk, from AARP and RTMP on EtherTalk */
 static char ifname[16]; /* the network interface for mode 2, or "" for the system's choice */
 static int fd = -1;
@@ -628,6 +632,13 @@ static void deliver(const uint8_t *f, int n)
     if (dskt == NIS_SOCKET && type == DDP_NBP) {
         nbp_receive(data, len, snode);
         return;
+    }
+    /* RTMP data from a router (to the RTMP socket): it is the one ZIP
+     * and other zones' lookups go to. */
+    if (dskt == 1 && type == 1 && len >= 4) {
+        router_net = (uint16_t)(data[0] << 8 | data[1]);
+        router_node = data[3] ? data[3] : snode;
+        router_ticks = now_ms();
     }
     /* AEP: the echoer on socket 4 sends a request back as a reply. */
     if (dskt == 4 && type == 4) {
@@ -1292,10 +1303,80 @@ bool machine_set_appletalk(const char *how)
         return false;
     const char *colon = strchr(how, ':');
     snprintf(ifname, sizeof ifname, "%s", mode >= 2 && colon ? colon + 1 : "");
+    if (mode)
+        mode_on = mode;
     return true;
 }
 
 bool appletalk_enabled(void) { return mode != 0; }
+
+/* The router RTMP last said is there (in the last minute): its node. */
+bool at_router(uint16_t *rnet, uint8_t *rnode)
+{
+    if (!router_node || now_ms() - router_ticks > 60000)
+        return false;
+    *rnet = router_net;
+    *rnode = router_node;
+    return true;
+}
+
+bool appletalk_in_use(void)
+{
+    if (!opened)
+        return false;
+    for (int s = 1; s < 255; s++)
+        if (sockets[s] && s != NIS_SOCKET)
+            return true;
+    return nnames > 0;
+}
+
+static const char *mode_name(void)
+{
+    static char out[32];
+    switch (mode) {
+    case 0: return "off";
+    case 1: return "local";
+    case 2: snprintf(out, sizeof out, ifname[0] ? "lan:%s" : "lan", ifname); return out;
+    default: snprintf(out, sizeof out, "bridge:%s", ifname); return out;
+    }
+}
+
+/* Inactive: the programs' transition queue told, the link closed and
+ * everything on it forgotten; Active: the mode it had, the link opened
+ * again when .MPP is. */
+const char *appletalk_set_active(bool on)
+{
+    if (on && !mode) {
+        mode = mode_on ? mode_on : 1;
+        gestalt_set(fourcc("atlk"), 58);
+    } else if (!on && mode) {
+        if (opened)
+            at_transition_event(2 /* ATTransClose */, 0, false, 0);
+        if (fd >= 0 && mode != 3)
+            close(fd);
+        if (mode == 3)
+            et_close();
+        fd = -1;
+        opened = selfsend = false;
+        node = 0;
+        nnames = 0;
+        memset(sockets, 0, sizeof sockets);
+        memset(handlers, 0, sizeof handlers);
+        memset(listeners, 0, sizeof listeners);
+        memset(ops, 0, sizeof ops);
+        memset(hops, 0, sizeof hops);
+        router_node = 0;
+        atp_reset();
+        adsp_reset();
+        wr8(LM_PortBUse, 0xFF);
+        if (vars)
+            wr8(vars + SYS_LAP_ADDR, 0);
+        mode_on = mode;
+        mode = 0;
+        gestalt_set(fourcc("atlk"), 0);
+    }
+    return mode_name();
+}
 uint8_t appletalk_node(void) { return node; }
 
 void appletalk_reset(void)

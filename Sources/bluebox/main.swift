@@ -175,6 +175,11 @@ func usage() -> Never {
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      snap:F.png saves the screen; in a window, wait:N is N/1000 ms
     \(screensaverUsage)
+      bluebox chooser [run options]
+          Open the Chooser on its own (it is also in every program's Apple menu):
+          the AppleShare servers, LaserWriters and host printers to choose from,
+          Save as PDF and its folder, the user name and AppleTalk on or off, kept
+          as the default settings (printer, print-folder, user-name, appletalk).
       bluebox send [--to PID|SIGNATURE] [--no-wait] odoc|pdoc FILE... | oapp | quit | dosc TEXT | CLASSID [TEXT]
           Send an Apple Event to a running classic application (the only one, or the
           one --to names by process ID or creator): open or print documents, open,
@@ -195,6 +200,7 @@ func usage() -> Never {
                 [cpu 68000|68020|68030|68040|ppc|default] [fpu none|68881|68882|68040|default]
                 [addressing 24|32|default] [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
+                [printer panel|pdf|host:NAME|laserwriter:NAME@ZONE|driver:FILE|default] [user-name NAME|default]
                 [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
                 [real-name|email|organization|mail-account|smtp-host|news-host|
                  home-page|search-page TEXT|default]
@@ -784,6 +790,14 @@ func runCommand(_ args: [String]) {
              + "SdVolume, MenuFlash, DlgFont, SysFontFam, ApFontID, ScrDmpEnb, SPVolCtl, SPClikCaret, SPKbd, "
              + "SPMisc2, SPFont, SPAlarm)")
     }
+    // The Chooser's choices: the user name, the printer, the PDF folder.
+    machine_set_user_name(saved.userName ?? hostFullUserName())
+    if let f = saved.printFolder, !f.isEmpty { machine_set_print_folder(f) }
+    let printer = saved.printer ?? ((saved.printFolder ?? "").isEmpty ? "panel" : "pdf")
+    if !machine_set_printer(printer) {
+        eprint("bluebox: printer \"\(printer)\" (from the settings) is not panel, pdf, host:NAME, laserwriter:NAME@ZONE or driver:FILE\n")
+    }
+    installChooserHost(app: app, keep: !census)
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_override(sel, v) }
@@ -838,7 +852,7 @@ func runCommand(_ args: [String]) {
     }
     #if canImport(AppKit)
     ClassicImages.install()
-    if let printTo { installPrintToFile(printTo) } else { printFolder = saved.printFolder.flatMap { $0.isEmpty ? nil : $0 } }
+    if let printTo { installPrintToFile(printTo) } else if !interactive { installHeadlessPrinting() }
     if !headlessFileAnswers.isEmpty {
         // Open and save dialogs answered in turn, without a panel.
         machine_set_file_handler({ _, pathOut, pathSize, _ in
@@ -1663,6 +1677,7 @@ case "apps": appsCommand(rest)
 case "shell": shellCommand(rest)
 #endif
 case "set": setCommand(rest)
+case "chooser": chooserCommand(rest)
 case "rsrc": rsrcCommand(rest)
 case "inspect": inspectCommand(rest)
 case "exports": exportsCommand(rest)
