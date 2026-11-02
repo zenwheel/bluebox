@@ -20,6 +20,7 @@
 #include "tb_internal.h"
 #include "thme.h"
 #include "sysres_gen.h"
+#include "chooser.h"
 #include "machine.h"
 #include "qd3d.h"
 #include "jit.h"
@@ -382,6 +383,8 @@ static bool open_system_file(void)
     for (unsigned i = 0; i < sysfont_count && n < 512; i++)
         specs[n++] = (rsrc_spec){ sysfonts[i].type, sysfonts[i].id, sysfonts[i].name, RES_SYS_HEAP | RES_PURGEABLE,
                                   sysfonts[i].data, sysfonts[i].len };
+    /* The Chooser, its icons, and the strings it keeps (chooser.c). */
+    n = chooser_system_resources(specs, n, 512);
     /* A theme's own Finder and system icons replace ours. */
     theme_system_icons(specs, &n, 512);
     uint8_t *fork;
@@ -533,6 +536,7 @@ bool machine_boot(bool census)
     ctb_reset(); /* the CRM's queue first: the serial ports go in it */
     serial_reset();
     appletalk_reset();
+    chooser_reset(); /* after the serial ports and AppleTalk */
     ppc_glue_reset();
     ppc_libs_reset();
     sound_converters_reset();

@@ -3474,6 +3474,36 @@ int16_t fm_mount_disk(const char *root, const uint8_t *name, int16_t drive, int1
     return noErr;
 }
 
+/* A folder mounted as a volume while the program runs (an AppleShare
+ * volume the Chooser connected): its vRefNum, or 0. */
+int16_t fm_mount_folder_now(const char *root, const char *name, int16_t *drive_out)
+{
+    if (nmounts >= MAX_MOUNTS)
+        return 0;
+    mount *m = &mounts[nmounts];
+    memset(m, 0, sizeof *m);
+    if (!realpath(root, m->root))
+        return 0;
+    fm_grant(m->root, true);
+    m->vref = new_vref();
+    int16_t drive = BOOT_DRIVE + 1;
+    for (int i = 0; i < nmounts; i++)
+        if (mounts[i].drive >= drive)
+            drive = (int16_t)(mounts[i].drive + 1);
+    m->drive = drive;
+    *drive_out = drive;
+    m->dref = (int16_t)(-1 - CD_UNIT);
+    m->root_id = dir_id_for(rel_of(m->root));
+    uint8_t mac[64];
+    size_t n = utf8_to_macroman(name && name[0] ? name : strrchr(m->root, '/') + 1, mac, 27);
+    m->name[0] = (char)n;
+    memcpy(m->name + 1, mac, n);
+    nmounts++;
+    add_vcb(m);
+    LOGF(LOG_TRAPS, "  mounted %.*s (vRefNum %d) from %s\n", (int)n, m->name + 1, m->vref, m->root);
+    return m->vref;
+}
+
 const char *fm_volume_root(void) { return root_path[0] ? root_path : disk_path(); }
 
 bool fm_disk_info_of(int16_t vref, fm_disk_info *out)

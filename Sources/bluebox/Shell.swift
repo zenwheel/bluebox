@@ -849,6 +849,11 @@ struct SettingsForm: View {
                        inherited: fallback.modemPort ?? "modem")
             PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
                        inherited: fallback.printerPort ?? "none")
+            TextField("User name", text: Binding(get: { settings.userName ?? "" }, set: {
+                let v = String($0.prefix(31))
+                settings.userName = v.isEmpty ? nil : v
+            }), prompt: Text(fallback.userName ?? hostFullUserName()))
+            .help("The Chooser's user name: the name file servers and other Macs on the network know you by.")
             TextField("AppleShare volume", text: Binding(get: { settings.appleShare ?? "" }, set: {
                 let v = $0.trimmingCharacters(in: .whitespaces)
                 settings.appleShare = v.isEmpty ? nil : v
@@ -858,7 +863,8 @@ struct SettingsForm: View {
                   + "before the server to log in; without it you are a guest.")
         }
         Section("Printing") {
-            PrintFolderPicker(folder: $settings.printFolder, inherit: inherit, inherited: fallback.printFolder)
+            PrinterPicker(printer: $settings.printer, folder: $settings.printFolder, inherit: inherit,
+                          inherited: fallback)
         }
         Section {
             internetField("Real name", \.realName)
@@ -1345,32 +1351,54 @@ struct NetworkInterface {
     }
 }
 
-/// Printing: the print panel, or every job saved as a PDF in a folder.
-struct PrintFolderPicker: View {
+/// The host's printers, asked once (lpstat) for the settings pages.
+let shellHostPrinters = hostPrinterNames()
+
+/// Printing, as the Chooser chooses it: the print panel, a host printer
+/// printed to without it, a LaserWriter on AppleTalk, or every job saved as
+/// a PDF in a folder.
+struct PrinterPicker: View {
+    @Binding var printer: String?
     @Binding var folder: String?
     let inherit: String
-    let inherited: String?
+    let inherited: AppSettings
 
-    private enum Kind: Hashable { case inherit, panel, folder }
-    private static let panel = ""
+    /// What a printer setting (with its folder) means, in words.
+    static func describe(_ printer: String?, _ folder: String?) -> String {
+        let p = printer ?? ((folder ?? "").isEmpty ? "panel" : "pdf")
+        if p == "pdf" { return "saved as PDF in \((folder ?? "").isEmpty ? "a folder" : (folder! as NSString).abbreviatingWithTildeInPath)" }
+        if p.hasPrefix("host:") { return "printed on \(p.dropFirst(5).replacingOccurrences(of: "_", with: " "))" }
+        if p.hasPrefix("laserwriter:") { return "printed on the LaserWriter \(p.dropFirst(12).split(separator: "@").first ?? "")" }
+        if p.hasPrefix("driver:") { return "the print panel (\(p.dropFirst(7)) chosen)" }
+        return "the print panel"
+    }
 
     var body: some View {
-        // An empty string stands for "the print panel" overriding an inherited folder.
-        let kind: Kind = folder == nil ? .inherit : folder == Self.panel ? .panel : .folder
-        Picker("Printed pages", selection: Binding(get: { kind }, set: { k in
-            switch k {
-            case .inherit: folder = nil
-            case .panel: folder = Self.panel
-            case .folder: if kind != .folder { choose() }
+        let current = printer ?? (folder.map { $0.isEmpty ? "panel" : "pdf" })
+        let hosts = shellHostPrinters
+        Picker("Printed pages", selection: Binding(get: { current ?? "" }, set: { v in
+            switch v {
+            case "": printer = nil; folder = nil
+            case "pdf":
+                if (folder ?? "").isEmpty { choose() }
+                if !(folder ?? "").isEmpty { printer = "pdf" }
+            default: printer = v
             }
         })) {
-            Text("\(inherit) (\(inherited.map { "saved in " + name($0) } ?? "the print panel"))").tag(Kind.inherit)
-            Text("The print panel").tag(Kind.panel)
-            Text(kind == .folder ? "Saved as PDF in \(name(folder!))" : "Saved as PDF in a folder…").tag(Kind.folder)
+            Text("\(inherit) (\(Self.describe(inherited.printer, inherited.printFolder)))").tag("")
+            Text("The print panel").tag("panel")
+            Text(Self.describe("pdf", folder) + (current == "pdf" ? "" : "…")).tag("pdf")
+            ForEach(hosts, id: \.self) { h in
+                Text(h.replacingOccurrences(of: "_", with: " ")).tag("host:" + h)
+            }
+            if let c = current, c.hasPrefix("laserwriter:") || c.hasPrefix("driver:") || (c.hasPrefix("host:") && !hosts.contains(String(c.dropFirst(5)))) {
+                Text(Self.describe(c, folder)).tag(c)
+            }
         }
-        .help("Saving to a folder skips the print panel: each printed document becomes a PDF there, named "
-              + "after its window and the time.")
-        if kind == .folder {
+        .help("Where a program's printing goes, as its Chooser chooses: the print panel, one of this Mac's printers "
+              + "(no panel), or a PDF file in a folder, named after the document and the time. LaserWriters on "
+              + "AppleTalk are chosen in the Chooser, in the Apple menu.")
+        if current == "pdf" {
             Button("Choose Folder…") { choose() }
         }
     }
@@ -1383,6 +1411,9 @@ struct PrintFolderPicker: View {
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.prompt = "Choose"
-        if panel.runModal() == .OK, let url = panel.url { folder = url.path }
+        if panel.runModal() == .OK, let url = panel.url {
+            folder = url.path
+            printer = "pdf"
+        }
     }
 }

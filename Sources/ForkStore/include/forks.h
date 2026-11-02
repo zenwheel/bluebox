@@ -116,6 +116,7 @@ typedef struct {
     uint8_t attrs;
     const uint8_t *data;
     uint32_t len;
+    uint8_t name_len; /* the name's length when it holds NULs (a desk accessory's "\0Name"); 0: a C string */
 } rsrc_spec;
 bool rsrc_build(const rsrc_spec *specs, size_t n, uint8_t **out, size_t *out_len);
 

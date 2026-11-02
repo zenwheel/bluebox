@@ -1085,13 +1085,39 @@ func installPrintHandlers() {
         guard let job else { return false }
         let pdf = ClassicPrint.pdf(job)
         let saveAsPDF = job.pointee.save_pdf
+        let destination = Int(job.pointee.destination)
+        let printerName = withUnsafeBytes(of: job.pointee.printer) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+        let folder = withUnsafeBytes(of: job.pointee.folder) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+        let docTitle = withUnsafeBytes(of: job.pointee.title) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+        let copies = Int(job.pointee.copies)
         var ok = false
         onMain {
             MainActor.assumeIsolated {
-                let title = NSApp.windows.first(where: { $0.isKeyWindow })?.title ?? ProcessInfo.processInfo.processName
-                if let folder = printFolder { // the print-folder setting: no panel
+                let title = !docTitle.isEmpty ? docTitle
+                    : NSApp.windows.first(where: { $0.isKeyWindow })?.title ?? ProcessInfo.processInfo.processName
+                if destination == Int(MACHINE_PRINT_TO_PDF), !saveAsPDF { // the Chooser's Save as PDF: no panel
                     let url = pdfDestination(folder, title: title)
                     ok = (try? pdf.write(to: url)) != nil
+                    return
+                }
+                if destination == Int(MACHINE_PRINT_TO_HOST), !saveAsPDF, NSPrinter(name: printerName) == nil {
+                    ok = printWithLP(pdf, printer: printerName, title: title, copies: copies) // one CUPS found
+                    return
+                }
+                if destination == Int(MACHINE_PRINT_TO_HOST), !saveAsPDF, let printer = NSPrinter(name: printerName),
+                   let doc = PDFDocument(data: pdf) { // a host printer the Chooser chose: no panel
+                    let info = sessionPrintInfo.copy() as! NSPrintInfo
+                    info.printer = printer
+                    info.topMargin = 0
+                    info.bottomMargin = 0
+                    info.leftMargin = 0
+                    info.rightMargin = 0
+                    if copies > 1 { info.dictionary()[NSPrintInfo.AttributeKey.copies] = copies }
+                    guard let op = doc.printOperation(for: info, scalingMode: .pageScaleNone, autoRotate: false) else { return }
+                    op.jobTitle = title
+                    op.showsPrintPanel = false
+                    op.showsProgressPanel = true
+                    ok = op.run()
                     return
                 }
                 if saveAsPDF { // the classic job dialog's Save as PDF
@@ -1135,8 +1161,6 @@ func installPrintHandlers() {
 
 /// Where headless runs write printed pages (--print-to).
 nonisolated(unsafe) var printToPath: String?
-/// The print-folder setting: printed pages saved there as PDF, no print panel.
-nonisolated(unsafe) var printFolder: String?
 
 /// A PDF's destination: the path given, or a new file named after the
 /// document and the time when the path is a folder.
