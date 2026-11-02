@@ -6,7 +6,8 @@
 // speaks with the system voice (the one chosen in Spoken Content, a Siri
 // voice too, else the language's default; Siri voices can't be chosen by
 // name, only as the system voice): the classic voices that macOS still has by name are novelties, and programs
-// ask for ones it lacks.
+// ask for ones it lacks.  A request may name a host voice to use instead
+// (MacinTalk's robotic voice: Fred), when macOS has it.
 // Requests come on the emulator thread and are done on the main thread
 // without waiting; words, sync messages and the end of each utterance go
 // back as machine_speech_event.  macOS reports no phonemes any more (the
@@ -26,6 +27,8 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
     /// Synthesizers stopped (by StopSpeech, or for a new utterance): the end
     /// they report next (not finished) is the stopped one's, not news.
     private var replaced: Set<ObjectIdentifier> = []
+    /// The host voices channels were given by name (nil: the system voice).
+    private var hostVoices: [Int32: NSSpeechSynthesizer.VoiceName?] = [:]
 
     /// AVSpeechSynthesizer instead (--speech avspeech, or no NSSpeechSynthesizer voices).
     private var useAV = false
@@ -58,15 +61,16 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
             }
             let text = rq.text.map { String(cString: $0) }
             let voice = rq.voice.map { String(cString: $0) }
+            let hostVoice = rq.host_voice.map { String(cString: $0) }
             let (rate, pitch, modulation, volume) = (rq.rate, rq.pitch, rq.modulation, rq.volume * scale)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if ClassicSpeech.shared.useAV {
-                        ClassicSpeech.shared.av.perform(op: op, channel: channel, text: text, voice: voice, rate: rate,
-                                                        pitch: pitch, volume: volume)
+                        ClassicSpeech.shared.av.perform(op: op, channel: channel, text: text, voice: voice, hostVoice: hostVoice,
+                                                        rate: rate, pitch: pitch, volume: volume)
                     } else {
-                        ClassicSpeech.shared.perform(op: op, channel: channel, text: text, voice: voice, rate: rate,
-                                                     pitch: pitch, modulation: modulation, volume: volume)
+                        ClassicSpeech.shared.perform(op: op, channel: channel, text: text, voice: voice, hostVoice: hostVoice,
+                                                     rate: rate, pitch: pitch, modulation: modulation, volume: volume)
                     }
                 }
             }
@@ -89,14 +93,20 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
         return s
     }
 
-    @MainActor private func perform(op: Int, channel: Int32, text: String?, voice: String?, rate: Double, pitch: Double,
-                                    modulation: Double, volume: Double) {
+    @MainActor private func perform(op: Int, channel: Int32, text: String?, voice: String?, hostVoice: String?, rate: Double,
+                                    pitch: Double, modulation: Double, volume: Double) {
         switch op {
         case Int(MACHINE_SPEECH_SPEAK):
             let s = synth(channel)
             if s.isSpeaking { /* its unfinished end isn't the new one's */
                 replaced.insert(ObjectIdentifier(s))
                 s.stopSpeaking()
+            }
+            // Before the settings: a new voice starts with its own.
+            let named = hostVoice.flatMap(Self.voiceNamed)
+            if hostVoices[channel] != named {
+                s.setVoice(named)
+                hostVoices[channel] = named
             }
             if rate > 0 { s.rate = Float(rate) }
             s.volume = Float(max(0, min(1, volume)))
@@ -116,9 +126,17 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
             if let s = synths.removeValue(forKey: channel) {
                 s.stopSpeaking()
                 channelOf[ObjectIdentifier(s)] = nil
+                hostVoices[channel] = nil
             }
         default:
             break
+        }
+    }
+
+    /// A host voice by its name (Fred), if macOS has it.
+    private static func voiceNamed(_ name: String) -> NSSpeechSynthesizer.VoiceName? {
+        NSSpeechSynthesizer.availableVoices.first {
+            NSSpeechSynthesizer.attributes(forVoice: $0)[.name] as? String == name
         }
     }
 
@@ -225,8 +243,8 @@ final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
         return out
     }
 
-    @MainActor func perform(op: Int, channel: Int32, text: String?, voice name: String?, rate: Double, pitch: Double,
-                            volume: Double) {
+    @MainActor func perform(op: Int, channel: Int32, text: String?, voice name: String?, hostVoice: String?,
+                            rate: Double, pitch: Double, volume: Double) {
         switch op {
         case Int(MACHINE_SPEECH_SPEAK):
             let s = synths[channel] ?? {
@@ -236,12 +254,14 @@ final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
                 return s
             }()
             if s.isSpeaking { s.stopSpeaking(at: .immediate) }
+            let named = hostVoice.flatMap { n in AVSpeechSynthesisVoice.speechVoices().first { $0.name == n } }
             let parts = split(text ?? "", rate: rate > 0 ? rate : 180, pitch: pitch > 0 ? pitch : 46,
                               volume: max(0, min(1, volume)))
             var state = (channel: channel, offsets: [ObjectIdentifier: Int](), syncs: [ObjectIdentifier: [Int32]](),
                          last: ObjectIdentifier?.none)
             for p in parts {
                 let ut = AVSpeechUtterance(string: p.text)
+                ut.voice = named
                 // About 180 words a minute is AV's default rate.
                 ut.rate = Float(max(Double(AVSpeechUtteranceMinimumSpeechRate),
                                     min(Double(AVSpeechUtteranceMaximumSpeechRate),

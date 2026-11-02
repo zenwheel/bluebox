@@ -101,8 +101,9 @@ static void moose_call(gaddr m)
     memcpy(c->a, a, sizeof a);
 }
 
-/* A joke: one of the Pause phrases, not the one before, said at the next
- * null event (the Moose waits for the user to finish what they are doing). */
+/* A joke: one of the Pause phrases, all of them told once, in a shuffled
+ * order, before any is told again, said at the next null event (the Moose
+ * waits for the user to finish what they are doing). */
 bool moose_tell_joke(void)
 {
     gaddr m = moose_globals();
@@ -114,11 +115,27 @@ bool moose_tell_joke(void)
         max = (int16_t)rd16(rd32(list));
     if (max <= 0)
         return false;
-    static int last;
-    int n = 1 + (int)((uint16_t)tb_Random() % (unsigned)max);
-    if (n == last && max > 1)
-        n = n % max + 1;
-    last = n;
+    static uint8_t order[255];
+    static int count, next, last;
+    if (max > 255)
+        max = 255;
+    if (count != max || next >= count) {
+        for (int i = 0; i < max; i++)
+            order[i] = (uint8_t)(i + 1);
+        for (int i = max - 1; i > 0; i--) {
+            int j = (int)arc4random_uniform((uint32_t)i + 1);
+            uint8_t t = order[i];
+            order[i] = order[j];
+            order[j] = t;
+        }
+        if (max > 1 && order[0] == last) { /* not the last round's last joke again */
+            order[0] = order[max - 1];
+            order[max - 1] = (uint8_t)last;
+        }
+        count = max;
+        next = 0;
+    }
+    int n = last = order[next++];
     wr16(m + moo_NowNum, (uint16_t)n);
     wr16(m + moo_NowID, pauseSTR);
     return true;
@@ -190,6 +207,14 @@ static void load_settings(gaddr m)
     fclose(f);
 }
 
+/* Rate, pitch and Robotic to MacinTalk: the Moose's own speaking never
+ * passes them on (it makes no Control calls), so Talk Settings would
+ * change nothing that is heard. */
+static void pass_settings(gaddr m)
+{
+    macintalk_settings((int16_t)rd16(m + moo_Rate), (int16_t)rd16(m + moo_Pitch), rd16(m + moo_Robot) != 0);
+}
+
 /* Written when they change: the Moose may be stopped by the host at any time. */
 static void save_settings(void)
 {
@@ -200,6 +225,7 @@ static void save_settings(void)
     current_values(m, v);
     if (have_saved && !memcmp(v, saved_values, sizeof v))
         return;
+    pass_settings(m);
     char path[1024], tmp[1100];
     prefs_path(path, sizeof path);
     char *slash = strrchr(path, '/');
@@ -241,6 +267,10 @@ bool moose_host_start(void)
     tb_DisposePtr(name);
     if (!h)
         return false;
+    /* QuickDraw starts randSeed at 1, so the Moose would make its idle
+     * remarks in the same order at every start: a seed from the host. */
+    gaddr qd = rd32(rd32(LM_CurrentA5)) - QDGlobals_thePort_off;
+    wr32(qd + QDGlobals_randSeed_off, arc4random() | 1);
     int r = moose_start(true);
     gaddr m = moose_globals();
     LOGF(LOG_TRAPS, "StartMoose(TRUE) = %d: globals %08X rate %d pitch %d delay %d enable %d animate %d pauses %d flags %08X\n",
@@ -255,6 +285,7 @@ bool moose_host_start(void)
     }
     if (m) {
         load_settings(m);
+        pass_settings(m);
         current_values(m, saved_values);
         have_saved = true; /* as they were read: nothing to write yet */
     }

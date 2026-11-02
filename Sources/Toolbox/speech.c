@@ -275,6 +275,7 @@ static double unit_seconds(double wpm) { return 12.6 / (wpm > 20 ? wpm : 180); }
 typedef struct {
     gaddr chan;    /* the SpeechChannel the program holds (a 4-byte record) */
     int voice;
+    const char *host_voice; /* speech_channel_host_voice's, or NULL: the system voice */
     int32_t rate, pitch, modulation, volume; /* Fixed */
     int32_t refcon;
     uint32_t a5;   /* soCurrentA5: A5 for the callbacks, 0 to leave it */
@@ -383,6 +384,7 @@ static void host_request(channel *c, int op, const char *text)
     rq.channel = chan_id(c);
     rq.op = op;
     rq.voice = voices[c->voice].name;
+    rq.host_voice = c->host_voice;
     rq.rate = c->rate / 65536.0;
     rq.pitch = c->pitch / 65536.0;
     rq.modulation = c->modulation / 65536.0;
@@ -1550,6 +1552,13 @@ void speech_set_defaults(uint32_t creator, int32_t id, int32_t rate, int32_t pit
     speech_defaults.rate = rate;
     speech_defaults.pitch = pitch;
     speech_defaults.volume = volume;
+}
+
+void speech_channel_host_voice(gaddr chan, const char *name)
+{
+    channel *c = chan_of(chan);
+    if (c)
+        c->host_voice = name;
 }
 
 int speech_channel_voice(gaddr chan)

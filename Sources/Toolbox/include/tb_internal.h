@@ -608,6 +608,9 @@ bool fm_open_apple_menu_item(const uint8_t *name, int n);
 void speech_pump(void);
 void speech_interrupt(void);
 bool speech_waiting(void);
+/* A host voice by name for a channel to speak with instead of the system
+ * voice (MacinTalk's robotic one), or NULL for the system voice again. */
+void speech_channel_host_voice(gaddr chan, const char *name);
 bool speech_recording(machine_speech_fn fn); /* speech_record.c */
 void speech_reset(void);
 /* A word's phonemes (the Speech Manager's opcodes): the dictionary's, else
@@ -625,6 +628,10 @@ void machine_serve_main_thread(void);
  * file in the System Folder. */
 void macintalk_reset(void);
 void macintalk_install_file(void);
+/* Rate (words a minute), pitch (Hz) and robotic (0 or 1) for every speech,
+ * now and to come, as a program's settings that never reach MacinTalk
+ * through its calls (the Talking Moose's); -1 leaves one as it is. */
+void macintalk_settings(int rate, int pitch, int robotic);
 
 /* Code Fragment Manager (cfm.c): PowerPC applications. */
 struct ppc_cpu;

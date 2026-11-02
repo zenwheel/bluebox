@@ -57,6 +57,7 @@ typedef struct {
     int rate, pitch, sex, robotic;
 } mt_speech;
 static mt_speech speech[MAX_SPEECH];
+static int given_rate = -1, given_pitch = -1, given_robotic = -1; /* macintalk_settings' */
 
 static uint32_t open_stub, prime_stub, control_stub, status_stub, close_stub, reader_stub;
 
@@ -74,8 +75,9 @@ static mt_speech *speech_of(gaddr dce, bool make)
         return NULL;
     memset(free_one, 0, sizeof *free_one);
     free_one->refnum = rn;
-    free_one->rate = mt_rate;
-    free_one->pitch = mt_pitch;
+    free_one->rate = given_rate >= 0 ? given_rate : mt_rate;
+    free_one->pitch = given_pitch >= 0 ? given_pitch : mt_pitch;
+    free_one->robotic = given_robotic > 0;
     return free_one;
 }
 
@@ -318,6 +320,8 @@ static void apply(mt_speech *s)
     tb_SetSpeechPitch(s->chan, (int32_t)lround(note * 65536));
     wr32(spec, (uint32_t)(s->robotic ? 0 : 35 << 16));
     tb_SetSpeechInfo(s->chan, (int32_t)fourcc("pmod"), spec);
+    /* Robotic: the host's Fred (or Kathy), the voices of MacinTalk's time, in a monotone. */
+    speech_channel_host_voice(s->chan, !s->robotic ? NULL : s->sex ? "Kathy" : "Fred");
     tb_DisposePtr(spec);
 }
 
@@ -463,8 +467,25 @@ static void close_native(cpu68k *c, uint16_t tw)
 /* ---------------------------------------------------------------------- */
 /* The file */
 
+void macintalk_settings(int rate, int pitch, int robotic)
+{
+    if (rate >= 0 && rate <= 425)
+        given_rate = rate;
+    if (pitch >= 65 && pitch <= 500)
+        given_pitch = pitch;
+    if (robotic == 0 || robotic == 1)
+        given_robotic = robotic;
+    for (int i = 0; i < MAX_SPEECH; i++)
+        if (speech[i].refnum) {
+            if (given_rate >= 0) speech[i].rate = given_rate;
+            if (given_pitch >= 0) speech[i].pitch = given_pitch;
+            if (given_robotic >= 0) speech[i].robotic = given_robotic;
+        }
+}
+
 void macintalk_reset(void)
 {
+    given_rate = given_pitch = given_robotic = -1;
     for (int i = 0; i < MAX_SPEECH; i++)
         speech[i].refnum = 0; /* the channels went with the last run's heap */
     for (int i = 0; i < MAX_READ; i++) {

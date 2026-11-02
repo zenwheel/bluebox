@@ -513,6 +513,7 @@ enum {
 typedef struct {
     int channel, op;
     const char *voice;       /* the classic voice asked for (Fred, Victoria ...); hosts speak with the system voice */
+    const char *host_voice;  /* a host voice by name to speak with instead (MacinTalk's robotic voice: Fred), or NULL */
     double rate;             /* words per minute */
     double pitch;            /* base pitch, as SetSpeechPitch's (about 30 to 65) */
     double modulation, volume;
