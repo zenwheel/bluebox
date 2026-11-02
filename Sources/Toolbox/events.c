@@ -807,12 +807,17 @@ static bool system_took(gaddr evt)
  * filter when the user has left the Mac alone long enough. */
 enum { LM_JGNEFilter = 0x029A };
 static bool in_gne_filter;
+/* The system's own filter, which only returns: on a Mac the slot always
+ * held one (the Process Manager's), so programs that install a filter
+ * chain to the one they found without looking (Web Archer's PowerPC
+ * glue jumps to it); ours isn't called. */
+static gaddr system_gne_filter;
 
 static bool gne_filtered(gaddr evt, bool got)
 {
     gaddr f = rd32(LM_JGNEFilter);
     cpu68k *c = g_cpu;
-    if (!f || in_gne_filter || !c || c->halted)
+    if (!f || f == system_gne_filter || in_gne_filter || !c || c->halted)
         return got;
     uint32_t d[8], a[8];
     memcpy(d, c->d, sizeof d);
@@ -1241,6 +1246,10 @@ void events_reset(void)
 {
     gaddr buf = mm_new_ptr_in(rd32(LM_SysZone), QSIZE * EVQEL, true);
     wr32(LM_SysEvtBuf, buf);
+    system_gne_filter = mm_new_ptr_in(rd32(LM_SysZone), 2, true);
+    if (system_gne_filter)
+        wr16(system_gne_filter, 0x4E75); /* RTS */
+    wr32(LM_JGNEFilter, system_gne_filter);
     wr16(LM_SysEvtCnt, QSIZE - 1);
     mirrored = (uint32_t)-1;
     synced = waiting = false;

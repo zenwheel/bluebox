@@ -76,8 +76,9 @@ extension BlueBox {
                 0x4E75,                                          // RTS
             ]
             for (i, w) in words.enumerated() { wr16(filter + UInt32(i * 2), w) }
+            let system = rd32(0x029A)
             wr32(0x029A, filter)
-            defer { wr32(0x029A, 0) }
+            defer { wr32(0x029A, system) }
             tb_FlushEvents(-1, 0)
             let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
             machine_post_key(0x61, 0, 0, 1, 0)
@@ -88,6 +89,33 @@ extension BlueBox {
             #expect(rd16(log) == 4 && rd16(log + 2) == 2)
             #expect(tb_GetNextEvent(0, e) == 0)      // a null event is seen too
             #expect(rd16(log) == 0 && rd16(log + 2) == 3 && rd16(log + 4) == 0)
+        }
+
+        /// jGNEFilter always holds a filter, as the Process Manager's was
+        /// there on a Mac: a program's filter chains to the one it found
+        /// without looking (Web Archer's glue jumps to it), and returns.
+        @Test func gneFilterChainsToTheSystems() {
+            launchTestApp()
+            guestStack()
+            let system = rd32(0x029A)
+            #expect(system != 0 && rd16(system) == 0x4E75)  // RTS
+            let count = tb_NewPtr(2, true, true)
+            let filter = tb_NewPtr(18, true, false), old = filter + 14
+            let words: [UInt16] = [
+                0x5279, UInt16(count >> 16), UInt16(count & 0xFFFF), // ADDQ.W #1,count
+                0x2079, UInt16(old >> 16), UInt16(old & 0xFFFF),     // MOVEA.L old,A0
+                0x4ED0,                                              // JMP (A0)
+                0, 0,                                                // old: the filter found
+            ]
+            for (i, w) in words.enumerated() { wr16(filter + UInt32(i * 2), w) }
+            wr32(old, system)
+            wr32(0x029A, filter)
+            defer { wr32(0x029A, system) }
+            tb_FlushEvents(-1, 0)
+            let e = tb_NewPtr(Int32(EventRecord_SIZEOF), false, true)
+            machine_post_key(0x61, 0, 0, 1, 0)
+            #expect(tb_GetNextEvent(0x0008, e) != 0)
+            #expect(rd16(count) == 1 && !cpu.pointee.halted)
         }
 
         /// The system's own code (in the system heap) drawing on the screen
