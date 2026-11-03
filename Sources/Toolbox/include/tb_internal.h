@@ -520,6 +520,7 @@ void controls_reset(void);
 void controls_forget_window(gaddr w);
 gaddr ctl_new(gaddr wst, gaddr r, gaddr title, bool vis, int16_t value, int16_t min, int16_t max, int16_t var,
               int16_t cdef_id, gaddr defh, int32_t rc, int32_t init_param);
+void ctl_defer_draw(bool on);
 /* Called with the part a click on a control ended in (TrackControl,
  * HandleControlClick): for the Carbon Event Manager's kEventControlHit
  * and the control's command (carbon_ctl_command).  NULL until set. */

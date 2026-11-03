@@ -301,11 +301,17 @@ static gaddr make_item(gaddr d, int i)
         it = item_at(d, i);
         gmemcpy(r, it + 4, 8);
         if (kind == resCtrl) {
+            /* Made where its item is before it is drawn, not drawn (and
+             * erased) first where the 'CNTL' put it: Appearance Sample's
+             * Mega Dialog left its password field's frame in the tabs. */
+            ctl_defer_draw(true);
             made = tb_GetNewControl((int16_t)rd16(it + 14), d);
+            ctl_defer_draw(false);
             if (made) {
                 qrect q = qrect_get(r);
-                tb_MoveControl(made, q.left, q.top);
-                tb_SizeControl(made, (int16_t)(q.right - q.left), (int16_t)(q.bottom - q.top));
+                qrect_put(rd32(made) + ControlRecord_contrlRect_off, q);
+                if (ControlRecord_contrlVis(rd32(made)) && WindowRecord_visible(d))
+                    tb_Draw1Control(made);
             }
         } else {
             wr8(title, (uint8_t)len);
@@ -441,6 +447,23 @@ void tb_AppendDITL(gaddr d, gaddr ditl, int16_t method)
     make_items_from(d, old + 1);
     if (method == 1 || method == 2)
         tb_SizeWindow(d, (int16_t)(right - port.left), (int16_t)(bottom - port.top), true);
+    /* The new items are drawn at the next update (Appearance Sample's Mega
+     * Dialog changes its tab's items so, and showed only the parts of its
+     * static and edit text that old controls' erasing had invalidated). */
+    if (WindowRecord_visible(d)) {
+        gaddr saved = qd_port();
+        tb_SetPort(d);
+        gaddr rp = tb_NewPtr(8, false, false);
+        for (int i = old + 1; i <= old + added; i++) {
+            qrect r = item_rect(d, i);
+            int out = (item_type(d, i) & 0x7F) == editText ? 4 : 0; /* with its frame */
+            qrect_put(rp, (qrect){ (int16_t)(r.top - out), (int16_t)(r.left - out), (int16_t)(r.bottom + out),
+                                   (int16_t)(r.right + out) });
+            tb_InvalRect(rp);
+        }
+        tb_DisposePtr(rp);
+        tb_SetPort(saved);
+    }
 }
 
 /* ShortenDITL(dialog, numberItems): the last items go. */

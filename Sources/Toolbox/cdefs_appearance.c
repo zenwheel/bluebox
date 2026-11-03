@@ -105,6 +105,7 @@ typedef struct {
     uint32_t clock_flags, clock_secs;
     gaddr validation;
     void *scroll_text;
+    qrect made_for;              /* the rectangle a list's or edit text's record has */
 } ap_ctl;
 
 static gaddr cp(gaddr ch) { return rd32(ch); }
@@ -1139,6 +1140,7 @@ static void edit_init(gaddr ch, ap_ctl *a)
     ctl_font_begin(ch, &fs);
     gaddr r = tmp_rect(crect(ch));
     a->te = tb_TENew(r, r);
+    a->made_for = crect(ch);
     tb_DisposePtr(r);
     ctl_font_end(&fs);
     tb_SetPort(saved);
@@ -1489,6 +1491,8 @@ static int32_t static_data(gaddr ch, ap_ctl *a, const access *x, bool set)
 /* ---------------------------------------------------------------------- */
 /* CDEF 22: list boxes ('ldes': rows, columns, cell size, scroll bars, LDEF) */
 
+static void follow_bounds(gaddr ch, ap_ctl *a);
+
 static void list_init(gaddr ch, ap_ctl *a)
 {
     int16_t id = cvalue(ch);
@@ -1517,6 +1521,8 @@ static void list_init(gaddr ch, ap_ctl *a)
     tb_SetPort(w);
     gaddr rv = tmp_rect(view), db = tmp_rect((qrect){ 0, 0, (int16_t)rows, (int16_t)(cols > 0 ? cols : 1) });
     a->list = tb_LNew(rv, db, make_pt((int16_t)ch_h, (int16_t)ch_w), (int16_t)ldef, w, true, grow, hs, vs);
+    a->made_for = (qrect){ 0, 0, 0, 0 };
+    follow_bounds(ch, a);
     tb_DisposePtr(db);
     tb_DisposePtr(rv);
     tb_SetPort(saved);
@@ -2382,6 +2388,49 @@ static void dispose(gaddr ch, ap_ctl *a)
     free(a->tabs);
 }
 
+/* A list box's list and an edit text's TERec are made for the control's
+ * rectangle; a dialog moves and sizes its controls to their items' after
+ * making them from their 'CNTL's (Appearance Sample's Mega Dialog: its
+ * list box and password field were drawn where their 'CNTL's put them),
+ * and programs move them, without a message to the CDEF.  They follow
+ * the rectangle at the next message. */
+static void follow_bounds(gaddr ch, ap_ctl *a)
+{
+    qrect r = crect(ch);
+    if (r.top == a->made_for.top && r.left == a->made_for.left && r.bottom == a->made_for.bottom &&
+        r.right == a->made_for.right)
+        return;
+    if (a->id == 22 && a->list && rd32(a->list)) {
+        gaddr l = rd32(a->list);
+        qrect view = r;
+        if (rd32(l + ListRec_vScroll_off))
+            view.right = (int16_t)(view.right - 15);
+        if (rd32(l + ListRec_hScroll_off))
+            view.bottom = (int16_t)(view.bottom - 15);
+        /* kControlListBoxAutoSizeProc: whole rows, the control shortened
+         * to them. */
+        int cell = (int16_t)rd16(l + ListRec_cellSize_off);
+        if ((var_of(ch) & 1) && cell > 0 && view.bottom - view.top >= cell) {
+            int cut = (view.bottom - view.top) % cell;
+            view.bottom = (int16_t)(view.bottom - cut);
+            r.bottom = (int16_t)(r.bottom - cut);
+            qrect_put(cp(ch) + ControlRecord_contrlRect_off, r);
+        }
+        qrect old = qrect_get(l + ListRec_rView_off);
+        qrect_put(l + ListRec_rView_off, (qrect){ view.top, view.left, (int16_t)(view.top + old.bottom - old.top),
+                                                  (int16_t)(view.left + old.right - old.left) });
+        tb_LSize((int16_t)(view.right - view.left), (int16_t)(view.bottom - view.top), a->list);
+    } else if (a->id == 17 && a->te && rd32(a->te) && !a->dialog) {
+        gaddr t = rd32(a->te);
+        qrect_put(t + TERec_destRect_off, r);
+        qrect_put(t + TERec_viewRect_off, r);
+        tb_TECalText(a->te);
+    } else {
+        return;
+    }
+    a->made_for = r;
+}
+
 static void entry(cpu68k *c, int id)
 {
     uint32_t ret = cpu_pop32(c);
@@ -2402,6 +2451,8 @@ static void entry(cpu68k *c, int id)
         cpu_push32(c, ret);
         return;
     }
+    if (msg != initCntl && msg != dispCntl)
+        follow_bounds(ch, a);
     switch (msg) {
     case drawCntl: draw(ch, a, param & 0xFF); break;
     case testCntl: result = test(ch, a, (uint32_t)param); break;

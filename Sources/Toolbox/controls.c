@@ -1179,6 +1179,11 @@ int16_t tb_SetControlSupervisor(gaddr ch, gaddr boss)
 
 /* A control with the given definition (a CDEF's handle, or one a
  * CarbonLib program registered or made); initCntl gets init_param. */
+/* Controls made while this is set are not drawn yet: the Dialog Manager
+ * places a 'CNTL' item's control at its item's rectangle first. */
+static bool defer_draw;
+void ctl_defer_draw(bool on) { defer_draw = on; }
+
 gaddr ctl_new(gaddr wst, gaddr r, gaddr title, bool vis, int16_t value, int16_t min, int16_t max, int16_t var,
               int16_t cdef_id, gaddr defh, int32_t rc, int32_t init_param)
 {
@@ -1209,7 +1214,7 @@ gaddr ctl_new(gaddr wst, gaddr r, gaddr title, bool vis, int16_t value, int16_t 
     gaddr root = ctl_window_root(wst);
     if (root)
         tb_AutoEmbedControl(ch, wst);
-    if (vis && ControlRecord_contrlVis(cp(ch)))
+    if (vis && ControlRecord_contrlVis(cp(ch)) && !defer_draw)
         tb_Draw1Control(ch);
     return ch;
 }
