@@ -244,6 +244,10 @@ static void hilite_region(gaddr port, const hrgn *shape)
     hrgn_free(&r);
 }
 
+/* TextEdit's selection: highlighted, as Color QuickDraw's TextEdit
+ * clears HiliteMode's bit before each invert. */
+void qd_hilite_region(gaddr port, const hrgn *shape) { hilite_region(port, shape); }
+
 /* ---------------------------------------------------------------------- */
 /* Shapes */
 

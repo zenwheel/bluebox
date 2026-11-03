@@ -191,6 +191,7 @@ void qd_port_op_color(gaddr port, uint16_t out[3]);
 /* Fill a region with an 8x8 1-bit pattern using a pattern transfer mode
  * (patCopy..notPatBic = 8..15), in the current port's colours. */
 void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mode);
+void qd_hilite_region(gaddr port, const hrgn *shape);
 /* Shape helpers. */
 void qd_oval_region(hrgn *out, qrect r);
 void qd_rrect_region(hrgn *out, qrect r, int ow, int oh);

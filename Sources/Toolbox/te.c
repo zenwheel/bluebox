@@ -513,7 +513,10 @@ static void range_region(gaddr teh, int a, int b, hrgn *r)
         int s = a > ls ? a : ls, e = b < le ? b : le;
         int lx = line_x(teh, line);
         int x0 = lx + width_of(teh, ls, s - ls);
-        int x1 = (b > le || (e == le && line < lb)) ? dest.right : lx + width_of(teh, ls, e - ls);
+        /* A selection through the end of the text is lit to the right
+         * edge, as one running on to the next line is. */
+        bool to_end = b >= te16(teh, TERec_teLength_off) && line == lb;
+        int x1 = (b > le || (e == le && line < lb) || to_end) ? dest.right : lx + width_of(teh, ls, e - ls);
         int top = dest.top + line_top(teh, line), lh = line_height(teh, line);
         hrgn_rect(&tmp, (qrect){ (int16_t)top, (int16_t)x0, (int16_t)(top + lh), (int16_t)x1 });
         hrgn_op(r, r, &tmp, RGN_UNION);
@@ -528,7 +531,7 @@ static void invert_range(gaddr teh, int a, int b)
     hrgn_init(&r);
     range_region(teh, a, b, &r);
     if (!hrgn_empty(&r))
-        qd_fill_region(qd_port(), &r, qd_pat_black, patXor);
+        qd_hilite_region(qd_port(), &r); /* the highlight colour (an invert on one bit) */
     hrgn_free(&r);
 }
 
