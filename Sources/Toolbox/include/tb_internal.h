@@ -466,6 +466,7 @@ void ap_font_info(int *ascent, int *descent);
 void ap_arrow(qrect r, int dir, int size, const uint16_t rgb[3]);
 void ap_placard(qrect r, uint32_t state);
 void ap_well_frame(qrect r, uint32_t state);
+void ap_list_frame(qrect r, uint32_t state);
 void ap_focus_rect(qrect r, bool focus);
 void ap_group(qrect r, uint32_t state, bool primary);
 void ap_separator(qrect r, uint32_t state);
@@ -562,6 +563,7 @@ void ap_after_track(gaddr ch, int16_t part);
  * window's control list; a user item's draws and takes clicks through its
  * procedures when it has them (ap_item_click: -1 when it has none). */
 gaddr ap_item_control(gaddr dialog, int item, int kind);
+bool ap_item_inactive(gaddr d, int item);
 bool ap_stand_in_item(gaddr ch, gaddr *dialog, int *item); /* the item a stand-in is for */
 void ap_forget_dialog(gaddr dialog);
 void ap_items_shifted(gaddr dialog, int from, int delta);

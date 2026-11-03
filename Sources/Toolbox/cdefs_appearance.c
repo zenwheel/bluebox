@@ -14,6 +14,7 @@
  * for GetDialogItemAsControl, kept out of the window's control list: its
  * text, selection and procedures are the item's.
  */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1534,7 +1535,7 @@ static void list_draw(gaddr ch, ap_ctl *a)
     if (!cvisible(ch))
         return;
     qrect r = crect(ch);
-    ap_well_frame(inset(r, -1), draw_state(ch, 0));
+    ap_list_frame(inset(r, -1), draw_state(ch, 0));
     if (a->list) {
         tb_LActivate(chilite(ch) != 255, a->list);
         tb_LUpdate(GrafPort_visRgn(qd_port()), a->list);
@@ -1611,27 +1612,48 @@ static void clock_draw(gaddr ch, ap_ctl *a)
 {
     if (!cvisible(ch))
         return;
+    /* As the Appearance Manager's: the fields in an edit text's frame,
+     * filling the control but for little arrows at its right (none when
+     * it only shows the time), the date's fields a fixed width (" 3", the
+     * year in full: "11/ 3/2026"). */
     qrect r = crect(ch);
-    ap_fill_grey(r, 0xFFFF);
-    ap_well_frame(inset(r, -1), draw_state(ch, 0));
+    bool arrows = !(a->clock_flags & 1);
+    qrect field = { (int16_t)(r.top + 2), (int16_t)(r.left + 2), (int16_t)(r.bottom - 2),
+                    (int16_t)(r.right - (arrows ? 17 : 2)) };
+    ap_fill_grey(field, 0xFFFF);
+    ap_well_frame(field, draw_state(ch, 0));
+    if (arrows) {
+        int h = 22 < r.bottom - r.top ? 22 : r.bottom - r.top;
+        int top = r.top + (r.bottom - r.top - h) / 2;
+        /* dimmed until the clock has the focus, as Mac OS 9 shows them */
+        ap_little_arrows((qrect){ (int16_t)top, (int16_t)(r.right - 13), (int16_t)(top + h), r.right },
+                         a->focused ? draw_state(ch, 0) : 0);
+    }
     gaddr now = tb_NewPtr(4, false, true), s = tb_NewPtr(256, false, true);
     if (a->clock_secs && !(a->clock_flags & 2))
         wr32(now, a->clock_secs);
     else
         tb_GetDateTime(now);
     int v = var_of(ch);
-    if (v == 2 || v == 3)
-        tb_IUDateString((int32_t)rd32(now), 0, s);
-    else
-        tb_IUTimeString((int32_t)rd32(now), v == 1, s);
     uint8_t buf[256];
-    int n = rd8(s);
-    gget(buf, s + 1, (uint32_t)n);
+    int n;
+    if (v == 2 || v == 3) {
+        gaddr dt = tb_NewPtr(14, false, true);
+        tb_SecondsToDate(rd32(now), dt);
+        int year = (int16_t)rd16(dt), month = (int16_t)rd16(dt + 2), day = (int16_t)rd16(dt + 4);
+        tb_DisposePtr(dt);
+        n = v == 2 ? snprintf((char *)buf, sizeof buf, "%2d/%2d/%04d", month, day, year)
+                   : snprintf((char *)buf, sizeof buf, "%2d/%04d", month, year);
+    } else {
+        tb_IUTimeString((int32_t)rd32(now), v == 1, s);
+        n = rd8(s);
+        gget(buf, s + 1, (uint32_t)n);
+    }
     ctl_font_saved fs;
     ctl_font_begin(ch, &fs);
     uint16_t c[3];
     text_rgb(ch, chilite(ch) == 255 ? 2 : 1, c);
-    ap_text_in(inset(r, 2), buf, n, false, c);
+    ap_text_in((qrect){ field.top, (int16_t)(field.left + 2), field.bottom, field.right }, buf, n, false, c);
     ctl_font_end(&fs);
     tb_DisposePtr(s);
     tb_DisposePtr(now);
@@ -2724,6 +2746,15 @@ static struct {
     gaddr dialog, ch;
     int item;
 } stand_ins[256];
+
+/* Whether an item's stand-in (if it has one) has been deactivated. */
+bool ap_item_inactive(gaddr d, int item)
+{
+    for (int i = 0; i < 256; i++)
+        if (stand_ins[i].dialog == d && stand_ins[i].item == item && stand_ins[i].ch && rd32(stand_ins[i].ch))
+            return chilite(stand_ins[i].ch) == 255;
+    return false;
+}
 
 gaddr ap_item_control(gaddr d, int item, int kind)
 {

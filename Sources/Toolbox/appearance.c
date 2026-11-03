@@ -760,9 +760,18 @@ int32_t tb_DrawThemeEditTextFrame(gaddr r, uint32_t state)
     return noErr;
 }
 
+/* A list box's frame: the theme's own (Gizmo's orange), else an edit
+ * text's. */
+void ap_list_frame(qrect r, uint32_t state)
+{
+    if (themed() && thme_frame(state != kThemeStateInactive ? 530 : 531, r))
+        return;
+    ap_well_frame(r, state);
+}
+
 int32_t tb_DrawThemeListBoxFrame(gaddr r, uint32_t state)
 {
-    ap_well_frame(rect_arg(r), state);
+    ap_list_frame(rect_arg(r), state);
     return noErr;
 }
 

@@ -913,11 +913,12 @@ static void draw_text_item(gaddr h, qrect r, bool substitute)
 }
 
 /* Platinum's edit text: white inside a well frame, the one being edited
- * with the focus ring (theme dialogs, in colour). */
+ * with the focus ring (theme dialogs, in colour); a theme file's frame
+ * and focus ring under a theme. */
 static bool platinum_edit(gaddr d)
 {
     return (dialog_flags(d) & (kDialogFlagsUseThemeBackground | kDialogFlagsUseThemeControls)) &&
-           g_appearance == MACHINE_APPEARANCE_BW && ap_in_color();
+           g_appearance != MACHINE_APPEARANCE_NATIVE && ap_in_color();
 }
 
 static void focus_ring(gaddr d, int n, bool on)
@@ -949,7 +950,16 @@ static void draw_item(gaddr d, int n)
         if (h)
             tb_Draw1Control(h);
     } else if (type == statText) {
+        /* Deactivated through its control (DeactivateControl on what
+         * GetDialogItemAsControl gave, as Appearance Sample's Mega Dialog
+         * does), in the theme's inactive text colour. */
+        uint16_t c[3];
+        bool dim = ap_in_color() && ap_item_inactive(d, n) && ap_text_rgb(2, c);
+        if (dim)
+            qd_set_fg_override(c);
         draw_text_item(h, r, true);
+        if (dim)
+            qd_set_fg_override(NULL);
     } else if (type == editText) {
         qrect f = { (int16_t)(r.top - 3), (int16_t)(r.left - 3), (int16_t)(r.bottom + 3), (int16_t)(r.right + 3) };
         bool platinum = platinum_edit(d);
