@@ -1515,7 +1515,10 @@ static int menu_part(int type)
     return thme_has_part(id) ? id : 257;
 }
 
-bool thme_menu_background(qrect r, int type) { return part(menu_part(type), r, 0); }
+/* Drawn active (0x02): a menu that is down is the active one; the
+ * inactive look (Gizmo's grey edges for its red ones) is not a pulled
+ * down menu's. */
+bool thme_menu_background(qrect r, int type) { return part(menu_part(type), r, 0x02); }
 
 /* What a menu's background covers round r: most themes draw the frame and
  * shadow outside the menu's rectangle (System 7's a pixel left and above,
@@ -1541,6 +1544,24 @@ bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier)
 }
 
 bool thme_menu_separator(qrect r) { return part(263, r, 0); }
+
+/* How far an item's content (its text) sits inside the item: the
+ * TextMenuItem layout's content rectangle against the item's, top, left,
+ * bottom and right.  The Appearance Manager makes items that much taller
+ * than the font (GetThemeMenuItemExtra): two pixels in Apple's own
+ * layouts, three in Gizmo's, which also indents the text four. */
+bool thme_menu_item_insets(int out[4])
+{
+    int m[THME_MEASURES] = { 0 };
+    qrect b = { 0, 0, 40, 200 }, c;
+    if (!T.on || !thme_part_rect(261, b, 0x02, m, THME_CONTENT, &c))
+        return false;
+    out[0] = imax(0, c.top - b.top);
+    out[1] = imax(0, c.left - b.left);
+    out[2] = imax(0, b.bottom - c.bottom);
+    out[3] = imax(0, b.right - c.right);
+    return true;
+}
 
 /* ---------------------------------------------------------------------- */
 /* The scene ('scen'): the desktop pattern, highlight colour, fonts and

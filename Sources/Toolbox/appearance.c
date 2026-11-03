@@ -2253,14 +2253,18 @@ int32_t tb_DrawThemeMenuSeparator(gaddr rp)
 
 int32_t tb_GetThemeMenuSeparatorHeight(gaddr out)
 {
-    wr16(out, 9);
+    int h = 9;
+    if (themed() && thme_metric("msht", &h) && h < 1)
+        h = 1;
+    wr16(out, (uint16_t)h);
     return noErr;
 }
 
 int32_t tb_GetThemeMenuItemExtra(uint16_t type, gaddr height, gaddr width)
 {
+    int ins[4];
     if (height)
-        wr16(height, 2);
+        wr16(height, themed() && thme_menu_item_insets(ins) ? (uint16_t)(ins[0] + ins[2]) : 2);
     if (width)
         wr16(width, (type & 0xFF) == 1 ? 18 : 6);
     return noErr;

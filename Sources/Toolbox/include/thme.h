@@ -96,6 +96,8 @@ bool thme_menu_background(qrect r, int type);
 bool thme_menu_extent(qrect r, int type, qrect *out);
 bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier);
 bool thme_menu_separator(qrect r);
+/* The content's insets in a menu item: top, left, bottom, right. */
+bool thme_menu_item_insets(int out[4]);
 
 /* The scene: a string item ('name', 'snds' the sound set, 'patn', fonts),
  * the highlight colour, the desktop pattern painted over an area. */
