@@ -163,7 +163,8 @@ func usage() -> Never {
                      (over AppleTalk, which --appletalk must turn on)
           --file-answer P  answer the next open or save dialog with host path P,
                      without a panel (headless runs; repeatable, in order)
-          --appearance A  bw (default); native (macOS window frames); or a theme: a
+          --appearance A  native (macOS window frames, the default in rootless windows);
+                     bw (the default otherwise); or a theme: a
                      Kaleidoscope scheme or Mac OS 8.5 theme file, an archive of
                      them (.sit etc., "archive.sit:Name" picks one), or the name
                      of an imported one (bluebox themes lists them); themes use a
@@ -893,6 +894,15 @@ func runCommand(_ args: [String]) {
     if interactive && !background && !screenWindow && saved.display == "screen" { screenWindow = true }
     // The Finder draws the desktop: the whole screen, unless its setting says otherwise.
     if interactive && !screenWindow && machine_is_finder() && saved.display != "rootless" { screenWindow = true }
+    // Rootless, a program's windows have macOS's frames unless an appearance
+    // is chosen: they look like the host's own.  On the whole screen the
+    // Window Manager draws them.
+    if interactive && !appearanceGiven && saved.appearance == nil && !screenWindow {
+        let depth = machine_screen_depth_setting() /* as chosen above */
+        machine_set_appearance(Int32(MACHINE_APPEARANCE_NATIVE))
+        machine_set_screen_depth(depth)
+    }
+    if screenWindow { machine_drop_native_frames() }
     let chosenFor = app
     MainActor.assumeIsolated {
         RootlessHost.switchesToScreen = saved.display != "rootless" && !background

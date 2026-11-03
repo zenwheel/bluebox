@@ -914,6 +914,7 @@ int16_t rm_fork_set_eof(int16_t rn, uint32_t len);
 bool gestalt_exists(uint32_t selector);
 void gestalt_delete(uint32_t selector);
 void wm_hide_menu_bar(bool hide);
+void wm_host_requests(void); /* what the host asked of the Window Manager, at an event */
 bool wm_is_collapsed(gaddr w);
 bool wm_set_collapsed(gaddr w, bool on); /* false when the window can't collapse */
 uint32_t wm_window_features(gaddr w);

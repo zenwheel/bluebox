@@ -258,6 +258,9 @@ void machine_attach_host(bool attached);
 
 /* ---- Rootless presentation (snapshots published by the emulator thread) ---- */
 
+/* The Mac's whole screen shown in one window: with the native appearance,
+ * the Window Manager draws the windows' frames again (at the next event). */
+void machine_drop_native_frames(void);
 enum { MACHINE_WINDOW_NATIVE = 1, MACHINE_WINDOW_CLOSE = 2, MACHINE_WINDOW_ZOOM = 4, MACHINE_WINDOW_GROW = 8 };
 
 typedef struct {

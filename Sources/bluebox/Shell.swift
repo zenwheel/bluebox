@@ -777,7 +777,8 @@ struct SettingsForm: View {
                 }
             }
             Picker("Appearance", selection: $settings.appearance) {
-                Text("\(inherit) (\(appearanceName(fallback.appearance ?? "bw").lowercased()))").tag(String?.none)
+                Text("\(inherit) (\(appearanceName(fallback.appearance ?? ((settings.display ?? fallback.display) == "screen" ? "bw" : "native")).lowercased()))")
+                    .tag(String?.none)
                 Text("Black and white").tag(String?.some("bw"))
                 Text("macOS window frames").tag(String?.some("native"))
                 ForEach(themes, id: \.self) { t in Text("Theme: \(t)").tag(String?.some(t)) }

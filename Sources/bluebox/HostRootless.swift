@@ -562,6 +562,7 @@ final class TransientView: NSView {
         showWholeScreen(Int(sw), Int(sh))
         for w in windows.values { w.orderOut(nil) }
         windows.removeAll()
+        machine_drop_native_frames()
         Self.screenModeChosen?(why)
     }
 

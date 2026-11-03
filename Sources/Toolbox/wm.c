@@ -270,10 +270,25 @@ static int zoom_hit(gaddr w)
     return z && rect_eq(global_content(w), qrect_get(rd32(z) + 8)) ? wInZoomIn : wInZoomOut;
 }
 
-/* The native appearance: document windows' frames are the host's. */
+/* The native appearance: document windows' frames are the host's, until
+ * the Mac's whole screen is shown in one window (machine_drop_native_frames):
+ * then the Window Manager draws them again. */
+static bool frames_dropped;
+static volatile bool drop_frames_asked;
+
 static bool native_frame(int var)
 {
-    return g_appearance == MACHINE_APPEARANCE_NATIVE && (var == 0 || var == 4 || var == 8 || var == 12);
+    return g_appearance == MACHINE_APPEARANCE_NATIVE && !frames_dropped && (var == 0 || var == 4 || var == 8 || var == 12);
+}
+
+void ev_wake(void);
+
+void machine_drop_native_frames(void)
+{
+    if (g_appearance != MACHINE_APPEARANCE_NATIVE || frames_dropped)
+        return;
+    drop_frames_asked = true;
+    ev_wake();
 }
 
 /* ---- Actions from the host's window frames ---- */
@@ -2018,6 +2033,21 @@ gaddr wm_desk_window(void) { return desk_window; }
 
 /* Exposed so other managers can repaint after drawing over windows. */
 void wm_repaint_all(void) { repaint_all(); }
+
+/* At the next event: the frames the host stopped drawing, drawn here. */
+void wm_host_requests(void)
+{
+    if (!drop_frames_asked)
+        return;
+    drop_frames_asked = false;
+    frames_dropped = true;
+    gaddr saved = qd_port();
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
+        call_wdef(w, wCalcRgns, 0);
+    tb_SetPort(saved);
+    calc_all_vis();
+    repaint_all();
+}
 
 /* ---------------------------------------------------------------------- */
 /* Moving and sizing */

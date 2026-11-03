@@ -686,6 +686,7 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     if (afterdark_answer(evt))
         return false;
     note_poll();
+    wm_host_requests();
     opentransport_poll(); /* network events to the programs' notifiers */
     mactcp_poll();
     serial_poll();

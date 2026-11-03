@@ -57,7 +57,7 @@ struct AppSettings: Codable {
             + "fpu \(fpu.map { $0 == 0 ? "none" : String($0) } ?? "default (the processor's own)"), "
             + "addressing \(addressing.map(String.init) ?? "default (24 unless the program is 32-bit clean)"), "
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
-            + "appearance \(appearance ?? "default (bw)"), highlight \(highlight ?? "default (host)"), "
+            + "appearance \(appearance ?? "default (native in rootless windows, else bw)"), highlight \(highlight ?? "default (host)"), "
             + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
             + "printer-port \(printerPort ?? "default (none)"), "
             + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)"), "
