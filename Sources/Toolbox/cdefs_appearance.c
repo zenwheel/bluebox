@@ -165,6 +165,28 @@ static void erase(qrect r)
     tb_DisposePtr(p);
 }
 
+static qrect tab_pane_of(gaddr ch, ap_ctl *a);
+
+/* A control erasing itself in a theme's tab pane erases to the pane's
+ * inside, not the port's background (NeXTheme's and GlassWorks' check
+ * boxes had lighter boxes round their titles in the Mega Dialog). */
+static void erase_in(gaddr ch, qrect r)
+{
+    if (g_appearance == MACHINE_APPEARANCE_THEME && ap_in_color()) {
+        ctl_info *ci = ctl_find(ch);
+        for (int depth = 0; ci && ci->parent && depth < 16; depth++) {
+            ctl_info *pi = ctl_find(ci->parent);
+            if (pi && pi->cdef == 8 && pi->ap) {
+                if (thme_tab_pane_inside(tab_pane_of(ci->parent, (ap_ctl *)pi->ap), r, rd8(rd32(ci->parent) + ControlRecord_contrlHilite_off) != 255))
+                    return;
+                break;
+            }
+            ci = pi;
+        }
+    }
+    erase(r);
+}
+
 static void title_of(gaddr ch, uint8_t *buf, int *n)
 {
     gaddr t = cp(ch) + ControlRecord_contrlTitle_off;
@@ -413,7 +435,7 @@ void ap_draw_standard(gaddr ch, int kind)
         int top = r.top + (r.bottom - r.top - 12) / 2;
         qrect box = { (int16_t)top, (int16_t)(r.left + 2), (int16_t)(top + 12), (int16_t)(r.left + 14) };
         if (kind != 0) {
-            erase(r);
+            erase_in(ch, r);
             if (native_draw_check(box, kind == 2, cvalue(ch) != 0, pressed, disabled) ||
                 theme_draw_check(box, kind == 2, cvalue(ch) != 0, pressed, disabled)) {
                 text_rgb(ch, disabled ? 2 : 1, c);
@@ -449,7 +471,7 @@ void ap_draw_standard(gaddr ch, int kind)
         ap_text_in(tr, title, n, true, c);
         return;
     }
-    erase(r);
+    erase_in(ch, r);
     int top = r.top + (r.bottom - r.top - 12) / 2;
     qrect box = { (int16_t)top, (int16_t)(r.left + 2), (int16_t)(top + 12), (int16_t)(r.left + 14) };
     int v = cvalue(ch);
@@ -509,7 +531,7 @@ static void draw_track(gaddr ch, int kind)
     if (!cvisible(ch))
         return;
     gaddr info = track_info(ch, kind, chilite(ch) == kControlIndicatorPart ? 8 : 0);
-    erase(crect(ch));
+    erase_in(ch, crect(ch));
     ap_track(info);
     if (kind == 2 && (var_of(ch) & 2) && !(var_of(ch) & 8)) { /* tick marks: one per value up to 20 */
         int range = cmax(ch) - cmin(ch);
@@ -1536,7 +1558,7 @@ static int32_t static_data(gaddr ch, ap_ctl *a, const access *x, bool set)
     if (cvisible(ch)) {
         gaddr saved = qd_port();
         tb_SetPort(cowner(ch));
-        erase(crect(ch));
+        erase_in(ch, crect(ch));
         tb_SetPort(saved);
         tb_Draw1Control(ch);
     }
@@ -1992,7 +2014,7 @@ static void draw(gaddr ch, ap_ctl *a, int part)
     case 2: bevel_draw(ch, a); break;
     case 3: draw_track(ch, 2); break;
     case 4:
-        erase(r);
+        erase_in(ch, r);
         if (a->behavior & AP_DRAWS_TITLE) { /* the triangle, its title after it */
             int top = r.top + (r.bottom - r.top - 12) / 2;
             qrect tri = { (int16_t)top, r.left, (int16_t)(top + 12), (int16_t)(r.left + 12) };
@@ -2020,14 +2042,14 @@ static void draw(gaddr ch, ap_ctl *a, int part)
         break;
     }
     case 8: tabs_draw(ch, a); break;
-    case 9: erase(r); ap_separator(r, draw_state(ch, 0)); break;
+    case 9: erase_in(ch, r); ap_separator(r, draw_state(ch, 0)); break;
     case 10: group_draw(ch); break;
     case 11: well_draw(ch, a); break;
     case 12: {
         static const int dirs[4] = { 2, 0, 3, 1 }; /* east, west, north, south */
         uint16_t c[3];
         ap_brush_rgb(chilite(ch) == 255 ? 22 : 20, c);
-        erase(r);
+        erase_in(ch, r);
         ap_arrow(r, dirs[var_of(ch) & 3], (var_of(ch) & 4) ? 9 : 17, c);
         break;
     }

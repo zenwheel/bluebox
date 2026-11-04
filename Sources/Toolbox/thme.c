@@ -1464,6 +1464,35 @@ bool thme_tab(qrect r, int style, bool small, int dir)
 
 bool thme_tab_pane(qrect r, uint32_t state) { return part(300, r, state == 0 ? 0x02 : 0); }
 
+/* The inside of a tab pane (its layout's content records) over the part
+ * of it in clip: what a control in the pane erases to. */
+bool thme_tab_pane_inside(qrect pane, qrect clip, bool active)
+{
+    const tlayo *l = T.on ? layout(300) : NULL;
+    if (!l)
+        return false;
+    bool any = false;
+    for (int i = 0; i < l->nr; i++)
+        if ((l->r[i].flags & 0x300) == 0x300 && l->r[i].what == fourcc("plut"))
+            any = true;
+    if (!any)
+        return false;
+    int m[THME_MEASURES] = { 0 };
+    surface s;
+    port_surface(&s);
+    hrgn t;
+    hrgn_init(&t);
+    hrgn_rect(&t, clip);
+    hrgn_op(&s.clip, &s.clip, &t, RGN_SECT);
+    hrgn_free(&t);
+    surface *old = S;
+    S = &s;
+    draw_part_on(300, pane, active ? 0 : 0x02, m, 0, 0x200);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
+}
+
 /* Sliders, progress and indeterminate bars (scroll bars go to
  * thme_scroll_bar): the thumb (from the caller's geometry) is measure 3,
  * from the bounds' start; a progress bar's fill ends at measure 3. */
