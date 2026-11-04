@@ -301,11 +301,17 @@ static gaddr make_item(gaddr d, int i)
         it = item_at(d, i);
         gmemcpy(r, it + 4, 8);
         if (kind == resCtrl) {
+            /* Made where its item is before it is drawn, not drawn (and
+             * erased) first where the 'CNTL' put it: Appearance Sample's
+             * Mega Dialog left its password field's frame in the tabs. */
+            ctl_defer_draw(true);
             made = tb_GetNewControl((int16_t)rd16(it + 14), d);
+            ctl_defer_draw(false);
             if (made) {
                 qrect q = qrect_get(r);
-                tb_MoveControl(made, q.left, q.top);
-                tb_SizeControl(made, (int16_t)(q.right - q.left), (int16_t)(q.bottom - q.top));
+                qrect_put(rd32(made) + ControlRecord_contrlRect_off, q);
+                if (ControlRecord_contrlVis(rd32(made)) && WindowRecord_visible(d))
+                    tb_Draw1Control(made);
             }
         } else {
             wr8(title, (uint8_t)len);
@@ -441,6 +447,23 @@ void tb_AppendDITL(gaddr d, gaddr ditl, int16_t method)
     make_items_from(d, old + 1);
     if (method == 1 || method == 2)
         tb_SizeWindow(d, (int16_t)(right - port.left), (int16_t)(bottom - port.top), true);
+    /* The new items are drawn at the next update (Appearance Sample's Mega
+     * Dialog changes its tab's items so, and showed only the parts of its
+     * static and edit text that old controls' erasing had invalidated). */
+    if (WindowRecord_visible(d)) {
+        gaddr saved = qd_port();
+        tb_SetPort(d);
+        gaddr rp = tb_NewPtr(8, false, false);
+        for (int i = old + 1; i <= old + added; i++) {
+            qrect r = item_rect(d, i);
+            int out = (item_type(d, i) & 0x7F) == editText ? 4 : 0; /* with its frame */
+            qrect_put(rp, (qrect){ (int16_t)(r.top - out), (int16_t)(r.left - out), (int16_t)(r.bottom + out),
+                                   (int16_t)(r.right + out) });
+            tb_InvalRect(rp);
+        }
+        tb_DisposePtr(rp);
+        tb_SetPort(saved);
+    }
 }
 
 /* ShortenDITL(dialog, numberItems): the last items go. */
@@ -527,8 +550,12 @@ gaddr tb_NewFeaturesDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t pr
 }
 
 /* 'dftb': version, count, then for each item 0 (none) or 1 and a
- * ControlFontStyleRec's fields with a font name after them. */
-static void apply_dftb(gaddr d, int16_t id)
+ * ControlFontStyleRec's fields with a font name after them.  Its entries
+ * are for the items from base + 1 on: a dialog's own, or those
+ * AppendDialogItemList adds from the item list with the 'dftb''s ID
+ * (Appearance Sample's Mega Dialog's Grab Bag tab has its bevel buttons'
+ * small fonts so). */
+static void apply_dftb(gaddr d, int16_t id, int base)
 {
     gaddr h = tb_GetResource((int32_t)fourcc("dftb"), id);
     if (!h || !rd32(h))
@@ -541,11 +568,13 @@ static void apply_dftb(gaddr d, int16_t id)
     int x = extra_index(d, true);
     if (x < 0 || n <= 0)
         return;
-    free(extras[x].fonts);
-    extras[x].fonts = calloc((size_t)n, 24);
-    extras[x].nfonts = n;
+    if (extras[x].nfonts < base + n) {
+        extras[x].fonts = realloc(extras[x].fonts, (size_t)(base + n) * 24);
+        extras[x].nfonts = base + n;
+    }
+    memset(extras[x].fonts + base, 0, (size_t)n * 24); /* not the items' before them */
     uint32_t o = 4;
-    for (int i = 0; i < n && o + 2 <= len; i++) {
+    for (int i = base; i < base + n && o + 2 <= len; i++) {
         int type = (int16_t)rd16(p + o);
         o += 2;
         if (type != 1)
@@ -651,6 +680,50 @@ gaddr tb_NewColorDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t proci
     return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, 0, true);
 }
 
+/* System 7's automatic positions (the word after a DLOG's title, an
+ * ALRT's last): 0x0A in the low byte, then the method (1 centred, 2 where
+ * alerts go, 3 staggered) and where (1 the main screen, 3 the parent
+ * window's screen, 5 over the parent window, the front one).  Centred
+ * across; down, half the room above it centred, a fifth where alerts go
+ * (Mac OS 9 puts SimpleText's save changes dialog and Appearance Sample's
+ * Standard Alert dialog so).  The window's whole frame is placed, below
+ * the menu bar. */
+static void auto_position(gaddr d, uint16_t pos)
+{
+    int method = (pos >> 11) & 3, where = pos >> 13;
+    if ((pos & 0xFF) != 0x0A || method == 0 || method == 3 || !d)
+        return;
+    qrect area = { (int16_t)rd16(LM_MBarHeight), 0, (int16_t)g_screen_height, (int16_t)g_screen_width };
+    if (where == 5) {
+        for (gaddr w = rd32(LM_WindowList); w; w = WindowRecord_nextWindow(w))
+            if (w != d && WindowRecord_visible(w)) {
+                hrgn g;
+                hrgn_init(&g);
+                rgn_read(WindowRecord_strucRgn(w), &g);
+                area = hrgn_bbox(&g);
+                hrgn_free(&g);
+                break;
+            }
+    }
+    hrgn g;
+    hrgn_init(&g);
+    rgn_read(WindowRecord_strucRgn(d), &g);
+    qrect s = hrgn_bbox(&g);
+    hrgn_free(&g);
+    if (s.right <= s.left || s.bottom <= s.top)
+        return;
+    int w = s.right - s.left, h = s.bottom - s.top;
+    int left = area.left + (area.right - area.left - w) / 2;
+    int room = area.bottom - area.top - h;
+    int top = area.top + (room > 0 ? (method == 1 ? room / 2 : room / 5) : 0);
+    /* the content's place: the frame's offset from it kept */
+    hrgn_init(&g);
+    rgn_read(WindowRecord_contRgn(d), &g);
+    qrect c = hrgn_bbox(&g);
+    hrgn_free(&g);
+    tb_MoveWindow(d, (int16_t)(left + (c.left - s.left)), (int16_t)(top + (c.top - s.top)), false);
+}
+
 /* DLOG: bounds(8), procID(2), visible(1), pad, goAway(1), pad, refCon(4), itemsID(2), title. */
 gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override, int32_t refcon_override,
                            bool use_refcon)
@@ -681,9 +754,12 @@ gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override
     if (d && color && rd32(dctb) && (int16_t)rd16(rd32(dctb) + 6) != -1) /* ctSize -1: the default colours */
         tb_SetWinColor(d, dctb);
     if (d)
-        apply_dftb(d, id);
+        apply_dftb(d, id, 0);
     if (d && color)
         apply_ictb(d, ditl_id);
+    uint32_t tl = (uint32_t)rd8(rd32(dlog) + 20), at = (21 + tl + 1) & ~1u;
+    if (d && (uint32_t)tb_GetHandleSize(dlog) >= at + 2)
+        auto_position(d, rd16(rd32(dlog) + at));
     if (d && vis)
         tb_ShowWindow(d);
     return d;
@@ -890,11 +966,12 @@ static void draw_text_item(gaddr h, qrect r, bool substitute)
 }
 
 /* Platinum's edit text: white inside a well frame, the one being edited
- * with the focus ring (theme dialogs, in colour). */
+ * with the focus ring (theme dialogs, in colour); a theme file's frame
+ * and focus ring under a theme. */
 static bool platinum_edit(gaddr d)
 {
     return (dialog_flags(d) & (kDialogFlagsUseThemeBackground | kDialogFlagsUseThemeControls)) &&
-           g_appearance == MACHINE_APPEARANCE_BW && ap_in_color();
+           g_appearance != MACHINE_APPEARANCE_NATIVE && ap_in_color();
 }
 
 static void focus_ring(gaddr d, int n, bool on)
@@ -926,7 +1003,20 @@ static void draw_item(gaddr d, int n)
         if (h)
             tb_Draw1Control(h);
     } else if (type == statText) {
+        /* Deactivated through its control (DeactivateControl on what
+         * GetDialogItemAsControl gave, as Appearance Sample's Mega Dialog
+         * does), in the theme's inactive text colour. */
+        uint16_t c[3];
+        bool dim = ap_in_color() && ap_item_inactive(d, n) && ap_text_rgb(2, c);
+        /* On a theme's dialog background, in the theme's dialog text colour
+         * (Hi-Tech's is white on its dark grey). */
+        bool tinted = !dim && g_appearance == MACHINE_APPEARANCE_THEME && ap_in_color() &&
+                      (dialog_flags(d) & kDialogFlagsUseThemeBackground) && thme_text_rgb(1, c);
+        if (dim || tinted)
+            qd_set_fg_override(c);
         draw_text_item(h, r, true);
+        if (dim || tinted)
+            qd_set_fg_override(NULL);
     } else if (type == editText) {
         qrect f = { (int16_t)(r.top - 3), (int16_t)(r.left - 3), (int16_t)(r.bottom + 3), (int16_t)(r.right + 3) };
         bool platinum = platinum_edit(d);
@@ -1655,7 +1745,9 @@ int16_t tb_AppendDialogItemList(gaddr d, int16_t id, int16_t method)
     gaddr ditl = tb_GetResource((int32_t)fourcc("DITL"), id);
     if (!ditl || !rd32(ditl))
         return resNotFound;
+    int before = item_count(d);
     tb_AppendDITL(d, ditl, method);
+    apply_dftb(d, id, before);
     return noErr;
 }
 

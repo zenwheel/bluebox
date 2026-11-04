@@ -760,9 +760,18 @@ int32_t tb_DrawThemeEditTextFrame(gaddr r, uint32_t state)
     return noErr;
 }
 
+/* A list box's frame: the theme's own (Gizmo's orange), else an edit
+ * text's. */
+void ap_list_frame(qrect r, uint32_t state)
+{
+    if (themed() && thme_frame(state != kThemeStateInactive ? 530 : 531, r))
+        return;
+    ap_well_frame(r, state);
+}
+
 int32_t tb_DrawThemeListBoxFrame(gaddr r, uint32_t state)
 {
-    ap_well_frame(rect_arg(r), state);
+    ap_list_frame(rect_arg(r), state);
     return noErr;
 }
 
@@ -955,9 +964,10 @@ void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n)
     dir &= 3;
     int along = dir < 2 ? r.right - r.left : r.bottom - r.top, depth = dir < 2 ? r.bottom - r.top : r.right - r.left;
     int d = front ? depth : depth - 3; /* the ones behind stop short of the pane */
-    /* The title's place: inside the tab's frame, away from the pane. */
-    qrect tr = tab_map(r, dir, 4, 2, along - 4, d);
-    if (themed() && thme_tab(r, style, false, dir)) {
+    /* The title's place: inside the tab's frame, away from the pane; the
+     * front tab's on the same line as the others'. */
+    qrect tr = tab_map(r, dir, 4, 2, along - 4, depth - 3);
+    if (themed() && thme_tab(r, style, depth < 22, dir)) { /* small tabs (19 deep) have their own layouts */
         if (n > 0) {
             uint16_t tc[3];
             int color = front ? (inactive ? 42 : 39) : inactive ? 43 : style == 1 ? 41 : 40;
@@ -1486,13 +1496,15 @@ static qrect track_area(const track_info *t)
             r.bottom = (int16_t)(r.bottom - a + 1);
         }
     } else if (t->kind == kThemeSlider) {
-        /* The groove the thumb rides along: thumb-wide margins at the ends. */
+        /* Where the thumb's middle goes: the thumb (15 long) runs from 4 in
+         * at one end to 4 in at the other, as Mac OS 9 has it (its tick
+         * marks are at these ends). */
         if (horizontal(t)) {
-            r.left = (int16_t)(r.left + 7);
-            r.right = (int16_t)(r.right - 7);
+            r.left = (int16_t)(r.left + 11);
+            r.right = (int16_t)(r.right - 12);
         } else {
-            r.top = (int16_t)(r.top + 7);
-            r.bottom = (int16_t)(r.bottom - 7);
+            r.top = (int16_t)(r.top + 11);
+            r.bottom = (int16_t)(r.bottom - 12);
         }
     }
     return r;
@@ -1828,11 +1840,16 @@ int32_t tb_DrawThemeTrackTickMarks(gaddr info, uint32_t count, gaddr erase_proc,
     uint16_t c[3];
     grey(c, t.enable == kThemeTrackActive ? 0 : 0x8888);
     for (uint32_t i = 0; i < count; i++) {
+        bool active = t.enable == kThemeTrackActive;
         if (h) {
             int x = a.left + (int)((int64_t)i * (a.right - a.left) / (count - 1));
+            if (themed() && thme_tick_mark(true, active, x, t.bounds.top + 17))
+                continue;
             ap_fill((qrect){ (int16_t)(t.bounds.top + 18), (int16_t)x, (int16_t)(t.bounds.top + 22), (int16_t)(x + 1) }, c);
         } else {
             int y = a.top + (int)((int64_t)i * (a.bottom - a.top) / (count - 1));
+            if (themed() && thme_tick_mark(false, active, t.bounds.left + 17, y))
+                continue;
             ap_fill((qrect){ (int16_t)y, (int16_t)(t.bounds.left + 18), (int16_t)(y + 1), (int16_t)(t.bounds.left + 22) }, c);
         }
     }
@@ -2253,14 +2270,18 @@ int32_t tb_DrawThemeMenuSeparator(gaddr rp)
 
 int32_t tb_GetThemeMenuSeparatorHeight(gaddr out)
 {
-    wr16(out, 9);
+    int h = 9;
+    if (themed() && thme_metric("msht", &h) && h < 1)
+        h = 1;
+    wr16(out, (uint16_t)h);
     return noErr;
 }
 
 int32_t tb_GetThemeMenuItemExtra(uint16_t type, gaddr height, gaddr width)
 {
+    int ins[4];
     if (height)
-        wr16(height, 2);
+        wr16(height, themed() && thme_menu_item_insets(ins) ? (uint16_t)(ins[0] + ins[2]) : 2);
     if (width)
         wr16(width, (type & 0xFF) == 1 ? 18 : 6);
     return noErr;

@@ -269,6 +269,70 @@ static bool standard_mdef(gaddr mh)
 
 static void standard_size(gaddr mh);
 static void with_wmgr_port(gaddr *saved);
+static bool themed(void);
+
+/* How the standard MDEF lays out items.  Classic menus have items and
+ * dividers 16 high, text 15 in and command keys 24 from the right.  In a
+ * theme (as the Appearance Manager's MDEF has them) an item is the font's
+ * height plus what the theme's item layout puts round its content, a
+ * divider is the theme's separator height ('msht': 6 in most, 1 in System
+ * 7's), the text starts past the mark column (the check mark and 8), and
+ * the command keys stand in a column 30 from the right. */
+typedef struct {
+    int item_h, sep_h, text_x, key_x, right_pad, base;
+} item_layout;
+
+static item_layout layout_of(gaddr mh)
+{
+    item_layout L = { ITEM_HEIGHT, ITEM_HEIGHT, 15, 24, 15, 12 };
+    int ins[4];
+    gaddr port = rd32(LM_WMgrPort);
+    if (!themed() || !port || !thme_menu_item_insets(ins))
+        return L;
+    gaddr saved = qd_port();
+    tb_SetPort(port);
+    int16_t of = GrafPort_txFont(port), os = GrafPort_txSize(port), oface = GrafPort_txFace(port);
+    menu_extra *mx = mh ? menu_extras(mh, false) : NULL;
+    GrafPort_set_txFont(port, mx && (mx->font || mx->size) ? mx->font : 0);
+    GrafPort_set_txSize(port, mx && mx->size ? (int16_t)mx->size : 12);
+    GrafPort_set_txFace(port, 0);
+    gaddr fi = tb_NewPtr(8, false, false);
+    tb_GetFontInfo(fi);
+    int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2), lead = (int16_t)rd16(fi + 6);
+    tb_DisposePtr(fi);
+    uint8_t check = 0x12;
+    int mark_w = qd_text_width(port, &check, 1);
+    GrafPort_set_txFont(port, of);
+    GrafPort_set_txSize(port, os);
+    GrafPort_set_txFace(port, oface);
+    tb_SetPort(saved);
+    int sep = 9;
+    thme_metric("msht", &sep);
+    L.item_h = asc + desc + lead + ins[0] + ins[2];
+    L.sep_h = sep > 0 ? sep : 1;
+    L.text_x = ins[1] + mark_w + 8;
+    L.key_x = ins[3] + 30;
+    L.right_pad = ins[3] + 10;
+    L.base = ins[0] + asc;
+    return L;
+}
+
+static bool is_divider(gaddr mh, int i)
+{
+    gaddr it = item_addr(mh, i);
+    return it && rd8(it) > 0 && rd8(it + 1) == '-';
+}
+
+static int item_h(gaddr mh, int i, const item_layout *L) { return is_divider(mh, i) ? L->sep_h : L->item_h; }
+
+/* Item i's top, from the menu's top. */
+static int item_top(gaddr mh, int i, const item_layout *L)
+{
+    int top = 0;
+    for (int k = 1; k < i; k++)
+        top += item_h(mh, k, L);
+    return top;
+}
 
 /* The size comes from the menu's definition (mSizeMsg); ours measures the
  * items. */
@@ -297,21 +361,23 @@ static void standard_size(gaddr mh)
 {
     display_menus_changed();
     int items = tb_CountMItems(mh);
-    int w = 0;
+    item_layout L = layout_of(mh);
+    int w = 0, h = 0;
     for (int i = 1; i <= items; i++) {
         gaddr it = item_addr(mh, i);
         uint8_t buf[256];
         int n = rd8(it);
         gget(buf, it + 1, (uint32_t)n);
-        int iw = system_font_width(buf, n) + 30;
+        int iw = system_font_width(buf, n) + L.text_x + L.right_pad;
         if (rd8(it + 1 + n + 1))
             iw += 30; /* command key */
         if (iw > w)
             w = iw;
+        h += item_h(mh, i, &L);
     }
     gaddr p = menu_ptr(mh);
     MenuInfo_set_menuWidth(p, (int16_t)(w < 40 ? 40 : w));
-    MenuInfo_set_menuHeight(p, (int16_t)(items * ITEM_HEIGHT));
+    MenuInfo_set_menuHeight(p, (int16_t)h);
 }
 
 gaddr tb_NewMenu(int16_t mid, gaddr str)
@@ -859,8 +925,12 @@ static int16_t system_font_width(const uint8_t *s, int n)
     return (int16_t)w;
 }
 
+static bool apple_title(gaddr mh);
+
 static int title_width(gaddr mh)
 {
+    if (themed() && apple_title(mh))
+        return 16; /* the icon */
     gaddr t = title_of(mh);
     uint8_t buf[256];
     int n = rd8(t);
@@ -997,6 +1067,51 @@ static void draw_text_colored(int x, int y, gaddr pstr, int color)
     qd_set_fg_override(NULL);
 }
 
+/* The Apple menu's title under the Appearance Manager is an icon, not
+ * the font's apple: the theme's ('sapl' in its 'tic#', GlassWorks' grey
+ * one), or else the System's six-coloured apple, drawn here. */
+static bool apple_title(gaddr mh)
+{
+    gaddr t = title_of(mh);
+    return rd8(t) == 1 && rd8(t + 1) == 0x14;
+}
+
+static void draw_apple_icon(qrect r)
+{
+    static const char *const shape[14] = {
+        "........##...", ".......##....", "..###..#.###.", ".###########.", "############.",
+        "###########..", "##########...", "##########...", "###########..", "############.",
+        ".############", ".###########.", "..#########..", "...###.###...",
+    };
+    static const uint16_t bands[6][3] = {
+        { 0x5E5E, 0xBDBD, 0x3E3E }, { 0xFFFF, 0xB9B9, 0x0000 }, { 0xF7F7, 0x8282, 0x0000 },
+        { 0xE2E2, 0x3838, 0x3838 }, { 0x9797, 0x3939, 0x9999 }, { 0x0000, 0x9C9C, 0xDFDF },
+    };
+    int x0 = r.left + (r.right - r.left - 13) / 2, y0 = r.top + (r.bottom - r.top - 14) / 2;
+    int16_t id;
+    if (thme_icon_id(fourcc("sapl"), &id)) {
+        gaddr ref = tb_NewPtr(4, false, true), rr = tb_NewPtr(8, false, false);
+        if (tb_GetIconRef(-32768, (int32_t)fourcc("macs"), (int32_t)fourcc("sapl"), ref) == noErr) {
+            int16_t x = (int16_t)(r.left + (r.right - r.left - 16) / 2), y = (int16_t)(r.top + (r.bottom - r.top - 16) / 2);
+            qrect_put(rr, (qrect){ y, x, (int16_t)(y + 16), (int16_t)(x + 16) });
+            int16_t err = tb_PlotIconRef(rr, 0, 0, 0, rd32(ref));
+            tb_ReleaseIconRef(rd32(ref));
+            tb_DisposePtr(ref);
+            tb_DisposePtr(rr);
+            if (err == noErr)
+                return;
+        } else {
+            tb_DisposePtr(ref);
+            tb_DisposePtr(rr);
+        }
+    }
+    for (int y = 0; y < 14; y++)
+        for (int x = 0; x < 13; x++)
+            if (shape[y][x] == '#')
+                ap_fill((qrect){ (int16_t)(y0 + y), (int16_t)(x0 + x), (int16_t)(y0 + y + 1), (int16_t)(x0 + x + 1) },
+                        bands[y < 4 ? 0 : y < 6 ? 1 : y < 8 ? 2 : y < 10 ? 3 : y < 12 ? 4 : 5]);
+}
+
 /* A title in the bar in the theme: its background, selected or not, and
  * its text. */
 static void themed_title(int i, bool selected)
@@ -1005,7 +1120,10 @@ static void themed_title(int i, bool selected)
     qrect r = title_rect(i);
     bool on = (MenuInfo_enableFlags(menu_ptr(mh)) & 1) != 0;
     thme_menu_title((qrect){ 0, 0, (int16_t)mbar_height(), (int16_t)g_screen_width }, r, selected, on);
-    draw_text_colored(r.left + 7, title_baseline(), title_of(mh), !on ? 33 : selected ? 32 : 31);
+    if (apple_title(mh))
+        draw_apple_icon(r);
+    else
+        draw_text_colored(r.left + 7, title_baseline(), title_of(mh), !on ? 33 : selected ? 32 : 31);
 }
 
 static void dim_rect(qrect r)
@@ -1159,11 +1277,12 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
     if (!th || !thme_menu_background(r, menu_kind))
         tb_EraseRect(rr);
     int n = tb_CountMItems(mh);
-    for (int i = 1; i <= n; i++) {
+    item_layout L = layout_of(mh);
+    int top = r.top;
+    for (int i = 1; i <= n; i++, top += item_h(mh, i - 1, &L)) {
         gaddr it = item_addr(mh, i);
         int nl = rd8(it);
-        int top = r.top + (i - 1) * ITEM_HEIGHT;
-        qrect ir = { (int16_t)top, r.left, (int16_t)(top + ITEM_HEIGHT), r.right };
+        qrect ir = { (int16_t)top, r.left, (int16_t)(top + item_h(mh, i, &L)), r.right };
         if (th) {
             if (nl > 0 && rd8(it + 1) == '-') {
                 thme_menu_separator(ir);
@@ -1174,17 +1293,17 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
             thme_menu_item(ir, sel, on, key == 0x1B);
             int color = !on ? 36 : sel ? 35 : 34;
             GrafPort_set_txFace(port, style);
-            draw_text_colored(r.left + 15, top + 12, it, color);
+            draw_text_colored(r.left + L.text_x, top + L.base, it, color);
             GrafPort_set_txFace(port, 0);
             uint16_t c[3] = { 0, 0, 0 };
             ap_text_rgb(color, c);
             qd_set_fg_override(c);
             if (mark) {
-                tb_MoveTo((int16_t)(r.left + 2), (int16_t)(top + 12));
+                tb_MoveTo((int16_t)(r.left + L.text_x - 8 - qd_text_width(port, &mark, 1)), (int16_t)(top + L.base));
                 tb_DrawChar(mark);
             }
             if (key && key != 0x1B) {
-                tb_MoveTo((int16_t)(r.right - 24), (int16_t)(top + 12));
+                tb_MoveTo((int16_t)(r.right - L.key_x), (int16_t)(top + L.base));
                 tb_DrawChar(0x11); /* command symbol */
                 tb_DrawChar(key);
             }
@@ -1251,8 +1370,13 @@ void menu_standard_mdef(int16_t msg, gaddr mh, gaddr rect, uint32_t hit, gaddr w
     case mChooseMsg: {
         int item = 0;
         int16_t h = pt_h(hit), v = pt_v(hit);
-        if (h >= r.left && h < r.right && v >= r.top && v < r.bottom)
-            item = (v - r.top) / ITEM_HEIGHT + 1;
+        if (h >= r.left && h < r.right && v >= r.top && v < r.bottom) {
+            item_layout L = layout_of(mh);
+            int n = tb_CountMItems(mh), top = r.top;
+            for (int i = 1; i <= n && !item; top += item_h(mh, i, &L), i++)
+                if (v < top + item_h(mh, i, &L))
+                    item = i;
+        }
         if (item) {
             gaddr it = item_addr(mh, item);
             if (!it || !item_enabled(mh, item) || (rd8(it) && rd8(it + 1) == '-'))
@@ -1302,8 +1426,9 @@ bool menu_item_bounds(gaddr mh, int item, qrect *out)
 {
     if (!mh || !rd32(mh) || item < 1 || item > tb_CountMItems(mh))
         return false;
-    int top = (item - 1) * ITEM_HEIGHT;
-    *out = (qrect){ (int16_t)top, 0, (int16_t)(top + ITEM_HEIGHT), MenuInfo_menuWidth(menu_ptr(mh)) };
+    item_layout L = layout_of(mh);
+    int top = item_top(mh, item, &L);
+    *out = (qrect){ (int16_t)top, 0, (int16_t)(top + item_h(mh, item, &L)), MenuInfo_menuWidth(menu_ptr(mh)) };
     return true;
 }
 
@@ -1543,6 +1668,15 @@ int32_t tb_MenuSelect(uint32_t p)
                 qrect t = title_rect(open);
                 box = (qrect){ (int16_t)mbar_height(), t.left, (int16_t)(mbar_height() + MenuInfo_menuHeight(mp)),
                                (int16_t)(t.left + MenuInfo_menuWidth(mp)) };
+                /* A theme's frame wider than the classic pixel starts under
+                 * the title's left edge, as the classic one does, the menu
+                 * inside it (Hi-Tech's and Gizmo's, four pixels in). */
+                qrect e;
+                if (themed() && thme_menu_extent(box, 0, &e) && e.left < box.left - 1) {
+                    int dx = box.left - 1 - e.left;
+                    box.left = (int16_t)(box.left + dx);
+                    box.right = (int16_t)(box.right + dx);
+                }
                 /* MBarHook sees the menu's rectangle before it is drawn; a
                  * result other than zero abandons the choice. */
                 if (rd32(LM_MBarHook)) {
@@ -1634,7 +1768,8 @@ int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
     gaddr saved;
     with_wmgr_port(&saved);
     gaddr mp = menu_ptr(mh);
-    int16_t t = (int16_t)(top - (item > 0 ? (item - 1) * ITEM_HEIGHT : 0));
+    item_layout L = layout_of(mh);
+    int16_t t = (int16_t)(top - (item > 0 ? item_top(mh, item, &L) : 0));
     qrect box = { t, left, (int16_t)(t + MenuInfo_menuHeight(mp)), (int16_t)(left + MenuInfo_menuWidth(mp)) };
     menu_kind = 1;
     qrect area = menu_area(box, 1);

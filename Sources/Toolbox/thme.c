@@ -38,10 +38,11 @@
  *    int8 last ring (0 is the rectangle's outermost row of pixels, negative
  *    ones outside it), int16 fill for the inside (0 none), u16 count, then
  *    entries {u8 flags, int8 ring, int16 fill,
- *    side masks}: a byte (version 2) or a word (version 3) per side, top,
- *    left, bottom, right, each going round counter-clockwise: the top bit
- *    is the corner the side starts at, then the first pixels, the middle,
- *    and the last pixels.  The flag bytes (the header's and each
+ *    side masks}: a byte (version 2) or a word (version 3) per side, left,
+ *    top, right, bottom, going round clockwise from the bottom left
+ *    corner: the top bit is the corner the side starts at, then the first
+ *    pixels, the middle, and the last pixels (the separators, the only
+ *    frames that are not square, show the order).  The flag bytes (the header's and each
  *    entry's) are 0x00, 0x40, 0x80 or 0xC0; in the 219 sample themes the
  *    entries' are set in some thirty third-party themes (Moby, Sosumi,
  *    LUCENT...), none of Apple's, often on a bevel's highlight or shadow
@@ -531,9 +532,12 @@ static void draw_frame(int16_t id, qrect r)
     int esize = ver >= 3 ? 12 : 8, n = be16(d + 10);
     /* The inside, past the last ring, in the frame's own fill (patterns
      * pinned to its bottom: the betas' button faces are tall gradients). */
-    int last = (int8_t)d[7];
+    /* Not for a frame drawn outside its rectangle (an edit text's, a list
+     * box's): what is inside is the field's, white as Mac OS 9 leaves it
+     * (Aqua's edit text frame has a grey fill). */
+    int first = (int8_t)d[5], last = (int8_t)d[7];
     tfill in;
-    if ((int16_t)be16(d + 8) && fill_of((int16_t)be16(d + 8), &in)) {
+    if (first >= 0 && (int16_t)be16(d + 8) && fill_of((int16_t)be16(d + 8), &in)) {
         qrect q = { (int16_t)(r.top + last + 1), (int16_t)(r.left + last + 1), (int16_t)(r.bottom - last - 1),
                     (int16_t)(r.right - last - 1) };
         if (q.right > q.left && q.bottom > q.top)
@@ -555,9 +559,14 @@ static void draw_frame(int16_t id, qrect r)
             uint32_t m = ver >= 3 ? be16(e + 4 + side * 2) : e[4 + side];
             if (!m)
                 continue;
-            /* Counter-clockwise: top from the right, left from the top,
-             * bottom from the left, right from the bottom. */
-            int len_side = (side & 1) ? h - 2 : w - 2;
+            /* Clockwise from the bottom left corner: left going up, top
+             * going right, right going down, bottom going left.  (The
+             * transpose of reading them top, left, bottom, right counter-
+             * clockwise, which draws every square frame the same; the
+             * separators tell them apart: Gizmo's horizontal one is a
+             * full second side in both rings, a two-pixel line along the
+             * top, as Mac OS 9 draws it.) */
+            int len_side = (side & 1) ? w - 2 : h - 2;
             for (int k = -1; k < len_side; k++) {
                 int bit;
                 if (k < 0)
@@ -572,10 +581,10 @@ static void draw_frame(int16_t id, qrect r)
                     continue;
                 int x, y;
                 switch (side) {
-                case 0: x = q.right - 1 - (k + 1); y = q.top; break;
-                case 1: x = q.left; y = q.top + (k + 1); break;
-                case 2: x = q.left + (k + 1); y = q.bottom - 1; break;
-                default: x = q.right - 1; y = q.bottom - 1 - (k + 1); break;
+                case 0: x = q.left; y = q.bottom - 1 - (k + 1); break;
+                case 1: x = q.left + (k + 1); y = q.top; break;
+                case 2: x = q.right - 1; y = q.top + (k + 1); break;
+                default: x = q.right - 1 - (k + 1); y = q.bottom - 1; break;
                 }
                 const uint8_t *c = f.rgb;
                 if (f.pat)
@@ -1332,16 +1341,24 @@ bool thme_scroll_bar(qrect r, bool vertical, int hilite, bool enabled, bool acti
                         : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + l0) };
     qrect q1 = vertical ? (qrect){ (int16_t)(r.bottom - l1), r.left, r.bottom, r.right }
                         : (qrect){ r.top, (int16_t)(r.right - l1), r.bottom, r.right };
-    draw_tile(image(fourcc("pxm#"), a0), img0 < n0 ? img0 : 0, q0, 1);
-    draw_tile(image(fourcc("pxm#"), a1), img1 < n1 ? img1 : 0, q1, 4);
-    qrect track = vertical ? (qrect){ q0.bottom, r.left, q1.top, r.right } : (qrect){ r.top, q0.right, r.bottom, q1.left };
+    /* Disabled or with nothing to scroll, the track runs the bar's length
+     * without arrows (Gizmo's grey lattice and orange on Mac OS 9). */
+    bool dead = !enabled || !active;
+    if (!dead) {
+        draw_tile(image(fourcc("pxm#"), a0), img0 < n0 ? img0 : 0, q0, 1);
+        draw_tile(image(fourcc("pxm#"), a1), img1 < n1 ? img1 : 0, q1, 4);
+    }
+    qrect track = dead ? r : vertical ? (qrect){ q0.bottom, r.left, q1.top, r.right } : (qrect){ r.top, q0.right, r.bottom, q1.left };
     int m[THME_MEASURES] = { 0 };
     bool live = enabled && active && thumb.bottom > thumb.top && thumb.right > thumb.left;
     if (live) {
         m[3] = vertical ? thumb.top - track.top : thumb.left - track.left;
         m[4] = vertical ? thumb.bottom - track.top : thumb.right - track.left;
     }
-    uint32_t st = (!active ? 0x02 : !enabled ? 0x01 : 0) | (live ? 0x10 : 0) | (hilite == 129 ? 0x100 : 0);
+    /* The layouts' bits are ThemeTrackEnableState's: 0x01 disabled (an
+     * inactive window's, Gizmo's grey lattice), 0x02 nothing to scroll
+     * (its orange). */
+    uint32_t st = (!active ? 0x01 : !enabled ? 0x02 : 0) | (live ? 0x10 : 0) | (hilite == 129 ? 0x100 : 0);
     draw_part_on(id, track, st, m, 0, 0);
     S = old;
     hrgn_free(&s.clip);
@@ -1447,6 +1464,35 @@ bool thme_tab(qrect r, int style, bool small, int dir)
 
 bool thme_tab_pane(qrect r, uint32_t state) { return part(300, r, state == 0 ? 0x02 : 0); }
 
+/* The inside of a tab pane (its layout's content records) over the part
+ * of it in clip: what a control in the pane erases to. */
+bool thme_tab_pane_inside(qrect pane, qrect clip, bool active)
+{
+    const tlayo *l = T.on ? layout(300) : NULL;
+    if (!l)
+        return false;
+    bool any = false;
+    for (int i = 0; i < l->nr; i++)
+        if ((l->r[i].flags & 0x300) == 0x300 && l->r[i].what == fourcc("plut"))
+            any = true;
+    if (!any)
+        return false;
+    int m[THME_MEASURES] = { 0 };
+    surface s;
+    port_surface(&s);
+    hrgn t;
+    hrgn_init(&t);
+    hrgn_rect(&t, clip);
+    hrgn_op(&s.clip, &s.clip, &t, RGN_SECT);
+    hrgn_free(&t);
+    surface *old = S;
+    S = &s;
+    draw_part_on(300, pane, active ? 0 : 0x02, m, 0, 0x200);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
+}
+
 /* Sliders, progress and indeterminate bars (scroll bars go to
  * thme_scroll_bar): the thumb (from the caller's geometry) is measure 3,
  * from the bounds' start; a progress bar's fill ends at measure 3. */
@@ -1463,7 +1509,8 @@ bool thme_track(const thme_track_info *t)
                            : (t->thumb_dir == 1 ? 427 : t->thumb_dir == 2 ? 426 : 425);
         if (!thme_has_part(id))
             id = t->horizontal ? 420 : 425;
-        m[3] = t->horizontal ? t->thumb.left - b.left : t->thumb.top - b.top;
+        /* the thumb's offset along the layouts' track, which starts 4 in */
+        m[3] = (t->horizontal ? t->thumb.left - b.left : t->thumb.top - b.top) - 4;
         m[5] = m[3];
         st |= (t->enable == 0 && t->max > t->min ? 0x10 : 0) | (t->press & 0x08 ? 0x100 : 0);
     } else if (t->kind == 3) { /* progress */
@@ -1478,6 +1525,28 @@ bool thme_track(const thme_track_info *t)
         st |= 0x40u << (t->phase & 3);
     }
     return thme_draw_part(id, b, st, m, 0);
+}
+
+/* A slider's tick mark: the theme's image ('pxm#' 396, an upright mark,
+ * under a horizontal slider; 395, a level one, beside a vertical one;
+ * named for the marks, not the sliders), its first frame (the
+ * next one inactive), its middle at (x, y) along the slider and its top
+ * or left edge there across it. */
+bool thme_tick_mark(bool horizontal, bool active, int x, int y)
+{
+    const timg *im = T.on ? image(fourcc("pxm#"), horizontal ? 396 : 395) : NULL;
+    if (!im || im->w <= 0 || im->h <= 0)
+        return false;
+    qrect r = horizontal ? (qrect){ (int16_t)y, (int16_t)(x - im->w / 2), (int16_t)(y + im->h), (int16_t)(x - im->w / 2 + im->w) }
+                         : (qrect){ (int16_t)(y - im->h / 2), (int16_t)x, (int16_t)(y - im->h / 2 + im->h), (int16_t)(x + im->w) };
+    surface s;
+    port_surface(&s);
+    surface *old = S;
+    S = &s;
+    draw_tile(im, !active && im->n > 1 ? 1 : 0, r, 1);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1515,7 +1584,10 @@ static int menu_part(int type)
     return thme_has_part(id) ? id : 257;
 }
 
-bool thme_menu_background(qrect r, int type) { return part(menu_part(type), r, 0); }
+/* Drawn active (0x02): a menu that is down is the active one; the
+ * inactive look (Gizmo's grey edges for its red ones) is not a pulled
+ * down menu's. */
+bool thme_menu_background(qrect r, int type) { return part(menu_part(type), r, 0x02); }
 
 /* What a menu's background covers round r: most themes draw the frame and
  * shadow outside the menu's rectangle (System 7's a pixel left and above,
@@ -1541,6 +1613,24 @@ bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier)
 }
 
 bool thme_menu_separator(qrect r) { return part(263, r, 0); }
+
+/* How far an item's content (its text) sits inside the item: the
+ * TextMenuItem layout's content rectangle against the item's, top, left,
+ * bottom and right.  The Appearance Manager makes items that much taller
+ * than the font (GetThemeMenuItemExtra): two pixels in Apple's own
+ * layouts, three in Gizmo's, which also indents the text four. */
+bool thme_menu_item_insets(int out[4])
+{
+    int m[THME_MEASURES] = { 0 };
+    qrect b = { 0, 0, 40, 200 }, c;
+    if (!T.on || !thme_part_rect(261, b, 0x02, m, THME_CONTENT, &c))
+        return false;
+    out[0] = imax(0, c.top - b.top);
+    out[1] = imax(0, c.left - b.left);
+    out[2] = imax(0, b.bottom - c.bottom);
+    out[3] = imax(0, b.right - c.right);
+    return true;
+}
 
 /* ---------------------------------------------------------------------- */
 /* The scene ('scen'): the desktop pattern, highlight colour, fonts and

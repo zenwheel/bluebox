@@ -76,6 +76,7 @@ bool thme_popup_arrow(qrect r, int orient, int size, uint32_t state);
 bool thme_focus_rect(qrect r);
 bool thme_tab(qrect r, int style, bool small, int dir);
 bool thme_tab_pane(qrect r, uint32_t state);
+bool thme_tab_pane_inside(qrect pane, qrect clip, bool active);
 
 /* A ThemeTrackDrawInfo's slider, progress or indeterminate bar (kind 2-4),
  * with the thumb where the Appearance code puts it. */
@@ -87,6 +88,7 @@ typedef struct {
     int enable, press, thumb_dir, phase;
 } thme_track_info;
 bool thme_track(const thme_track_info *t);
+bool thme_tick_mark(bool horizontal, bool active, int x, int y);
 
 /* Menus: the bar, a title's background, a menu's (0 pull-down, 1 pop-up, 2
  * hierarchical), an item's, a divider. */
@@ -96,6 +98,8 @@ bool thme_menu_background(qrect r, int type);
 bool thme_menu_extent(qrect r, int type, qrect *out);
 bool thme_menu_item(qrect r, bool selected, bool enabled, bool hier);
 bool thme_menu_separator(qrect r);
+/* The content's insets in a menu item: top, left, bottom, right. */
+bool thme_menu_item_insets(int out[4]);
 
 /* The scene: a string item ('name', 'snds' the sound set, 'patn', fonts),
  * the highlight colour, the desktop pattern painted over an area. */

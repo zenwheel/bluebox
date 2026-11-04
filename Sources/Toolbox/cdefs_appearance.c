@@ -14,11 +14,13 @@
  * for GetDialogItemAsControl, kept out of the window's control list: its
  * text, selection and procedures are the item's.
  */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 enum { drawCntl = 0, testCntl, calcCRgns, initCntl, dispCntl, posCntl, thumbCntl, dragCntl, autoTrack };
 enum {
@@ -105,6 +107,7 @@ typedef struct {
     uint32_t clock_flags, clock_secs;
     gaddr validation;
     void *scroll_text;
+    qrect made_for;              /* the rectangle a list's or edit text's record has */
 } ap_ctl;
 
 static gaddr cp(gaddr ch) { return rd32(ch); }
@@ -160,6 +163,28 @@ static void erase(qrect r)
     gaddr p = tmp_rect(r);
     tb_EraseRect(p);
     tb_DisposePtr(p);
+}
+
+static qrect tab_pane_of(gaddr ch, ap_ctl *a);
+
+/* A control erasing itself in a theme's tab pane erases to the pane's
+ * inside, not the port's background (NeXTheme's and GlassWorks' check
+ * boxes had lighter boxes round their titles in the Mega Dialog). */
+static void erase_in(gaddr ch, qrect r)
+{
+    if (g_appearance == MACHINE_APPEARANCE_THEME && ap_in_color()) {
+        ctl_info *ci = ctl_find(ch);
+        for (int depth = 0; ci && ci->parent && depth < 16; depth++) {
+            ctl_info *pi = ctl_find(ci->parent);
+            if (pi && pi->cdef == 8 && pi->ap) {
+                if (thme_tab_pane_inside(tab_pane_of(ci->parent, (ap_ctl *)pi->ap), r, rd8(rd32(ci->parent) + ControlRecord_contrlHilite_off) != 255))
+                    return;
+                break;
+            }
+            ci = pi;
+        }
+    }
+    erase(r);
 }
 
 static void title_of(gaddr ch, uint8_t *buf, int *n)
@@ -266,6 +291,21 @@ static void load_content(ap_ctl *a, int16_t type, int16_t res)
         tb_DisposePtr(h);
     } else if (type == kControlContentCIconRes) {
         a->content = tb_GetCIcon(res);
+        /* The System's stop, note and caution 'cicn's (0-2), which ours
+         * lacks: the theme's alert icons, or the icon family at the ID
+         * (the Mega Dialog's caution sign). */
+        static const char *const kinds[] = { "stop", "note", "caut" };
+        int16_t id = res;
+        if (!a->content && res >= 0 && res <= 2) {
+            if (thme_in_use())
+                thme_icon_id(fourcc(kinds[res]), &id);
+            gaddr h = tb_NewPtr(4, false, true);
+            if (tb_GetIconSuite(h, id, 0xFFFFFFFFu) == 0 && rd32(h)) {
+                a->content = rd32(h);
+                a->content_type = kControlContentIconSuiteRes;
+            }
+            tb_DisposePtr(h);
+        }
     } else if (type == kControlContentPictRes) {
         a->content = tb_GetPicture(res);
     }
@@ -387,12 +427,15 @@ void ap_draw_standard(gaddr ch, int kind)
     uint16_t c[3];
     if (g_appearance != MACHINE_APPEARANCE_BW) { /* the host's controls, or a Kaleidoscope theme's */
         bool pressed = state == 2, disabled = state == 0;
-        if (kind == 0 && (native_draw_button(r, title, n, pressed, disabled) || theme_draw_button(r, title, n, pressed, disabled)))
+        ctl_info *dci = ctl_find(ch);
+        bool ring = ((a && a->is_default) || (dci && dci->is_default)) && thme_in_use();
+        if (kind == 0 && (native_draw_button(r, title, n, pressed, disabled) ||
+                          (!ring && theme_draw_button(r, title, n, pressed, disabled))))
             return;
         int top = r.top + (r.bottom - r.top - 12) / 2;
         qrect box = { (int16_t)top, (int16_t)(r.left + 2), (int16_t)(top + 12), (int16_t)(r.left + 14) };
         if (kind != 0) {
-            erase(r);
+            erase_in(ch, r);
             if (native_draw_check(box, kind == 2, cvalue(ch) != 0, pressed, disabled) ||
                 theme_draw_check(box, kind == 2, cvalue(ch) != 0, pressed, disabled)) {
                 text_rgb(ch, disabled ? 2 : 1, c);
@@ -402,7 +445,8 @@ void ap_draw_standard(gaddr ch, int kind)
         }
     }
     if (kind == 0) {
-        ap_push_button(r, state, a && a->is_default);
+        ctl_info *ci = ctl_find(ch);
+        ap_push_button(r, state, (a && a->is_default) || (ci && ci->is_default));
         text_rgb(ch, state == 0 ? 13 : state == 2 ? 14 : 12, c);
         qrect tr = inset(r, 3);
         if (a && (a->icon_id || a->content)) { /* a colour icon at the left (6) or right (7) */
@@ -427,7 +471,7 @@ void ap_draw_standard(gaddr ch, int kind)
         ap_text_in(tr, title, n, true, c);
         return;
     }
-    erase(r);
+    erase_in(ch, r);
     int top = r.top + (r.bottom - r.top - 12) / 2;
     qrect box = { (int16_t)top, (int16_t)(r.left + 2), (int16_t)(top + 12), (int16_t)(r.left + 14) };
     int v = cvalue(ch);
@@ -466,7 +510,10 @@ static gaddr track_info(gaddr ch, int kind, int press)
     int attrs = (r.right - r.left >= r.bottom - r.top) ? 1 : 0;
     if (kind == 2) {
         int v = var_of(ch);
-        if (v & 4)
+        /* A vertical slider's minimum is at the bottom (Mac OS 9 shows the
+         * Mega Dialog's at their minimum there); kControlSliderReverseDirection
+         * only turns the thumb's point. */
+        if (!(attrs & 1))
             attrs |= 2;
         attrs |= 4;
         wr8(info + 30, (v & 8) ? 0 : (v & 4) ? 1 : 2); /* thumb direction */
@@ -484,7 +531,7 @@ static void draw_track(gaddr ch, int kind)
     if (!cvisible(ch))
         return;
     gaddr info = track_info(ch, kind, chilite(ch) == kControlIndicatorPart ? 8 : 0);
-    erase(crect(ch));
+    erase_in(ch, crect(ch));
     ap_track(info);
     if (kind == 2 && (var_of(ch) & 2) && !(var_of(ch) & 8)) { /* tick marks: one per value up to 20 */
         int range = cmax(ch) - cmin(ch);
@@ -525,7 +572,7 @@ static int16_t slider_drag(gaddr ch, uint32_t pt, gaddr action)
         int32_t at = p0 + (h ? pt_h(m) : pt_v(m)) - start;
         tb_GetThemeTrackLiveValue(info, at, val);
         int16_t v = (int16_t)(int32_t)rd32(val);
-        if (var_of(ch) & 4)
+        if (!h) /* the minimum at the bottom */
             v = (int16_t)(cmax(ch) - (v - cmin(ch)));
         if (v != cvalue(ch)) {
             tb_SetControlValue(ch, v);
@@ -589,7 +636,22 @@ static void bevel_draw(gaddr ch, ap_ctl *a)
     title_of(ch, title, &n);
     int gw, gh;
     content_size(a, &gw, &gh);
-    fit_content(a, in, &gw, &gh);
+    /* The graphic fits the room the title leaves it (an icon above or
+     * below a title in a 40-pixel button drops to its small size, as in
+     * the Mega Dialog's Grab Bag); a picture keeps its size, cut to the
+     * button. */
+    qrect room = in;
+    if (gw && n) {
+        int asc, desc;
+        ap_font_info(&asc, &desc);
+        if (a->text_place == 3)
+            room.bottom = (int16_t)(in.bottom - asc - desc - 2);
+        else if (a->text_place == 4)
+            room.top = (int16_t)(in.top + asc + desc + 2);
+    }
+    bool pict = a->content_type == kControlContentPictRes || a->content_type == kControlContentPictHandle;
+    if (!pict)
+        fit_content(a, room, &gw, &gh);
     qrect graphic = { 0, 0, 0, 0 }, text = in;
     if (gw && n) {
         int asc, desc;
@@ -615,8 +677,20 @@ static void bevel_draw(gaddr ch, ap_ctl *a)
     } else if (gw) {
         graphic = place(in, gw, gh, a->graphic_align, a->graphic_h, a->graphic_v);
     }
-    if (gw)
+    if (gw && pict) {
+        gaddr saved = tb_NewRgn(), cut = tb_NewRgn(), rp = tmp_rect(in);
+        tb_GetClip(saved);
+        tb_RectRgn(cut, rp);
+        tb_SectRgn(cut, saved, cut);
+        tb_SetClip(cut);
         draw_content(a, graphic, state == 0);
+        tb_SetClip(saved);
+        tb_DisposePtr(rp);
+        tb_DisposeRgn(cut);
+        tb_DisposeRgn(saved);
+    } else if (gw) {
+        draw_content(a, graphic, state == 0);
+    }
     if (n) {
         uint16_t c[3];
         text_rgb(ch, state == 0 ? 16 : state == 2 ? 17 : 15, c);
@@ -628,7 +702,7 @@ static void bevel_draw(gaddr ch, ap_ctl *a)
         uint16_t c[3];
         ap_text_rgb(state == 0 ? 16 : 15, c);
         qrect g = (var & 4) ? (qrect){ (int16_t)((r.top + r.bottom) / 2 - 4), (int16_t)(r.right - 10), (int16_t)((r.top + r.bottom) / 2 + 4), (int16_t)(r.right - 3) }
-                            : a->center_glyph ? (qrect){ (int16_t)(r.bottom - 8), (int16_t)((r.left + r.right) / 2 - 4), (int16_t)(r.bottom - 3), (int16_t)((r.left + r.right) / 2 + 4) }
+                            : a->center_glyph ? (qrect){ (int16_t)((r.top + r.bottom) / 2 - 3), (int16_t)(r.right - 11), (int16_t)((r.top + r.bottom) / 2 + 3), (int16_t)(r.right - 3) } /* centred down the right edge */
                                               : (qrect){ (int16_t)(r.bottom - 9), (int16_t)(r.right - 11), (int16_t)(r.bottom - 3), (int16_t)(r.right - 3) };
         ap_arrow(g, (var & 4) ? 2 : 1, 7, c);
     }
@@ -749,10 +823,14 @@ static int32_t bevel_data(gaddr ch, ap_ctl *a, const access *x, bool set)
 static int tab_height(gaddr ch) { return (var_of(ch) & 1) ? 19 : 24; }
 static int tab_dir(gaddr ch) { return (var_of(ch) >> 1) & 3; }
 
+/* A tab is its title and 12 either side, small or large (where the
+ * themes' tab layouts put the title), the first 5 in from the control's
+ * edge, each overlapping the one before by a pixel: Mac OS 9 lays out
+ * Appearance Sample's Mega Dialog's tabs so under every theme. */
 static int tab_width(gaddr ch, ap_ctl *a, int k)
 {
     int n = a->tabs[k - 1].name[0];
-    int w = qd_text_width(qd_port(), a->tabs[k - 1].name + 1, n) + ((var_of(ch) & 1) ? 16 : 24);
+    int w = qd_text_width(qd_port(), a->tabs[k - 1].name + 1, n) + 24;
     return w < 40 ? 40 : w;
 }
 
@@ -767,7 +845,7 @@ static qrect tab_rect(gaddr ch, ap_ctl *a, int i)
 {
     qrect r = crect(ch);
     int dir = tab_dir(ch), th = tab_height(ch), depth = tab_depth(ch, a);
-    int p = (dir < 2 ? r.left : r.top) + 8;
+    int p = (dir < 2 ? r.left : r.top) + 5;
     for (int k = 1; k <= a->ntabs; k++) {
         int len = tab_width(ch, a, k);
         if (k == i) {
@@ -1139,6 +1217,7 @@ static void edit_init(gaddr ch, ap_ctl *a)
     ctl_font_begin(ch, &fs);
     gaddr r = tmp_rect(crect(ch));
     a->te = tb_TENew(r, r);
+    a->made_for = crect(ch);
     tb_DisposePtr(r);
     ctl_font_end(&fs);
     tb_SetPort(saved);
@@ -1479,7 +1558,7 @@ static int32_t static_data(gaddr ch, ap_ctl *a, const access *x, bool set)
     if (cvisible(ch)) {
         gaddr saved = qd_port();
         tb_SetPort(cowner(ch));
-        erase(crect(ch));
+        erase_in(ch, crect(ch));
         tb_SetPort(saved);
         tb_Draw1Control(ch);
     }
@@ -1488,6 +1567,8 @@ static int32_t static_data(gaddr ch, ap_ctl *a, const access *x, bool set)
 
 /* ---------------------------------------------------------------------- */
 /* CDEF 22: list boxes ('ldes': rows, columns, cell size, scroll bars, LDEF) */
+
+static void follow_bounds(gaddr ch, ap_ctl *a);
 
 static void list_init(gaddr ch, ap_ctl *a)
 {
@@ -1517,6 +1598,8 @@ static void list_init(gaddr ch, ap_ctl *a)
     tb_SetPort(w);
     gaddr rv = tmp_rect(view), db = tmp_rect((qrect){ 0, 0, (int16_t)rows, (int16_t)(cols > 0 ? cols : 1) });
     a->list = tb_LNew(rv, db, make_pt((int16_t)ch_h, (int16_t)ch_w), (int16_t)ldef, w, true, grow, hs, vs);
+    a->made_for = (qrect){ 0, 0, 0, 0 };
+    follow_bounds(ch, a);
     tb_DisposePtr(db);
     tb_DisposePtr(rv);
     tb_SetPort(saved);
@@ -1528,10 +1611,13 @@ static void list_draw(gaddr ch, ap_ctl *a)
     if (!cvisible(ch))
         return;
     qrect r = crect(ch);
-    ap_well_frame(inset(r, -1), draw_state(ch, 0));
-    if (a->list) {
+    ap_list_frame(inset(r, -1), draw_state(ch, 0));
+    if (a->list) { /* white inside, on any dialog background (Hi-Tech's dark grey) */
+        bk_saved bk;
+        white_bk(&bk);
         tb_LActivate(chilite(ch) != 255, a->list);
         tb_LUpdate(GrafPort_visRgn(qd_port()), a->list);
+        restore_bk(&bk);
     }
     if (a->focused)
         ap_focus_rect(inset(r, -3), true);
@@ -1605,27 +1691,51 @@ static void clock_draw(gaddr ch, ap_ctl *a)
 {
     if (!cvisible(ch))
         return;
+    /* As the Appearance Manager's: the fields in an edit text's frame,
+     * filling the control but for little arrows at its right (none when
+     * it only shows the time), the date's fields a fixed width (" 3", the
+     * year in full: "11/ 3/2026"). */
     qrect r = crect(ch);
-    ap_fill_grey(r, 0xFFFF);
-    ap_well_frame(inset(r, -1), draw_state(ch, 0));
+    bool arrows = !(a->clock_flags & 1);
+    qrect field = { (int16_t)(r.top + 2), (int16_t)(r.left + 2), (int16_t)(r.bottom - 2),
+                    (int16_t)(r.right - (arrows ? 17 : 2)) };
+    ap_fill_grey(field, 0xFFFF);
+    ap_well_frame(field, draw_state(ch, 0));
+    if (arrows) {
+        int h = 22 < r.bottom - r.top ? 22 : r.bottom - r.top;
+        int top = r.top + (r.bottom - r.top - h) / 2;
+        /* dimmed until the clock has the focus, as Mac OS 9 shows them */
+        ap_little_arrows((qrect){ (int16_t)top, (int16_t)(r.right - 13), (int16_t)(top + h), r.right },
+                         a->focused ? draw_state(ch, 0) : 0);
+    }
     gaddr now = tb_NewPtr(4, false, true), s = tb_NewPtr(256, false, true);
     if (a->clock_secs && !(a->clock_flags & 2))
         wr32(now, a->clock_secs);
     else
         tb_GetDateTime(now);
     int v = var_of(ch);
-    if (v == 2 || v == 3)
-        tb_IUDateString((int32_t)rd32(now), 0, s);
-    else
-        tb_IUTimeString((int32_t)rd32(now), v == 1, s);
     uint8_t buf[256];
-    int n = rd8(s);
-    gget(buf, s + 1, (uint32_t)n);
+    int n;
+    if (v == 2 || v == 3) {
+        gaddr dt = tb_NewPtr(14, false, true);
+        tb_SecondsToDate(rd32(now), dt);
+        int year = (int16_t)rd16(dt), month = (int16_t)rd16(dt + 2), day = (int16_t)rd16(dt + 4);
+        tb_DisposePtr(dt);
+        n = v == 2 ? snprintf((char *)buf, sizeof buf, "%2d/%2d/%04d", month, day, year)
+                   : snprintf((char *)buf, sizeof buf, "%2d/%04d", month, year);
+    } else {
+        tb_IUTimeString((int32_t)rd32(now), v == 1, s);
+        n = rd8(s);
+        gget(buf, s + 1, (uint32_t)n);
+    }
     ctl_font_saved fs;
     ctl_font_begin(ch, &fs);
-    uint16_t c[3];
-    text_rgb(ch, chilite(ch) == 255 ? 2 : 1, c);
-    ap_text_in(inset(r, 2), buf, n, false, c);
+    /* black in its white field whatever the dialog's text colour is
+     * (Hi-Tech's white), grey when inactive */
+    uint16_t c[3] = { 0, 0, 0 };
+    if (chilite(ch) == 255)
+        c[0] = c[1] = c[2] = 0x7777;
+    ap_text_in((qrect){ field.top, (int16_t)(field.left + 2), field.bottom, field.right }, buf, n, false, c);
     ctl_font_end(&fs);
     tb_DisposePtr(s);
     tb_DisposePtr(now);
@@ -1904,7 +2014,7 @@ static void draw(gaddr ch, ap_ctl *a, int part)
     case 2: bevel_draw(ch, a); break;
     case 3: draw_track(ch, 2); break;
     case 4:
-        erase(r);
+        erase_in(ch, r);
         if (a->behavior & AP_DRAWS_TITLE) { /* the triangle, its title after it */
             int top = r.top + (r.bottom - r.top - 12) / 2;
             qrect tri = { (int16_t)top, r.left, (int16_t)(top + 12), (int16_t)(r.left + 12) };
@@ -1932,14 +2042,14 @@ static void draw(gaddr ch, ap_ctl *a, int part)
         break;
     }
     case 8: tabs_draw(ch, a); break;
-    case 9: erase(r); ap_separator(r, draw_state(ch, 0)); break;
+    case 9: erase_in(ch, r); ap_separator(r, draw_state(ch, 0)); break;
     case 10: group_draw(ch); break;
     case 11: well_draw(ch, a); break;
     case 12: {
         static const int dirs[4] = { 2, 0, 3, 1 }; /* east, west, north, south */
         uint16_t c[3];
         ap_brush_rgb(chilite(ch) == 255 ? 22 : 20, c);
-        erase(r);
+        erase_in(ch, r);
         ap_arrow(r, dirs[var_of(ch) & 3], (var_of(ch) & 4) ? 9 : 17, c);
         break;
     }
@@ -2356,6 +2466,12 @@ static void init(gaddr ch, ap_ctl *a)
     case 20: icon_init(ch, a); break;
     case 22: list_init(ch, a); break;
     case 27: st_init(ch, a); break;
+    case 3: /* kControlSliderHasTickMarks: the initial value is how many */
+        if ((var_of(ch) & 2) && !(var_of(ch) & 8) && cvalue(ch) > 1) {
+            a->ticks = cvalue(ch);
+            set_value_raw(ch, cmin(ch));
+        }
+        break;
     case 23:
         if ((var_of(ch) & 7) >= 6) { /* a push button with an icon: its cicn from the maximum */
             a->icon_id = cmax(ch);
@@ -2382,6 +2498,49 @@ static void dispose(gaddr ch, ap_ctl *a)
     free(a->tabs);
 }
 
+/* A list box's list and an edit text's TERec are made for the control's
+ * rectangle; a dialog moves and sizes its controls to their items' after
+ * making them from their 'CNTL's (Appearance Sample's Mega Dialog: its
+ * list box and password field were drawn where their 'CNTL's put them),
+ * and programs move them, without a message to the CDEF.  They follow
+ * the rectangle at the next message. */
+static void follow_bounds(gaddr ch, ap_ctl *a)
+{
+    qrect r = crect(ch);
+    if (r.top == a->made_for.top && r.left == a->made_for.left && r.bottom == a->made_for.bottom &&
+        r.right == a->made_for.right)
+        return;
+    if (a->id == 22 && a->list && rd32(a->list)) {
+        gaddr l = rd32(a->list);
+        qrect view = r;
+        if (rd32(l + ListRec_vScroll_off))
+            view.right = (int16_t)(view.right - 15);
+        if (rd32(l + ListRec_hScroll_off))
+            view.bottom = (int16_t)(view.bottom - 15);
+        /* kControlListBoxAutoSizeProc: whole rows, the control shortened
+         * to them. */
+        int cell = (int16_t)rd16(l + ListRec_cellSize_off);
+        if ((var_of(ch) & 1) && cell > 0 && view.bottom - view.top >= cell) {
+            int cut = (view.bottom - view.top) % cell;
+            view.bottom = (int16_t)(view.bottom - cut);
+            r.bottom = (int16_t)(r.bottom - cut);
+            qrect_put(cp(ch) + ControlRecord_contrlRect_off, r);
+        }
+        qrect old = qrect_get(l + ListRec_rView_off);
+        qrect_put(l + ListRec_rView_off, (qrect){ view.top, view.left, (int16_t)(view.top + old.bottom - old.top),
+                                                  (int16_t)(view.left + old.right - old.left) });
+        tb_LSize((int16_t)(view.right - view.left), (int16_t)(view.bottom - view.top), a->list);
+    } else if (a->id == 17 && a->te && rd32(a->te) && !a->dialog) {
+        gaddr t = rd32(a->te);
+        qrect_put(t + TERec_destRect_off, r);
+        qrect_put(t + TERec_viewRect_off, r);
+        tb_TECalText(a->te);
+    } else {
+        return;
+    }
+    a->made_for = r;
+}
+
 static void entry(cpu68k *c, int id)
 {
     uint32_t ret = cpu_pop32(c);
@@ -2402,6 +2561,8 @@ static void entry(cpu68k *c, int id)
         cpu_push32(c, ret);
         return;
     }
+    if (msg != initCntl && msg != dispCntl)
+        follow_bounds(ch, a);
     switch (msg) {
     case drawCntl: draw(ch, a, param & 0xFF); break;
     case testCntl: result = test(ch, a, (uint32_t)param); break;
@@ -2673,6 +2834,15 @@ static struct {
     gaddr dialog, ch;
     int item;
 } stand_ins[256];
+
+/* Whether an item's stand-in (if it has one) has been deactivated. */
+bool ap_item_inactive(gaddr d, int item)
+{
+    for (int i = 0; i < 256; i++)
+        if (stand_ins[i].dialog == d && stand_ins[i].item == item && stand_ins[i].ch && rd32(stand_ins[i].ch))
+            return chilite(stand_ins[i].ch) == 255;
+    return false;
+}
 
 gaddr ap_item_control(gaddr d, int item, int kind)
 {

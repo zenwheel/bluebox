@@ -466,6 +466,7 @@ void ap_font_info(int *ascent, int *descent);
 void ap_arrow(qrect r, int dir, int size, const uint16_t rgb[3]);
 void ap_placard(qrect r, uint32_t state);
 void ap_well_frame(qrect r, uint32_t state);
+void ap_list_frame(qrect r, uint32_t state);
 void ap_focus_rect(qrect r, bool focus);
 void ap_group(qrect r, uint32_t state, bool primary);
 void ap_separator(qrect r, uint32_t state);
@@ -494,6 +495,7 @@ typedef struct {
     gaddr parent, supervisor;
     uint32_t seq;
     bool is_root, hidden_with_parent, inactive_with_parent, has_font;
+    bool is_default, is_cancel; /* a CDEF 0 push button's, in the Appearance look */
     uint8_t saved_hilite;
     int8_t new_msgs; /* takes Control Manager 2.0's messages: -1 not asked yet */
     uint8_t font[24];
@@ -520,6 +522,7 @@ void controls_reset(void);
 void controls_forget_window(gaddr w);
 gaddr ctl_new(gaddr wst, gaddr r, gaddr title, bool vis, int16_t value, int16_t min, int16_t max, int16_t var,
               int16_t cdef_id, gaddr defh, int32_t rc, int32_t init_param);
+void ctl_defer_draw(bool on);
 /* Called with the part a click on a control ended in (TrackControl,
  * HandleControlClick): for the Carbon Event Manager's kEventControlHit
  * and the control's command (carbon_ctl_command).  NULL until set. */
@@ -561,6 +564,7 @@ void ap_after_track(gaddr ch, int16_t part);
  * window's control list; a user item's draws and takes clicks through its
  * procedures when it has them (ap_item_click: -1 when it has none). */
 gaddr ap_item_control(gaddr dialog, int item, int kind);
+bool ap_item_inactive(gaddr d, int item);
 bool ap_stand_in_item(gaddr ch, gaddr *dialog, int *item); /* the item a stand-in is for */
 void ap_forget_dialog(gaddr dialog);
 void ap_items_shifted(gaddr dialog, int from, int delta);

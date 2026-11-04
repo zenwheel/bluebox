@@ -317,14 +317,15 @@ extension BlueBox {
             #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF && rd16(c + 4) == 0)
             tb_GetCPixel(21, 22, c)
             #expect(rd16(c) == 0xFFFF && rd16(c + 2) == 0 && rd16(c + 4) == 0)
-            // A frame: its ring outside the rectangle, its fill inside.
+            // A frame: its ring outside the rectangle; its fill is not drawn
+            // inside (a field's, left as it is, as Mac OS 9 leaves edit text).
             #expect(thme_frame(520, qrect(top: 120, left: 130, bottom: 140, right: 170)))
             tb_GetCPixel(129, 119, c)
             #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF && rd16(c + 4) == 0)
             tb_GetCPixel(150, 140, c)
             #expect(rd16(c) == 0 && rd16(c + 2) == 0xFFFF && rd16(c + 4) == 0)
             tb_GetCPixel(150, 130, c)
-            #expect(rd16(c) == 0x8080 && rd16(c + 2) == 0x8080)
+            #expect(rd16(c) == 0xFFFF && rd16(c + 2) == 0xFFFF)
             tb_GetCPixel(150, 145, c)
             #expect(rd16(c) == 0xFFFF && rd16(c + 2) == 0xFFFF) // untouched
             // A check box, and right to left (TESysJust -1) its mirrored layout.
