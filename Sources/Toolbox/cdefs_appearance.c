@@ -20,6 +20,7 @@
 
 #include "qd_internal.h"
 #include "tb_internal.h"
+#include "thme.h"
 
 enum { drawCntl = 0, testCntl, calcCRgns, initCntl, dispCntl, posCntl, thumbCntl, dragCntl, autoTrack };
 enum {
@@ -389,7 +390,10 @@ void ap_draw_standard(gaddr ch, int kind)
     uint16_t c[3];
     if (g_appearance != MACHINE_APPEARANCE_BW) { /* the host's controls, or a Kaleidoscope theme's */
         bool pressed = state == 2, disabled = state == 0;
-        if (kind == 0 && (native_draw_button(r, title, n, pressed, disabled) || theme_draw_button(r, title, n, pressed, disabled)))
+        ctl_info *dci = ctl_find(ch);
+        bool ring = ((a && a->is_default) || (dci && dci->is_default)) && thme_in_use();
+        if (kind == 0 && (native_draw_button(r, title, n, pressed, disabled) ||
+                          (!ring && theme_draw_button(r, title, n, pressed, disabled))))
             return;
         int top = r.top + (r.bottom - r.top - 12) / 2;
         qrect box = { (int16_t)top, (int16_t)(r.left + 2), (int16_t)(top + 12), (int16_t)(r.left + 14) };
@@ -404,7 +408,8 @@ void ap_draw_standard(gaddr ch, int kind)
         }
     }
     if (kind == 0) {
-        ap_push_button(r, state, a && a->is_default);
+        ctl_info *ci = ctl_find(ch);
+        ap_push_button(r, state, (a && a->is_default) || (ci && ci->is_default));
         text_rgb(ch, state == 0 ? 13 : state == 2 ? 14 : 12, c);
         qrect tr = inset(r, 3);
         if (a && (a->icon_id || a->content)) { /* a colour icon at the left (6) or right (7) */

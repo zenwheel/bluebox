@@ -371,8 +371,12 @@ static void cdef0_draw(gaddr ch)
     int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
     tb_DisposePtr(fi);
     int base = r.top + (r.bottom - r.top + asc - desc) / 2;
+    /* A theme file's default button has its ring: drawn as the
+     * Appearance Manager's (below), not as a plain theme button. */
+    ctl_info *dci = ctl_find(ch);
+    bool ring = dci && dci->is_default && thme_in_use();
     if (kind == 0 && (native_draw_button(r, title, n, hil == inButton, hil == 255) ||
-                      theme_draw_button(r, title, n, hil == inButton, hil == 255))) {
+                      (!ring && theme_draw_button(r, title, n, hil == inButton, hil == 255)))) {
         ctl_font_end(&fs);
         return;
     }
@@ -2001,8 +2005,42 @@ int16_t tb_GetControlFeatures(gaddr ch, gaddr out)
 
 static int16_t data_access(gaddr ch, int16_t part, int32_t tag, int32_t size, gaddr data, gaddr out_size, bool set)
 {
-    if (!ctl_find(ch))
+    ctl_info *ci = ctl_find(ch);
+    if (!ci)
         return errUnknownControl;
+    /* Under the Appearance Manager CDEF 0's push buttons are its own and
+     * take kControlPushButtonDefaultTag and CancelTag (Appearance Sample's
+     * Mega Dialog makes "Make It So" its default so). */
+    if (ci->cdef == 0 && (ci->var & 3) == 0 && ctl_platinum(ch) &&
+        (tag == (int32_t)fourcc("dflt") || tag == (int32_t)fourcc("cncl"))) {
+        bool *flag = tag == (int32_t)fourcc("dflt") ? &ci->is_default : &ci->is_cancel;
+        if (!set) {
+            if (out_size)
+                wr32(out_size, 1);
+            if (data && size >= 1)
+                wr8(data, *flag);
+            return noErr;
+        }
+        if (size < 1 || !data)
+            return -30591; /* errDataSizeMismatch */
+        bool b = rd8(data) != 0;
+        if (b != *flag) {
+            *flag = b;
+            if (flag == &ci->is_default && ControlRecord_contrlVis(cp(ch))) {
+                gaddr saved = qd_port();
+                tb_SetPort(cowner(ch));
+                qrect r = crect(ch);
+                if (!b) { /* the ring's area back to the background */
+                    gaddr rr = tmp_rect((qrect){ (int16_t)(r.top - 4), (int16_t)(r.left - 4), (int16_t)(r.bottom + 4), (int16_t)(r.right + 4) });
+                    tb_EraseRect(rr);
+                    tb_DisposePtr(rr);
+                }
+                tb_Draw1Control(ch);
+                tb_SetPort(saved);
+            }
+        }
+        return noErr;
+    }
     if (!(features(ch) & kControlSupportsDataAccess))
         return errDataNotSupported;
     gaddr rec = tb_NewPtr(16, false, true);
