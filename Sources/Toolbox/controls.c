@@ -513,6 +513,13 @@ static void cdef1_draw(gaddr ch, int part)
         return;
     qrect r = crect(ch);
     bool v = sb_vertical(r);
+    /* A theme file's scroll bar: disabled (its inactive look, Gizmo's grey
+     * lattice) in an inactive window, else with nothing to scroll (Gizmo's
+     * orange) when dimmed or empty: SimpleText dims an empty window's
+     * bar, which Mac OS 9 shows as nothing to scroll. */
+    if (thme_in_use() && thme_scroll_bar(r, v, chilite(ch), chilite(ch) != 255 && cmax(ch) > cmin(ch),
+                                         WindowRecord_hilited(cowner(ch)) != 0, sb_thumb(ch)))
+        return;
     if (native_draw_scrollbar(ch, r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), cvalue(ch),
                               cmin(ch), cmax(ch)) ||
         theme_draw_scrollbar(r, v, chilite(ch), chilite(ch) != 255, chilite(ch) != 255 && cmax(ch) > cmin(ch), sb_thumb(ch)))

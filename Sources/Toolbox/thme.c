@@ -1341,16 +1341,24 @@ bool thme_scroll_bar(qrect r, bool vertical, int hilite, bool enabled, bool acti
                         : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + l0) };
     qrect q1 = vertical ? (qrect){ (int16_t)(r.bottom - l1), r.left, r.bottom, r.right }
                         : (qrect){ r.top, (int16_t)(r.right - l1), r.bottom, r.right };
-    draw_tile(image(fourcc("pxm#"), a0), img0 < n0 ? img0 : 0, q0, 1);
-    draw_tile(image(fourcc("pxm#"), a1), img1 < n1 ? img1 : 0, q1, 4);
-    qrect track = vertical ? (qrect){ q0.bottom, r.left, q1.top, r.right } : (qrect){ r.top, q0.right, r.bottom, q1.left };
+    /* Disabled or with nothing to scroll, the track runs the bar's length
+     * without arrows (Gizmo's grey lattice and orange on Mac OS 9). */
+    bool dead = !enabled || !active;
+    if (!dead) {
+        draw_tile(image(fourcc("pxm#"), a0), img0 < n0 ? img0 : 0, q0, 1);
+        draw_tile(image(fourcc("pxm#"), a1), img1 < n1 ? img1 : 0, q1, 4);
+    }
+    qrect track = dead ? r : vertical ? (qrect){ q0.bottom, r.left, q1.top, r.right } : (qrect){ r.top, q0.right, r.bottom, q1.left };
     int m[THME_MEASURES] = { 0 };
     bool live = enabled && active && thumb.bottom > thumb.top && thumb.right > thumb.left;
     if (live) {
         m[3] = vertical ? thumb.top - track.top : thumb.left - track.left;
         m[4] = vertical ? thumb.bottom - track.top : thumb.right - track.left;
     }
-    uint32_t st = (!active ? 0x02 : !enabled ? 0x01 : 0) | (live ? 0x10 : 0) | (hilite == 129 ? 0x100 : 0);
+    /* The layouts' bits are ThemeTrackEnableState's: 0x01 disabled (an
+     * inactive window's, Gizmo's grey lattice), 0x02 nothing to scroll
+     * (its orange). */
+    uint32_t st = (!active ? 0x01 : !enabled ? 0x02 : 0) | (live ? 0x10 : 0) | (hilite == 129 ? 0x100 : 0);
     draw_part_on(id, track, st, m, 0, 0);
     S = old;
     hrgn_free(&s.clip);
