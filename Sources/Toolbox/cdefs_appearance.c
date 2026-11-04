@@ -269,6 +269,21 @@ static void load_content(ap_ctl *a, int16_t type, int16_t res)
         tb_DisposePtr(h);
     } else if (type == kControlContentCIconRes) {
         a->content = tb_GetCIcon(res);
+        /* The System's stop, note and caution 'cicn's (0-2), which ours
+         * lacks: the theme's alert icons, or the icon family at the ID
+         * (the Mega Dialog's caution sign). */
+        static const char *const kinds[] = { "stop", "note", "caut" };
+        int16_t id = res;
+        if (!a->content && res >= 0 && res <= 2) {
+            if (thme_in_use())
+                thme_icon_id(fourcc(kinds[res]), &id);
+            gaddr h = tb_NewPtr(4, false, true);
+            if (tb_GetIconSuite(h, id, 0xFFFFFFFFu) == 0 && rd32(h)) {
+                a->content = rd32(h);
+                a->content_type = kControlContentIconSuiteRes;
+            }
+            tb_DisposePtr(h);
+        }
     } else if (type == kControlContentPictRes) {
         a->content = tb_GetPicture(res);
     }
@@ -599,7 +614,22 @@ static void bevel_draw(gaddr ch, ap_ctl *a)
     title_of(ch, title, &n);
     int gw, gh;
     content_size(a, &gw, &gh);
-    fit_content(a, in, &gw, &gh);
+    /* The graphic fits the room the title leaves it (an icon above or
+     * below a title in a 40-pixel button drops to its small size, as in
+     * the Mega Dialog's Grab Bag); a picture keeps its size, cut to the
+     * button. */
+    qrect room = in;
+    if (gw && n) {
+        int asc, desc;
+        ap_font_info(&asc, &desc);
+        if (a->text_place == 3)
+            room.bottom = (int16_t)(in.bottom - asc - desc - 2);
+        else if (a->text_place == 4)
+            room.top = (int16_t)(in.top + asc + desc + 2);
+    }
+    bool pict = a->content_type == kControlContentPictRes || a->content_type == kControlContentPictHandle;
+    if (!pict)
+        fit_content(a, room, &gw, &gh);
     qrect graphic = { 0, 0, 0, 0 }, text = in;
     if (gw && n) {
         int asc, desc;
@@ -625,8 +655,20 @@ static void bevel_draw(gaddr ch, ap_ctl *a)
     } else if (gw) {
         graphic = place(in, gw, gh, a->graphic_align, a->graphic_h, a->graphic_v);
     }
-    if (gw)
+    if (gw && pict) {
+        gaddr saved = tb_NewRgn(), cut = tb_NewRgn(), rp = tmp_rect(in);
+        tb_GetClip(saved);
+        tb_RectRgn(cut, rp);
+        tb_SectRgn(cut, saved, cut);
+        tb_SetClip(cut);
         draw_content(a, graphic, state == 0);
+        tb_SetClip(saved);
+        tb_DisposePtr(rp);
+        tb_DisposeRgn(cut);
+        tb_DisposeRgn(saved);
+    } else if (gw) {
+        draw_content(a, graphic, state == 0);
+    }
     if (n) {
         uint16_t c[3];
         text_rgb(ch, state == 0 ? 16 : state == 2 ? 17 : 15, c);
@@ -638,7 +680,7 @@ static void bevel_draw(gaddr ch, ap_ctl *a)
         uint16_t c[3];
         ap_text_rgb(state == 0 ? 16 : 15, c);
         qrect g = (var & 4) ? (qrect){ (int16_t)((r.top + r.bottom) / 2 - 4), (int16_t)(r.right - 10), (int16_t)((r.top + r.bottom) / 2 + 4), (int16_t)(r.right - 3) }
-                            : a->center_glyph ? (qrect){ (int16_t)(r.bottom - 8), (int16_t)((r.left + r.right) / 2 - 4), (int16_t)(r.bottom - 3), (int16_t)((r.left + r.right) / 2 + 4) }
+                            : a->center_glyph ? (qrect){ (int16_t)((r.top + r.bottom) / 2 - 3), (int16_t)(r.right - 11), (int16_t)((r.top + r.bottom) / 2 + 3), (int16_t)(r.right - 3) } /* centred down the right edge */
                                               : (qrect){ (int16_t)(r.bottom - 9), (int16_t)(r.right - 11), (int16_t)(r.bottom - 3), (int16_t)(r.right - 3) };
         ap_arrow(g, (var & 4) ? 2 : 1, 7, c);
     }
