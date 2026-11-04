@@ -38,10 +38,11 @@
  *    int8 last ring (0 is the rectangle's outermost row of pixels, negative
  *    ones outside it), int16 fill for the inside (0 none), u16 count, then
  *    entries {u8 flags, int8 ring, int16 fill,
- *    side masks}: a byte (version 2) or a word (version 3) per side, top,
- *    left, bottom, right, each going round counter-clockwise: the top bit
- *    is the corner the side starts at, then the first pixels, the middle,
- *    and the last pixels.  The flag bytes (the header's and each
+ *    side masks}: a byte (version 2) or a word (version 3) per side, left,
+ *    top, right, bottom, going round clockwise from the bottom left
+ *    corner: the top bit is the corner the side starts at, then the first
+ *    pixels, the middle, and the last pixels (the separators, the only
+ *    frames that are not square, show the order).  The flag bytes (the header's and each
  *    entry's) are 0x00, 0x40, 0x80 or 0xC0; in the 219 sample themes the
  *    entries' are set in some thirty third-party themes (Moby, Sosumi,
  *    LUCENT...), none of Apple's, often on a bevel's highlight or shadow
@@ -555,9 +556,14 @@ static void draw_frame(int16_t id, qrect r)
             uint32_t m = ver >= 3 ? be16(e + 4 + side * 2) : e[4 + side];
             if (!m)
                 continue;
-            /* Counter-clockwise: top from the right, left from the top,
-             * bottom from the left, right from the bottom. */
-            int len_side = (side & 1) ? h - 2 : w - 2;
+            /* Clockwise from the bottom left corner: left going up, top
+             * going right, right going down, bottom going left.  (The
+             * transpose of reading them top, left, bottom, right counter-
+             * clockwise, which draws every square frame the same; the
+             * separators tell them apart: Gizmo's horizontal one is a
+             * full second side in both rings, a two-pixel line along the
+             * top, as Mac OS 9 draws it.) */
+            int len_side = (side & 1) ? w - 2 : h - 2;
             for (int k = -1; k < len_side; k++) {
                 int bit;
                 if (k < 0)
@@ -572,10 +578,10 @@ static void draw_frame(int16_t id, qrect r)
                     continue;
                 int x, y;
                 switch (side) {
-                case 0: x = q.right - 1 - (k + 1); y = q.top; break;
-                case 1: x = q.left; y = q.top + (k + 1); break;
-                case 2: x = q.left + (k + 1); y = q.bottom - 1; break;
-                default: x = q.right - 1; y = q.bottom - 1 - (k + 1); break;
+                case 0: x = q.left; y = q.bottom - 1 - (k + 1); break;
+                case 1: x = q.left + (k + 1); y = q.top; break;
+                case 2: x = q.right - 1; y = q.top + (k + 1); break;
+                default: x = q.right - 1 - (k + 1); y = q.bottom - 1; break;
                 }
                 const uint8_t *c = f.rgb;
                 if (f.pat)
