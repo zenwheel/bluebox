@@ -680,6 +680,50 @@ gaddr tb_NewColorDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t proci
     return new_dialog(dst, r, tit, vis, procid, behind, gaflag, rc, items, 0, true);
 }
 
+/* System 7's automatic positions (the word after a DLOG's title, an
+ * ALRT's last): 0x0A in the low byte, then the method (1 centred, 2 where
+ * alerts go, 3 staggered) and where (1 the main screen, 3 the parent
+ * window's screen, 5 over the parent window, the front one).  Centred
+ * across; down, half the room above it centred, a fifth where alerts go
+ * (Mac OS 9 puts SimpleText's save changes dialog and Appearance Sample's
+ * Standard Alert dialog so).  The window's whole frame is placed, below
+ * the menu bar. */
+static void auto_position(gaddr d, uint16_t pos)
+{
+    int method = (pos >> 11) & 3, where = pos >> 13;
+    if ((pos & 0xFF) != 0x0A || method == 0 || method == 3 || !d)
+        return;
+    qrect area = { (int16_t)rd16(LM_MBarHeight), 0, (int16_t)g_screen_height, (int16_t)g_screen_width };
+    if (where == 5) {
+        for (gaddr w = rd32(LM_WindowList); w; w = WindowRecord_nextWindow(w))
+            if (w != d && WindowRecord_visible(w)) {
+                hrgn g;
+                hrgn_init(&g);
+                rgn_read(WindowRecord_strucRgn(w), &g);
+                area = hrgn_bbox(&g);
+                hrgn_free(&g);
+                break;
+            }
+    }
+    hrgn g;
+    hrgn_init(&g);
+    rgn_read(WindowRecord_strucRgn(d), &g);
+    qrect s = hrgn_bbox(&g);
+    hrgn_free(&g);
+    if (s.right <= s.left || s.bottom <= s.top)
+        return;
+    int w = s.right - s.left, h = s.bottom - s.top;
+    int left = area.left + (area.right - area.left - w) / 2;
+    int room = area.bottom - area.top - h;
+    int top = area.top + (room > 0 ? (method == 1 ? room / 2 : room / 5) : 0);
+    /* the content's place: the frame's offset from it kept */
+    hrgn_init(&g);
+    rgn_read(WindowRecord_contRgn(d), &g);
+    qrect c = hrgn_bbox(&g);
+    hrgn_free(&g);
+    tb_MoveWindow(d, (int16_t)(left + (c.left - s.left)), (int16_t)(top + (c.top - s.top)), false);
+}
+
 /* DLOG: bounds(8), procID(2), visible(1), pad, goAway(1), pad, refCon(4), itemsID(2), title. */
 gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override, int32_t refcon_override,
                            bool use_refcon)
@@ -713,6 +757,9 @@ gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override
         apply_dftb(d, id, 0);
     if (d && color)
         apply_ictb(d, ditl_id);
+    uint32_t tl = (uint32_t)rd8(rd32(dlog) + 20), at = (21 + tl + 1) & ~1u;
+    if (d && (uint32_t)tb_GetHandleSize(dlog) >= at + 2)
+        auto_position(d, rd16(rd32(dlog) + at));
     if (d && vis)
         tb_ShowWindow(d);
     return d;
