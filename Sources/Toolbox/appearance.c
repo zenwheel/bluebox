@@ -1496,13 +1496,15 @@ static qrect track_area(const track_info *t)
             r.bottom = (int16_t)(r.bottom - a + 1);
         }
     } else if (t->kind == kThemeSlider) {
-        /* The groove the thumb rides along: thumb-wide margins at the ends. */
+        /* Where the thumb's middle goes: the thumb (15 long) runs from 4 in
+         * at one end to 4 in at the other, as Mac OS 9 has it (its tick
+         * marks are at these ends). */
         if (horizontal(t)) {
-            r.left = (int16_t)(r.left + 7);
-            r.right = (int16_t)(r.right - 7);
+            r.left = (int16_t)(r.left + 11);
+            r.right = (int16_t)(r.right - 12);
         } else {
-            r.top = (int16_t)(r.top + 7);
-            r.bottom = (int16_t)(r.bottom - 7);
+            r.top = (int16_t)(r.top + 11);
+            r.bottom = (int16_t)(r.bottom - 12);
         }
     }
     return r;
@@ -1838,11 +1840,16 @@ int32_t tb_DrawThemeTrackTickMarks(gaddr info, uint32_t count, gaddr erase_proc,
     uint16_t c[3];
     grey(c, t.enable == kThemeTrackActive ? 0 : 0x8888);
     for (uint32_t i = 0; i < count; i++) {
+        bool active = t.enable == kThemeTrackActive;
         if (h) {
             int x = a.left + (int)((int64_t)i * (a.right - a.left) / (count - 1));
+            if (themed() && thme_tick_mark(true, active, x, t.bounds.top + 17))
+                continue;
             ap_fill((qrect){ (int16_t)(t.bounds.top + 18), (int16_t)x, (int16_t)(t.bounds.top + 22), (int16_t)(x + 1) }, c);
         } else {
             int y = a.top + (int)((int64_t)i * (a.bottom - a.top) / (count - 1));
+            if (themed() && thme_tick_mark(false, active, t.bounds.left + 17, y))
+                continue;
             ap_fill((qrect){ (int16_t)y, (int16_t)(t.bounds.left + 18), (int16_t)(y + 1), (int16_t)(t.bounds.left + 22) }, c);
         }
     }

@@ -87,6 +87,7 @@ typedef struct {
     int enable, press, thumb_dir, phase;
 } thme_track_info;
 bool thme_track(const thme_track_info *t);
+bool thme_tick_mark(bool horizontal, bool active, int x, int y);
 
 /* Menus: the bar, a title's background, a menu's (0 pull-down, 1 pop-up, 2
  * hierarchical), an item's, a divider. */

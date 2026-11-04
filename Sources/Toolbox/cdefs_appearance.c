@@ -473,7 +473,10 @@ static gaddr track_info(gaddr ch, int kind, int press)
     int attrs = (r.right - r.left >= r.bottom - r.top) ? 1 : 0;
     if (kind == 2) {
         int v = var_of(ch);
-        if (v & 4)
+        /* A vertical slider's minimum is at the bottom (Mac OS 9 shows the
+         * Mega Dialog's at their minimum there); kControlSliderReverseDirection
+         * only turns the thumb's point. */
+        if (!(attrs & 1))
             attrs |= 2;
         attrs |= 4;
         wr8(info + 30, (v & 8) ? 0 : (v & 4) ? 1 : 2); /* thumb direction */
@@ -532,7 +535,7 @@ static int16_t slider_drag(gaddr ch, uint32_t pt, gaddr action)
         int32_t at = p0 + (h ? pt_h(m) : pt_v(m)) - start;
         tb_GetThemeTrackLiveValue(info, at, val);
         int16_t v = (int16_t)(int32_t)rd32(val);
-        if (var_of(ch) & 4)
+        if (!h) /* the minimum at the bottom */
             v = (int16_t)(cmax(ch) - (v - cmin(ch)));
         if (v != cvalue(ch)) {
             tb_SetControlValue(ch, v);
@@ -2393,6 +2396,12 @@ static void init(gaddr ch, ap_ctl *a)
     case 20: icon_init(ch, a); break;
     case 22: list_init(ch, a); break;
     case 27: st_init(ch, a); break;
+    case 3: /* kControlSliderHasTickMarks: the initial value is how many */
+        if ((var_of(ch) & 2) && !(var_of(ch) & 8) && cvalue(ch) > 1) {
+            a->ticks = cvalue(ch);
+            set_value_raw(ch, cmin(ch));
+        }
+        break;
     case 23:
         if ((var_of(ch) & 7) >= 6) { /* a push button with an icon: its cicn from the maximum */
             a->icon_id = cmax(ch);

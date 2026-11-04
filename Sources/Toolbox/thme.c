@@ -1463,7 +1463,8 @@ bool thme_track(const thme_track_info *t)
                            : (t->thumb_dir == 1 ? 427 : t->thumb_dir == 2 ? 426 : 425);
         if (!thme_has_part(id))
             id = t->horizontal ? 420 : 425;
-        m[3] = t->horizontal ? t->thumb.left - b.left : t->thumb.top - b.top;
+        /* the thumb's offset along the layouts' track, which starts 4 in */
+        m[3] = (t->horizontal ? t->thumb.left - b.left : t->thumb.top - b.top) - 4;
         m[5] = m[3];
         st |= (t->enable == 0 && t->max > t->min ? 0x10 : 0) | (t->press & 0x08 ? 0x100 : 0);
     } else if (t->kind == 3) { /* progress */
@@ -1478,6 +1479,28 @@ bool thme_track(const thme_track_info *t)
         st |= 0x40u << (t->phase & 3);
     }
     return thme_draw_part(id, b, st, m, 0);
+}
+
+/* A slider's tick mark: the theme's image ('pxm#' 396, an upright mark,
+ * under a horizontal slider; 395, a level one, beside a vertical one;
+ * named for the marks, not the sliders), its first frame (the
+ * next one inactive), its middle at (x, y) along the slider and its top
+ * or left edge there across it. */
+bool thme_tick_mark(bool horizontal, bool active, int x, int y)
+{
+    const timg *im = T.on ? image(fourcc("pxm#"), horizontal ? 396 : 395) : NULL;
+    if (!im || im->w <= 0 || im->h <= 0)
+        return false;
+    qrect r = horizontal ? (qrect){ (int16_t)y, (int16_t)(x - im->w / 2), (int16_t)(y + im->h), (int16_t)(x - im->w / 2 + im->w) }
+                         : (qrect){ (int16_t)(y - im->h / 2), (int16_t)x, (int16_t)(y - im->h / 2 + im->h), (int16_t)(x + im->w) };
+    surface s;
+    port_surface(&s);
+    surface *old = S;
+    S = &s;
+    draw_tile(im, !active && im->n > 1 ? 1 : 0, r, 1);
+    S = old;
+    hrgn_free(&s.clip);
+    return true;
 }
 
 /* ---------------------------------------------------------------------- */
