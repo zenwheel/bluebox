@@ -182,7 +182,8 @@ static void da_host_native(cpu68k *c, uint16_t tw)
 /* A file of desk accessories and no program: the host stands in. */
 bool startup_is_da_file(void)
 {
-    if (tb_Get1Resource((int32_t)fourcc("CODE"), 0))
+    /* A program, 68k or PowerPC (StuffIt Expander carries a DRVR too). */
+    if (tb_Get1Resource((int32_t)fourcc("CODE"), 0) || tb_Get1Resource((int32_t)fourcc("cfrg"), 0))
         return false;
     return tb_Count1Resources((int32_t)fourcc("DRVR")) > 0;
 }
