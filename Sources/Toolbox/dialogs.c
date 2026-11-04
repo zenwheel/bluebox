@@ -550,8 +550,12 @@ gaddr tb_NewFeaturesDialog(gaddr dst, gaddr r, gaddr tit, int8_t vis, int16_t pr
 }
 
 /* 'dftb': version, count, then for each item 0 (none) or 1 and a
- * ControlFontStyleRec's fields with a font name after them. */
-static void apply_dftb(gaddr d, int16_t id)
+ * ControlFontStyleRec's fields with a font name after them.  Its entries
+ * are for the items from base + 1 on: a dialog's own, or those
+ * AppendDialogItemList adds from the item list with the 'dftb''s ID
+ * (Appearance Sample's Mega Dialog's Grab Bag tab has its bevel buttons'
+ * small fonts so). */
+static void apply_dftb(gaddr d, int16_t id, int base)
 {
     gaddr h = tb_GetResource((int32_t)fourcc("dftb"), id);
     if (!h || !rd32(h))
@@ -564,11 +568,13 @@ static void apply_dftb(gaddr d, int16_t id)
     int x = extra_index(d, true);
     if (x < 0 || n <= 0)
         return;
-    free(extras[x].fonts);
-    extras[x].fonts = calloc((size_t)n, 24);
-    extras[x].nfonts = n;
+    if (extras[x].nfonts < base + n) {
+        extras[x].fonts = realloc(extras[x].fonts, (size_t)(base + n) * 24);
+        extras[x].nfonts = base + n;
+    }
+    memset(extras[x].fonts + base, 0, (size_t)n * 24); /* not the items' before them */
     uint32_t o = 4;
-    for (int i = 0; i < n && o + 2 <= len; i++) {
+    for (int i = base; i < base + n && o + 2 <= len; i++) {
         int type = (int16_t)rd16(p + o);
         o += 2;
         if (type != 1)
@@ -704,7 +710,7 @@ gaddr dialog_from_resource(int16_t id, gaddr dst, gaddr behind, int vis_override
     if (d && color && rd32(dctb) && (int16_t)rd16(rd32(dctb) + 6) != -1) /* ctSize -1: the default colours */
         tb_SetWinColor(d, dctb);
     if (d)
-        apply_dftb(d, id);
+        apply_dftb(d, id, 0);
     if (d && color)
         apply_ictb(d, ditl_id);
     if (d && vis)
@@ -1692,7 +1698,9 @@ int16_t tb_AppendDialogItemList(gaddr d, int16_t id, int16_t method)
     gaddr ditl = tb_GetResource((int32_t)fourcc("DITL"), id);
     if (!ditl || !rd32(ditl))
         return resNotFound;
+    int before = item_count(d);
     tb_AppendDITL(d, ditl, method);
+    apply_dftb(d, id, before);
     return noErr;
 }
 
