@@ -532,9 +532,12 @@ static void draw_frame(int16_t id, qrect r)
     int esize = ver >= 3 ? 12 : 8, n = be16(d + 10);
     /* The inside, past the last ring, in the frame's own fill (patterns
      * pinned to its bottom: the betas' button faces are tall gradients). */
-    int last = (int8_t)d[7];
+    /* Not for a frame drawn outside its rectangle (an edit text's, a list
+     * box's): what is inside is the field's, white as Mac OS 9 leaves it
+     * (Aqua's edit text frame has a grey fill). */
+    int first = (int8_t)d[5], last = (int8_t)d[7];
     tfill in;
-    if ((int16_t)be16(d + 8) && fill_of((int16_t)be16(d + 8), &in)) {
+    if (first >= 0 && (int16_t)be16(d + 8) && fill_of((int16_t)be16(d + 8), &in)) {
         qrect q = { (int16_t)(r.top + last + 1), (int16_t)(r.left + last + 1), (int16_t)(r.bottom - last - 1),
                     (int16_t)(r.right - last - 1) };
         if (q.right > q.left && q.bottom > q.top)
