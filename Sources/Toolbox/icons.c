@@ -123,6 +123,29 @@ int16_t tb_GetIconFromSuite(gaddr iconp, gaddr suite, int32_t type)
     return paramErr_;
 }
 
+/* A member of a theme's 'icns' at an ID (most of the betas' icons are
+ * there rather than in 'ICN#', 'icl8'... resources of their own): the
+ * element's data, after its type and length. */
+static const uint8_t *theme_icns_member(int16_t id, uint32_t type, uint32_t *n)
+{
+    uint32_t len;
+    const uint8_t *d = thme_resource(fourcc("icns"), id, &len);
+    if (!d || len < 8)
+        return NULL;
+    for (uint32_t o = 8; o + 8 <= len;) {
+        uint32_t t = (uint32_t)d[o] << 24 | (uint32_t)d[o + 1] << 16 | (uint32_t)d[o + 2] << 8 | d[o + 3];
+        uint32_t l = (uint32_t)d[o + 4] << 24 | (uint32_t)d[o + 5] << 16 | (uint32_t)d[o + 6] << 8 | d[o + 7];
+        if (l < 8 || o + l > len)
+            break;
+        if (t == type) {
+            *n = l - 8;
+            return d + o + 8;
+        }
+        o += l;
+    }
+    return NULL;
+}
+
 int16_t tb_GetIconSuite(gaddr suitep, int16_t res_id, uint32_t selector)
 {
     gaddr tmp = tb_NewPtr(4, false, true);
@@ -138,6 +161,8 @@ int16_t tb_GetIconSuite(gaddr suitep, int16_t res_id, uint32_t selector)
             continue;
         uint32_t n;
         const uint8_t *d = themed ? thme_resource(fourcc(members[i]), res_id, &n) : NULL;
+        if (themed && !d)
+            d = theme_icns_member(res_id, fourcc(members[i]), &n);
         if (d) {
             gaddr h = tb_NewHandle(n, false, false);
             if (h) {
