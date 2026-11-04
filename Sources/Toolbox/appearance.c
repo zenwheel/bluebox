@@ -964,9 +964,10 @@ void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n)
     dir &= 3;
     int along = dir < 2 ? r.right - r.left : r.bottom - r.top, depth = dir < 2 ? r.bottom - r.top : r.right - r.left;
     int d = front ? depth : depth - 3; /* the ones behind stop short of the pane */
-    /* The title's place: inside the tab's frame, away from the pane. */
-    qrect tr = tab_map(r, dir, 4, 2, along - 4, d);
-    if (themed() && thme_tab(r, style, false, dir)) {
+    /* The title's place: inside the tab's frame, away from the pane; the
+     * front tab's on the same line as the others'. */
+    qrect tr = tab_map(r, dir, 4, 2, along - 4, depth - 3);
+    if (themed() && thme_tab(r, style, depth < 22, dir)) { /* small tabs (19 deep) have their own layouts */
         if (n > 0) {
             uint16_t tc[3];
             int color = front ? (inactive ? 42 : 39) : inactive ? 43 : style == 1 ? 41 : 40;

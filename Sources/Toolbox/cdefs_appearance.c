@@ -756,10 +756,14 @@ static int32_t bevel_data(gaddr ch, ap_ctl *a, const access *x, bool set)
 static int tab_height(gaddr ch) { return (var_of(ch) & 1) ? 19 : 24; }
 static int tab_dir(gaddr ch) { return (var_of(ch) >> 1) & 3; }
 
+/* A tab is its title and 12 either side, small or large (where the
+ * themes' tab layouts put the title), the first 5 in from the control's
+ * edge, each overlapping the one before by a pixel: Mac OS 9 lays out
+ * Appearance Sample's Mega Dialog's tabs so under every theme. */
 static int tab_width(gaddr ch, ap_ctl *a, int k)
 {
     int n = a->tabs[k - 1].name[0];
-    int w = qd_text_width(qd_port(), a->tabs[k - 1].name + 1, n) + ((var_of(ch) & 1) ? 16 : 24);
+    int w = qd_text_width(qd_port(), a->tabs[k - 1].name + 1, n) + 24;
     return w < 40 ? 40 : w;
 }
 
@@ -774,7 +778,7 @@ static qrect tab_rect(gaddr ch, ap_ctl *a, int i)
 {
     qrect r = crect(ch);
     int dir = tab_dir(ch), th = tab_height(ch), depth = tab_depth(ch, a);
-    int p = (dir < 2 ? r.left : r.top) + 8;
+    int p = (dir < 2 ? r.left : r.top) + 5;
     for (int k = 1; k <= a->ntabs; k++) {
         int len = tab_width(ch, a, k);
         if (k == i) {
