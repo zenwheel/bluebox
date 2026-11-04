@@ -1548,9 +1548,12 @@ static void list_draw(gaddr ch, ap_ctl *a)
         return;
     qrect r = crect(ch);
     ap_list_frame(inset(r, -1), draw_state(ch, 0));
-    if (a->list) {
+    if (a->list) { /* white inside, on any dialog background (Hi-Tech's dark grey) */
+        bk_saved bk;
+        white_bk(&bk);
         tb_LActivate(chilite(ch) != 255, a->list);
         tb_LUpdate(GrafPort_visRgn(qd_port()), a->list);
+        restore_bk(&bk);
     }
     if (a->focused)
         ap_focus_rect(inset(r, -3), true);
@@ -1663,8 +1666,11 @@ static void clock_draw(gaddr ch, ap_ctl *a)
     }
     ctl_font_saved fs;
     ctl_font_begin(ch, &fs);
-    uint16_t c[3];
-    text_rgb(ch, chilite(ch) == 255 ? 2 : 1, c);
+    /* black in its white field whatever the dialog's text colour is
+     * (Hi-Tech's white), grey when inactive */
+    uint16_t c[3] = { 0, 0, 0 };
+    if (chilite(ch) == 255)
+        c[0] = c[1] = c[2] = 0x7777;
     ap_text_in((qrect){ field.top, (int16_t)(field.left + 2), field.bottom, field.right }, buf, n, false, c);
     ctl_font_end(&fs);
     tb_DisposePtr(s);

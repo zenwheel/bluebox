@@ -955,10 +955,14 @@ static void draw_item(gaddr d, int n)
          * does), in the theme's inactive text colour. */
         uint16_t c[3];
         bool dim = ap_in_color() && ap_item_inactive(d, n) && ap_text_rgb(2, c);
-        if (dim)
+        /* On a theme's dialog background, in the theme's dialog text colour
+         * (Hi-Tech's is white on its dark grey). */
+        bool tinted = !dim && g_appearance == MACHINE_APPEARANCE_THEME && ap_in_color() &&
+                      (dialog_flags(d) & kDialogFlagsUseThemeBackground) && thme_text_rgb(1, c);
+        if (dim || tinted)
             qd_set_fg_override(c);
         draw_text_item(h, r, true);
-        if (dim)
+        if (dim || tinted)
             qd_set_fg_override(NULL);
     } else if (type == editText) {
         qrect f = { (int16_t)(r.top - 3), (int16_t)(r.left - 3), (int16_t)(r.bottom + 3), (int16_t)(r.right + 3) };
