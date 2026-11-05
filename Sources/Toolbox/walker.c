@@ -163,6 +163,20 @@ static bool declines(const char *text)
     return strcasestr(text, "cancel") || strcasestr(text, "decline") || strcasestr(text, "disagree");
 }
 
+/* Whether dialog d is a licence (a button of its own Disagrees or
+ * Declines): its Escape and Command-period are that button, and its
+ * Return may do nothing (Apple's licence, Disk Copy's), so the walk at
+ * the start clicks its other buttons instead. */
+static bool licence(gaddr d)
+{
+    char text[64];
+    int x, y, b;
+    for (int i = 1; i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++)
+        if (b && (strcasestr(text, "decline") || strcasestr(text, "disagree")))
+            return true;
+    return false;
+}
+
 /* Whether window w has a button of its own that quits (dimmed or not):
  * its Cancel then only cancels (HDBackup's, while it asks for a disk with
  * its Quit dimmed), and is pressed at the start as any other. */
@@ -1461,6 +1475,8 @@ void walker_idle(uint64_t icount)
         int step = *tries < 5 ? (begun() ? opened : starting)[*tries] : 5;
         if (step < 5)
             ++*tries;
+        if ((step == 0 || step == 1) && !begun() && licence(d))
+            return;
         switch (step) {
         case 0: key(0x1B, 0x35, 0); return;             /* Escape */
         case 1: key('.', 0x2F, 0x0100); return;         /* Command-period */
