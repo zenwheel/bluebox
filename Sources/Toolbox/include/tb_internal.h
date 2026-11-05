@@ -429,6 +429,15 @@ bool theme_draw_grow(qrect c, bool active, bool small);
 bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
 bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
+/* A Kaleidoscope 1.x scheme's menus (false: draw the classic ones): the
+ * bar, a title's background, a menu's, an item's, a divider, and the text
+ * colours (0 title, 1 selected title, 2 item, 3 selected item). */
+bool theme_menu_bar(qrect r);
+bool theme_menu_title(qrect r, bool selected);
+bool theme_menu_background(qrect r);
+bool theme_menu_item(qrect r, bool selected);
+bool theme_menu_divider(qrect r);
+bool theme_menu_text(int what, bool enabled, uint16_t out[3]);
 /* Native controls (native_controls.c), drawn by the host. */
 bool native_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool native_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);

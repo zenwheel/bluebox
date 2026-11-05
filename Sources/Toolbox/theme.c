@@ -1092,6 +1092,193 @@ bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool
     return true;
 }
 
+/* ---------------------------------------------------------------------- */
+/* Kaleidoscope 1.x menus */
+
+/* A Kaleidoscope 1.x scheme is in use and the port shows colour (in black
+ * and white the classic drawing stands). */
+static bool k1_colour(void) { return theme_active() && loaded && k1 && ap_in_color(); }
+
+/* A colour of a map icon, whether its mask shows the pixel or not (the
+ * menu bar's mask leaves out the very pixels that hold its colours). */
+static bool k1_px(const image *im, int x, int y, uint16_t out[3])
+{
+    if (!im || x < 0 || y < 0 || x >= im->w || y >= im->h)
+        return false;
+    const uint8_t *p = im->rgba + ((size_t)y * (size_t)im->w + (size_t)x) * 4;
+    for (int i = 0; i < 3; i++)
+        out[i] = (uint16_t)(p[i] * 0x101);
+    return true;
+}
+
+static void k1_fill_px(const image *im, int x, int y, qrect r)
+{
+    uint16_t c[3];
+    if (r.right > r.left && r.bottom > r.top && k1_px(im, x, y, c))
+        ap_fill(r, c);
+}
+
+/* The menu bar (-12288, 20 by 8): its fill, the text (row 2), the upper
+ * and lower divider lines of the pulled-down menus (rows 4 and 5), the
+ * highlight along its top and the shadow along its bottom; column 8's top
+ * and bottom pixels colour its left and right ends.  The pixels its mask
+ * shows at the sides are the bar's ends: its top seven rows the bar's,
+ * the last its bottom row, the seventh repeated between. */
+static const image *k1_bar(void)
+{
+    const image *m = img(-12288);
+    return m && m->w >= 20 && m->h >= 8 ? m : NULL;
+}
+
+/* A menu (-12272) or highlight map (8 by 4): its left column the light
+ * edge, its right the dark one, the fill between them and the text in its
+ * middle.  Without -12272 a menu is the menu bar's colours, as in
+ * Kaleidoscope before 1.7. */
+static const image *k1_menu_map(void)
+{
+    const image *m = img(-12272);
+    return m && m->w >= 8 && m->h >= 4 ? m : NULL;
+}
+
+/* The selected item's and title's map: the variation in the accent
+ * colour, among those the scheme has (-12287 lavender, the one every
+ * scheme has, -12286 to -12280 gold to silver, and -12256 to -12247 for
+ * Mac OS 8.5's other accents), the one whose light edge is the nearest. */
+static const image *k1_hilite_map(void)
+{
+    const image *best = NULL;
+    uint16_t acc[3];
+    if (!ap_brush_rgb(-5, acc))
+        acc[0] = acc[1] = acc[2] = 0;
+    long bestd = 0;
+    for (int id = -12287; id <= -12247; id++) {
+        if (id > -12280 && id < -12256)
+            continue;
+        const image *m = img((int16_t)id);
+        uint16_t c[3];
+        if (!m || m->w < 8 || m->h < 4 || !k1_px(m, 0, 0, c))
+            continue;
+        long d = 0;
+        for (int i = 0; i < 3; i++)
+            d += ((long)c[i] - acc[i]) / 256 * (((long)c[i] - acc[i]) / 256);
+        if (!best || d < bestd) {
+            best = m;
+            bestd = d;
+        }
+    }
+    return best;
+}
+
+static void mix(const uint16_t a[3], const uint16_t b[3], uint16_t out[3])
+{
+    for (int i = 0; i < 3; i++)
+        out[i] = (uint16_t)(((uint32_t)a[i] + b[i]) / 2);
+}
+
+/* Fill r as an 8-by-4 map has it: light left column, dark right one. */
+static void k1_map_rect(const image *m, qrect r)
+{
+    k1_fill_px(m, 2, 0, r);
+    k1_fill_px(m, 0, 1, (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) });
+    k1_fill_px(m, 7, 1, (qrect){ r.top, (int16_t)(r.right - 1), r.bottom, r.right });
+}
+
+bool theme_menu_bar(qrect r)
+{
+    const image *m = k1_bar();
+    if (!k1_colour() || !m)
+        return false;
+    int w = r.right - r.left, h = r.bottom - r.top;
+    k1_fill_px(m, 9, 6, r);
+    k1_fill_px(m, 9, 0, (qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right });
+    k1_fill_px(m, 9, 7, (qrect){ (int16_t)(r.bottom - 1), r.left, r.bottom, r.right });
+    k1_fill_px(m, 8, 0, (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) });
+    k1_fill_px(m, 8, 7, (qrect){ r.top, (int16_t)(r.right - 1), r.bottom, r.right });
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    for (int y = 0; y < h; y++) {
+        int sy = y < 7 ? y : y == h - 1 ? 7 : 6;
+        blit(m, 0, sy, 8, 1, r.left, r.top + y, &clip);
+        if (w >= 16)
+            blit(m, m->w - 8, sy, 8, 1, r.right - 8, r.top + y, &clip);
+    }
+    hrgn_free(&clip);
+    return true;
+}
+
+bool theme_menu_title(qrect r, bool selected)
+{
+    const image *bar = k1_bar(), *hl = selected ? k1_hilite_map() : NULL;
+    if (!k1_colour() || !bar || (selected && !hl))
+        return false;
+    if (selected)
+        k1_map_rect(hl, r);
+    else {
+        k1_fill_px(bar, 9, 6, r);
+        k1_fill_px(bar, 9, 0, (qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right });
+    }
+    return true;
+}
+
+bool theme_menu_background(qrect r)
+{
+    const image *m = k1_menu_map(), *bar = k1_bar();
+    if (!k1_colour() || (!m && !bar))
+        return false;
+    if (m) {
+        k1_map_rect(m, r);
+    } else {
+        k1_fill_px(bar, 9, 6, r);
+        k1_fill_px(bar, 8, 0, (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) });
+        k1_fill_px(bar, 8, 7, (qrect){ r.top, (int16_t)(r.right - 1), r.bottom, r.right });
+    }
+    return true;
+}
+
+bool theme_menu_item(qrect r, bool selected)
+{
+    if (!selected)
+        return theme_menu_background(r);
+    const image *hl = k1_hilite_map();
+    if (!k1_colour() || !hl)
+        return false;
+    k1_map_rect(hl, r);
+    return true;
+}
+
+/* A divider: the bar's upper divider colour over its lower one, across
+ * the middle of the item. */
+bool theme_menu_divider(qrect r)
+{
+    const image *bar = k1_bar();
+    if (!k1_colour() || !bar)
+        return false;
+    int y = r.top + (r.bottom - r.top) / 2 - 1;
+    k1_fill_px(bar, 9, 4, (qrect){ (int16_t)y, (int16_t)(r.left + 1), (int16_t)(y + 1), (int16_t)(r.right - 1) });
+    k1_fill_px(bar, 9, 5, (qrect){ (int16_t)(y + 1), (int16_t)(r.left + 1), (int16_t)(y + 2), (int16_t)(r.right - 1) });
+    return true;
+}
+
+/* Text colours: 0 a title in the bar, 1 a selected title, 2 an item, 3 a
+ * selected item.  A disabled one is halfway to its background. */
+bool theme_menu_text(int what, bool enabled, uint16_t out[3])
+{
+    const image *bar = k1_bar();
+    if (!k1_colour() || !bar)
+        return false;
+    const image *m = what == 1 || what == 3 ? k1_hilite_map() : what == 2 ? k1_menu_map() : NULL;
+    uint16_t fill[3];
+    bool ok;
+    if (m)
+        ok = k1_px(m, 3, 1, out) && k1_px(m, 2, 0, fill);
+    else
+        ok = k1_px(bar, 9, 2, out) && k1_px(bar, 9, 6, fill);
+    if (ok && !enabled)
+        mix(out, fill, out);
+    return ok;
+}
+
 const char *theme_name(void) { return thme_on() ? thme_name() : loaded ? scheme_name : ""; }
 
 /* A cicn's image as RGBA (malloc'd), for PlotCIcon. */
