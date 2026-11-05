@@ -570,6 +570,13 @@ static void cdef1_draw(gaddr ch, int part)
     tb_DisposePtr(rr);
 }
 
+/* A wheel's click on a scroll bar without arrows (ctl_wheel_arrow): the
+ * arrow it stands for, at that one point while the click is handled. */
+static struct {
+    gaddr ch;
+    int16_t part, h, v;
+} wheel_at;
+
 static int32_t cdef1_test(gaddr ch, uint32_t pt)
 {
     qrect r = crect(ch);
@@ -582,6 +589,8 @@ static int32_t cdef1_test(gaddr ch, uint32_t pt)
     int c = vert ? v : h, lo = vert ? r.top : r.left, hi = vert ? r.bottom : r.right;
     int klo, khi, slo, shi;
     bool native = native_scroll_knob(ch, &klo, &khi, &slo, &shi); /* macOS's bars have no arrows */
+    if (native && ch == wheel_at.ch && h == wheel_at.h && v == wheel_at.v && ev_wheel_click())
+        return wheel_at.part;
     if (!native && sb_together(ch)) {
         if (c >= hi - 16)
             return inDownButton;
@@ -1771,6 +1780,11 @@ bool ctl_wheel_arrow(int x, int y, bool vertical, bool back, int *ax, int *ay)
     qrect r = crect(best);
     int16_t want = back ? 20 : 21; /* inUpButton, inDownButton */
     int len = vertical ? r.bottom - r.top : r.right - r.left;
+    /* macOS's bars have no arrows: a click anywhere on the bar, which its
+     * hit test takes for the arrow. */
+    int klo, khi, slo, shi;
+    bool arrowless = native_scroll_knob(best, &klo, &khi, &slo, &shi);
+    wheel_at.ch = 0;
     for (int i = 2; i < len - 2; i += 2) {
         int at = back ? i : len - 1 - i;
         int px = vertical ? (r.left + r.right) / 2 : r.left + at;
@@ -1778,7 +1792,13 @@ bool ctl_wheel_arrow(int x, int y, bool vertical, bool back, int *ax, int *ay)
         int gx = px - d.bounds.left, gy = py - d.bounds.top;
         if (gx < cont.left || gx >= cont.right || gy < cont.top || gy >= cont.bottom)
             continue;
-        if (tb_TestControl(best, make_pt((int16_t)py, (int16_t)px)) == want) {
+        if (arrowless && tb_TestControl(best, make_pt((int16_t)py, (int16_t)px))) {
+            wheel_at.ch = best;
+            wheel_at.part = want;
+            wheel_at.h = (int16_t)px;
+            wheel_at.v = (int16_t)py;
+        }
+        if (wheel_at.ch || tb_TestControl(best, make_pt((int16_t)py, (int16_t)px)) == want) {
             *ax = px - d.bounds.left;
             *ay = py - d.bounds.top;
             return true;
