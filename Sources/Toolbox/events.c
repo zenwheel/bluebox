@@ -588,6 +588,7 @@ void ev_post_click_at(int x, int y)
  * has taken the last. */
 static int wheel_x, wheel_y, wheel_dx, wheel_dy; /* under lock: steps not yet clicked */
 static bool wheel_click_now;
+static uint32_t wheel_click_where; /* where that click is (global) */
 
 void machine_post_wheel(int x, int y, int dx, int dy)
 {
@@ -807,8 +808,10 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     /* A key event handed to the program: KeyMap shows that key now, not
      * at the next emulation slice (Maelstrom reads it to see which key a
      * key-down was for). */
-    if (remove && !os_only)
+    if (remove && !os_only) {
         wheel_click_now = found && e.what == mouseDown && e.wheel;
+        wheel_click_where = e.where;
+    }
     uint8_t keys[16];
     bool key_event = found && remove && (e.what == keyDown || e.what == autoKey || e.what == keyUp);
     if (key_event)
@@ -1206,7 +1209,13 @@ int8_t tb_WaitMouseUp(void)
 
 void tb_GetMouse(gaddr p)
 {
-    uint32_t g = ev_mouse_global();
+    /* While a wheel's click is handled the mouse is where it clicked: a
+     * program tracking the arrow itself (Internet Explorer: GetMouse and
+     * TestControl until StillDown is false) sees it there, as it would a
+     * hand's click. */
+    pthread_mutex_lock(&lock);
+    uint32_t g = wheel_click_now ? wheel_click_where : make_pt(mouse_v, mouse_h);
+    pthread_mutex_unlock(&lock);
     int16_t h = pt_h(g), v = pt_v(g);
     gaddr port = qd_port();
     if (port) {

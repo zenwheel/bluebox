@@ -1018,5 +1018,50 @@ extension BlueBox {
             #expect(wheelStep(w, down: false) == (20, 20))
             tb_DisposeWindow(w)
         }
+
+        /// A step of the wheel tracked as Internet Explorer tracks a click in
+        /// an arrow, without TrackControl: FindControl, then GetMouse and
+        /// TestControl for the part under the mouse until StillDown is false.
+        private func wheelStepTrackedByHand(_ w: UInt32, down: Bool) -> (part: Int16, underMouse: Int16) {
+            machine_post_wheel(250, 200, 0, down ? -1 : 1)
+            let e = tb_NewPtr(16, false, true)
+            let pt = tb_NewPtr(4, false, true)
+            let cp = tb_NewPtr(4, false, true)
+            defer { tb_DisposePtr(e); tb_DisposePtr(pt); tb_DisposePtr(cp) }
+            guard tb_GetNextEvent(0x0002, e) != 0, rd16(e) == 1 else { return (-1, -1) }
+            wr32(pt, rd32(e + 10))
+            tb_GlobalToLocal(pt)
+            let part = tb_FindControl(rd32(pt), w, cp)
+            guard part != 0 else { return (0, 0) }
+            var under: Int16 = 0
+            repeat {
+                tb_GetMouse(pt)
+                under = tb_TestControl(rd32(cp), rd32(pt))
+            } while tb_StillDown() != 0
+            _ = tb_GetNextEvent(0x0004, e)
+            return (part, under)
+        }
+
+        /// The wheel's click is where the mouse is while it is handled, so
+        /// a program that follows the mouse itself takes it, on macOS's
+        /// scroll bars and on classic ones.
+        @Test @MainActor func theWheelScrollsAProgramThatTracksTheArrowItself() {
+            launchTestApp()
+            _ = initToolbox()
+            let (w, _) = documentWithScrollBar(value: 50)
+            #expect(wheelStepTrackedByHand(w, down: true) == (21, 21))
+            #expect(wheelStepTrackedByHand(w, down: false) == (20, 20))
+            tb_DisposeWindow(w)
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_NATIVE))
+            NativeControls.install()
+            defer {
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+                machine_set_control_renderer(nil, nil)
+            }
+            let (w2, _) = documentWithScrollBar(value: 50)
+            #expect(wheelStepTrackedByHand(w2, down: true) == (21, 21))
+            #expect(wheelStepTrackedByHand(w2, down: false) == (20, 20))
+            tb_DisposeWindow(w2)
+        }
     }
 }
