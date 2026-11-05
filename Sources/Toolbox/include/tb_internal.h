@@ -441,6 +441,9 @@ bool theme_menu_background(qrect r);
 bool theme_menu_item(qrect r, bool selected);
 bool theme_menu_divider(qrect r);
 bool theme_menu_text(int what, bool enabled, uint16_t out[3]);
+/* A Kaleidoscope 1.x scheme's default button ring and progress bar. */
+bool theme_draw_ring(qrect button, bool active);
+bool theme_draw_progress(qrect r, int32_t min, int32_t max, int32_t value, bool rtl);
 /* Native controls (native_controls.c), drawn by the host. */
 bool native_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool native_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);

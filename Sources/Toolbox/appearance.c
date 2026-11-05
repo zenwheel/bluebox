@@ -1152,6 +1152,8 @@ void ap_default_ring(qrect r, uint32_t state)
 {
     if (themed() && thme_default_ring(r, state))
         return;
+    if (theme_draw_ring(r, state != kThemeStateInactive))
+        return;
     bool active = state != kThemeStateInactive;
     qrect ring = inset(r, -4);
     uint16_t g[3];
@@ -2088,6 +2090,9 @@ static void platinum_progress(const track_info *t)
 
 static void draw_progress(const track_info *t)
 {
+    if (t->kind == kThemeProgressBar &&
+        theme_draw_progress(t->bounds, t->min, t->max, t->value, (t->attributes & kThemeTrackRightToLeft) != 0))
+        return;
     if (ap_in_color()) {
         platinum_progress(t);
         return;

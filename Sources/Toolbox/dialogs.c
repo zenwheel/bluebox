@@ -1113,6 +1113,8 @@ static void draw_default_ring(gaddr d)
         ap_default_ring(qrect_get(rd32(button) + ControlRecord_contrlRect_off), hil == 255 ? 0 : 1);
         return;
     }
+    if (button && rd32(button) && theme_draw_ring(r, ControlRecord_contrlHilite(rd32(button)) != 255))
+        return; /* a Kaleidoscope scheme's */
     gaddr rp = tb_NewPtr(8, false, false);
     qrect_put(rp, (qrect){ (int16_t)(r.top - 4), (int16_t)(r.left - 4), (int16_t)(r.bottom + 4), (int16_t)(r.right + 4) });
     tb_PenSize(3, 3);

@@ -34,6 +34,7 @@ extension BlueBox {
         static let ring: [[UInt8]] = [[0x10, 0x10, 0x10], [0xF0, 0xF0, 0xE0], [0x50, 0x50, 0x60], [0xC0, 0xB0, 0xA0],
                                       [0x70, 0x60, 0x50], [0xE0, 0xE0, 0xF0], [0x20, 0x30, 0x40]]
         static let utilityFill: [UInt8] = [0x40, 0x80, 0x40]
+        static let buttonFace: [UInt8] = [0xCC, 0xDD, 0xEE], buttonText: [UInt8] = [0x80, 0x00, 0x20]
 
         /// A dialog map (16 square): the rings from the outside in, the well and inner outline round its middle.
         static func dialogMap() -> [UInt8] {
@@ -68,6 +69,11 @@ extension BlueBox {
                 TestResource(type: "cicn", id: -12287,
                              data: menuMap([0x66, 0x66, 0xCC], [0x33, 0x33, 0x99], hiliteText, [0, 0, 0x88])),
                 TestResource(type: "cicn", id: -14326, data: dialogMap()),
+                // a push button: black outline, the face, the text's colour in its middle
+                TestResource(type: "cicn", id: -10239,
+                             data: cicnColours(w: 16, h: 16, [[0, 0, 0], buttonFace, buttonText]) { x, y in
+                                 x == 0 || y == 0 || x == 15 || y == 15 ? 0 : (y == 8 || y == 9) && x >= 6 && x <= 9 ? 2 : 1
+                             }),
                 TestResource(type: "cicn", id: -14316,
                              data: cicnColours(w: 12, h: 12, [utilityFill, [0xFF, 0xFF, 0xFF]]) { _, y in y == 1 ? 1 : 0 }),
             ])
@@ -171,6 +177,22 @@ extension BlueBox {
             _ = window(1985, 500, 100, 600, 300)
             #expect(screen(200, 500 - 6) == Self.utilityFill)
             #expect(screen(200, 500 - 11) == [0xFF, 0xFF, 0xFF])           // its light top edge
+        }
+
+        @Test func pushButtonsStretchRoundTheirText() {
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_load_theme(Self.scheme().path, &err, err.count))
+            defer { machine_set_appearance(Int32(MACHINE_APPEARANCE_BW)) }
+            launchTestApp()
+            _ = initToolbox()
+            let w = window(4, 100, 100, 300, 400)
+            tb_SetPort(w)
+            let title: [UInt8] = Array("OK".utf8)
+            // a button 80 by 20 at (20, 20) in the window: outline, face all along, the patch of text colour not repeated
+            #expect(theme_draw_button(qrect(top: 20, left: 20, bottom: 40, right: 100), title, 2, false, false))
+            #expect(screen(120, 120) == [0, 0, 0])
+            for x: Int32 in [130, 150, 185] { #expect(screen(x, 132) == Self.buttonFace && screen(x, 133) == Self.buttonFace) }
+            #expect(any(Self.buttonText, 120, 120, 200, 140))                 // the title, in the patch's colour
         }
     }
 }
