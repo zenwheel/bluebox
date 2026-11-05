@@ -24,6 +24,9 @@ public final class ClassicAudio: @unchecked Sendable {
     /// keeps at most about a tenth of a second ahead.
     private let maxBacklog = 0.5
     private var observing = false
+    /// Suspended (the host's Suspend): the players hold what they were
+    /// given and play it on from where they stopped.  On `queue`.
+    private var suspended = false
 
     /// Route the machine's sound to the host.
     public func install() {
@@ -38,6 +41,21 @@ public final class ClassicAudio: @unchecked Sendable {
             ClassicAudio.shared.play(channel: channel, pcm: pcm, frames: Int(frames), channels: Int(channels),
                                      rate: rate, volume: volume)
         }, nil)
+    }
+
+    /// Hold the sound still while the program is suspended, and go on.
+    public func setSuspended(_ on: Bool) {
+        queue.async {
+            guard self.suspended != on else { return }
+            self.suspended = on
+            if on {
+                for entry in self.players.values where entry.node.isPlaying { entry.node.pause() }
+                self.engine.pause()
+            } else {
+                if !self.engine.isRunning { try? self.engine.start() }
+                for entry in self.players.values where entry.scheduled > 0 { entry.node.play() }
+            }
+        }
     }
 
     private func play(channel: Int32, pcm: UnsafePointer<Int16>?, frames: Int, channels: Int, rate: Double,
@@ -87,10 +105,16 @@ public final class ClassicAudio: @unchecked Sendable {
             entry = (node, format, 0)
             players[channel] = entry
         }
+        let node = entry!.node
+        if suspended { // what came just before: it waits with the rest
+            node.scheduleBuffer(buffer, completionHandler: nil)
+            entry!.scheduled += Double(buffer.frameLength) / format.sampleRate
+            players[channel] = entry
+            return
+        }
         if !engine.isRunning {
             do { try engine.start() } catch { return }
         }
-        let node = entry!.node
         // Sound that piled up while the player could not keep up (the
         // output device starting, which can take seconds) would otherwise
         // stay ahead of everything after it: a game's sound ten seconds
@@ -114,7 +138,7 @@ public final class ClassicAudio: @unchecked Sendable {
     }
 
     private func restartPlayers() {
-        if !engine.isRunning { try? engine.start() }
+        if !engine.isRunning && !suspended { try? engine.start() }
     }
 }
 #endif
