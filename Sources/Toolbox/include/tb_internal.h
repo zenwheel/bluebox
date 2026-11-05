@@ -781,6 +781,7 @@ void video_fade(int percent, gaddr zero); /* DrawSprocket's gamma fades */
  * table, the display off), or NULL when as it is. */
 const uint8_t (*video_output_lut(void))[256];
 uint32_t ev_input_serial(void);           /* moves with each key, click and mouse move */
+uint32_t ev_queue_polls(void);            /* moves with each call asking for an event */
 /* After Dark modules (afterdark.c): a module file as the program, and idle
  * blanking in a run. */
 bool afterdark_is_module_file(void);

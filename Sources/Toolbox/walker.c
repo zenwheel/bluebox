@@ -66,6 +66,7 @@ static struct {
     unsigned seen;    /* the step it was last in front at */
     bool again;       /* it went and came back: the program asks again */
     bool quits;       /* a button passed over as Quit */
+    uint32_t polls;   /* ev_queue_polls when it came up */
 } open_dialogs[NDIALOGS];
 static int nopen;
 static uint64_t next_at, menus_at, started_at;
@@ -1455,6 +1456,7 @@ void walker_idle(uint64_t icount)
             open_dialogs[at].clicked = 0;
             open_dialogs[at].quits = false;
             open_dialogs[at].again = false;
+            open_dialogs[at].polls = ev_queue_polls();
             open_dialogs[at].seen = steps;
             dialogs++;
             dialogs_shown++;
@@ -1490,18 +1492,26 @@ void walker_idle(uint64_t icount)
              * of a program that is all one dialog), but for those that
              * would end the run, and a starting one's Cancel, which may
              * well quit.  (Not a window the program runs itself: an
-             * installer's progress, whose Stop would cut it short.) */
+             * installer's progress, whose Stop would cut it short.)  One
+             * whose program has asked for no event since it came up is
+             * run by a loop of the program's own polling the mouse and
+             * keyboard, which the menus can't get past (HemiRoids' Set
+             * Keys): its buttons too, but not a Stop or Cancel. */
             char text[64], what[96];
             int x, y, b;
             bool modal = dialog_modal(d), dimmed = false, starting = !begun() && !has_quit(d, true);
-            for (int i = 1; modal && i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++) {
+            bool own = !modal && ev_queue_polls() == open_dialogs[at].polls;
+            for (int i = 1; (modal || own) && i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0;
+                 i++) {
                 if (!b || (open_dialogs[at].clicked & 1ull << (i - 1)))
                     continue;
                 if (passed_over(text)) {
                     open_dialogs[at].quits = true;
                     continue;
                 }
-                if (starting && declines(text))
+                if ((starting || own) && declines(text))
+                    continue;
+                if (own && strcasestr(text, "stop"))
                     continue;
                 if (b == 1) {
                     dimmed = true;
