@@ -172,19 +172,63 @@ static qrect tab_pane_of(gaddr ch, ap_ctl *a);
  * boxes had lighter boxes round their titles in the Mega Dialog). */
 static void erase_in(gaddr ch, qrect r)
 {
-    if (g_appearance == MACHINE_APPEARANCE_THEME && ap_in_color()) {
+    if (g_appearance != MACHINE_APPEARANCE_NATIVE && ap_in_color()) {
         ctl_info *ci = ctl_find(ch);
         for (int depth = 0; ci && ci->parent && depth < 16; depth++) {
             ctl_info *pi = ctl_find(ci->parent);
             if (pi && pi->cdef == 8 && pi->ap) {
-                if (thme_tab_pane_inside(tab_pane_of(ci->parent, (ap_ctl *)pi->ap), r, rd8(rd32(ci->parent) + ControlRecord_contrlHilite_off) != 255))
+                bool on = rd8(rd32(ci->parent) + ControlRecord_contrlHilite_off) != 255;
+                if (thme_tab_pane_inside(tab_pane_of(ci->parent, (ap_ctl *)pi->ap), r, on))
                     return;
+                if (!thme_has_part(300)) { /* Platinum's pane */
+                    ap_fill_grey(r, ap_tab_pane_inside(on));
+                    return;
+                }
                 break;
             }
             ci = pi;
         }
     }
     erase(r);
+}
+
+/* Platinum's tab panes are lighter than the window: what is drawn inside
+ * one (a control, a dialog item) erases to the pane's grey, the port's
+ * background colour being set to it meanwhile. */
+bool ap_pane_background(gaddr w, qrect r, uint16_t saved[3])
+{
+    if (!w || g_appearance == MACHINE_APPEARANCE_NATIVE || !qd_port_is_color(w) || !ap_in_color() ||
+        thme_has_part(300))
+        return false;
+    for (gaddr x = WindowRecord_controlList(w); x; x = ControlRecord_nextControl(cp(x))) {
+        ctl_info *ci = ctl_find(x);
+        if (!ci || ci->cdef != 8 || !ci->ap || !cvisible(x))
+            continue;
+        qrect p = inset(tab_pane_of(x, (ap_ctl *)ci->ap), 2);
+        if (r.left < p.left || r.top < p.top || r.left >= p.right || r.top >= p.bottom)
+            continue; /* (some run on past the pane's edge) */
+        gaddr c = tb_NewPtr(6, false, false);
+        tb_GetBackColor(c);
+        for (int i = 0; i < 3; i++)
+            saved[i] = rd16(c + (uint32_t)i * 2);
+        uint16_t g = ap_tab_pane_inside(chilite(x) != 255);
+        wr16(c, g);
+        wr16(c + 2, g);
+        wr16(c + 4, g);
+        tb_RGBBackColor(c);
+        tb_DisposePtr(c);
+        return true;
+    }
+    return false;
+}
+
+void ap_pane_background_end(const uint16_t saved[3])
+{
+    gaddr c = tb_NewPtr(6, false, false);
+    for (int i = 0; i < 3; i++)
+        wr16(c + (uint32_t)i * 2, saved[i]);
+    tb_RGBBackColor(c);
+    tb_DisposePtr(c);
 }
 
 static void title_of(gaddr ch, uint8_t *buf, int *n)
@@ -2624,7 +2668,19 @@ static void entry(cpu68k *c, int id)
     case kControlMsgSetUpBackground:
         if (a->id == 16 && a->procs[UP_BACK])
             call_up(a, UP_BACK, ch, 0x000003C0, (uint32_t)param, 0, 2);
-        else if (a->id == 8 || a->id == 14 || a->id == 21)
+        else if (a->id == 8 && !thme_has_part(300) && rd16((gaddr)param) >= 4) {
+            /* Platinum's pane, lighter than the window */
+            gaddr c3 = tb_NewPtr(6, false, false);
+            uint16_t g = ap_tab_pane_inside(chilite(ch) != 255);
+            wr16(c3, g);
+            wr16(c3 + 2, g);
+            wr16(c3 + 4, g);
+            gaddr white = tb_NewPtr(8, false, true);
+            tb_BackPat(white);
+            tb_DisposePtr(white);
+            tb_RGBBackColor(c3);
+            tb_DisposePtr(c3);
+        } else if (a->id == 8 || a->id == 14 || a->id == 21)
             tb_SetThemeBackground(25, (int16_t)rd16((gaddr)param), (int8_t)rd8((gaddr)param + 2));
         break;
     case kControlMsgTestNewMsgSupport: result = NEW_MSG_OK; break;

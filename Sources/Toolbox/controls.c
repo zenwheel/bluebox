@@ -465,6 +465,10 @@ static int32_t cdef0_test(gaddr ch, uint32_t pt)
 
 static bool sb_vertical(qrect r) { return r.bottom - r.top > r.right - r.left; }
 
+/* Platinum's arrows both at the bottom (or right) end, as an Apple theme's
+ * scene asks. */
+static bool sb_together(gaddr ch) { return ctl_platinum(ch) && ap_scroll_arrows_together(); }
+
 static qrect sb_thumb(gaddr ch)
 {
     qrect r = crect(ch);
@@ -479,6 +483,8 @@ static qrect sb_thumb(gaddr ch)
     int track = len - 2 * 16 - 16;
     int range = cmax(ch) - cmin(ch);
     int pos = range > 0 ? (int)((long)(cvalue(ch) - cmin(ch)) * track / range) : 0;
+    if (sb_together(ch))
+        pos -= 16; /* the track starts at the top */
     if (v)
         return (qrect){ (int16_t)(r.top + 16 + pos), r.left, (int16_t)(r.top + 32 + pos), r.right };
     return (qrect){ r.top, (int16_t)(r.left + 16 + pos), r.bottom, (int16_t)(r.left + 32 + pos) };
@@ -526,7 +532,7 @@ static void cdef1_draw(gaddr ch, int part)
         return;
     ctl_info *ci = ctl_find(ch);
     if ((ci && ci->cdef == 24 && g_appearance == MACHINE_APPEARANCE_BW) || ctl_platinum(ch)) {
-        ap_scroll_bar(r, v, chilite(ch), chilite(ch) != 255, cmax(ch) > cmin(ch), sb_thumb(ch));
+        ap_scroll_bar_arrows(r, v, chilite(ch), chilite(ch) != 255, cmax(ch) > cmin(ch), sb_thumb(ch), sb_together(ch));
         return;
     }
     tb_PenNormal();
@@ -576,10 +582,17 @@ static int32_t cdef1_test(gaddr ch, uint32_t pt)
     int c = vert ? v : h, lo = vert ? r.top : r.left, hi = vert ? r.bottom : r.right;
     int klo, khi, slo, shi;
     bool native = native_scroll_knob(ch, &klo, &khi, &slo, &shi); /* macOS's bars have no arrows */
-    if (!native && c < lo + 16)
-        return inUpButton;
-    if (!native && c >= hi - 16)
-        return inDownButton;
+    if (!native && sb_together(ch)) {
+        if (c >= hi - 16)
+            return inDownButton;
+        if (c >= hi - 31)
+            return inUpButton;
+    } else {
+        if (!native && c < lo + 16)
+            return inUpButton;
+        if (!native && c >= hi - 16)
+            return inDownButton;
+    }
     if (cmax(ch) <= cmin(ch))
         return 0;
     qrect t = sb_thumb(ch);
@@ -1326,7 +1339,12 @@ void tb_KillControls(gaddr w)
 /* A control, then those embedded in it. */
 static void draw_tree(gaddr ch)
 {
+    ctl_info *ci = ctl_find(ch);
+    uint16_t bk[3];
+    bool pane = ci && ci->cdef != 8 && ci->parent && ap_pane_background(qd_port(), crect(ch), bk);
     call_cdef(ch, drawCntl, 0);
+    if (pane)
+        ap_pane_background_end(bk);
     if (!ControlRecord_contrlVis(cp(ch)))
         return;
     gaddr subs[512];
@@ -1419,7 +1437,11 @@ void tb_HideControl(gaddr ch)
         return;
     gaddr saved = qd_port();
     tb_SetPort(cowner(ch));
+    uint16_t bk[3];
+    bool pane = ap_pane_background(cowner(ch), crect(ch), bk);
     tb_EraseRect(cp(ch) + ControlRecord_contrlRect_off);
+    if (pane)
+        ap_pane_background_end(bk);
     tb_InvalRect(cp(ch) + ControlRecord_contrlRect_off);
     tb_SetPort(saved);
 }

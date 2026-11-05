@@ -877,7 +877,11 @@ void tb_SetDialogItemText(gaddr item, gaddr text)
     if (WindowRecord_visible(d)) {
         gaddr r = tb_NewPtr(8, false, false);
         qrect_put(r, item_rect(d, i));
+        uint16_t bk[3];
+        bool pane = ap_pane_background(d, item_rect(d, i), bk);
         tb_EraseRect(r);
+        if (pane)
+            ap_pane_background_end(bk);
         tb_DisposePtr(r);
         draw_item(d, i);
     }
@@ -997,6 +1001,8 @@ static void draw_item(gaddr d, int n)
     gaddr h = item_handle(d, n);
     gaddr rp = tb_NewPtr(8, false, false);
     qrect_put(rp, r);
+    uint16_t bk[3];
+    bool pane = !(type & ctrlItem) && ap_pane_background(d, r, bk);
     item_font_saved fs;
     item_font_begin(d, n, &fs);
     if (type & ctrlItem) {
@@ -1054,6 +1060,8 @@ static void draw_item(gaddr d, int n)
         guest_call(h);
     }
     item_font_end(d, &fs);
+    if (pane)
+        ap_pane_background_end(bk);
     tb_DisposePtr(rp);
 }
 

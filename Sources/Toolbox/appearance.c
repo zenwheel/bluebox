@@ -9,6 +9,7 @@
  * drew it on such screens.  The highlight brushes follow the host's
  * selection and accent colours, and HiliteRGB follows them too.
  */
+#include <math.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -926,18 +927,34 @@ int32_t tb_DrawThemeTickMark(gaddr rp, uint32_t state)
 /* ---------------------------------------------------------------------- */
 /* Tabs */
 
-/* A tab pane: the frame the front tab joins, its inside Platinum grey. */
+/* A tab pane: the frame the front tab joins, dark on top, lit inside
+ * its top and left, shaded inside its bottom and right; its inside a
+ * lighter grey than the window's (ap_tab_pane_inside). */
 void ap_tab_pane(qrect r, uint32_t state)
 {
     if (themed() && thme_tab_pane(r, state))
         return;
     bool active = state != kThemeStateInactive;
-    ap_frame_grey(r, active ? 0 : 0x8888);
+    if (!ap_in_color()) {
+        ap_frame_grey(r, 0);
+        ap_fill_grey(inset(r, 1), 0xFFFF);
+        return;
+    }
+    ap_frame_grey(r, active ? 0x4040 : 0x8888);
+    ap_fill_grey((qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right }, active ? 0x3333 : 0x8888);
     qrect in = inset(r, 1);
-    ap_fill_grey(in, 0xDDDD);
-    if (active)
-        ap_bevel(in, 0xFFFF, 0xAAAA);
+    ap_fill_grey(in, ap_tab_pane_inside(active));
+    if (active) {
+        ap_fill_grey((qrect){ in.top, in.left, (int16_t)(in.top + 1), in.right }, 0xD9D9);
+        ap_fill_grey((qrect){ (int16_t)(in.top + 1), in.left, (int16_t)(in.top + 2), in.right }, 0xFBFB);
+        ap_fill_grey((qrect){ (int16_t)(in.top + 1), in.left, in.bottom, (int16_t)(in.left + 1) }, 0xFBFB);
+        ap_fill_grey((qrect){ (int16_t)(in.bottom - 1), in.left, in.bottom, in.right }, 0xB2B2);
+        ap_fill_grey((qrect){ (int16_t)(in.top + 1), (int16_t)(in.right - 1), in.bottom, in.right }, 0xB2B2);
+        ap_fill_grey((qrect){ (int16_t)(in.bottom - 1), (int16_t)(in.right - 1), in.bottom, in.right }, 0x8686);
+    }
 }
+
+uint16_t ap_tab_pane_inside(bool active) { return active ? 0xEEEE : 0xDDDD; }
 
 int32_t tb_DrawThemeTabPane(gaddr r, uint32_t state)
 {
@@ -967,6 +984,72 @@ static void tab_title(qrect r, int dir, const uint8_t *s, int n, const uint16_t 
         ap_text_in(r, s, n, true, tc);
 }
 
+static void tab_dot(qrect r, int dir, int u, int v, uint16_t g) { ap_fill_grey(tab_map(r, dir, u, v, u + 1, v + 1), g); }
+
+/* Platinum's tab: a trapezoid whose sides slope a pixel in every two rows
+ * (drawn smooth), round at its top corners; the front one runs on into
+ * the pane, lighter, the ones behind it darker and shaded at the foot. */
+static void platinum_tab(qrect r, int dir, int along, int depth, bool front, bool inactive, bool pressed)
+{
+    /* the side's inset, in half pixels, row by row from the top */
+    static const int8_t inset2[16] = { 20, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+    uint16_t line = inactive ? 0x8888 : 0x3333, edge = inactive ? 0x9999 : 0x4343;
+    uint16_t face = front ? (inactive ? 0xDDDD : 0xEEEE) : pressed ? 0x8888 : inactive ? 0xDDDD : 0xCCCC;
+    uint16_t bg = 0xDDDD;
+    int rows = front ? (depth < 19 ? depth : 19) : 16;
+    if (along < 24)
+        return;
+    /* the top line's soft upper edge */
+    for (int u = 11; u < along - 11; u++)
+        tab_dot(r, dir, u, -1, (uint16_t)((bg * 2 + line) / 3));
+    for (int v = 0; v < rows; v++) {
+        int e2 = v < 16 ? inset2[v] : -(v - 15); /* below the top of the pane, it widens on */
+        int x = e2 >> 1;
+        bool half = e2 & 1;
+        int l = half ? x + 2 : x + 1, rr = along - (half ? x + 2 : x + 1); /* the face between */
+        if (v == 0) {
+            tab_dot(r, dir, 7, 0, 0xD1D1);
+            tab_dot(r, dir, 8, 0, 0xACAC);
+            tab_dot(r, dir, 9, 0, 0x8E8E);
+            tab_dot(r, dir, 10, 0, edge);
+            tab_dot(r, dir, along - 8, 0, 0xD1D1);
+            tab_dot(r, dir, along - 9, 0, 0xACAC);
+            tab_dot(r, dir, along - 10, 0, 0x8E8E);
+            tab_dot(r, dir, along - 11, 0, edge);
+            ap_fill_grey(tab_map(r, dir, 11, 0, along - 11, 1), line);
+            continue;
+        }
+        if (v < 16) {
+            /* the sides, smoothed into what is round them */
+            if (half) {
+                tab_dot(r, dir, x, v, 0x8E8E);
+                tab_dot(r, dir, x + 1, v, 0x5959);
+                tab_dot(r, dir, along - 1 - x, v, 0x8E8E);
+                tab_dot(r, dir, along - 2 - x, v, 0x5454);
+            } else {
+                tab_dot(r, dir, x - 1, v, 0xACAC);
+                tab_dot(r, dir, x, v, edge);
+                tab_dot(r, dir, along - x, v, 0xACAC);
+                tab_dot(r, dir, along - 1 - x, v, edge);
+            }
+        }
+        if (rr <= l)
+            continue;
+        uint16_t f = face;
+        if (v == 1)
+            f = front ? 0xD9D9 : 0xD0D0;
+        else if (v == 2)
+            f = front ? 0xFBFB : 0xD9D9;
+        else if (!front && v == 15)
+            f = 0x9999;
+        ap_fill_grey(tab_map(r, dir, l, v, rr, v + 1), f);
+        if (v > 2 && !(!front && v == 15) && !pressed) {
+            tab_dot(r, dir, l, v, front ? 0xFBFB : 0xD6D6);
+            tab_dot(r, dir, rr - 1, v, front ? 0xE3E3 : 0xBFBF);
+        }
+    }
+}
+
 /* A tab in r facing dir, its inner edge on the pane's edge (which the
  * front tab covers by kThemeTabPaneOverlap). */
 void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n)
@@ -984,6 +1067,15 @@ void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n)
             int color = front ? (inactive ? 42 : 39) : inactive ? 43 : style == 1 ? 41 : 40;
             if (!ap_text_rgb(color, tc))
                 grey(tc, 0);
+            tab_title(tr, dir, title, n, tc);
+        }
+        return;
+    }
+    if (ap_in_color()) {
+        platinum_tab(r, dir, along, depth, front, inactive, pressed);
+        if (n > 0) {
+            uint16_t tc[3];
+            grey(tc, inactive ? 0x7777 : pressed ? 0xFFFF : 0);
             tab_title(tr, dir, title, n, tc);
         }
         return;
@@ -1135,27 +1227,61 @@ void ap_check_box(qrect box, bool radio, int value, uint32_t state)
     ap_frame(box, frame);
     qrect in = inset(box, 1);
     ap_fill(in, face);
-    if (!pressed)
+    if (active && ap_in_color()) {
+        /* Platinum's: a dark grey frame, lit inside at the top and left,
+         * shaded inside at the bottom and right */
+        ap_frame_grey(box, 0x4040);
+        ap_fill_grey((qrect){ (int16_t)(box.bottom - 1), (int16_t)(box.left + 1), box.bottom, box.right }, 0x3737);
+        ap_fill_grey((qrect){ (int16_t)(box.top + 1), (int16_t)(box.right - 1), box.bottom, box.right }, 0x3737);
+        if (!pressed) {
+            ap_bevel(in, 0xF6F6, 0x6666);
+            ap_fill_grey((qrect){ (int16_t)(in.bottom - 2), (int16_t)(in.left + 1), (int16_t)(in.bottom - 1), (int16_t)(in.right - 1) }, 0xC8C8);
+            ap_fill_grey((qrect){ (int16_t)(in.top + 1), (int16_t)(in.right - 2), (int16_t)(in.bottom - 1), (int16_t)(in.right - 1) }, 0xC8C8);
+        }
+    } else if (!pressed)
         ap_bevel(in, active ? 0xFFFF : 0xEEEE, active ? 0xAAAA : 0xDDDD);
-    if (value == 1) {
+    if (value == 1 && ap_in_color()) {
+        /* A check mark: a stroke down from the left, then up past the top
+         * right corner, its edges smoothed into the box. */
+        static const float seg[2][4] = { { 2.5f, 5.5f, 5.5f, 8.0f }, { 5.5f, 8.0f, 11.5f, 1.0f } };
+        for (int y = 0; y < 10; y++)
+            for (int x = 1; x < 13; x++) {
+                float best = 9;
+                for (int k = 0; k < 2; k++) {
+                    float ax = seg[k][0], ay = seg[k][1], bx = seg[k][2], by = seg[k][3];
+                    float px = x + 0.5f, py = y + 0.5f, dx = bx - ax, dy = by - ay;
+                    float t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy);
+                    t = t < 0 ? 0 : t > 1 ? 1 : t;
+                    float ex = ax + t * dx - px, ey = ay + t * dy - py, d = ex * ex + ey * ey;
+                    if (d < best)
+                        best = d;
+                }
+                float cover = 1.6f - sqrtf(best) * 1.3f;
+                if (cover <= 0)
+                    continue;
+                if (cover > 1)
+                    cover = 1;
+                qrect p = { (int16_t)(box.top + y), (int16_t)(box.left + x), (int16_t)(box.top + y + 1), (int16_t)(box.left + x + 1) };
+                uint16_t c[3];
+                int w = box.right - box.left, h = box.bottom - box.top;
+                /* what it is drawn over: the face, the frame, or (past the
+                 * corner) the background */
+                uint16_t under = x < w - 1 && y >= 1 && y < h - 1 ? face[0] : x < w ? frame[0] : 0xDDDD;
+                for (int i = 0; i < 3; i++)
+                    c[i] = (uint16_t)(under + (int)((mark[i] - (int)under) * cover));
+                ap_fill(p, c);
+            }
+    } else if (value == 1) {
         /* A check mark, from the lower left up past the right edge. */
         static const char *const rows[] = {
             "..........##", ".........##.", "........##..", "..##...##...",
             "...##.##....", "....###.....", ".....#......",
         };
-        hrgn g;
-        hrgn_init(&g);
         for (int y = 0; y < 7; y++)
             for (int x = 0; x < 12; x++)
-                if (rows[y][x] == '#') {
-                    int x1 = x;
-                    while (x1 < 12 && rows[y][x1] == '#')
-                        x1++;
-                    hrgn_add_row(&g, box.top + 2 + y, box.left + 1 + x, box.left + 1 + x1);
-                    x = x1;
-                }
-        ap_fill_rgn(&g, mark);
-        hrgn_free(&g);
+                if (rows[y][x] == '#')
+                    ap_fill((qrect){ (int16_t)(box.top + 2 + y), (int16_t)(box.left + 1 + x), (int16_t)(box.top + 3 + y),
+                                     (int16_t)(box.left + 2 + x) }, mark);
     } else if (value == 2) {
         ap_fill((qrect){ (int16_t)(box.top + 5), (int16_t)(box.left + 3), (int16_t)(box.top + 7), (int16_t)(box.right - 3) }, mark);
     }
@@ -1618,6 +1744,20 @@ static void scroll_thumb(qrect r, bool horiz, bool pressed)
  * hilite is the part pressed (20, 21; 22 and 23 the track; 129 the thumb). */
 void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb)
 {
+    ap_scroll_bar_arrows(r, vertical, hilite, active, live, thumb, false);
+}
+
+/* Whether a scroll bar's arrows are together at its bottom or right end:
+ * the scene's choice ('sbar' 1, Mac OS Default's) in an Apple theme, whose
+ * scroll bars are Platinum's own. */
+bool ap_scroll_arrows_together(void)
+{
+    int v;
+    return themed() && !thme_has_part(400) && thme_scene_int("sbar", &v) && v == 1;
+}
+
+void ap_scroll_bar_arrows(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb, bool together)
+{
     if (themed() && thme_scroll_bar(r, vertical, hilite, live, active, thumb))
         return;
     qrect lo = vertical ? (qrect){ r.top, r.left, (int16_t)(r.top + 16), r.right } : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 16) };
@@ -1625,6 +1765,12 @@ void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, q
                         : (qrect){ r.top, (int16_t)(r.right - 16), r.bottom, r.right };
     qrect area = vertical ? (qrect){ (int16_t)(r.top + 15), r.left, (int16_t)(r.bottom - 15), r.right }
                           : (qrect){ r.top, (int16_t)(r.left + 15), r.bottom, (int16_t)(r.right - 15) };
+    if (together) { /* the track from the top (or left), the arrows after it */
+        lo = vertical ? (qrect){ (int16_t)(r.bottom - 31), r.left, (int16_t)(r.bottom - 15), r.right }
+                      : (qrect){ r.top, (int16_t)(r.right - 31), r.bottom, (int16_t)(r.right - 15) };
+        area = vertical ? (qrect){ r.top, r.left, (int16_t)(r.bottom - 30), r.right }
+                        : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.right - 30) };
+    }
     ap_frame_grey(area, 0);
     qrect in = inset(area, 1);
     bool on = active && live;

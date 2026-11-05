@@ -116,7 +116,7 @@ extension BlueBox {
             let info = tb_NewPtr(8, false, true)
             wr32(info, 1); wr16(info + 4, 1) // active, on
             #expect(tb_DrawThemeButton(rect(0, 0, 12, 60), 1, info, 0, 0, 0, 0) == 0) // kThemeCheckBox
-            #expect(pixel(0, 0) == grey(0))                 // the box's frame
+            #expect(pixel(0, 0) == grey(0x4040))            // the box's frame, Platinum's dark grey
             let marked = (0..<12).contains { x in (0..<12).contains { y in pixel(x, y) == grey(0) && x > 2 && y > 2 && x < 10 } }
             #expect(marked)
             wr32(info, 2) // pressed
