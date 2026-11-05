@@ -651,40 +651,119 @@ static void blit_stripes(const image *st, int x, int y, int w, const hrgn *clip)
     blit(st, st->w - 1, 0, 1, st->h, x + w - 1, y, clip);
 }
 
-/* Kaleidoscope 1.x: after the classic frame is drawn, lay the scheme's
- * racing stripes over the title bar's. */
+/* Kaleidoscope 1.x: a window icon (-14332 active, -14336 inactive) is a
+ * map of the colours of System 7's colour title bar: its outer ring the
+ * frame, then the bar's light top and left edges and dark bottom and
+ * right ones round its colour, a pixel of the title's colour (row 3),
+ * and the close box's well, frame and face in its middle. */
+static bool k1_rgb(const image *im, int x, int y, uint16_t out[3])
+{
+    if (!im || x >= im->w || y >= im->h)
+        return false;
+    const uint8_t *p = im->rgba + ((size_t)y * (size_t)im->w + (size_t)x) * 4;
+    for (int i = 0; i < 3; i++)
+        out[i] = (uint16_t)(p[i] * 0x101);
+    return p[3] != 0;
+}
+
+static void k1_fill(const image *im, int ix, int iy, qrect r)
+{
+    uint16_t c[3];
+    if (r.right > r.left && r.bottom > r.top && k1_rgb(im, ix, iy, c))
+        ap_fill(r, c);
+}
+
+/* A close or zoom box from the icon's: a well 13 square (dark top and
+ * left, light bottom and right), the box's frame, a face lit at its top
+ * left and shaded at its bottom right. */
+static void k1_box(const image *im, int x, int y, bool zoom)
+{
+    k1_fill(im, 4, 4, (qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 1), (int16_t)(x + 12) });
+    k1_fill(im, 4, 4, (qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 12), (int16_t)(x + 1) });
+    k1_fill(im, 11, 5, (qrect){ (int16_t)(y + 1), (int16_t)(x + 12), (int16_t)(y + 13), (int16_t)(x + 13) });
+    k1_fill(im, 5, 11, (qrect){ (int16_t)(y + 12), (int16_t)(x + 1), (int16_t)(y + 13), (int16_t)(x + 13) });
+    qrect b = { (int16_t)(y + 1), (int16_t)(x + 1), (int16_t)(y + 12), (int16_t)(x + 12) };
+    k1_fill(im, 5, 5, b);
+    qrect f = { (int16_t)(b.top + 1), (int16_t)(b.left + 1), (int16_t)(b.bottom - 1), (int16_t)(b.right - 1) };
+    k1_fill(im, 6, 6, f);
+    k1_fill(im, 7, 7, (qrect){ (int16_t)(f.top + 1), (int16_t)(f.left + 1), (int16_t)(f.top + 2), (int16_t)(f.right - 2) });
+    k1_fill(im, 7, 7, (qrect){ (int16_t)(f.top + 1), (int16_t)(f.left + 1), (int16_t)(f.bottom - 2), (int16_t)(f.left + 2) });
+    k1_fill(im, 9, 9, (qrect){ (int16_t)(f.bottom - 1), (int16_t)(f.left + 1), f.bottom, f.right });
+    k1_fill(im, 9, 9, (qrect){ (int16_t)(f.top + 1), (int16_t)(f.right - 1), f.bottom, f.right });
+    k1_fill(im, 8, 8, (qrect){ (int16_t)(f.bottom - 2), (int16_t)(f.right - 2), (int16_t)(f.bottom - 1), (int16_t)(f.right - 1) });
+    if (zoom) { /* the small box in its top left */
+        qrect z = { b.top, b.left, (int16_t)(b.top + 6), (int16_t)(b.left + 7) };
+        k1_fill(im, 5, 5, (qrect){ z.top, z.left, (int16_t)(z.top + 1), z.right });
+        k1_fill(im, 5, 5, (qrect){ z.top, (int16_t)(z.right - 1), z.bottom, z.right });
+        k1_fill(im, 5, 5, (qrect){ (int16_t)(z.bottom - 1), z.left, z.bottom, z.right });
+    }
+}
+
+/* After the classic frame is drawn: the title bar in the scheme's
+ * colours, its racing stripes, boxes and title. */
 void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom)
 {
-    if (!theme_active() || !k1 || !hilited || (var != 0 && var != 4 && var != 8 && var != 12))
+    if (!theme_active() || !k1 || (var != 0 && var != 4 && var != 8 && var != 12))
         return;
-    const image *st = img(-14331);
-    if (!st)
-        return;
+    const image *map = img(hilited ? -14332 : -14336), *st = img(-14331);
+    qrect t = { (int16_t)(c.top - 18), c.left, (int16_t)(c.top - 1), c.right };
+    if (map) {
+        k1_fill(map, 2, 2, t);
+        k1_fill(map, 1, 1, (qrect){ t.top, t.left, (int16_t)(t.top + 1), (int16_t)(t.right - 1) });
+        k1_fill(map, 1, 1, (qrect){ t.top, t.left, (int16_t)(t.bottom - 1), (int16_t)(t.left + 1) });
+        k1_fill(map, 14, 2, (qrect){ (int16_t)(t.top + 1), (int16_t)(t.right - 1), t.bottom, t.right });
+        k1_fill(map, 2, 14, (qrect){ (int16_t)(t.bottom - 1), (int16_t)(t.left + 1), t.bottom, (int16_t)(t.right - 1) });
+        k1_fill(map, 14, 1, (qrect){ t.top, (int16_t)(t.right - 1), (int16_t)(t.top + 1), t.right });
+        k1_fill(map, 1, 14, (qrect){ (int16_t)(t.bottom - 1), t.left, t.bottom, (int16_t)(t.left + 1) });
+    }
     hrgn clip;
     hrgn_init(&clip);
     port_clip(&clip);
-    int top = c.top - 18 + 3; /* the classic title bar's stripe rows */
-    int x0 = c.left + 1, x1 = c.right - 1;
+    int top = t.top + 3; /* the classic title bar's stripe rows */
+    int x0 = c.left + 2, x1 = c.right - 2;
     int tw = 0, n = 0;
     uint8_t s[256];
     gaddr th = WindowRecord_titleHandle(w);
     if (th && rd32(th) && (n = rd8(rd32(th))) > 0) {
         gget(s, rd32(th) + 1, (uint32_t)n);
-        tw = qd_text_width(qd_port(), s, n);
+        gaddr port = qd_port();
+        GrafPort_set_txFont(port, 0);
+        GrafPort_set_txSize(port, 12);
+        GrafPort_set_txFace(port, 0);
+        tw = qd_text_width(port, s, n);
+        if (tw > c.right - c.left - 64)
+            tw = c.right - c.left - 64;
     }
     int tx = c.left + (c.right - c.left - tw) / 2;
-    int cuts[3][2] = { { goaway ? c.left + 7 : 0, goaway ? c.left + 21 : 0 },
-                       { n ? tx - 6 : 0, n ? tx + tw + 6 : 0 },
-                       { zoom ? c.right - 22 : 0, zoom ? c.right - 7 : 0 } };
-    int x = x0;
-    for (int k = 0; k <= 3; k++) {
-        int end = k < 3 && cuts[k][1] ? cuts[k][0] : (k == 3 ? x1 : x);
-        if (k < 3 && !cuts[k][1])
-            continue;
-        if (end > x)
-            blit_stripes(st, x, top, end - x, &clip);
-        if (k < 3)
-            x = cuts[k][1];
+    if (hilited && st) {
+        int cuts[3][2] = { { goaway ? c.left + 7 : 0, goaway ? c.left + 21 : 0 },
+                           { n ? tx - 6 : 0, n ? tx + tw + 6 : 0 },
+                           { zoom ? c.right - 22 : 0, zoom ? c.right - 7 : 0 } };
+        int x = x0;
+        for (int k = 0; k <= 3; k++) {
+            int end = k < 3 && cuts[k][1] ? cuts[k][0] : (k == 3 ? x1 : x);
+            if (k < 3 && !cuts[k][1])
+                continue;
+            if (end > x)
+                blit_stripes(st, x, top, end - x, &clip);
+            if (k < 3)
+                x = cuts[k][1];
+        }
+    }
+    if (hilited && map && goaway)
+        k1_box(map, c.left + 7, t.top + 2, false);
+    if (hilited && map && zoom)
+        k1_box(map, c.right - 21, t.top + 2, true);
+    if (n && map) {
+        uint16_t col[3];
+        if (!k1_rgb(map, 7, 3, col))
+            col[0] = col[1] = col[2] = 0;
+        gaddr port = qd_port();
+        GrafPort_set_txMode(port, 1);
+        tb_MoveTo((int16_t)tx, (int16_t)(t.top + 13));
+        qd_set_fg_override(col);
+        qd_draw_text(port, s, n);
+        qd_set_fg_override(NULL);
     }
     hrgn_free(&clip);
 }
