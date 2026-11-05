@@ -87,6 +87,7 @@ static bool host_attached;
 static uint16_t key_last;
 static bool key_new, button_new;
 static bool elsewhere_new; /* the user typed or clicked in another host application */
+static uint32_t queue_polls; /* calls asking the Event Manager for an event */
 
 /* Keyboard and mouse globals missing from lowmem_gen.h. */
 #define LM_MBTicks 0x016Eu    /* LONGINT: Ticks at the last button change */
@@ -341,6 +342,7 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove
  * pressed, click, and move of the mouse (a screen saver wakes on it). */
 static volatile uint32_t input_serial;
 uint32_t ev_input_serial(void) { return input_serial; }
+uint32_t ev_queue_polls(void) { return queue_polls; }
 
 void machine_post_mouse(int x, int y, int button)
 {
@@ -750,6 +752,7 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     if (afterdark_answer(evt))
         return false;
     note_poll();
+    queue_polls++;
     wm_host_requests();
     if (!os_only)
         wheel_poll();

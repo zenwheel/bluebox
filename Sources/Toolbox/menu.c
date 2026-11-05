@@ -2450,6 +2450,17 @@ bool menu_bar_item(int i, int n, char *text, size_t size, bool *enabled, bool *s
     return true;
 }
 
+/* The key equivalent of item n of menu bar menu i, or 0 (the menu walker's
+ * Quit, which Command-Q is in any language: Disk Copy's "Beenden"). */
+int menu_bar_item_key(int i, int n)
+{
+    gaddr it = item_addr(menu_at(i), n);
+    if (!it)
+        return 0;
+    int key = rd8(it + 1 + (gaddr)rd8(it) + 1);
+    return key < 0x20 ? 0 : key; /* 0x1B a submenu, 0x1C-0x1F script and icon marks */
+}
+
 /* A menu's title replaced (CarbonLib's SetMenuTitle). */
 bool menu_set_title(gaddr mh, gaddr title)
 {

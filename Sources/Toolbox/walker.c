@@ -66,6 +66,7 @@ static struct {
     unsigned seen;    /* the step it was last in front at */
     bool again;       /* it went and came back: the program asks again */
     bool quits;       /* a button passed over as Quit */
+    uint32_t polls;   /* ev_queue_polls when it came up */
 } open_dialogs[NDIALOGS];
 static int nopen;
 static uint64_t next_at, menus_at, started_at;
@@ -161,6 +162,20 @@ static bool begun(void) { return chosen || pressed || pictured || targets_clicke
 static bool declines(const char *text)
 {
     return strcasestr(text, "cancel") || strcasestr(text, "decline") || strcasestr(text, "disagree");
+}
+
+/* Whether dialog d is a licence (a button of its own Disagrees or
+ * Declines): its Escape and Command-period are that button, and its
+ * Return may do nothing (Apple's licence, Disk Copy's), so the walk at
+ * the start clicks its other buttons instead. */
+static bool licence(gaddr d)
+{
+    char text[64];
+    int x, y, b;
+    for (int i = 1; i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++)
+        if (b && (strcasestr(text, "decline") || strcasestr(text, "disagree")))
+            return true;
+    return false;
 }
 
 /* Whether window w has a button of its own that quits (dimmed or not):
@@ -1441,6 +1456,7 @@ void walker_idle(uint64_t icount)
             open_dialogs[at].clicked = 0;
             open_dialogs[at].quits = false;
             open_dialogs[at].again = false;
+            open_dialogs[at].polls = ev_queue_polls();
             open_dialogs[at].seen = steps;
             dialogs++;
             dialogs_shown++;
@@ -1461,6 +1477,8 @@ void walker_idle(uint64_t icount)
         int step = *tries < 5 ? (begun() ? opened : starting)[*tries] : 5;
         if (step < 5)
             ++*tries;
+        if ((step == 0 || step == 1) && !begun() && licence(d))
+            return;
         switch (step) {
         case 0: key(0x1B, 0x35, 0); return;             /* Escape */
         case 1: key('.', 0x2F, 0x0100); return;         /* Command-period */
@@ -1474,18 +1492,26 @@ void walker_idle(uint64_t icount)
              * of a program that is all one dialog), but for those that
              * would end the run, and a starting one's Cancel, which may
              * well quit.  (Not a window the program runs itself: an
-             * installer's progress, whose Stop would cut it short.) */
+             * installer's progress, whose Stop would cut it short.)  One
+             * whose program has asked for no event since it came up is
+             * run by a loop of the program's own polling the mouse and
+             * keyboard, which the menus can't get past (HemiRoids' Set
+             * Keys): its buttons too, but not a Stop or Cancel. */
             char text[64], what[96];
             int x, y, b;
             bool modal = dialog_modal(d), dimmed = false, starting = !begun() && !has_quit(d, true);
-            for (int i = 1; modal && i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++) {
+            bool own = !modal && ev_queue_polls() == open_dialogs[at].polls;
+            for (int i = 1; (modal || own) && i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0;
+                 i++) {
                 if (!b || (open_dialogs[at].clicked & 1ull << (i - 1)))
                     continue;
                 if (passed_over(text)) {
                     open_dialogs[at].quits = true;
                     continue;
                 }
-                if (starting && declines(text))
+                if ((starting || own) && declines(text))
+                    continue;
+                if (own && strcasestr(text, "stop"))
                     continue;
                 if (b == 1) {
                     dimmed = true;
@@ -1635,7 +1661,11 @@ void walker_idle(uint64_t icount)
             bool enabled, submenu;
             if (!menu_bar_item(mi, n, text, sizeof text, &enabled, &submenu))
                 break;
-            bool candidate = !submenu && !passed_over(text) && !(mi == 0 && n > 1) && text[0] != '-';
+            /* Command-Q is Quit whatever the item says (Disk Copy's German
+             * "Beenden"). */
+            int cmd = menu_bar_item_key(mi, n);
+            bool candidate = !submenu && !passed_over(text) && cmd != 'Q' && cmd != 'q' && !(mi == 0 && n > 1) &&
+                             text[0] != '-';
             if (!candidate || !enabled) {
                 LOGF(LOG_TRAPS, "  walk passes menu %d item %d \"%s\"%s\n", menu_bar_id(mi), n, text,
                      enabled ? "" : " (disabled)");
