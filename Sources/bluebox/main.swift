@@ -394,9 +394,12 @@ func queueScript(_ script: [String], start: UInt64) {
             let xy = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
             guard xy.count == 2 else { fail("mouse steps take x/y: \(step)") }
             let kind = String(step[..<colon])
+            // A click's release comes a little after its press (10 ms at
+            // the headless clock's rate), as a hand's does: a program
+            // polling Button between them sees the button down.
             let presses: [Int32] = kind == "click" ? [1, 0] : kind == "down" ? [1] : kind == "up" ? [0] : [-1]
-            for b in presses { add(1, xy[0], xy[1], b, after: 0) }
-            at += 200_000
+            for b in presses { add(1, xy[0], xy[1], b, after: kind == "click" && b == 1 ? 100_000 : 0) }
+            at += kind == "click" ? 100_000 : 200_000
             continue
         }
         // The scroll wheel: wheel:x/y/n, n lines up (down when negative);

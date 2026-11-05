@@ -14,6 +14,7 @@
 
 #include "qd_internal.h"
 #include "carbon_hi.h"
+#include "hw68k.h"
 #include "machine.h"
 #include "tb_internal.h"
 #include "thme.h"
@@ -2690,8 +2691,10 @@ void tb_InitWindows(void)
     wr8(LM_WWExist, 0);
     /* As in the ROM, the Window Manager port is left current: with Color
        QuickDraw the colour one, whose pixel map programs read the screen's
-       depth from (Sokoban 3D: GetGWorld, GetGWorldPixMap). */
-    tb_SetPort(rd32(LM_WMgrCPort));
+       depth from (Sokoban 3D: GetGWorld, GetGWorldPixMap); without it, on a
+       Plus or an SE, the one port there was, whose portBits programs point
+       at buffers of their own (Down Hill Racer draws its pictures there). */
+    tb_SetPort(hw_machine()->color_qd ? rd32(LM_WMgrCPort) : wp);
 }
 
 int16_t tb_GetWVariant(gaddr w) { return w ? varcode(w) : 0; }

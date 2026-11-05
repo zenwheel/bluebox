@@ -31279,6 +31279,20 @@ static void glue_StopSpeechAt(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_StringToDate(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_date_time = (gaddr)cpu_pop32(c);
+    gaddr a_length_used_ret = (gaddr)cpu_pop32(c);
+    gaddr a_cache = (gaddr)cpu_pop32(c);
+    int32_t a_length = (int32_t)cpu_pop32(c);
+    gaddr a_text = (gaddr)cpu_pop32(c);
+    int16_t r = tb_StringToDate(a_text, a_length, a_cache, a_length_used_ret, a_date_time);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_StringToExtended(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -31311,6 +31325,20 @@ static void glue_StringToNum(cpu68k *c, uint16_t trapword)
     uint32_t a_lp = 0;
     tb_StringToNum(a_s, &a_lp);
     c->d[0] = a_lp;
+}
+
+static void glue_StringToTime(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_datetimep = (gaddr)cpu_pop32(c);
+    gaddr a_lenusedp = (gaddr)cpu_pop32(c);
+    gaddr a_cachep = (gaddr)cpu_pop32(c);
+    int32_t a_len = (int32_t)cpu_pop32(c);
+    gaddr a_textp = (gaddr)cpu_pop32(c);
+    int16_t r = tb_StringToTime(a_textp, a_len, a_cachep, a_lenusedp, a_datetimep);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
 }
 
 static void glue_StringWidth(cpu68k *c, uint16_t trapword)
@@ -36710,8 +36738,8 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA8B5, (int32_t)0x8210FFE6u, "StringToExtended", CONV_STACK, 16, 2, glue_StringToExtended},
     {0xA8B5, (int32_t)0x8210FFE8u, "ExtendedToString", CONV_STACK, 16, 2, glue_ExtendedToString},
     {0xA8B5, (int32_t)0x8210FFEAu, "FormatRecToString", CONV_STACK, 16, 2, glue_FormatRecToString},
-    {0xA8B5, (int32_t)0x8214FFF4u, "StringToTime", CONV_STACK, 20, 2, 0},
-    {0xA8B5, (int32_t)0x8214FFF6u, "StringToDate", CONV_STACK, 20, 2, 0},
+    {0xA8B5, (int32_t)0x8214FFF4u, "StringToTime", CONV_STACK, 20, 2, glue_StringToTime},
+    {0xA8B5, (int32_t)0x8214FFF6u, "StringToDate", CONV_STACK, 20, 2, glue_StringToDate},
     {0xA8B5, (int32_t)0x821C0030u, "CharToPixel", CONV_STACK, 28, 2, glue_CharToPixel},
     {0xA8B5, (int32_t)0x821CFFFEu, "StyledLineBreak", CONV_STACK, 28, 2, glue_StyledLineBreak},
     {0xA8B5, (int32_t)0x8222002Eu, "PixelToChar", CONV_STACK, 34, 2, glue_PixelToChar},

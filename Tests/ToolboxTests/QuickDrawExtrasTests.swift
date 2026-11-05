@@ -343,10 +343,16 @@ extension BlueBox {
             wr16(rd32(pic), 22)
             for (i, v) in [0, 0, 20, 20].enumerated() { wr16(rd32(pic) + 2 + UInt32(i * 2), UInt16(v)) }
             tb_DrawPicture(pic, rect(0, 0, 20, 20))
-            GrafPort_set_grafProcs(rd32(port), 0)
             #expect(rd32(cursor) == src + UInt32(data.count)) // read to its end, no further
             #expect(black(5, 5))
             #expect(!black(15, 15))
+            // GetPictInfo reads it through the same proc (SlideShow surveys
+            // its spooled pictures for their colours so).
+            wr32(cursor, src)
+            let info = tb_NewPtr(200, false, true)
+            #expect(tb_GetPictInfo(pic, info, 0, 0, 0, 0) == 0)
+            #expect(rd32(cursor) == src + UInt32(data.count))
+            GrafPort_set_grafProcs(rd32(port), 0)
         }
 
         /// A comment with data, in a handle of its own.
@@ -532,6 +538,36 @@ extension BlueBox {
             tb_IUTimeString(Int32(bitPattern: secs), 1, s)
             #expect(pstring(at: s) == "1:05:07 PM")
             #expect(tb_GetIntlResource(1) != 0)
+        }
+
+        /// StringToDate and StringToTime read what the date and time
+        /// strings write, by the itl0's order and the itl1's names.
+        @Test func datesAndTimesAreRead() {
+            launchTestApp()
+            let text = tb_NewPtr(64, false, true), used = tb_NewPtr(4, false, true)
+            let rec = tb_NewPtr(28, false, true)
+            func date(_ s: String) -> (Int16, [Int], Int) {
+                for (i, c) in s.utf8.enumerated() { wr8(text + UInt32(i), c) }
+                for i in 0..<14 { wr16(rec + UInt32(i * 2), 0) }
+                let st = tb_StringToDate(text, Int32(s.utf8.count), 0, used, rec)
+                return (st, [Int(rd16(rec + 2)), Int(rd16(rec + 4)), Int(rd16(rec + 6))], Int(rd32(used)))
+            }
+            func time(_ s: String) -> (Int16, [Int], Int) {
+                for (i, c) in s.utf8.enumerated() { wr8(text + UInt32(i), c) }
+                let st = tb_StringToTime(text, Int32(s.utf8.count), 0, used, rec)
+                return (st, [Int(rd16(rec + 8)), Int(rd16(rec + 10)), Int(rd16(rec + 12))], Int(rd32(used)))
+            }
+            #expect(date("1/2/96") == (0, [1996, 1, 2], 6))
+            #expect(date("12/25/1995 extra") == (2, [1995, 12, 25], 10)) // leftOverChars
+            #expect(date("Tuesday, January 2, 1996").1 == [1996, 1, 2])
+            #expect(date("Jan 2, 1996").0 & 1 == 1) // longDateFound
+            #expect(date("15 March 1995").1 == [1995, 3, 15])
+            #expect(date("2/30/96").0 == Int16(bitPattern: 0x8800)) // dateTimeInvalid
+            #expect(date("hello").0 == Int16(bitPattern: 0x8400)) // dateTimeNotFound
+            #expect(time("1:05:07 PM") == (0, [13, 5, 7], 10))
+            #expect(time("12:30 AM").1 == [0, 30, 0])
+            #expect(time("23:59").1 == [23, 59, 0])
+            #expect(time("25:00").0 == Int16(bitPattern: 0x8800))
         }
 
         @Test func ordering() {

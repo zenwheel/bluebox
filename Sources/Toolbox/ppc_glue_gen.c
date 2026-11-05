@@ -15411,6 +15411,17 @@ static void ppcglue_DrawJust(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_StringToTime(ppc_cpu *c)
+{
+    gaddr a_textp = (gaddr)c->gpr[3];
+    int32_t a_len = (int32_t)c->gpr[4];
+    gaddr a_cachep = (gaddr)c->gpr[5];
+    gaddr a_lenusedp = (gaddr)c->gpr[6];
+    gaddr a_datetimep = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StringToTime(a_textp, a_len, a_cachep, a_lenusedp, a_datetimep);
+    c->pc = c->lr;
+}
+
 static void ppcglue_GetSysDirection(ppc_cpu *c)
 {
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_GetSysDirection();
@@ -15436,6 +15447,17 @@ static void ppcglue_CharByte(ppc_cpu *c)
     gaddr a_textBuf = (gaddr)c->gpr[3];
     int16_t a_textOffset = (int16_t)c->gpr[4];
     c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_CharByte(a_textBuf, a_textOffset);
+    c->pc = c->lr;
+}
+
+static void ppcglue_StringToDate(ppc_cpu *c)
+{
+    gaddr a_text = (gaddr)c->gpr[3];
+    int32_t a_length = (int32_t)c->gpr[4];
+    gaddr a_cache = (gaddr)c->gpr[5];
+    gaddr a_length_used_ret = (gaddr)c->gpr[6];
+    gaddr a_date_time = (gaddr)c->gpr[7];
+    c->gpr[3] = (uint32_t)(int32_t)(int16_t)tb_StringToDate(a_text, a_length, a_cache, a_length_used_ret, a_date_time);
     c->pc = c->lr;
 }
 
@@ -37931,40 +37953,6 @@ static void ppctrap_ROMlib_FnextX(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_StringToTime(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, 0x8214FFF4u);
-    ppc_trap((uint16_t)(0xA8B5));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
-static void ppctrap_StringToDate(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(2, 0);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap_push(4, c->gpr[6]);
-    ppc_trap_push(4, c->gpr[7]);
-    ppc_trap_push(4, 0x8214FFF6u);
-    ppc_trap((uint16_t)(0xA8B5));
-    uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_result(2)));
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_ToggleDate(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -43870,11 +43858,11 @@ const ppc_export ppc_exports[] = {
     {"StopMovie", ppcglue_StopMovie},
     {"StopSpeech", ppcglue_StopSpeech},
     {"StopSpeechAt", ppcglue_StopSpeechAt},
-    {"StringToDate", ppctrap_StringToDate},
+    {"StringToDate", ppcglue_StringToDate},
     {"StringToExtended", ppcglue_StringToExtended},
     {"StringToFormatRec", ppcglue_StringToFormatRec},
     {"StringToNum", ppctrap_StringToNum},
-    {"StringToTime", ppctrap_StringToTime},
+    {"StringToTime", ppcglue_StringToTime},
     {"StringWidth", ppcglue_StringWidth},
     {"StripAddress", ppcglue_StripAddress},
     {"StripDiacritics", ppcglue_StripDiacritics},

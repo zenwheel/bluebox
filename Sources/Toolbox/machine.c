@@ -942,10 +942,22 @@ bool events_host_attached(void);
 static bool realtime;
 void machine_set_realtime(bool on) { realtime = on; }
 
+/* A 68000 (PLAN M22) keeps a compact Mac's time: its clocks at 7.8336 MHz,
+ * with about a quarter of the bus going to the screen and the sound, as on
+ * a Plus or an SE, so it ran as a 6 MHz 68000 would.  Early games timed
+ * themselves by it (Down Hill Racer divides by the ticks a frame takes).
+ * What the instruction count moved on by without running instructions (a
+ * wait for input passing, machine_idle_for) is time at the usual rate. */
+static bool timed_68000(void) { return cpu.model == 68000 && !g_ppc_mode; }
+static uint64_t cycles_ns(uint64_t cycles) { return (uint64_t)((unsigned __int128)cycles * 4000000000u / (7833600u * 3)); }
+
 uint64_t machine_time_ns(void)
 {
-    if (!events_host_attached() && !realtime)
+    if (!events_host_attached() && !realtime) {
+        if (timed_68000())
+            return cycles_ns(cpu.cycles) + (cpu.icount - cpu.timed) * 100u + skipped_ns;
         return cpu.icount * 100u + skipped_ns;
+    }
     return now_ns() - ticks_base_ns + skipped_ns;
 }
 
@@ -1017,9 +1029,33 @@ void machine_set_time(uint32_t secs)
     wr32(LM_Time, secs);
 }
 
+/* With the wall clock, a 68000 runs no faster than its clocks allow:
+ * ahead of them it waits.  A program idle in the host meanwhile (or behind
+ * by more than a few ticks) starts the count again rather than racing to
+ * catch up. */
+static void pace_68000(void)
+{
+    static uint64_t wall0, cycles0;
+    if (!timed_68000() || (!events_host_attached() && !realtime))
+        return;
+    uint64_t wall = now_ns() - wall0, run = cycles_ns(cpu.cycles - cycles0);
+    if (!wall0 || run + 100000000u < wall || run > wall + 100000000u) {
+        wall0 = now_ns();
+        cycles0 = cpu.cycles;
+        return;
+    }
+    if (run > wall + 1000000u) {
+        struct timespec ts = { 0, (long)(run - wall) };
+        nanosleep(&ts, NULL);
+    }
+}
+
 run_status machine_run(uint64_t max)
 {
-    const uint64_t slice = 20000;
+    /* Ticks and the VBL tasks move on between slices: a 68000's are
+     * shorter, its instructions taking ten times as long, so that a
+     * program timing a loop by Ticks sees them change within a tick. */
+    const uint64_t slice = timed_68000() ? 2000 : 20000;
     uint64_t done = 0;
     while (!cpu.halted && done < max) {
         uint64_t n = max - done < slice ? max - done : slice;
@@ -1032,6 +1068,7 @@ run_status machine_run(uint64_t max)
                 cpu_halt(&cpu, "%s", g_ppc.halt_reason);
         } else {
             done += cpu_run(&cpu, n);
+            pace_68000();
         }
         machine_advance_ticks();
         events_script_pump(cpu.icount);

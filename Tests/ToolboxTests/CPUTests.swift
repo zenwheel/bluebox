@@ -83,3 +83,34 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    /// A 68000 counts its clock cycles as the User's Manual's tables give
+    /// them (PLAN M22's timing): what a program timing a loop by the tick saw.
+    @Suite struct M68000Timing {
+        @Test func cyclesFollowTheManualsTables() {
+            bootMachine()
+            let at: UInt32 = 0x5000_0000
+            // MOVEQ #9,D0; loop: CLR.L (A0)+; DBRA D0,loop; ADD.L D1,D0; MULU.W D1,D0; BRA *
+            let code: [UInt16] = [0x7009, 0x4298, 0x51C8, 0xFFFC, 0xD081, 0xC0C1, 0x60FE]
+            for (i, w) in code.enumerated() { wr16(at + UInt32(i * 2), w) }
+            var c = cpu68k()
+            cpu_init(&c)
+            cpu_set_model(&c, 68000, 0)
+            c.pc = at
+            c.a.0 = at + 0x100
+            var spent: [UInt64] = []
+            func run(_ n: UInt64) {
+                let before = c.cycles
+                _ = cpu_run(&c, n)
+                spent.append(c.cycles - before)
+            }
+            run(21) // MOVEQ 4; ten CLR.L (A0)+ at 20; nine DBRA taken at 10, the last 14
+            run(1)  // ADD.L Dn,Dn: 8
+            run(1)  // MULU.W: 70 (38 + 2n; Blue Box takes n as 16)
+            run(1)  // BRA.B taken: 10
+            #expect(spent == [308, 8, 70, 10], "cycles \(spent)")
+            #expect(c.timed == c.icount)
+        }
+    }
+}
