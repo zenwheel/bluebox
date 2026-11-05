@@ -93,6 +93,7 @@ void code_check_reset(void);
 int menu_bar_count(void);
 int16_t menu_bar_id(int i);
 bool menu_bar_item(int i, int n, char *text, size_t size, bool *enabled, bool *submenu);
+int menu_bar_item_key(int i, int n);
 gaddr dialog_in_front(void);
 uint32_t dialog_signature(gaddr d);
 bool dialog_modal(gaddr d);

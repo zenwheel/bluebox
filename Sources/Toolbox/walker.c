@@ -1651,7 +1651,11 @@ void walker_idle(uint64_t icount)
             bool enabled, submenu;
             if (!menu_bar_item(mi, n, text, sizeof text, &enabled, &submenu))
                 break;
-            bool candidate = !submenu && !passed_over(text) && !(mi == 0 && n > 1) && text[0] != '-';
+            /* Command-Q is Quit whatever the item says (Disk Copy's German
+             * "Beenden"). */
+            int cmd = menu_bar_item_key(mi, n);
+            bool candidate = !submenu && !passed_over(text) && cmd != 'Q' && cmd != 'q' && !(mi == 0 && n > 1) &&
+                             text[0] != '-';
             if (!candidate || !enabled) {
                 LOGF(LOG_TRAPS, "  walk passes menu %d item %d \"%s\"%s\n", menu_bar_id(mi), n, text,
                      enabled ? "" : " (disabled)");
