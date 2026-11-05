@@ -533,6 +533,36 @@ extension BlueBox {
             #expect(tb_GetIntlResource(1) != 0)
         }
 
+        /// StringToDate and StringToTime read what the date and time
+        /// strings write, by the itl0's order and the itl1's names.
+        @Test func datesAndTimesAreRead() {
+            launchTestApp()
+            let text = tb_NewPtr(64, false, true), used = tb_NewPtr(4, false, true)
+            let rec = tb_NewPtr(28, false, true)
+            func date(_ s: String) -> (Int16, [Int], Int) {
+                for (i, c) in s.utf8.enumerated() { wr8(text + UInt32(i), c) }
+                for i in 0..<14 { wr16(rec + UInt32(i * 2), 0) }
+                let st = tb_StringToDate(text, Int32(s.utf8.count), 0, used, rec)
+                return (st, [Int(rd16(rec + 2)), Int(rd16(rec + 4)), Int(rd16(rec + 6))], Int(rd32(used)))
+            }
+            func time(_ s: String) -> (Int16, [Int], Int) {
+                for (i, c) in s.utf8.enumerated() { wr8(text + UInt32(i), c) }
+                let st = tb_StringToTime(text, Int32(s.utf8.count), 0, used, rec)
+                return (st, [Int(rd16(rec + 8)), Int(rd16(rec + 10)), Int(rd16(rec + 12))], Int(rd32(used)))
+            }
+            #expect(date("1/2/96") == (0, [1996, 1, 2], 6))
+            #expect(date("12/25/1995 extra") == (2, [1995, 12, 25], 10)) // leftOverChars
+            #expect(date("Tuesday, January 2, 1996").1 == [1996, 1, 2])
+            #expect(date("Jan 2, 1996").0 & 1 == 1) // longDateFound
+            #expect(date("15 March 1995").1 == [1995, 3, 15])
+            #expect(date("2/30/96").0 == Int16(bitPattern: 0x8800)) // dateTimeInvalid
+            #expect(date("hello").0 == Int16(bitPattern: 0x8400)) // dateTimeNotFound
+            #expect(time("1:05:07 PM") == (0, [13, 5, 7], 10))
+            #expect(time("12:30 AM").1 == [0, 30, 0])
+            #expect(time("23:59").1 == [23, 59, 0])
+            #expect(time("25:00").0 == Int16(bitPattern: 0x8800))
+        }
+
         @Test func ordering() {
             launchTestApp()
             func cmp(_ a: String, _ b: String) -> Int16 {

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 
 #include "sysres_gen.h"
@@ -320,6 +321,313 @@ void tb_IULTimeString(gaddr datetimep, int8_t secs, gaddr result, gaddr h)
     char s[64];
     format_time(long_secs(datetimep), secs != 0, h, s, sizeof s);
     put_result(result, s);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Reading dates and times: StringToDate and StringToTime (Inside Macintosh:
+ * Text, "Converting Between Strings and Dates and Times"), by the current
+ * itl0's order, separators and AM and PM strings and the itl1's month and
+ * day names. */
+
+enum {
+    longDateFound = 1, leftOverChars = 2, sepNotIntlSep = 4, fieldOrderNotIntl = 8, extraneousStrings = 16,
+    tooManySeps = 32, sepNotConsistent = 64, fatalDateTime = (int16_t)0x8000, tokenErr = (int16_t)0x8100,
+    dateTimeNotFound = (int16_t)0x8400, dateTimeInvalid = (int16_t)0x8800
+};
+
+typedef struct {
+    const uint8_t *s;
+    int n, at;
+} scan;
+
+static bool sc_space(int c) { return c == ' ' || c == '\t' || c == 0xCA; }
+static void sc_skip(scan *k)
+{
+    while (k->at < k->n && sc_space(k->s[k->at]))
+        k->at++;
+}
+static int sc_number(scan *k, int *digits)
+{
+    int v = 0, d = 0;
+    while (k->at < k->n && k->s[k->at] >= '0' && k->s[k->at] <= '9' && d < 9) {
+        v = v * 10 + (k->s[k->at++] - '0');
+        d++;
+    }
+    *digits = d;
+    return v;
+}
+static bool sc_alpha(int c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0x80; }
+static int sc_word(scan *k, char *w, int cap)
+{
+    int n = 0;
+    while (k->at < k->n && sc_alpha(k->s[k->at])) {
+        if (n < cap - 1)
+            w[n++] = (char)k->s[k->at];
+        k->at++;
+    }
+    w[n] = 0;
+    return n;
+}
+
+/* A word naming one of the itl1's names (at least three letters of it, or
+ * all of a shorter one): its number from 1, or 0. */
+static int name_index(const char *w, const uint8_t *itl1, int first, int count)
+{
+    int wl = (int)strlen(w);
+    for (int i = 0; i < count; i++) {
+        const uint8_t *name = itl1 + first + i * 16;
+        int nl = name[0] < 15 ? name[0] : 15;
+        if (wl > nl || wl < (nl < 3 ? nl : 3))
+            continue;
+        if (!strncasecmp(w, (const char *)name + 1, (size_t)wl))
+            return i + 1;
+    }
+    return 0;
+}
+
+static int days_in(int year, int month)
+{
+    static const int len[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    bool leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    return month == 2 && leap ? 29 : len[month - 1];
+}
+
+static void current_ymd(int *y, int *m, int *d)
+{
+    struct tm t;
+    to_tm(rd32(LM_Time), &t);
+    *y = t.tm_year + 1900;
+    *m = t.tm_mon + 1;
+    *d = t.tm_mday;
+}
+
+/* A one- or two-digit year: the one nearest this year, within fifty years
+ * either side. */
+static int full_year(int v, int digits)
+{
+    if (digits > 2)
+        return v;
+    int y, m, d;
+    current_ymd(&y, &m, &d);
+    int full = y - y % 100 + v;
+    if (full > y + 50)
+        full -= 100;
+    else if (full <= y - 50)
+        full += 100;
+    return full;
+}
+
+int16_t tb_StringToDate(gaddr text, int32_t length, gaddr cache, gaddr length_used_ret, gaddr date_time)
+{
+    uint8_t buf[256], itl0[32], itl1[332];
+    int n = length < 0 ? 0 : length > 255 ? 255 : (int)length;
+    gget(buf, text, (uint32_t)n);
+    intl_bytes(0, 0, itl0, sizeof itl0);
+    intl_bytes(0, 1, itl1, sizeof itl1);
+    scan k = { buf, n, 0 };
+    int16_t status = 0;
+    int val[3], digits[3], nfields = 0, month_field = -1, used = 0;
+    uint8_t seps[3] = { 0 };
+    int nseps = 0;
+    sc_skip(&k);
+    while (k.at < k.n && nfields < 3) {
+        int c = k.s[k.at];
+        if (c >= '0' && c <= '9') {
+            val[nfields] = sc_number(&k, &digits[nfields]);
+            nfields++;
+        } else if (sc_alpha(c)) {
+            char w[32];
+            int save = k.at;
+            sc_word(&k, w, sizeof w);
+            int mon = name_index(w, itl1, 112, 12);
+            if (mon && month_field < 0) {
+                val[nfields] = mon;
+                digits[nfields] = 0;
+                month_field = nfields++;
+                status |= longDateFound;
+            } else if (name_index(w, itl1, 0, 7)) {
+                status |= longDateFound; /* the day's name says nothing more */
+            } else {
+                k.at = save;
+                break;
+            }
+        } else {
+            break;
+        }
+        used = k.at;
+        /* The separator after the field: spaces round it, and one mark. */
+        sc_skip(&k);
+        if (k.at < k.n && strchr("/-.,", k.s[k.at]) && k.s[k.at]) {
+            if (nseps < 3)
+                seps[nseps] = k.s[k.at];
+            nseps++;
+            k.at++;
+            sc_skip(&k);
+        } else if (k.at < k.n && k.s[k.at] == ':') {
+            break; /* a time follows */
+        }
+    }
+    if (nfields == 0) {
+        wr32(length_used_ret, 0);
+        return dateTimeNotFound;
+    }
+    wr32(length_used_ret, (uint32_t)used);
+    for (int i = 0; i < nseps && i < 3; i++) {
+        if (seps[i] != itl0[9] && !(status & longDateFound))
+            status |= sepNotIntlSep;
+        if (seps[i] != seps[0])
+            status |= sepNotConsistent;
+    }
+    if (nseps > nfields)
+        status |= tooManySeps;
+    k.at = used;
+    sc_skip(&k);
+    if (k.at < k.n)
+        status |= leftOverChars;
+
+    /* Which field is which: the itl0's order (0 mdy, 1 dmy, 2 ymd, 3 myd,
+     * 4 dym, 5 ydm), unless a month's name or a year's size says. */
+    static const char orders[6][4] = { "mdy", "dmy", "ymd", "myd", "dym", "ydm" };
+    const char *order = orders[itl0[7] < 6 ? itl0[7] : 0];
+    int year, month, day;
+    current_ymd(&year, &month, &day);
+    int y = -1, m = -1, d = -1;
+    if (nfields == 1) {
+        if (month_field == 0)
+            m = 0;
+        else
+            d = 0;
+    } else {
+        /* The order's letters for the fields present: a missing year (two
+         * fields) is the order without its y. */
+        char want[4];
+        int w = 0;
+        for (int i = 0; i < 3; i++)
+            if (nfields == 3 || order[i] != 'y')
+                want[w++] = order[i];
+        if (month_field >= 0 && want[month_field] != 'm') {
+            /* A month by name where the order has another field: the rest
+             * keep their order around it. */
+            status |= fieldOrderNotIntl;
+            w = 0;
+            for (int i = 0; i < 3 && w < nfields; i++) {
+                if (w == month_field)
+                    want[w++] = 'm';
+                if (order[i] != 'm' && (nfields == 3 || order[i] != 'y') && w < nfields)
+                    want[w++] = order[i];
+            }
+            if (w < nfields)
+                want[w++] = 'm';
+        }
+        for (int i = 0; i < nfields; i++) {
+            if (want[i] == 'y')
+                y = i;
+            else if (want[i] == 'm')
+                m = i;
+            else
+                d = i;
+        }
+        /* A field with three or more digits, or over 31, can only be the
+         * year: it changes places with the field the order made the year. */
+        for (int i = 0; i < nfields; i++)
+            if (i != y && i != month_field && (digits[i] > 2 || val[i] > 31)) {
+                if (m == i)
+                    m = y;
+                else if (d == i)
+                    d = y;
+                y = i;
+                status |= fieldOrderNotIntl;
+                break;
+            }
+    }
+    if (y >= 0)
+        year = full_year(val[y], digits[y]);
+    if (m >= 0)
+        month = val[m];
+    if (d >= 0)
+        day = val[d];
+    else if (m >= 0)
+        day = 1; /* a month without a day: its first */
+    if (month < 1 || month > 12 || day < 1 || day > days_in(year, month))
+        return dateTimeInvalid;
+    wr16(date_time + 2, (uint16_t)year);
+    wr16(date_time + 4, (uint16_t)month);
+    wr16(date_time + 6, (uint16_t)day);
+    return status;
+}
+
+int16_t tb_StringToTime(gaddr textp, int32_t len, gaddr cachep, gaddr lenusedp, gaddr datetimep)
+{
+    uint8_t buf[256], itl0[32];
+    int n = len < 0 ? 0 : len > 255 ? 255 : (int)len;
+    gget(buf, textp, (uint32_t)n);
+    intl_bytes(0, 0, itl0, sizeof itl0);
+    scan k = { buf, n, 0 };
+    int16_t status = 0;
+    int f[3] = { 0, 0, 0 }, nf = 0, digits, used = 0;
+    sc_skip(&k);
+    while (k.at < k.n && nf < 3 && k.s[k.at] >= '0' && k.s[k.at] <= '9') {
+        f[nf++] = sc_number(&k, &digits);
+        used = k.at;
+        if (k.at < k.n && (k.s[k.at] == ':' || k.s[k.at] == itl0[20])) {
+            if (k.s[k.at] != itl0[20])
+                status |= sepNotIntlSep;
+            k.at++;
+        } else {
+            break;
+        }
+    }
+    if (nf == 0) {
+        wr32(lenusedp, 0);
+        return dateTimeNotFound;
+    }
+    /* AM or PM: the itl0's strings, or the letters alone. */
+    k.at = used;
+    sc_skip(&k);
+    int pm = -1;
+    if (k.at < k.n && sc_alpha(k.s[k.at])) {
+        char w[16];
+        int save = k.at;
+        sc_word(&k, w, sizeof w);
+        char am[5] = { 0 }, ev[5] = { 0 };
+        int a = 0, e = 0;
+        for (int i = 0; i < 4; i++) {
+            if (itl0[12 + i] && !sc_space(itl0[12 + i]))
+                am[a++] = (char)itl0[12 + i];
+            if (itl0[16 + i] && !sc_space(itl0[16 + i]))
+                ev[e++] = (char)itl0[16 + i];
+        }
+        if ((a && !strcasecmp(w, am)) || !strcasecmp(w, "am") || !strcasecmp(w, "a"))
+            pm = 0;
+        else if ((e && !strcasecmp(w, ev)) || !strcasecmp(w, "pm") || !strcasecmp(w, "p"))
+            pm = 1;
+        if (pm >= 0) {
+            used = k.at;
+            /* "A.M." and the like: the stops after the letters. */
+            while (used < k.n && k.s[used] == '.')
+                used++;
+        } else {
+            k.at = save;
+        }
+    }
+    int hour = f[0];
+    if (pm >= 0) {
+        if (hour < 1 || hour > 12)
+            return dateTimeInvalid;
+        hour = hour % 12 + (pm ? 12 : 0);
+    }
+    if (hour > 23 || f[1] > 59 || f[2] > 59)
+        return dateTimeInvalid;
+    wr32(lenusedp, (uint32_t)used);
+    k.at = used;
+    sc_skip(&k);
+    if (k.at < k.n)
+        status |= leftOverChars;
+    wr16(datetimep + 8, (uint16_t)hour);
+    wr16(datetimep + 10, (uint16_t)f[1]);
+    wr16(datetimep + 12, (uint16_t)f[2]);
+    wr16(datetimep + 20, (uint16_t)(hour >= 12));
+    return status;
 }
 
 /* ---------------------------------------------------------------------- */
