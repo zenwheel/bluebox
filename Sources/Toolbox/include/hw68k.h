@@ -60,5 +60,7 @@ bool hw_screen_alternate(void);
 bool hw_sound_alternate(void);
 int hw_sound_volume(void);
 bool hw_sound_enabled(void);
+/* The processor's accesses to the I/O space so far. */
+uint64_t hw_device_accesses(void);
 
 #endif

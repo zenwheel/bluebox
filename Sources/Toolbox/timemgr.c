@@ -388,12 +388,23 @@ bool time_busy(void)
     return false;
 }
 
+/* When the next Time Manager task is due (machine ns), 0 if none. */
+uint64_t time_next_due(void)
+{
+    uint64_t due = 0;
+    for (int i = 0; i < MAX_TASKS; i++)
+        if (timers[i].tm && timers[i].active && (!due || timers[i].due < due))
+            due = timers[i].due;
+    return due;
+}
+
 void time_pump(void)
 {
     cpu68k *c = g_cpu;
     if (in_interrupt || !c || c->halted || (c->sr & 0x0700))
         return;
     in_interrupt = true;
+    idle_interrupt_enter();
     run_completions();
     run_deferred();
     sound_pump(); /* sound completion ran at interrupt time too */
@@ -432,6 +443,7 @@ void time_pump(void)
     vbl_ticks = ticks;
     while (n--)
         vbl_tick();
+    idle_interrupt_leave();
     in_interrupt = false;
 }
 
@@ -442,7 +454,9 @@ void time_vbl_task(void)
     if (in_interrupt)
         return;
     in_interrupt = true;
+    idle_interrupt_enter();
     vbl_tick();
+    idle_interrupt_leave();
     in_interrupt = false;
 }
 

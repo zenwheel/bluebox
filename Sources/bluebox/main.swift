@@ -85,7 +85,9 @@ func usage() -> Never {
           --census   keep going past unimplemented traps and report every trap used
           --max N    stop after N instructions (default 50000000)
           --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu, speech (the Speech
-                     Manager's callbacks, timed); the debugger's entries are always logged
+                     Manager's callbacks, timed), idle (a program waiting by spinning, found
+                     and let the host sleep: with a host or --realtime; BLUEBOX_IDLE_SLEEP=0
+                     turns that off); the debugger's entries are always logged
           --debugger D  what Debugger, DebugStr and SysBreak do, Blue Box being a Mac with
                      MacsBug installed: log (the default: log the message, where from and how
                      often, and go on, as "g" in MacsBug), halt (stop the run there) or quiet
@@ -666,6 +668,7 @@ func runCommand(_ args: [String]) {
                 case "mem": logMask |= UInt32(LOG_MEM)
                 case "cpu": logMask |= UInt32(LOG_CPU)
                 case "speech": logMask |= UInt32(LOG_SPEECH)
+                case "idle": logMask |= UInt32(LOG_IDLE)
                 case "debugger": break
                 default: fail("unknown log category \(item)")
                 }

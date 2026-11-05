@@ -515,6 +515,7 @@ bool machine_boot(bool census)
      * its windows through it (Web Archer's search bar). */
     wm_rebuild_desk();
     display_reset();
+    idle_reset();
     speech_reset();
     macintalk_reset();
     drag_reset();
@@ -941,6 +942,7 @@ bool events_host_attached(void);
 
 static bool realtime;
 void machine_set_realtime(bool on) { realtime = on; }
+bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
 /* A 68000 (PLAN M22) keeps a compact Mac's time: its clocks at 7.8336 MHz,
  * with about a quarter of the bus going to the screen and the sound, as on
@@ -1072,6 +1074,7 @@ run_status machine_run(uint64_t max)
             done += cpu_run(&cpu, n);
             pace_68000();
         }
+        idle_slice();
         machine_advance_ticks();
         events_script_pump(cpu.icount);
         events_sync_lowmem();
