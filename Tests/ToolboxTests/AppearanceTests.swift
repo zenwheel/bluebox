@@ -139,7 +139,7 @@ extension BlueBox {
             #expect(tb_DrawThemeTrack(info, 0, 0, 0) == 0)
             let filled = pixel(20, 8), empty = pixel(80, 8)
             #expect(filled != empty)
-            #expect(empty == grey(0xEEEE))
+            #expect(empty == grey(0xBBBB)) // Platinum's well
             #expect(filled.2 > filled.0) // the accent: bluer than it is red
             let bounds = tb_NewPtr(8, false, true)
             #expect(tb_GetThemeTrackBounds(info, bounds) == 0)

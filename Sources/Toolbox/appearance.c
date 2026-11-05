@@ -1815,63 +1815,226 @@ static void draw_scroll_bar(const track_info *t)
 }
 
 /* A slider: a groove with a pointed (or plain) thumb. */
+/* A pixel of a slider's part drawn as if horizontal with its thumb
+ * pointing down (i along the track, j across it from the thumb's flat
+ * edge), turned to the slider's way: dir 1 points up (or left), 2 down (or
+ * right). */
+typedef struct {
+    qrect box;
+    bool h;
+    int dir;
+} slider_map;
+
+static void slider_dot(const slider_map *m, int i, int j, uint16_t r, uint16_t g, uint16_t b)
+{
+    int x, y;
+    int len = m->h ? m->box.bottom - m->box.top : m->box.right - m->box.left;
+    if (m->dir == 1)
+        j = len - 1 - j;
+    if (m->h) {
+        x = m->box.left + i;
+        y = m->box.top + j;
+    } else {
+        x = m->box.left + j;
+        y = m->box.top + i;
+    }
+    uint16_t c[3] = { r, g, b };
+    ap_fill((qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 1), (int16_t)(x + 1) }, c);
+}
+
+static void slider_grey(const slider_map *m, int i, int j, uint16_t v) { slider_dot(m, i, j, v, v, v); }
+
+static void mix16(const uint16_t a[3], const uint16_t b[3], int t, uint16_t out[3])
+{
+    for (int k = 0; k < 3; k++)
+        out[k] = (uint16_t)(a[k] + (b[k] - a[k]) * t / 16);
+}
+
+/* Platinum's slider: a rounded groove, and a thumb in the accent colour
+ * (a pentagon pointing at the tick marks, or a square), lit at its top
+ * left, shaded at its bottom right, with three grip lines. */
 static void draw_slider(const track_info *t)
 {
     bool h = horizontal(t), active = t->enable == kThemeTrackActive;
     qrect a = track_area(t), b = t->bounds;
-    qrect groove = h ? (qrect){ (int16_t)(b.top + 5), (int16_t)(a.left - 2), (int16_t)(b.top + 10), (int16_t)(a.right + 2) }
-                     : (qrect){ (int16_t)(a.top - 2), (int16_t)(b.left + 5), (int16_t)(a.bottom + 2), (int16_t)(b.left + 10) };
-    ap_frame_grey(groove, active ? 0 : 0x8888);
-    ap_fill_grey(inset(groove, 1), active ? 0xAAAA : 0xDDDD);
-    if (ap_in_color())
-        ap_bevel(inset(groove, 1), 0x8888, 0xDDDD);
     qrect th = track_thumb(t);
-    uint16_t face[3];
-    if (active)
-        accent_shade(t->press & 0x08 ? -2 : 4, face);
-    else
+    if (!ap_in_color()) {
+        qrect groove = h ? (qrect){ (int16_t)(b.top + 5), (int16_t)(a.left - 2), (int16_t)(b.top + 10), (int16_t)(a.right + 2) }
+                         : (qrect){ (int16_t)(a.top - 2), (int16_t)(b.left + 5), (int16_t)(a.bottom + 2), (int16_t)(b.left + 10) };
+        ap_frame_grey(groove, 0);
+        ap_fill_grey(inset(groove, 1), 0xFFFF);
+        ap_frame_grey(th, 0);
+        ap_fill_grey(inset(th, 1), active ? 0xFFFF : 0xDDDD);
+        return;
+    }
+    int dir = t->thumb_dir == 1 ? 1 : t->thumb_dir == 2 ? 2 : 0;
+    /* the thumb's box, 15 square; the groove across it where its body is */
+    qrect box = h ? (qrect){ (int16_t)(th.top + 1), th.left, (int16_t)(th.top + 16), (int16_t)(th.left + 15) }
+                  : (qrect){ th.top, (int16_t)(th.left + 1), (int16_t)(th.top + 15), (int16_t)(th.left + 16) };
+    int g0 = dir == 0 ? 3 : 0; /* the groove's first row, across the thumb */
+    slider_map gm = { box, h, dir };
+    /* the groove, the length of the track and a little more, its ends round */
+    static const uint16_t tube[8] = { 0xDDDD, 0x8888, 0x4444, 0xAAAA, 0xAAAA, 0x8888, 0x5959, 0xFBFB };
+    static const uint16_t tube_off[8] = { 0xE5E5, 0xAAAA, 0x9999, 0xCCCC, 0xCCCC, 0xAAAA, 0x9999, 0xF6F6 };
+    int lo = (h ? a.left - box.left : a.top - box.top) - 9, hi = (h ? a.right - box.left : a.bottom - box.top) + 9;
+    for (int i = lo; i < hi; i++)
+        for (int j = 0; j < 8; j++) {
+            bool end = i == lo || i == hi - 1;
+            if (end && (j == 0 || j == 7))
+                continue;
+            uint16_t v = active ? tube[j] : tube_off[j];
+            if (end)
+                v = (uint16_t)((v + 0xDDDD) / 2);
+            slider_grey(&gm, i, g0 + j, v);
+        }
+    /* the thumb */
+    uint16_t face[3], light[3], shade[3], dark[3], line[3], white[3], black[3];
+    grey(white, 0xFFFF);
+    grey(black, 0x3333);
+    if (active) {
+        accent_shade(t->press & 0x08 ? -2 : 7, face);
+        mix16(face, white, 7, light);
+        accent_shade(4, shade);
+        accent_shade(-6, dark);
+        mix16(face, dark, 9, line);
+    } else {
         grey(face, 0xDDDD);
-    hrgn g, in;
-    hrgn_init(&g);
-    hrgn_init(&in);
-    /* Square with a point down (or right) unless plain. */
-    int w = h ? th.right - th.left : th.bottom - th.top;
-    bool pointed = t->thumb_dir != 0;
-    for (int y = th.top; y < th.bottom; y++) {
-        int x0 = th.left, x1 = th.right;
-        if (h && pointed) {
-            int d = y - (th.bottom - w / 2);
-            if (d > 0) {
-                x0 += d;
-                x1 -= d;
+        grey(light, 0xEEEE);
+        grey(shade, 0xBBBB);
+        grey(dark, 0xAAAA);
+        grey(line, 0xBBBB);
+    }
+    uint16_t edge = active ? 0x3333 : 0x8888;
+    int body = dir == 0 ? 15 : 8; /* rows before it tapers to its point */
+    for (int j = 0; j < 15; j++) {
+        int in = j < body ? 0 : j - body + 1; /* how far each side has come in */
+        int i0 = in, i1 = 14 - in;
+        if (i1 < i0)
+            break;
+        for (int i = i0; i <= i1; i++) {
+            bool rim = i == i0 || i == i1 || j == 0 || (dir == 0 && j == 14) || j == 14 - 0 * in || (in && i1 - i0 < 2);
+            if (rim) {
+                slider_grey(&gm, i, j, edge);
+                continue;
             }
-        }
-        if (x1 > x0)
-            hrgn_add_row(&g, y, x0, x1);
-    }
-    if (!h && pointed) { /* vertical: pointing right */
-        hrgn_free(&g);
-        hrgn_init(&g);
-        int cy = (th.top + th.bottom) / 2, side = th.right - th.left - 4;
-        for (int y = th.top; y < th.bottom; y++) {
-            int d = abs(y - cy);
-            hrgn_add_row(&g, y, th.left, th.left + side + (4 - d > 0 ? 4 - d : 0));
+            const uint16_t *c = face;
+            if (i == i0 + 1 || j == 1)
+                c = light;
+            else if (i == i1 - 1)
+                c = dark;
+            else if (i == i1 - 2 || (j == body - 1 + in && in) || (dir == 0 && j == 13))
+                c = shade;
+            slider_dot(&gm, i, j, c[0], c[1], c[2]);
         }
     }
-    uint16_t frame[3];
-    grey(frame, active ? 0 : 0x8888);
-    ap_fill_rgn(&g, frame);
-    hrgn_copy(&in, &g);
-    hrgn_inset(&in, 1, 1);
-    ap_fill_rgn(&in, face);
-    hrgn_free(&g);
-    hrgn_free(&in);
+    /* three grip lines down its middle */
+    if (active)
+        for (int k = 0; k < 3; k++)
+            for (int j = 2; j < (dir == 0 ? 13 : 7); j++) {
+                slider_dot(&gm, 4 + k * 2, j, light[0], light[1], light[2]);
+                slider_dot(&gm, 5 + k * 2, j, line[0], line[1], line[2]);
+            }
+    (void)black;
 }
 
 /* A progress bar: a framed, sunken track filled with the accent colour;
  * indeterminate ones are diagonal stripes that move with the phase. */
+/* A progress bar's tube, row k of n: Platinum shades it top to bottom as
+ * a rod lit from above, in the accent colours (variation ramp positions,
+ * light 0 to dark 7) or in greys. */
+static void tube_rgb(int k, int n, bool accent, uint16_t out[3])
+{
+    static const float pos[11] = { 6.6f, 4.1f, 3.1f, 1.7f, 1.0f, 0.4f, 1.3f, 2.3f, 3.3f, 4.6f, 6.1f };
+    static const uint16_t greys[11] = { 0x1515, 0x5E5E, 0x8484, 0xAEAE, 0xCCCC, 0xF6F6, 0xDDDD, 0xBBBB, 0x9999,
+                                        0x7777, 0x4444 };
+    int i = n > 1 ? k * 10 / (n - 1) : 5;
+    if (!accent) {
+        grey(out, greys[i]);
+        return;
+    }
+    /* the ramp: GetThemeAccentColors' (the theme's variation, or the shades) */
+    static const int8_t shades[8] = { 14, 12, 9, 6, 3, 0, -4, -8 };
+    float p = pos[i];
+    int lo = (int)p, hi = lo < 7 ? lo + 1 : 7;
+    uint16_t a[3], c[3];
+    if (!(themed() && thme_variation_rgb(lo, a)))
+        accent_shade(shades[lo], a);
+    if (!(themed() && thme_variation_rgb(hi, c)))
+        accent_shade(shades[hi], c);
+    float f = p - lo;
+    for (int j = 0; j < 3; j++)
+        out[j] = (uint16_t)(a[j] + (c[j] - a[j]) * f);
+}
+
+/* Platinum's progress bar: a sunken grey well with the tube in it, the
+ * done part in the accent colours with a shaded end; an indeterminate one
+ * slanted stripes of the two that move with the phase. */
+static void platinum_progress(const track_info *t)
+{
+    qrect r = t->bounds;
+    bool active = t->enable == kThemeTrackActive;
+    ap_fill_grey((qrect){ (int16_t)(r.top - 1), (int16_t)(r.left - 1), r.top, r.right }, 0xDDDD);
+    ap_fill_grey((qrect){ r.top, (int16_t)(r.left - 1), r.bottom, r.left }, 0xDDDD);
+    ap_fill_grey((qrect){ r.bottom, r.left, (int16_t)(r.bottom + 1), (int16_t)(r.right + 1) }, 0xFBFB);
+    ap_fill_grey((qrect){ (int16_t)(r.top - 1), r.right, r.bottom, (int16_t)(r.right + 1) }, 0xFBFB);
+    ap_fill_grey((qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right }, 0x8080);
+    ap_fill_grey((qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) }, 0x8080);
+    ap_fill_grey((qrect){ (int16_t)(r.bottom - 1), r.left, r.bottom, r.right }, 0x4040);
+    ap_fill_grey((qrect){ (int16_t)(r.top + 1), (int16_t)(r.right - 1), r.bottom, r.right }, 0x4040);
+    qrect in = inset(r, 1);
+    int n = in.bottom - in.top, w = in.right - in.left;
+    if (n <= 0 || w <= 0)
+        return;
+    bool indet = t->kind == kThemeIndeterminateBar;
+    int done = 0;
+    if (!indet && t->max > t->min) {
+        done = (int)((int64_t)(t->value - t->min) * w / (t->max - t->min));
+        done = done < 0 ? 0 : done > w ? w : done;
+    }
+    bool rtl = t->attributes & kThemeTrackRightToLeft;
+    for (int k = 0; k < n; k++) {
+        uint16_t blue[3], g[3], well;
+        tube_rgb(k, n, active, blue);
+        tube_rgb(k, n, false, g);
+        well = k == 0 ? 0x2222 : k == 1 ? 0x9595 : k == n - 1 ? 0xA6A6 : k == n - 2 ? 0xC3C3 : 0xBBBB;
+        int y = in.top + k;
+        if (indet) {
+            int shift = (n - 1 - k) + t->phase * 2;
+            for (int x = 0; x < w; x++) {
+                bool on = ((x + shift) % 16) < 8;
+                ap_fill((qrect){ (int16_t)y, (int16_t)(in.left + x), (int16_t)(y + 1), (int16_t)(in.left + x + 1) }, on ? blue : g);
+            }
+            continue;
+        }
+        if (done < w)
+            ap_fill_grey(rtl ? (qrect){ (int16_t)y, in.left, (int16_t)(y + 1), (int16_t)(in.right - done) }
+                             : (qrect){ (int16_t)y, (int16_t)(in.left + done), (int16_t)(y + 1), in.right }, well);
+        if (!done)
+            continue;
+        int x0 = rtl ? in.right - done : in.left;
+        ap_fill((qrect){ (int16_t)y, (int16_t)x0, (int16_t)(y + 1), (int16_t)(x0 + done) }, blue);
+        /* its ends darkened, round */
+        uint16_t d[3];
+        for (int e = 0; e < 3 && e < done; e++) {
+            int f = e == 0 ? 10 : e == 1 ? 6 : 2;
+            for (int j = 0; j < 3; j++)
+                d[j] = (uint16_t)(blue[j] * (16 - f) / 16);
+            int x = rtl ? x0 + e : x0 + done - 1 - e;
+            ap_fill((qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 1), (int16_t)(x + 1) }, d);
+        }
+        for (int j = 0; j < 3; j++)
+            d[j] = (uint16_t)(blue[j] / 5);
+        int xs = rtl ? x0 + done - 1 : x0;
+        ap_fill((qrect){ (int16_t)y, (int16_t)xs, (int16_t)(y + 1), (int16_t)(xs + 1) }, d);
+    }
+}
+
 static void draw_progress(const track_info *t)
 {
+    if (ap_in_color()) {
+        platinum_progress(t);
+        return;
+    }
     qrect r = t->bounds;
     bool active = t->enable == kThemeTrackActive;
     ap_frame_grey(r, active ? 0 : 0x8888);
