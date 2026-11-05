@@ -2396,10 +2396,68 @@ static qrect widget_rect(int flavor, qrect c, int widget)
     return (qrect){ (int16_t)top, (int16_t)(right - sz), (int16_t)(top + sz), (int16_t)right };
 }
 
+/* A theme's window layout for a ThemeWindowType (the active one; the
+ * inactive follows it), or 0: Platinum's own in an Apple theme. */
+static int theme_window_part(int flavor)
+{
+    static const int16_t parts[10] = { 128, 130, 134, 132, 134, 0, 0, 0, 136, 138 };
+    int id = flavor < 10 ? parts[flavor] : 0;
+    return id && themed() && thme_has_part(id) ? id : 0;
+}
+
+/* The layouts' state bits and measures for a window's attributes and
+ * metrics (ThemeWindowMetrics: size, title height, title width). */
+static uint32_t theme_window_state(uint32_t attrs, gaddr metrics, int *m)
+{
+    memset(m, 0, sizeof(int) * THME_MEASURES);
+    if (metrics) {
+        m[1] = (int16_t)rd16(metrics + 4);
+        m[2] = (m[1] + 1) / 2;
+        m[3] = (int16_t)rd16(metrics + 2);
+        m[4] = (m[3] + 1) / 2;
+    }
+    return (attrs & 0x02 ? 0x01 : 0) | (attrs & 0x1F8);
+}
+
+static uint32_t region_part(uint16_t code)
+{
+    switch (code) {
+    case 0: case 5: return THME_TITLE_BAR;
+    case 1: return THME_TITLE_TEXT;
+    case 2: return THME_CLOSE;
+    case 3: return THME_ZOOM;
+    case 4: return THME_GROW;
+    case 6: return THME_CONTENT;
+    case 7: return THME_COLLAPSE;
+    default: return 0;
+    }
+}
+
 int32_t tb_GetThemeWindowRegion(uint16_t flavor, gaddr content, uint32_t state, gaddr metrics, uint32_t attrs,
                                 uint16_t code, gaddr rgn)
 {
     qrect c = qrect_get(content), s = window_struct(flavor, c);
+    int tid = theme_window_part(flavor);
+    if (tid) {
+        int m[THME_MEASURES];
+        uint32_t st = theme_window_state(attrs, metrics, m);
+        int id = tid + (state == kThemeStateInactive ? 1 : 0);
+        hrgn g;
+        hrgn_init(&g);
+        uint32_t which = region_part(code);
+        qrect r;
+        if (which == THME_CONTENT)
+            hrgn_rect(&g, c);
+        else if (which && thme_part_rect(id, c, st, m, which, &r))
+            hrgn_rect(&g, r);
+        else if (!which) {
+            hrgn_free(&g);
+            thme_part_region(id, c, st, m, THME_CONTENT, &g); /* the structure */
+        }
+        rgn_write(rgn, &g);
+        hrgn_free(&g);
+        return noErr;
+    }
     hrgn g;
     hrgn_init(&g);
     switch (code) {
@@ -2447,6 +2505,24 @@ int32_t tb_DrawThemeWindowFrame(uint16_t flavor, gaddr content, uint32_t state, 
 {
     qrect c = qrect_get(content), s = window_struct(flavor, c);
     bool active = state != kThemeStateInactive;
+    int tid = theme_window_part(flavor);
+    if (tid) { /* the theme's (Platinum's) frame, the title by the program */
+        int m[THME_MEASURES];
+        uint32_t st = theme_window_state(attrs, metrics, m);
+        int id = tid + (active ? 0 : 1);
+        thme_draw_part(id, c, st, m, 0);
+        qrect tr;
+        if (title_proc && (thme_part_rect(id, c, st | 0x80, m, THME_TITLE_TEXT, &tr) ||
+                           thme_part_rect(id, c, st, m, THME_TITLE_BAR, &tr))) {
+            gaddr b = tb_NewPtr(8, false, false);
+            qrect_put(b, tr);
+            int depth = qd_port_pixels(qd_port()).depth;
+            uint32_t args[4] = { b, (uint32_t)depth, depth >= 4, title_data };
+            mm_call(title_proc, 0x00003EC0, args, 4);
+            tb_DisposePtr(b);
+        }
+        return noErr;
+    }
     ap_frame_grey(s, active ? 0 : 0x8888);
     if (has_title(flavor)) {
         qrect bar = { (int16_t)(s.top + 1), (int16_t)(s.left + 1), (int16_t)(c.top - 1), (int16_t)(s.right - 1) };
@@ -2489,6 +2565,18 @@ int8_t tb_GetThemeWindowRegionHit(uint16_t flavor, gaddr content, uint32_t state
     qrect c = qrect_get(content), s = window_struct(flavor, c);
     int h = pt_h(pt), v = pt_v(pt);
     int16_t code = -1;
+    int tid = theme_window_part(flavor);
+    if (tid) {
+        int m[THME_MEASURES];
+        uint32_t st = theme_window_state(attrs, metrics, m);
+        int id = tid + (state == kThemeStateInactive ? 1 : 0);
+        uint32_t hit = thme_part_hit(id, c, st, m, 0x2FF, h, v);
+        code = hit & THME_CLOSE ? 2 : hit & THME_ZOOM ? 3 : hit & THME_COLLAPSE ? 7 : hit & THME_GROW ? 4
+             : hit & THME_CONTENT ? 6 : hit ? 5 : -1;
+        if (out)
+            wr16(out, (uint16_t)code);
+        return code >= 0;
+    }
     if (h < s.left || h >= s.right || v < s.top || v >= s.bottom)
         code = -1;
     else if (h >= c.left && h < c.right && v >= c.top && v < c.bottom)
