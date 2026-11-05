@@ -9,6 +9,7 @@
  * drew it on such screens.  The highlight brushes follow the host's
  * selection and accent colours, and HiliteRGB follows them too.
  */
+#include <math.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,6 +68,14 @@ static void unpack_rgb(uint64_t v, uint16_t out[3])
 /* A Mac OS 8.5 theme file in use: its parts, brushes and colours. */
 static bool themed(void) { return thme_in_use(); }
 
+/* An Apple theme's colour variation is the accent, not the host's. */
+static void theme_accent(void)
+{
+    uint16_t rgb[3];
+    if (themed() && thme_variation_rgb(3, rgb))
+        memcpy(accent, rgb, sizeof accent);
+}
+
 /* At event calls: the host's colours as they are now. */
 void appearance_poll(void)
 {
@@ -76,6 +85,7 @@ void appearance_poll(void)
     uint64_t a = atomic_load(&host_accent), h = atomic_load(&host_hilite);
     if (a)
         unpack_rgb(a, accent);
+    theme_accent();
     uint16_t rgb[3];
     if (h && !(themed() && thme_highlight_rgb(rgb))) { /* a theme's own highlight colour stays */
         unpack_rgb(h, rgb);
@@ -418,6 +428,7 @@ void appearance_reset(void)
     uint64_t a = atomic_load(&host_accent);
     if (a)
         unpack_rgb(a, accent);
+    theme_accent();
 }
 
 int32_t tb_RegisterAppearanceClient(void)
@@ -571,7 +582,8 @@ int32_t tb_GetThemeAccentColors(gaddr out)
     static const int8_t shades[n] = { 14, 12, 9, 6, 3, 0, -4, -8 };
     for (int i = 0; i < n; i++) {
         uint16_t rgb[3];
-        accent_shade(shades[i], rgb);
+        if (!(themed() && thme_variation_rgb(i, rgb))) /* an Apple theme's variation, as it is */
+            accent_shade(shades[i], rgb);
         wr16(p + 8 + i * 8, (uint16_t)i);
         wr16(p + 10 + i * 8, rgb[0]);
         wr16(p + 12 + i * 8, rgb[1]);
@@ -915,18 +927,34 @@ int32_t tb_DrawThemeTickMark(gaddr rp, uint32_t state)
 /* ---------------------------------------------------------------------- */
 /* Tabs */
 
-/* A tab pane: the frame the front tab joins, its inside Platinum grey. */
+/* A tab pane: the frame the front tab joins, dark on top, lit inside
+ * its top and left, shaded inside its bottom and right; its inside a
+ * lighter grey than the window's (ap_tab_pane_inside). */
 void ap_tab_pane(qrect r, uint32_t state)
 {
     if (themed() && thme_tab_pane(r, state))
         return;
     bool active = state != kThemeStateInactive;
-    ap_frame_grey(r, active ? 0 : 0x8888);
+    if (!ap_in_color()) {
+        ap_frame_grey(r, 0);
+        ap_fill_grey(inset(r, 1), 0xFFFF);
+        return;
+    }
+    ap_frame_grey(r, active ? 0x4040 : 0x8888);
+    ap_fill_grey((qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right }, active ? 0x3333 : 0x8888);
     qrect in = inset(r, 1);
-    ap_fill_grey(in, 0xDDDD);
-    if (active)
-        ap_bevel(in, 0xFFFF, 0xAAAA);
+    ap_fill_grey(in, ap_tab_pane_inside(active));
+    if (active) {
+        ap_fill_grey((qrect){ in.top, in.left, (int16_t)(in.top + 1), in.right }, 0xD9D9);
+        ap_fill_grey((qrect){ (int16_t)(in.top + 1), in.left, (int16_t)(in.top + 2), in.right }, 0xFBFB);
+        ap_fill_grey((qrect){ (int16_t)(in.top + 1), in.left, in.bottom, (int16_t)(in.left + 1) }, 0xFBFB);
+        ap_fill_grey((qrect){ (int16_t)(in.bottom - 1), in.left, in.bottom, in.right }, 0xB2B2);
+        ap_fill_grey((qrect){ (int16_t)(in.top + 1), (int16_t)(in.right - 1), in.bottom, in.right }, 0xB2B2);
+        ap_fill_grey((qrect){ (int16_t)(in.bottom - 1), (int16_t)(in.right - 1), in.bottom, in.right }, 0x8686);
+    }
 }
+
+uint16_t ap_tab_pane_inside(bool active) { return active ? 0xEEEE : 0xDDDD; }
 
 int32_t tb_DrawThemeTabPane(gaddr r, uint32_t state)
 {
@@ -956,6 +984,72 @@ static void tab_title(qrect r, int dir, const uint8_t *s, int n, const uint16_t 
         ap_text_in(r, s, n, true, tc);
 }
 
+static void tab_dot(qrect r, int dir, int u, int v, uint16_t g) { ap_fill_grey(tab_map(r, dir, u, v, u + 1, v + 1), g); }
+
+/* Platinum's tab: a trapezoid whose sides slope a pixel in every two rows
+ * (drawn smooth), round at its top corners; the front one runs on into
+ * the pane, lighter, the ones behind it darker and shaded at the foot. */
+static void platinum_tab(qrect r, int dir, int along, int depth, bool front, bool inactive, bool pressed)
+{
+    /* the side's inset, in half pixels, row by row from the top */
+    static const int8_t inset2[16] = { 20, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+    uint16_t line = inactive ? 0x8888 : 0x3333, edge = inactive ? 0x9999 : 0x4343;
+    uint16_t face = front ? (inactive ? 0xDDDD : 0xEEEE) : pressed ? 0x8888 : inactive ? 0xDDDD : 0xCCCC;
+    uint16_t bg = 0xDDDD;
+    int rows = front ? (depth < 19 ? depth : 19) : 16;
+    if (along < 24)
+        return;
+    /* the top line's soft upper edge */
+    for (int u = 11; u < along - 11; u++)
+        tab_dot(r, dir, u, -1, (uint16_t)((bg * 2 + line) / 3));
+    for (int v = 0; v < rows; v++) {
+        int e2 = v < 16 ? inset2[v] : -(v - 15); /* below the top of the pane, it widens on */
+        int x = e2 >> 1;
+        bool half = e2 & 1;
+        int l = half ? x + 2 : x + 1, rr = along - (half ? x + 2 : x + 1); /* the face between */
+        if (v == 0) {
+            tab_dot(r, dir, 7, 0, 0xD1D1);
+            tab_dot(r, dir, 8, 0, 0xACAC);
+            tab_dot(r, dir, 9, 0, 0x8E8E);
+            tab_dot(r, dir, 10, 0, edge);
+            tab_dot(r, dir, along - 8, 0, 0xD1D1);
+            tab_dot(r, dir, along - 9, 0, 0xACAC);
+            tab_dot(r, dir, along - 10, 0, 0x8E8E);
+            tab_dot(r, dir, along - 11, 0, edge);
+            ap_fill_grey(tab_map(r, dir, 11, 0, along - 11, 1), line);
+            continue;
+        }
+        if (v < 16) {
+            /* the sides, smoothed into what is round them */
+            if (half) {
+                tab_dot(r, dir, x, v, 0x8E8E);
+                tab_dot(r, dir, x + 1, v, 0x5959);
+                tab_dot(r, dir, along - 1 - x, v, 0x8E8E);
+                tab_dot(r, dir, along - 2 - x, v, 0x5454);
+            } else {
+                tab_dot(r, dir, x - 1, v, 0xACAC);
+                tab_dot(r, dir, x, v, edge);
+                tab_dot(r, dir, along - x, v, 0xACAC);
+                tab_dot(r, dir, along - 1 - x, v, edge);
+            }
+        }
+        if (rr <= l)
+            continue;
+        uint16_t f = face;
+        if (v == 1)
+            f = front ? 0xD9D9 : 0xD0D0;
+        else if (v == 2)
+            f = front ? 0xFBFB : 0xD9D9;
+        else if (!front && v == 15)
+            f = 0x9999;
+        ap_fill_grey(tab_map(r, dir, l, v, rr, v + 1), f);
+        if (v > 2 && !(!front && v == 15) && !pressed) {
+            tab_dot(r, dir, l, v, front ? 0xFBFB : 0xD6D6);
+            tab_dot(r, dir, rr - 1, v, front ? 0xE3E3 : 0xBFBF);
+        }
+    }
+}
+
 /* A tab in r facing dir, its inner edge on the pane's edge (which the
  * front tab covers by kThemeTabPaneOverlap). */
 void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n)
@@ -973,6 +1067,15 @@ void ap_tab(qrect r, int style, int dir, const uint8_t *title, int n)
             int color = front ? (inactive ? 42 : 39) : inactive ? 43 : style == 1 ? 41 : 40;
             if (!ap_text_rgb(color, tc))
                 grey(tc, 0);
+            tab_title(tr, dir, title, n, tc);
+        }
+        return;
+    }
+    if (ap_in_color()) {
+        platinum_tab(r, dir, along, depth, front, inactive, pressed);
+        if (n > 0) {
+            uint16_t tc[3];
+            grey(tc, inactive ? 0x7777 : pressed ? 0xFFFF : 0);
             tab_title(tr, dir, title, n, tc);
         }
         return;
@@ -1081,6 +1184,55 @@ void ap_push_button(qrect r, uint32_t state, bool is_default)
 }
 
 /* A check box or radio button's 12-pixel box: value 0 off, 1 on, 2 mixed. */
+/* Platinum's radio button: a smooth ball, lit from the top left; on, sunk
+ * (dark, lit from below) with a black dot in it; mixed, a dash. */
+static void platinum_radio(qrect box, int value, bool active, bool pressed)
+{
+    uint16_t bg[3];
+    gaddr c = tb_NewPtr(6, false, false);
+    tb_GetBackColor(c);
+    for (int i = 0; i < 3; i++)
+        bg[i] = rd16(c + (uint32_t)i * 2);
+    tb_DisposePtr(c);
+    int size = box.right - box.left < box.bottom - box.top ? box.right - box.left : box.bottom - box.top;
+    float rad = size / 2.0f + 0.5f, cx = box.left + size / 2.0f, cy = box.top + size / 2.0f;
+    bool sunk = value == 1 || pressed;
+    for (int y = box.top - 1; y < box.top + size + 1; y++)
+        for (int x = box.left - 1; x < box.left + size + 1; x++) {
+            float dx = x + 0.5f - cx, dy = y + 0.5f - cy, d = sqrtf(dx * dx + dy * dy);
+            float cover = rad - d;
+            if (cover <= 0)
+                continue;
+            if (cover > 1)
+                cover = 1;
+            float t = (dx + dy) / (2 * rad); /* -0.7 top left .. 0.7 bottom right */
+            float v;
+            if (d > rad - 1.4f) /* the rim */
+                v = active ? (sunk ? 0x20 : 0x30) + (t > 0 ? 0x20 : 0) : 0x99;
+            else if (sunk)
+                v = 0x50 + (t + 0.7f) / 1.4f * 0x90;
+            else {
+                float k = (t + 0.25f) / 0.95f;
+                v = 0xFE - (k < 0 ? 0 : k > 1 ? 1 : k) * 0x90;
+            }
+            if (!active)
+                v = 0xDD + (v - 0xDD) * 0.3f;
+            if (pressed && value != 1)
+                v *= 0.8f;
+            if (value == 1 && d < size / 5.0f + 0.8f) { /* the dot */
+                float dc = size / 5.0f + 0.8f - d;
+                float k = dc > 1 ? 1 : dc;
+                v = v * (1 - k) + (active ? 0 : 0x77) * k;
+            }
+            if (value == 2 && dy > -1.5f && dy < 1.0f && dx > -rad + 3 && dx < rad - 3)
+                v = active ? 0 : 0x77;
+            uint16_t px[3];
+            for (int i = 0; i < 3; i++)
+                px[i] = (uint16_t)(bg[i] + ((int)(v * 0x101) - (int)bg[i]) * cover);
+            ap_fill((qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 1), (int16_t)(x + 1) }, px);
+        }
+}
+
 void ap_check_box(qrect box, bool radio, int value, uint32_t state)
 {
     if (themed() && thme_check_box(box, radio, value, state))
@@ -1090,6 +1242,10 @@ void ap_check_box(qrect box, bool radio, int value, uint32_t state)
     grey(frame, active ? 0 : 0x8888);
     grey(face, pressed ? 0x8888 : active ? 0xDDDD : 0xEEEE);
     grey(mark, active ? 0 : 0x8888);
+    if (radio && ap_in_color()) {
+        platinum_radio(box, value, active, pressed);
+        return;
+    }
     if (radio) {
         hrgn g, in;
         hrgn_init(&g);
@@ -1124,27 +1280,61 @@ void ap_check_box(qrect box, bool radio, int value, uint32_t state)
     ap_frame(box, frame);
     qrect in = inset(box, 1);
     ap_fill(in, face);
-    if (!pressed)
+    if (active && ap_in_color()) {
+        /* Platinum's: a dark grey frame, lit inside at the top and left,
+         * shaded inside at the bottom and right */
+        ap_frame_grey(box, 0x4040);
+        ap_fill_grey((qrect){ (int16_t)(box.bottom - 1), (int16_t)(box.left + 1), box.bottom, box.right }, 0x3737);
+        ap_fill_grey((qrect){ (int16_t)(box.top + 1), (int16_t)(box.right - 1), box.bottom, box.right }, 0x3737);
+        if (!pressed) {
+            ap_bevel(in, 0xF6F6, 0x6666);
+            ap_fill_grey((qrect){ (int16_t)(in.bottom - 2), (int16_t)(in.left + 1), (int16_t)(in.bottom - 1), (int16_t)(in.right - 1) }, 0xC8C8);
+            ap_fill_grey((qrect){ (int16_t)(in.top + 1), (int16_t)(in.right - 2), (int16_t)(in.bottom - 1), (int16_t)(in.right - 1) }, 0xC8C8);
+        }
+    } else if (!pressed)
         ap_bevel(in, active ? 0xFFFF : 0xEEEE, active ? 0xAAAA : 0xDDDD);
-    if (value == 1) {
+    if (value == 1 && ap_in_color()) {
+        /* A check mark: a stroke down from the left, then up past the top
+         * right corner, its edges smoothed into the box. */
+        static const float seg[2][4] = { { 2.5f, 5.5f, 5.5f, 8.0f }, { 5.5f, 8.0f, 11.5f, 1.0f } };
+        for (int y = 0; y < 10; y++)
+            for (int x = 1; x < 13; x++) {
+                float best = 9;
+                for (int k = 0; k < 2; k++) {
+                    float ax = seg[k][0], ay = seg[k][1], bx = seg[k][2], by = seg[k][3];
+                    float px = x + 0.5f, py = y + 0.5f, dx = bx - ax, dy = by - ay;
+                    float t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy);
+                    t = t < 0 ? 0 : t > 1 ? 1 : t;
+                    float ex = ax + t * dx - px, ey = ay + t * dy - py, d = ex * ex + ey * ey;
+                    if (d < best)
+                        best = d;
+                }
+                float cover = 1.6f - sqrtf(best) * 1.3f;
+                if (cover <= 0)
+                    continue;
+                if (cover > 1)
+                    cover = 1;
+                qrect p = { (int16_t)(box.top + y), (int16_t)(box.left + x), (int16_t)(box.top + y + 1), (int16_t)(box.left + x + 1) };
+                uint16_t c[3];
+                int w = box.right - box.left, h = box.bottom - box.top;
+                /* what it is drawn over: the face, the frame, or (past the
+                 * corner) the background */
+                uint16_t under = x < w - 1 && y >= 1 && y < h - 1 ? face[0] : x < w ? frame[0] : 0xDDDD;
+                for (int i = 0; i < 3; i++)
+                    c[i] = (uint16_t)(under + (int)((mark[i] - (int)under) * cover));
+                ap_fill(p, c);
+            }
+    } else if (value == 1) {
         /* A check mark, from the lower left up past the right edge. */
         static const char *const rows[] = {
             "..........##", ".........##.", "........##..", "..##...##...",
             "...##.##....", "....###.....", ".....#......",
         };
-        hrgn g;
-        hrgn_init(&g);
         for (int y = 0; y < 7; y++)
             for (int x = 0; x < 12; x++)
-                if (rows[y][x] == '#') {
-                    int x1 = x;
-                    while (x1 < 12 && rows[y][x1] == '#')
-                        x1++;
-                    hrgn_add_row(&g, box.top + 2 + y, box.left + 1 + x, box.left + 1 + x1);
-                    x = x1;
-                }
-        ap_fill_rgn(&g, mark);
-        hrgn_free(&g);
+                if (rows[y][x] == '#')
+                    ap_fill((qrect){ (int16_t)(box.top + 2 + y), (int16_t)(box.left + 1 + x), (int16_t)(box.top + 3 + y),
+                                     (int16_t)(box.left + 2 + x) }, mark);
     } else if (value == 2) {
         ap_fill((qrect){ (int16_t)(box.top + 5), (int16_t)(box.left + 3), (int16_t)(box.top + 7), (int16_t)(box.right - 3) }, mark);
     }
@@ -1607,6 +1797,20 @@ static void scroll_thumb(qrect r, bool horiz, bool pressed)
  * hilite is the part pressed (20, 21; 22 and 23 the track; 129 the thumb). */
 void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb)
 {
+    ap_scroll_bar_arrows(r, vertical, hilite, active, live, thumb, false);
+}
+
+/* Whether a scroll bar's arrows are together at its bottom or right end:
+ * the scene's choice ('sbar' 1, Mac OS Default's) in an Apple theme, whose
+ * scroll bars are Platinum's own. */
+bool ap_scroll_arrows_together(void)
+{
+    int v;
+    return themed() && !thme_has_part(400) && thme_scene_int("sbar", &v) && v == 1;
+}
+
+void ap_scroll_bar_arrows(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb, bool together)
+{
     if (themed() && thme_scroll_bar(r, vertical, hilite, live, active, thumb))
         return;
     qrect lo = vertical ? (qrect){ r.top, r.left, (int16_t)(r.top + 16), r.right } : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 16) };
@@ -1614,6 +1818,12 @@ void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, q
                         : (qrect){ r.top, (int16_t)(r.right - 16), r.bottom, r.right };
     qrect area = vertical ? (qrect){ (int16_t)(r.top + 15), r.left, (int16_t)(r.bottom - 15), r.right }
                           : (qrect){ r.top, (int16_t)(r.left + 15), r.bottom, (int16_t)(r.right - 15) };
+    if (together) { /* the track from the top (or left), the arrows after it */
+        lo = vertical ? (qrect){ (int16_t)(r.bottom - 31), r.left, (int16_t)(r.bottom - 15), r.right }
+                      : (qrect){ r.top, (int16_t)(r.right - 31), r.bottom, (int16_t)(r.right - 15) };
+        area = vertical ? (qrect){ r.top, r.left, (int16_t)(r.bottom - 30), r.right }
+                        : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.right - 30) };
+    }
     ap_frame_grey(area, 0);
     qrect in = inset(area, 1);
     bool on = active && live;
@@ -1658,63 +1868,226 @@ static void draw_scroll_bar(const track_info *t)
 }
 
 /* A slider: a groove with a pointed (or plain) thumb. */
+/* A pixel of a slider's part drawn as if horizontal with its thumb
+ * pointing down (i along the track, j across it from the thumb's flat
+ * edge), turned to the slider's way: dir 1 points up (or left), 2 down (or
+ * right). */
+typedef struct {
+    qrect box;
+    bool h;
+    int dir;
+} slider_map;
+
+static void slider_dot(const slider_map *m, int i, int j, uint16_t r, uint16_t g, uint16_t b)
+{
+    int x, y;
+    int len = m->h ? m->box.bottom - m->box.top : m->box.right - m->box.left;
+    if (m->dir == 1)
+        j = len - 1 - j;
+    if (m->h) {
+        x = m->box.left + i;
+        y = m->box.top + j;
+    } else {
+        x = m->box.left + j;
+        y = m->box.top + i;
+    }
+    uint16_t c[3] = { r, g, b };
+    ap_fill((qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 1), (int16_t)(x + 1) }, c);
+}
+
+static void slider_grey(const slider_map *m, int i, int j, uint16_t v) { slider_dot(m, i, j, v, v, v); }
+
+static void mix16(const uint16_t a[3], const uint16_t b[3], int t, uint16_t out[3])
+{
+    for (int k = 0; k < 3; k++)
+        out[k] = (uint16_t)(a[k] + (b[k] - a[k]) * t / 16);
+}
+
+/* Platinum's slider: a rounded groove, and a thumb in the accent colour
+ * (a pentagon pointing at the tick marks, or a square), lit at its top
+ * left, shaded at its bottom right, with three grip lines. */
 static void draw_slider(const track_info *t)
 {
     bool h = horizontal(t), active = t->enable == kThemeTrackActive;
     qrect a = track_area(t), b = t->bounds;
-    qrect groove = h ? (qrect){ (int16_t)(b.top + 5), (int16_t)(a.left - 2), (int16_t)(b.top + 10), (int16_t)(a.right + 2) }
-                     : (qrect){ (int16_t)(a.top - 2), (int16_t)(b.left + 5), (int16_t)(a.bottom + 2), (int16_t)(b.left + 10) };
-    ap_frame_grey(groove, active ? 0 : 0x8888);
-    ap_fill_grey(inset(groove, 1), active ? 0xAAAA : 0xDDDD);
-    if (ap_in_color())
-        ap_bevel(inset(groove, 1), 0x8888, 0xDDDD);
     qrect th = track_thumb(t);
-    uint16_t face[3];
-    if (active)
-        accent_shade(t->press & 0x08 ? -2 : 4, face);
-    else
+    if (!ap_in_color()) {
+        qrect groove = h ? (qrect){ (int16_t)(b.top + 5), (int16_t)(a.left - 2), (int16_t)(b.top + 10), (int16_t)(a.right + 2) }
+                         : (qrect){ (int16_t)(a.top - 2), (int16_t)(b.left + 5), (int16_t)(a.bottom + 2), (int16_t)(b.left + 10) };
+        ap_frame_grey(groove, 0);
+        ap_fill_grey(inset(groove, 1), 0xFFFF);
+        ap_frame_grey(th, 0);
+        ap_fill_grey(inset(th, 1), active ? 0xFFFF : 0xDDDD);
+        return;
+    }
+    int dir = t->thumb_dir == 1 ? 1 : t->thumb_dir == 2 ? 2 : 0;
+    /* the thumb's box, 15 square; the groove across it where its body is */
+    qrect box = h ? (qrect){ (int16_t)(th.top + 1), th.left, (int16_t)(th.top + 16), (int16_t)(th.left + 15) }
+                  : (qrect){ th.top, (int16_t)(th.left + 1), (int16_t)(th.top + 15), (int16_t)(th.left + 16) };
+    int g0 = dir == 0 ? 3 : 0; /* the groove's first row, across the thumb */
+    slider_map gm = { box, h, dir };
+    /* the groove, the length of the track and a little more, its ends round */
+    static const uint16_t tube[8] = { 0xDDDD, 0x8888, 0x4444, 0xAAAA, 0xAAAA, 0x8888, 0x5959, 0xFBFB };
+    static const uint16_t tube_off[8] = { 0xE5E5, 0xAAAA, 0x9999, 0xCCCC, 0xCCCC, 0xAAAA, 0x9999, 0xF6F6 };
+    int lo = (h ? a.left - box.left : a.top - box.top) - 9, hi = (h ? a.right - box.left : a.bottom - box.top) + 9;
+    for (int i = lo; i < hi; i++)
+        for (int j = 0; j < 8; j++) {
+            bool end = i == lo || i == hi - 1;
+            if (end && (j == 0 || j == 7))
+                continue;
+            uint16_t v = active ? tube[j] : tube_off[j];
+            if (end)
+                v = (uint16_t)((v + 0xDDDD) / 2);
+            slider_grey(&gm, i, g0 + j, v);
+        }
+    /* the thumb */
+    uint16_t face[3], light[3], shade[3], dark[3], line[3], white[3], black[3];
+    grey(white, 0xFFFF);
+    grey(black, 0x3333);
+    if (active) {
+        accent_shade(t->press & 0x08 ? -2 : 7, face);
+        mix16(face, white, 7, light);
+        accent_shade(4, shade);
+        accent_shade(-6, dark);
+        mix16(face, dark, 9, line);
+    } else {
         grey(face, 0xDDDD);
-    hrgn g, in;
-    hrgn_init(&g);
-    hrgn_init(&in);
-    /* Square with a point down (or right) unless plain. */
-    int w = h ? th.right - th.left : th.bottom - th.top;
-    bool pointed = t->thumb_dir != 0;
-    for (int y = th.top; y < th.bottom; y++) {
-        int x0 = th.left, x1 = th.right;
-        if (h && pointed) {
-            int d = y - (th.bottom - w / 2);
-            if (d > 0) {
-                x0 += d;
-                x1 -= d;
+        grey(light, 0xEEEE);
+        grey(shade, 0xBBBB);
+        grey(dark, 0xAAAA);
+        grey(line, 0xBBBB);
+    }
+    uint16_t edge = active ? 0x3333 : 0x8888;
+    int body = dir == 0 ? 15 : 8; /* rows before it tapers to its point */
+    for (int j = 0; j < 15; j++) {
+        int in = j < body ? 0 : j - body + 1; /* how far each side has come in */
+        int i0 = in, i1 = 14 - in;
+        if (i1 < i0)
+            break;
+        for (int i = i0; i <= i1; i++) {
+            bool rim = i == i0 || i == i1 || j == 0 || (dir == 0 && j == 14) || j == 14 - 0 * in || (in && i1 - i0 < 2);
+            if (rim) {
+                slider_grey(&gm, i, j, edge);
+                continue;
             }
-        }
-        if (x1 > x0)
-            hrgn_add_row(&g, y, x0, x1);
-    }
-    if (!h && pointed) { /* vertical: pointing right */
-        hrgn_free(&g);
-        hrgn_init(&g);
-        int cy = (th.top + th.bottom) / 2, side = th.right - th.left - 4;
-        for (int y = th.top; y < th.bottom; y++) {
-            int d = abs(y - cy);
-            hrgn_add_row(&g, y, th.left, th.left + side + (4 - d > 0 ? 4 - d : 0));
+            const uint16_t *c = face;
+            if (i == i0 + 1 || j == 1)
+                c = light;
+            else if (i == i1 - 1)
+                c = dark;
+            else if (i == i1 - 2 || (j == body - 1 + in && in) || (dir == 0 && j == 13))
+                c = shade;
+            slider_dot(&gm, i, j, c[0], c[1], c[2]);
         }
     }
-    uint16_t frame[3];
-    grey(frame, active ? 0 : 0x8888);
-    ap_fill_rgn(&g, frame);
-    hrgn_copy(&in, &g);
-    hrgn_inset(&in, 1, 1);
-    ap_fill_rgn(&in, face);
-    hrgn_free(&g);
-    hrgn_free(&in);
+    /* three grip lines down its middle */
+    if (active)
+        for (int k = 0; k < 3; k++)
+            for (int j = 2; j < (dir == 0 ? 13 : 7); j++) {
+                slider_dot(&gm, 4 + k * 2, j, light[0], light[1], light[2]);
+                slider_dot(&gm, 5 + k * 2, j, line[0], line[1], line[2]);
+            }
+    (void)black;
 }
 
 /* A progress bar: a framed, sunken track filled with the accent colour;
  * indeterminate ones are diagonal stripes that move with the phase. */
+/* A progress bar's tube, row k of n: Platinum shades it top to bottom as
+ * a rod lit from above, in the accent colours (variation ramp positions,
+ * light 0 to dark 7) or in greys. */
+static void tube_rgb(int k, int n, bool accent, uint16_t out[3])
+{
+    static const float pos[11] = { 6.6f, 4.1f, 3.1f, 1.7f, 1.0f, 0.4f, 1.3f, 2.3f, 3.3f, 4.6f, 6.1f };
+    static const uint16_t greys[11] = { 0x1515, 0x5E5E, 0x8484, 0xAEAE, 0xCCCC, 0xF6F6, 0xDDDD, 0xBBBB, 0x9999,
+                                        0x7777, 0x4444 };
+    int i = n > 1 ? k * 10 / (n - 1) : 5;
+    if (!accent) {
+        grey(out, greys[i]);
+        return;
+    }
+    /* the ramp: GetThemeAccentColors' (the theme's variation, or the shades) */
+    static const int8_t shades[8] = { 14, 12, 9, 6, 3, 0, -4, -8 };
+    float p = pos[i];
+    int lo = (int)p, hi = lo < 7 ? lo + 1 : 7;
+    uint16_t a[3], c[3];
+    if (!(themed() && thme_variation_rgb(lo, a)))
+        accent_shade(shades[lo], a);
+    if (!(themed() && thme_variation_rgb(hi, c)))
+        accent_shade(shades[hi], c);
+    float f = p - lo;
+    for (int j = 0; j < 3; j++)
+        out[j] = (uint16_t)(a[j] + (c[j] - a[j]) * f);
+}
+
+/* Platinum's progress bar: a sunken grey well with the tube in it, the
+ * done part in the accent colours with a shaded end; an indeterminate one
+ * slanted stripes of the two that move with the phase. */
+static void platinum_progress(const track_info *t)
+{
+    qrect r = t->bounds;
+    bool active = t->enable == kThemeTrackActive;
+    ap_fill_grey((qrect){ (int16_t)(r.top - 1), (int16_t)(r.left - 1), r.top, r.right }, 0xDDDD);
+    ap_fill_grey((qrect){ r.top, (int16_t)(r.left - 1), r.bottom, r.left }, 0xDDDD);
+    ap_fill_grey((qrect){ r.bottom, r.left, (int16_t)(r.bottom + 1), (int16_t)(r.right + 1) }, 0xFBFB);
+    ap_fill_grey((qrect){ (int16_t)(r.top - 1), r.right, r.bottom, (int16_t)(r.right + 1) }, 0xFBFB);
+    ap_fill_grey((qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right }, 0x8080);
+    ap_fill_grey((qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) }, 0x8080);
+    ap_fill_grey((qrect){ (int16_t)(r.bottom - 1), r.left, r.bottom, r.right }, 0x4040);
+    ap_fill_grey((qrect){ (int16_t)(r.top + 1), (int16_t)(r.right - 1), r.bottom, r.right }, 0x4040);
+    qrect in = inset(r, 1);
+    int n = in.bottom - in.top, w = in.right - in.left;
+    if (n <= 0 || w <= 0)
+        return;
+    bool indet = t->kind == kThemeIndeterminateBar;
+    int done = 0;
+    if (!indet && t->max > t->min) {
+        done = (int)((int64_t)(t->value - t->min) * w / (t->max - t->min));
+        done = done < 0 ? 0 : done > w ? w : done;
+    }
+    bool rtl = t->attributes & kThemeTrackRightToLeft;
+    for (int k = 0; k < n; k++) {
+        uint16_t blue[3], g[3], well;
+        tube_rgb(k, n, active, blue);
+        tube_rgb(k, n, false, g);
+        well = k == 0 ? 0x2222 : k == 1 ? 0x9595 : k == n - 1 ? 0xA6A6 : k == n - 2 ? 0xC3C3 : 0xBBBB;
+        int y = in.top + k;
+        if (indet) {
+            int shift = (n - 1 - k) + t->phase * 2;
+            for (int x = 0; x < w; x++) {
+                bool on = ((x + shift) % 16) < 8;
+                ap_fill((qrect){ (int16_t)y, (int16_t)(in.left + x), (int16_t)(y + 1), (int16_t)(in.left + x + 1) }, on ? blue : g);
+            }
+            continue;
+        }
+        if (done < w)
+            ap_fill_grey(rtl ? (qrect){ (int16_t)y, in.left, (int16_t)(y + 1), (int16_t)(in.right - done) }
+                             : (qrect){ (int16_t)y, (int16_t)(in.left + done), (int16_t)(y + 1), in.right }, well);
+        if (!done)
+            continue;
+        int x0 = rtl ? in.right - done : in.left;
+        ap_fill((qrect){ (int16_t)y, (int16_t)x0, (int16_t)(y + 1), (int16_t)(x0 + done) }, blue);
+        /* its ends darkened, round */
+        uint16_t d[3];
+        for (int e = 0; e < 3 && e < done; e++) {
+            int f = e == 0 ? 10 : e == 1 ? 6 : 2;
+            for (int j = 0; j < 3; j++)
+                d[j] = (uint16_t)(blue[j] * (16 - f) / 16);
+            int x = rtl ? x0 + e : x0 + done - 1 - e;
+            ap_fill((qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 1), (int16_t)(x + 1) }, d);
+        }
+        for (int j = 0; j < 3; j++)
+            d[j] = (uint16_t)(blue[j] / 5);
+        int xs = rtl ? x0 + done - 1 : x0;
+        ap_fill((qrect){ (int16_t)y, (int16_t)xs, (int16_t)(y + 1), (int16_t)(xs + 1) }, d);
+    }
+}
+
 static void draw_progress(const track_info *t)
 {
+    if (ap_in_color()) {
+        platinum_progress(t);
+        return;
+    }
     qrect r = t->bounds;
     bool active = t->enable == kThemeTrackActive;
     ap_frame_grey(r, active ? 0 : 0x8888);
@@ -2023,10 +2396,68 @@ static qrect widget_rect(int flavor, qrect c, int widget)
     return (qrect){ (int16_t)top, (int16_t)(right - sz), (int16_t)(top + sz), (int16_t)right };
 }
 
+/* A theme's window layout for a ThemeWindowType (the active one; the
+ * inactive follows it), or 0: Platinum's own in an Apple theme. */
+static int theme_window_part(int flavor)
+{
+    static const int16_t parts[10] = { 128, 130, 134, 132, 134, 0, 0, 0, 136, 138 };
+    int id = flavor < 10 ? parts[flavor] : 0;
+    return id && themed() && thme_has_part(id) ? id : 0;
+}
+
+/* The layouts' state bits and measures for a window's attributes and
+ * metrics (ThemeWindowMetrics: size, title height, title width). */
+static uint32_t theme_window_state(uint32_t attrs, gaddr metrics, int *m)
+{
+    memset(m, 0, sizeof(int) * THME_MEASURES);
+    if (metrics) {
+        m[1] = (int16_t)rd16(metrics + 4);
+        m[2] = (m[1] + 1) / 2;
+        m[3] = (int16_t)rd16(metrics + 2);
+        m[4] = (m[3] + 1) / 2;
+    }
+    return (attrs & 0x02 ? 0x01 : 0) | (attrs & 0x1F8);
+}
+
+static uint32_t region_part(uint16_t code)
+{
+    switch (code) {
+    case 0: case 5: return THME_TITLE_BAR;
+    case 1: return THME_TITLE_TEXT;
+    case 2: return THME_CLOSE;
+    case 3: return THME_ZOOM;
+    case 4: return THME_GROW;
+    case 6: return THME_CONTENT;
+    case 7: return THME_COLLAPSE;
+    default: return 0;
+    }
+}
+
 int32_t tb_GetThemeWindowRegion(uint16_t flavor, gaddr content, uint32_t state, gaddr metrics, uint32_t attrs,
                                 uint16_t code, gaddr rgn)
 {
     qrect c = qrect_get(content), s = window_struct(flavor, c);
+    int tid = theme_window_part(flavor);
+    if (tid) {
+        int m[THME_MEASURES];
+        uint32_t st = theme_window_state(attrs, metrics, m);
+        int id = tid + (state == kThemeStateInactive ? 1 : 0);
+        hrgn g;
+        hrgn_init(&g);
+        uint32_t which = region_part(code);
+        qrect r;
+        if (which == THME_CONTENT)
+            hrgn_rect(&g, c);
+        else if (which && thme_part_rect(id, c, st, m, which, &r))
+            hrgn_rect(&g, r);
+        else if (!which) {
+            hrgn_free(&g);
+            thme_part_region(id, c, st, m, THME_CONTENT, &g); /* the structure */
+        }
+        rgn_write(rgn, &g);
+        hrgn_free(&g);
+        return noErr;
+    }
     hrgn g;
     hrgn_init(&g);
     switch (code) {
@@ -2074,6 +2505,24 @@ int32_t tb_DrawThemeWindowFrame(uint16_t flavor, gaddr content, uint32_t state, 
 {
     qrect c = qrect_get(content), s = window_struct(flavor, c);
     bool active = state != kThemeStateInactive;
+    int tid = theme_window_part(flavor);
+    if (tid) { /* the theme's (Platinum's) frame, the title by the program */
+        int m[THME_MEASURES];
+        uint32_t st = theme_window_state(attrs, metrics, m);
+        int id = tid + (active ? 0 : 1);
+        thme_draw_part(id, c, st, m, 0);
+        qrect tr;
+        if (title_proc && (thme_part_rect(id, c, st | 0x80, m, THME_TITLE_TEXT, &tr) ||
+                           thme_part_rect(id, c, st, m, THME_TITLE_BAR, &tr))) {
+            gaddr b = tb_NewPtr(8, false, false);
+            qrect_put(b, tr);
+            int depth = qd_port_pixels(qd_port()).depth;
+            uint32_t args[4] = { b, (uint32_t)depth, depth >= 4, title_data };
+            mm_call(title_proc, 0x00003EC0, args, 4);
+            tb_DisposePtr(b);
+        }
+        return noErr;
+    }
     ap_frame_grey(s, active ? 0 : 0x8888);
     if (has_title(flavor)) {
         qrect bar = { (int16_t)(s.top + 1), (int16_t)(s.left + 1), (int16_t)(c.top - 1), (int16_t)(s.right - 1) };
@@ -2116,6 +2565,18 @@ int8_t tb_GetThemeWindowRegionHit(uint16_t flavor, gaddr content, uint32_t state
     qrect c = qrect_get(content), s = window_struct(flavor, c);
     int h = pt_h(pt), v = pt_v(pt);
     int16_t code = -1;
+    int tid = theme_window_part(flavor);
+    if (tid) {
+        int m[THME_MEASURES];
+        uint32_t st = theme_window_state(attrs, metrics, m);
+        int id = tid + (state == kThemeStateInactive ? 1 : 0);
+        uint32_t hit = thme_part_hit(id, c, st, m, 0x2FF, h, v);
+        code = hit & THME_CLOSE ? 2 : hit & THME_ZOOM ? 3 : hit & THME_COLLAPSE ? 7 : hit & THME_GROW ? 4
+             : hit & THME_CONTENT ? 6 : hit ? 5 : -1;
+        if (out)
+            wr16(out, (uint16_t)code);
+        return code >= 0;
+    }
     if (h < s.left || h >= s.right || v < s.top || v >= s.bottom)
         code = -1;
     else if (h >= c.left && h < c.right && v >= c.top && v < c.bottom)

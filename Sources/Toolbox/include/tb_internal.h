@@ -425,7 +425,7 @@ bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, boo
 void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom);
 bool theme_window_region(gaddr w, int var, qrect c, hrgn *out);
 int theme_window_hit(gaddr w, int var, qrect c, int h, int v);
-bool theme_draw_grow(qrect c, bool active);
+bool theme_draw_grow(qrect c, bool active, bool small);
 bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
 bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
@@ -460,6 +460,12 @@ void appearance_drag_sound_tick(void); /* a theme drag sound played again while 
 bool ap_in_color(void);
 void ap_fill_rgn(const hrgn *g, const uint16_t rgb[3]);
 void ap_fill(qrect r, const uint16_t rgb[3]);
+/* The grey inside a Platinum tab pane. */
+uint16_t ap_tab_pane_inside(bool active);
+/* Drawing r in window w's Platinum tab pane: the port's background is
+ * the pane's (true) until ap_pane_background_end. */
+bool ap_pane_background(gaddr w, qrect r, uint16_t saved[3]);
+void ap_pane_background_end(const uint16_t saved[3]);
 void ap_fill_grey(qrect r, uint16_t v);
 void ap_frame(qrect r, const uint16_t rgb[3]);
 void ap_frame_grey(qrect r, uint16_t v);
@@ -486,6 +492,8 @@ void ap_popup_button(qrect r, uint32_t state, bool arrow_only);
 void ap_button(qrect r, int kind, uint32_t state, int value, int adorn);
 void ap_track(gaddr info); /* a ThemeTrackDrawInfo in guest memory */
 void ap_scroll_bar(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb);
+void ap_scroll_bar_arrows(qrect r, bool vertical, int hilite, bool active, bool live, qrect thumb, bool together);
+bool ap_scroll_arrows_together(void);
 
 /* ---- Control Manager (controls.c) ---- */
 

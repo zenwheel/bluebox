@@ -116,6 +116,7 @@ static struct {
     size_t len;
     rsrc_index idx;
     char name[64];
+    bool builtin; /* an Apple 'tthm' file: Platinum, drawn by thme_platinum.c */
     tcache cache[MAX_CACHE];
     int ncache;
 } T;
@@ -151,8 +152,11 @@ static void forget(void)
     T.ncache = 0;
 }
 
-/* Is this resource fork a theme file's?  Every one has layouts. */
-bool thme_fork_is_theme(const uint8_t *fork, size_t len)
+/* Is this resource fork a theme file's?  Every one has layouts, but
+ * Apple's own ('tthm', Apple platinum): their owner resource names the
+ * look the Appearance Manager draws itself, the file holding only its
+ * scenes and colour variations. */
+static bool fork_has(const uint8_t *fork, size_t len, uint32_t type, int16_t id)
 {
     rsrc_index idx;
     char err[128];
@@ -160,10 +164,17 @@ bool thme_fork_is_theme(const uint8_t *fork, size_t len)
         return false;
     bool yes = false;
     for (size_t i = 0; i < idx.count && !yes; i++)
-        yes = idx.entries[i].type == fourcc("layo") && idx.entries[i].id == 128;
+        yes = idx.entries[i].type == type && idx.entries[i].id == id;
     rsrc_index_free(&idx);
     return yes;
 }
+
+bool thme_fork_is_theme(const uint8_t *fork, size_t len)
+{
+    return fork_has(fork, len, fourcc("layo"), 128) || fork_has(fork, len, fourcc("tthm"), 0);
+}
+
+static void choose_variation(void);
 
 bool thme_load(const char *path, const uint8_t *fork, size_t len, char *err, size_t errlen)
 {
@@ -179,6 +190,9 @@ bool thme_load(const char *path, const uint8_t *fork, size_t len, char *err, siz
     const char *base = strrchr(path, '/');
     snprintf(T.name, sizeof T.name, "%s", base ? base + 1 : path);
     T.on = true;
+    T.builtin = !fork_has(fork, len, fourcc("layo"), 128);
+    if (T.builtin)
+        choose_variation();
     return true;
 }
 
@@ -443,6 +457,19 @@ typedef struct {
 
 static surface *S;
 
+/* A pixel of the port that drawing reaches: in its bounds and clip. */
+static bool port_visible(int x, int y)
+{
+    if (x < S->d.bounds.left || x >= S->d.bounds.right || y < S->d.bounds.top || y >= S->d.bounds.bottom)
+        return false;
+    int n;
+    const int16_t *xs = hrgn_row(&S->clip, y, &n);
+    for (int k = 0; xs && k < n; k += 2)
+        if (x >= xs[k] && x < xs[k + 1])
+            return true;
+    return false;
+}
+
 static void plot(int x, int y, const uint8_t *rgb)
 {
     if (S->kind != 0) {
@@ -457,17 +484,70 @@ static void plot(int x, int y, const uint8_t *rgb)
         S->buf[i * 4 + 3] = 255;
         return;
     }
-    if (x < S->d.bounds.left || x >= S->d.bounds.right || y < S->d.bounds.top || y >= S->d.bounds.bottom)
-        return;
-    int n;
-    const int16_t *xs = hrgn_row(&S->clip, y, &n);
-    bool in = false;
-    for (int k = 0; xs && k < n && !in; k += 2)
-        in = x >= xs[k] && x < xs[k + 1];
-    if (!in)
+    if (!port_visible(x, y))
         return;
     uint16_t c[3] = { (uint16_t)(rgb[0] * 0x101), (uint16_t)(rgb[1] * 0x101), (uint16_t)(rgb[2] * 0x101) };
     put_px(&S->d, x - S->d.bounds.left, y - S->d.bounds.top, qd_rgb_px(S->d.depth, S->d.ctab, c));
+}
+
+/* Pixels Platinum's shadows darkened, so that drawing a frame again
+ * (activating its window, a new title) darkens what was under it, not
+ * its own shadow: the colour found there, and the one written. */
+#define SHADE_SLOTS 16384
+static struct {
+    gaddr base;
+    int16_t x, y;
+    uint32_t under, wrote;
+} shade[SHADE_SLOTS];
+
+static uint32_t mix(uint32_t under, const uint8_t *rgb, int a)
+{
+    uint32_t out = 0;
+    for (int i = 0; i < 3; i++) {
+        int u = (int)(under >> (16 - i * 8) & 0xFF);
+        out |= (uint32_t)((u * (255 - a) + rgb[i] * a + 127) / 255) << (16 - i * 8);
+    }
+    return out;
+}
+
+/* A pixel of a part drawn by thme_platinum.c: opaque, or mixed with what
+ * is there (alpha 1-254). */
+void thme_plot(int x, int y, const uint8_t *rgb, int alpha)
+{
+    if (alpha <= 0)
+        return;
+    if (alpha >= 255 || S->kind == 2) {
+        plot(x, y, rgb);
+        return;
+    }
+    if (S->kind == 1) {
+        if (x < S->bounds.left || x >= S->bounds.right || y < S->bounds.top || y >= S->bounds.bottom)
+            return;
+        uint8_t *p = S->buf + ((size_t)(y - S->bounds.top) * (size_t)(S->bounds.right - S->bounds.left) +
+                               (size_t)(x - S->bounds.left)) * 4;
+        uint32_t v = mix((uint32_t)p[0] << 16 | (uint32_t)p[1] << 8 | p[2], rgb, alpha);
+        uint8_t c[3] = { (uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v };
+        plot(x, y, c);
+        return;
+    }
+    if (!port_visible(x, y))
+        return;
+    uint16_t u16[3];
+    qd_px_rgb(S->d.depth, S->d.ctab, get_px(&S->d, x - S->d.bounds.left, y - S->d.bounds.top), u16);
+    uint32_t under = (uint32_t)(u16[0] >> 8) << 16 | (uint32_t)(u16[1] >> 8) << 8 | (u16[2] >> 8);
+    size_t k = ((size_t)(uint16_t)x * 40503u + (size_t)(uint16_t)y * 9973u + S->d.base) % SHADE_SLOTS;
+    if (shade[k].base == S->d.base && shade[k].x == x && shade[k].y == y && shade[k].wrote == under)
+        under = shade[k].under;
+    uint32_t v = mix(under, rgb, alpha);
+    uint8_t c[3] = { (uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v };
+    plot(x, y, c);
+    /* What the screen holds now (its depth may round the colour). */
+    qd_px_rgb(S->d.depth, S->d.ctab, get_px(&S->d, x - S->d.bounds.left, y - S->d.bounds.top), u16);
+    shade[k].base = S->d.base;
+    shade[k].x = (int16_t)x;
+    shade[k].y = (int16_t)y;
+    shade[k].under = under;
+    shade[k].wrote = (uint32_t)(u16[0] >> 8) << 16 | (uint32_t)(u16[1] >> 8) << 8 | (u16[2] >> 8);
 }
 
 static void port_surface(surface *s)
@@ -698,12 +778,20 @@ static qrect rec_rect(const tlayo *l, const int *v, qrect b, const trec *t)
 
 static bool applies(const trec *t, uint32_t state) { return (state & t->need) == t->need && !(state & t->forbid); }
 
-bool thme_has_part(int id) { return T.on && layout((int16_t)id) != NULL; }
+/* A part Platinum draws (an Apple theme file's), not a layout. */
+static bool native(int id) { return T.builtin && !layout((int16_t)id) && plat_has_part(id); }
+static bool has_part(int id) { return layout((int16_t)id) || native(id); }
+
+bool thme_has_part(int id) { return T.on && has_part(id); }
 
 /* Draw a part: every record that applies to the state, in order.  Images
  * of records making a region in `pressed` show their next image. */
 static bool draw_part_on(int id, qrect b, uint32_t state, const int *m, uint32_t pressed, uint32_t only)
 {
+    if (native(id)) {
+        plat_draw(id, b, state, m, pressed, only);
+        return true;
+    }
     const tlayo *l = layout((int16_t)id);
     if (!l)
         return false;
@@ -733,7 +821,7 @@ static bool draw_part_on(int id, qrect b, uint32_t state, const int *m, uint32_t
 
 bool thme_draw_part(int id, qrect b, uint32_t state, const int *m, uint32_t pressed)
 {
-    if (!T.on || !layout((int16_t)id))
+    if (!T.on || !has_part(id))
         return false;
     surface s;
     port_surface(&s);
@@ -749,6 +837,17 @@ bool thme_draw_part(int id, qrect b, uint32_t state, const int *m, uint32_t pres
  * regions in `which`; false if none. */
 bool thme_part_rect(int id, qrect b, uint32_t state, const int *m, uint32_t which, qrect *out)
 {
+    if (T.on && native(id)) {
+        plat_area a[PLAT_AREAS];
+        int n = plat_areas(id, b, state, m, a, PLAT_AREAS);
+        bool found = false;
+        for (int i = 0; i < n; i++)
+            if ((a[i].flags & 0x2FF & which) && a[i].r.right > a[i].r.left && a[i].r.bottom > a[i].r.top) {
+                *out = a[i].r;
+                found = true;
+            }
+        return found;
+    }
     const tlayo *l = T.on ? layout((int16_t)id) : NULL;
     if (!l)
         return false;
@@ -771,6 +870,15 @@ bool thme_part_rect(int id, qrect b, uint32_t state, const int *m, uint32_t whic
 /* The regions (of the bits in `which`) a point is in. */
 uint32_t thme_part_hit(int id, qrect b, uint32_t state, const int *m, uint32_t which, int h, int vv)
 {
+    if (T.on && native(id)) {
+        plat_area a[PLAT_AREAS];
+        int n = plat_areas(id, b, state, m, a, PLAT_AREAS);
+        uint32_t hit = 0;
+        for (int i = 0; i < n; i++)
+            if (h >= a[i].r.left && h < a[i].r.right && vv >= a[i].r.top && vv < a[i].r.bottom)
+                hit |= a[i].flags & which;
+        return hit;
+    }
     const tlayo *l = T.on ? layout((int16_t)id) : NULL;
     if (!l)
         return 0;
@@ -792,12 +900,22 @@ uint32_t thme_part_hit(int id, qrect b, uint32_t state, const int *m, uint32_t w
  * the regions in `also` (the content), as a region. */
 bool thme_part_region(int id, qrect b, uint32_t state, const int *m, uint32_t also, hrgn *out)
 {
-    const tlayo *l = T.on ? layout((int16_t)id) : NULL;
-    if (!l)
+    bool nat = T.on && native(id);
+    const tlayo *l = T.on && !nat ? layout((int16_t)id) : NULL;
+    if (!l && !nat)
         return false;
-    int *v = evaluate(l, b, m);
+    plat_area a[PLAT_AREAS];
+    int na = nat ? plat_areas(id, b, state, m, a, PLAT_AREAS) : 0;
+    int *v = l ? evaluate(l, b, m) : NULL;
     qrect bb = b;
-    for (int i = 0; i < l->nr; i++) {
+    for (int i = 0; i < na; i++) {
+        /* what is drawn lies at most a shadow's width outside them */
+        bb.top = (int16_t)imin(bb.top, a[i].r.top - 2);
+        bb.left = (int16_t)imin(bb.left, a[i].r.left - 2);
+        bb.bottom = (int16_t)imax(bb.bottom, a[i].r.bottom + 2);
+        bb.right = (int16_t)imax(bb.right, a[i].r.right + 2);
+    }
+    for (int i = 0; l && i < l->nr; i++) {
         const trec *t = &l->r[i];
         if (!applies(t, state))
             continue;
@@ -825,7 +943,15 @@ bool thme_part_region(int id, qrect b, uint32_t state, const int *m, uint32_t al
     surface *old = S;
     S = &s;
     draw_part_on(id, b, state, m, 0, 0);
-    for (int i = 0; i < l->nr; i++) {
+    for (int i = 0; i < na; i++) {
+        if (!(a[i].flags & 0x2FF & also))
+            continue;
+        qrect r = a[i].r;
+        for (int y = imax(r.top, bb.top); y < imin(r.bottom, bb.bottom); y++)
+            memset(s.buf + (size_t)(y - bb.top) * (size_t)w + (size_t)(imax(r.left, bb.left) - bb.left), 1,
+                   (size_t)imax(0, imin(r.right, bb.right) - imax(r.left, bb.left)));
+    }
+    for (int i = 0; l && i < l->nr; i++) {
         const trec *t = &l->r[i];
         if (!applies(t, state) || !((t->flags & 0x2FF) & also))
             continue;
@@ -914,7 +1040,7 @@ bool thme_metric(const char *tag, int *out)
     const uint8_t *d = T.on ? res(fourcc("tinf"), 128, &len) : NULL;
     const uint8_t *v = d ? coll_item(d, len, tag, &il) : NULL;
     if (!v || il != 2)
-        return false;
+        return T.on && T.builtin && plat_metric(tag, out);
     *out = (int16_t)be16(v);
     return true;
 }
@@ -1177,8 +1303,16 @@ bool thme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool
     if (!T.on || !window_kind(var, &k))
         return false;
     int id = k.id + (hilited ? 0 : 1);
-    if (!layout((int16_t)id))
+    if (!has_part(id))
         return false;
+    if (T.builtin) {
+        /* Platinum's dialog frames run into the content in its colour */
+        uint8_t bk[3] = { 0xFF, 0xFF, 0xFF };
+        if (w && qd_port_is_color(w))
+            for (int i = 0; i < 3; i++)
+                bk[i] = (uint8_t)(rd16(w + CGrafPort_rgbBkColor_off + (uint32_t)i * 2) >> 8);
+        plat_set_content(bk);
+    }
     uint8_t s[256];
     int m[THME_MEASURES];
     int n = window_title(w, &k, s, m);
@@ -1217,7 +1351,7 @@ bool thme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool
 bool thme_window_region(gaddr w, int var, qrect c, bool goaway, bool zoom, hrgn *out)
 {
     wkind k;
-    if (!T.on || !window_kind(var, &k) || !layout((int16_t)k.id))
+    if (!T.on || !window_kind(var, &k) || !has_part(k.id))
         return false;
     uint8_t s[256];
     int m[THME_MEASURES];
@@ -1231,7 +1365,7 @@ bool thme_window_region(gaddr w, int var, qrect c, bool goaway, bool zoom, hrgn 
 int thme_window_hit(gaddr w, int var, qrect c, bool goaway, bool zoom, int h, int v)
 {
     wkind k;
-    if (!T.on || !window_kind(var, &k) || !layout((int16_t)k.id))
+    if (!T.on || !window_kind(var, &k) || !has_part(k.id))
         return -1;
     uint8_t s[256];
     int m[THME_MEASURES];
@@ -1256,10 +1390,12 @@ int thme_window_hit(gaddr w, int var, qrect c, bool goaway, bool zoom, int h, in
 }
 
 /* DrawGrowIcon: the document window's grow box, in the port's clip. */
-bool thme_draw_grow(qrect c, bool active)
+bool thme_draw_grow(qrect c, bool active, bool small)
 {
-    int id = active ? 128 : 129;
-    if (!T.on || !layout((int16_t)id))
+    int id = (small ? 136 : 128) + (active ? 0 : 1);
+    if (small && !has_part(id))
+        id = active ? 128 : 129;
+    if (!T.on || !has_part(id))
         return false;
     int m[THME_MEASURES] = { 0 };
     surface s;
@@ -1558,7 +1694,7 @@ bool thme_menu_bar(qrect r) { return part(256, r, 0); }
  * selected look) under it, then the title's own (RootMenuItem). */
 bool thme_menu_title(qrect bar, qrect r, bool selected, bool enabled)
 {
-    if (!T.on || !layout(256))
+    if (!T.on || !has_part(256))
         return false;
     int m[THME_MEASURES] = { 0 };
     surface s;
@@ -1597,7 +1733,7 @@ bool thme_menu_extent(qrect r, int type, qrect *out)
 {
     hrgn g;
     int m[THME_MEASURES] = { 0 };
-    if (!T.on || !layout(257) || !thme_part_region(menu_part(type), r, 0, m, 0, &g))
+    if (!T.on || !has_part(257) || !thme_part_region(menu_part(type), r, 0, m, 0, &g))
         return false;
     qrect b = hrgn_bbox(&g);
     hrgn_free(&g);
@@ -1687,6 +1823,49 @@ bool thme_scene_string(const char *tag, char *out, size_t n)
     size_t k = d[0] < n - 1 ? d[0] : n - 1;
     memcpy(out, d + 1, k);
     out[k] = 0;
+    return true;
+}
+
+/* An Apple theme's colour variation: the 'clut' (200-220) its scene names
+ * ('varn', Lavender in Mac OS Default), a ramp of eight from light to
+ * dark that Platinum draws its accents in. */
+static void choose_variation(void)
+{
+    char name[64];
+    plat_set_ramp(NULL);
+    if (!thme_scene_string("varn", name, sizeof name))
+        return;
+    for (size_t i = 0; i < T.idx.count; i++) {
+        rsrc_entry *e = &T.idx.entries[i];
+        if (e->type != fourcc("clut") || strcmp(e->name, name) != 0)
+            continue;
+        const uint8_t *d = rsrc_data(T.fork, &T.idx, e);
+        if (e->data_len < 8 + 8 * 8)
+            return;
+        uint8_t ramp[8][3];
+        memset(ramp, 0, sizeof ramp);
+        int n = be16(d + 6) + 1;
+        for (int k = 0; k < n && 8 + (uint32_t)(k + 1) * 8 <= e->data_len; k++) {
+            const uint8_t *c = d + 8 + k * 8;
+            int v = be16(c);
+            if (v < 8)
+                for (int j = 0; j < 3; j++)
+                    ramp[v][j] = c[2 + j * 2];
+        }
+        plat_set_ramp(ramp);
+        return;
+    }
+}
+
+/* An Apple theme's colour variation, its i'th colour (0 light to 7 dark). */
+bool thme_variation_rgb(int i, uint16_t out[3])
+{
+    if (!T.on || !T.builtin)
+        return false;
+    uint8_t c[3];
+    plat_accent(i, c);
+    for (int k = 0; k < 3; k++)
+        out[k] = (uint16_t)(c[k] * 0x101);
     return true;
 }
 

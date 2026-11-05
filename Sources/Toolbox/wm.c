@@ -587,12 +587,12 @@ static int32_t wdef_hit(gaddr w, int var, uint32_t pt)
     return wNoHit;
 }
 
-static void wdef_grow_icon(gaddr w, int var)
+static void wdef_grow_icon(gaddr w, int var, bool small)
 {
     if (!has_grow(var) || !wvisible(w) || is_collapsed(w))
         return;
     qrect c = qrect_get(w + GrafPort_portRect_off);
-    if (native_frame(var) || theme_draw_grow(c, WindowRecord_hilited(w) != 0))
+    if (native_frame(var) || theme_draw_grow(c, WindowRecord_hilited(w) != 0, small))
         return;
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();
@@ -627,7 +627,7 @@ void wdef0_native(cpu68k *c, uint16_t tw)
     case wCalcRgns: wdef_calc(w, var); break;
     case wNew: wdef_new(w, var); break;
     case wDispose: wdef_dispose(w, var); break;
-    case wDrawGIcon: wdef_grow_icon(w, var); break;
+    case wDrawGIcon: wdef_grow_icon(w, var, false); break;
     default: break;
     }
     wr32(c->a[7], (uint32_t)result);
@@ -853,7 +853,7 @@ void wdef124_native(cpu68k *c, uint16_t tw)
     case wCalcRgns: wdef124_calc(w, var); break;
     case wDrawGIcon:
         if (float_grow(var) && !is_collapsed(w))
-            wdef_grow_icon(w, 0); /* the document window's grow box */
+            wdef_grow_icon(w, 0, true); /* a floating window's grow box */
         break;
     default: break;
     }

@@ -60,7 +60,8 @@ void thme_dump(FILE *f, bool coords);
 bool thme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom, uint32_t pressed);
 bool thme_window_region(gaddr w, int var, qrect c, bool goaway, bool zoom, hrgn *out);
 int thme_window_hit(gaddr w, int var, qrect c, bool goaway, bool zoom, int h, int v);
-bool thme_draw_grow(qrect c, bool active);
+/* DrawGrowIcon's box: a document window's, or (small) a floating one's. */
+bool thme_draw_grow(qrect c, bool active, bool small);
 
 /* Controls, as the Appearance Manager's ThemeDrawState (0 inactive, 1
  * active, 2 pressed) gives them. */
@@ -114,6 +115,8 @@ bool thme_in_use(void);
 int thme_scene_font(const char *tag, char *out, size_t n);
 int thme_system_family(void);
 bool thme_highlight_rgb(uint16_t out[3]);
+/* An Apple theme's colour variation (0 light to 7 dark). */
+bool thme_variation_rgb(int i, uint16_t out[3]);
 bool thme_paint_desk(const hrgn *area);
 /* The sound set: its 'snd ' for a ThemeSoundKind or ThemeDragSoundKind
  * (an OSType), and the kind's class (the sound mask's bit). */
@@ -129,5 +132,28 @@ bool thme_icon_listed(int16_t id);
 const uint8_t *thme_resource(uint32_t type, int16_t id, uint32_t *len);
 /* A ThemeCursor's 'crsr' (the step'th of an animated one), or NULL. */
 const uint8_t *thme_cursor(int cursor, int step, uint32_t *len);
+
+/* Platinum, which Apple's own theme files ('tthm') name: drawn by
+ * thme_platinum.c in place of layouts, for the windows and menus
+ * ('layo' ids as above).  An area is a region a part makes (THME_* flags)
+ * and its rectangle. */
+typedef struct {
+    uint16_t flags;
+    qrect r;
+} plat_area;
+#define PLAT_AREAS 32
+/* The colour variation, light to dark (NULL: Lavender, Mac OS 9's). */
+void plat_set_ramp(const uint8_t ramp[8][3]);
+void plat_accent(int i, uint8_t out[3]);
+bool plat_has_part(int id);
+/* The colour of the window being drawn's content. */
+void plat_set_content(const uint8_t rgb[3]);
+/* Platinum's metrics, as a theme's 'tinf' has them ('mbht', 'msht'...). */
+bool plat_metric(const char *tag, int *out);
+void plat_draw(int id, qrect b, uint32_t state, const int *m, uint32_t pressed, uint32_t only);
+int plat_areas(int id, qrect b, uint32_t state, const int *m, plat_area *out, int max);
+/* For thme_platinum.c: a pixel of the part being drawn, mixed with what
+ * is there by alpha (0-255). */
+void thme_plot(int x, int y, const uint8_t *rgb, int alpha);
 
 #endif
