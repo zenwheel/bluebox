@@ -118,10 +118,12 @@ public enum NativeControls {
         container.addSubview(view)
         var knob = (0, 0), slot = (0, 0)
         if let s = view as? NSScroller, s.isEnabled {
-            // Along the bar from its top (the view is not flipped) or left.
+            // Along the bar from its top or left: NSScroller is flipped, so
+            // its rects already count down from the top.
             func span(_ r: NSRect) -> (Int, Int) {
-                rq.vertical ? (Int((bounds.height - r.maxY).rounded()), Int((bounds.height - r.minY).rounded()))
-                            : (Int(r.minX.rounded()), Int(r.maxX.rounded()))
+                guard rq.vertical else { return (Int(r.minX.rounded()), Int(r.maxX.rounded())) }
+                return s.isFlipped ? (Int(r.minY.rounded()), Int(r.maxY.rounded()))
+                                   : (Int((bounds.height - r.maxY).rounded()), Int((bounds.height - r.minY).rounded()))
             }
             knob = span(s.rect(for: .knob))
             slot = span(s.rect(for: .knobSlot))
