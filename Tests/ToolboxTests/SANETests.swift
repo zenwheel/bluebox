@@ -270,6 +270,11 @@ extension BlueBox {
             wr16(dec + 2, 5000)
             #expect(run(pea(dec) + pea(tiny) + op(0x0009) + [0xA9F4]) == "ExitToShell")
             #expect(bits(tiny) == (0x7FFF, 0) && env & 0x0400 != 0)
+            // A NaN keeps its code through decimal: sqrt(-1) is NAN(001).
+            let neg = ext(-1), str = tb_NewPtr(256, false, true)
+            #expect(run(pea(neg) + op(0x0012) + pea(form) + pea(neg) + pea(out) + op(0x000B) + [0xA9F4]) == "ExitToShell")
+            tb_ROMlib_Fdec2str(form, out, str)
+            #expect(pstring(at: str) == "NAN(001)")
             setEnv(0)
         }
 

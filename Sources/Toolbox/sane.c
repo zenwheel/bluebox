@@ -1697,8 +1697,17 @@ void tb_ROMlib_Fdec2str(gaddr form, gaddr dec, gaddr out)
     double v = dec_get(dec);
     int style = decform_style(form), digits = (int16_t)rd16(form + 2);
     char buf[128];
-    if (isnan(v))
-        snprintf(buf, sizeof buf, "NAN(017)");
+    if (isnan(v)) {
+        /* The NaN's code: its significand's second byte, hex digits 3 and 4. */
+        char sig[8] = { 0 };
+        gget(sig, dec + 5, rd8(dec + 4) < 5 ? rd8(dec + 4) : 5);
+        unsigned code = 0;
+        for (int i = 3; i < 5; i++) {
+            int ch = sig[i] | 32;
+            code = code << 4 | (unsigned)(ch >= '0' && ch <= '9' ? ch - '0' : ch >= 'a' && ch <= 'f' ? ch - 'a' + 10 : 0);
+        }
+        snprintf(buf, sizeof buf, "%sNAN(%03u)", rd8(dec) & 1 ? "-" : "", code);
+    }
     else if (isinf(v))
         snprintf(buf, sizeof buf, v < 0 ? "-INF" : "INF");
     else if (style == 1) { /* fixed */
