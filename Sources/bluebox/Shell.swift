@@ -265,7 +265,7 @@ enum ShellItem: Hashable {
     }
 
     init() {
-        refresh()
+        refreshInBackground()
         watchSystemFolder()
     }
 
@@ -280,7 +280,7 @@ enum ShellItem: Hashable {
             let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .rename, .delete],
                                                                    queue: .main)
             source.setEventHandler { [weak self] in
-                MainActor.assumeIsolated { self?.refresh() }
+                MainActor.assumeIsolated { self?.refreshInBackground() }
             }
             source.setCancelHandler { close(fd) }
             source.resume()
@@ -288,8 +288,49 @@ enum ShellItem: Hashable {
         }
     }
 
+    /// What the library and the disk hold, as the sidebar lists them.
+    struct Contents: Sendable {
+        var apps: [ShellApp] = []
+        var themes: [String] = []
+        var systemItems: [SystemItem] = []
+    }
+
     /// Scan the library and the disk again (after an import or an install).
     func refresh() {
+        loads += 1
+        show(Self.read(library: library, systemFolder: systemFolder))
+    }
+
+    /// The same, read away from the main thread: the window comes up at
+    /// once and the list fills in (a library with CDs in it takes seconds
+    /// to read when its files aren't in memory).  A refresh started since
+    /// wins.
+    func refreshInBackground() {
+        loads += 1
+        let load = loads, library = library, systemFolder = systemFolder
+        loading = true
+        Task.detached(priority: .userInitiated) {
+            let contents = Self.read(library: library, systemFolder: systemFolder)
+            await MainActor.run {
+                guard load == self.loads else { return }
+                self.show(contents)
+            }
+        }
+    }
+
+    private var loads = 0
+    /// The first reading of the library isn't in yet.
+    @Published private(set) var loading = false
+
+    private func show(_ contents: Contents) {
+        apps = contents.apps
+        themes = contents.themes
+        systemItems = contents.systemItems
+        settings = loadSettings(library)
+        loading = false
+    }
+
+    nonisolated static func read(library: String, systemFolder: String) -> Contents {
         var found: [ShellApp] = []
         // The library is read once (it may hold CDs): its applications and
         // its themes.  Theme archives (Kaleidoscope schemes) often carry an
@@ -312,8 +353,9 @@ enum ShellItem: Hashable {
                                       architecture: a.architecture, creator: a.creator))
             }
         }
-        apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        themes = themePaths.map { ($0 as NSString).lastPathComponent }.sorted()
+        var contents = Contents()
+        contents.apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        contents.themes = themePaths.map { ($0 as NSString).lastPathComponent }.sorted()
         var items: [SystemItem] = []
         for folder in watchedSystemFolders {
             let root = systemFolder + "/" + folder
@@ -323,8 +365,8 @@ enum ShellItem: Hashable {
                                         creator: fourCCString(f.creator), architecture: f.architecture))
             }
         }
-        systemItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        settings = loadSettings(library)
+        contents.systemItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return contents
     }
 
     func settingsBinding(_ key: String) -> Binding<AppSettings> {
@@ -538,7 +580,12 @@ struct ShellView: View {
                         ShellNodeRows(model: model, nodes: entry.nodes, searching: !query.isEmpty, trashing: $trashing)
                     }
                 }
-                if places.isEmpty && !query.isEmpty {
+                if places.isEmpty && model.loading {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Reading the library\u{2026}").foregroundStyle(.secondary)
+                    }
+                } else if places.isEmpty && !query.isEmpty {
                     Text("No applications match").foregroundStyle(.secondary)
                 }
             }
