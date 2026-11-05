@@ -142,7 +142,9 @@ struct ShellNodeRows: View {
                     Image(nsImage: model.icon(app)).resizable().interpolation(.none)
                         .frame(width: 16, height: 16)
                     Text(app.name)
-                    if model.running[app.path] != nil {
+                    if model.states.isSuspended(app.path) {
+                        Image(systemName: "pause.circle.fill").font(.caption2).foregroundStyle(.orange).help("Suspended")
+                    } else if model.running[app.path] != nil {
                         Circle().fill(Color.green).frame(width: 6, height: 6).help("Running")
                     }
                 }
@@ -206,6 +208,8 @@ enum ShellItem: Hashable {
     @Published var settings: [String: AppSettings] = [:]
     @Published var systemItems: [SystemItem] = []
     @Published var running: [String: Process] = [:] /* by application path */
+    /// The running programs' process IDs, and which are suspended (as they say).
+    @Published var states = ProgramStates()
     /// Recently launched applications (paths saved before the rename from
     /// Classic follow the moved data folder).
     @Published var recent: [String] = (UserDefaults.standard.stringArray(forKey: "recent") ?? [])
@@ -267,6 +271,30 @@ enum ShellItem: Hashable {
     init() {
         refreshInBackground()
         watchSystemFolder()
+        watchSuspensions()
+    }
+
+    // MARK: Suspending and resuming
+
+    /// The programs say when they are suspended or resumed (from their own
+    /// menus too); a program ending, however it ends, is neither.
+    private func watchSuspensions() {
+        DistributedNotificationCenter.default().addObserver(forName: SuspendNotice.state, object: nil,
+                                                            queue: .main) { [weak self] note in
+            guard let (pid, suspended) = SuspendNotice.parse(note) else { return }
+            MainActor.assumeIsolated { self?.states.noted(pid: pid, suspended: suspended) }
+        }
+    }
+
+    /// Suspend a running program, or resume a suspended one.
+    func toggleSuspend(path: String) {
+        guard let pid = states.pids[path] else { return }
+        SuspendNotice.ask(pid: pid, suspend: !states.isSuspended(path))
+    }
+
+    /// The button where Launch is: Launch, Suspend or Resume.
+    func primaryAction(_ app: ShellApp) {
+        if states.isRunning(app.path) { toggleSuspend(path: app.path) } else { launch(app) }
     }
 
     var systemFolder: String { defaultDisk() + "/System Folder" }
@@ -391,11 +419,15 @@ enum ShellItem: Hashable {
         p.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
         p.arguments = ["run", path]
         p.terminationHandler = { [weak self] _ in
-            Task { @MainActor in self?.running[path] = nil }
+            Task { @MainActor in
+                self?.running[path] = nil
+                self?.states.ended(path) // a crash while suspended too
+            }
         }
         do {
             try p.run()
             running[path] = p
+            states.launched(path, pid: p.processIdentifier)
             recent.removeAll { $0 == path }
             recent.insert(path, at: 0)
             recent = Array(recent.prefix(8))
@@ -605,7 +637,11 @@ struct ShellView: View {
             // launches it or shows it in the Finder.
             .contextMenu(forSelectionType: ShellItem.self) { items in
                 if case .app(let app)? = items.first {
-                    Button("Launch") { model.launch(app) }
+                    if model.states.isRunning(app.path) {
+                        Button(model.states.action(for: app.path).title) { model.toggleSuspend(path: app.path) }
+                    } else {
+                        Button("Launch") { model.launch(app) }
+                    }
                     Button("Show in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: app.path)])
                     }
@@ -773,12 +809,13 @@ struct AppPage: View {
                     }
                     Spacer()
                     if model.running[app.path] != nil {
-                        Text("Running").foregroundStyle(.secondary)
+                        Text(model.states.isSuspended(app.path) ? "Suspended" : "Running").foregroundStyle(.secondary)
                     }
                     Button("Delete…", role: .destructive) { confirmDelete = true }
                         .disabled(model.running[app.path] != nil)
                         .help(model.running[app.path] != nil ? "Quit it first" : "Move it to the Trash")
-                    Button("Launch") { model.launch(app) }.keyboardShortcut(.defaultAction)
+                    Button(model.states.action(for: app.path).title) { model.primaryAction(app) }
+                        .keyboardShortcut(.defaultAction)
                 }
             }
             SettingsForm(settings: model.settingsBinding(settingsKey(app.path)), themes: model.themes, isDefault: false,
@@ -1105,8 +1142,8 @@ struct HighlightPicker: View {
         statusItem = item
     }
 
-    /// The status item's menu, built as it opens: running and recent
-    /// applications, the window, quitting.
+    /// The status item's menu, built as it opens: running, suspended
+    /// (chosen, resumed) and recent applications, the window, quitting.
     private func header(_ title: String) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
@@ -1115,7 +1152,7 @@ struct HighlightPicker: View {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        let running = model.running.keys.sorted()
+        let running = model.states.runningPaths.filter { model.running[$0] != nil }
         if !running.isEmpty {
             menu.addItem(header("Running"))
             for path in running {
@@ -1125,6 +1162,8 @@ struct HighlightPicker: View {
             }
             menu.addItem(.separator())
         }
+        SuspendedMenuSection.items(model.states.suspendedPaths, target: self, resume: #selector(resumeProgram(_:)))
+            .forEach { menu.addItem($0) }
         if !model.recent.isEmpty {
             menu.addItem(header("Recent"))
             for path in model.recent {
@@ -1143,6 +1182,12 @@ struct HighlightPicker: View {
         importItem.target = self
         menu.addItem(importItem)
         menu.addItem(NSMenuItem(title: "Quit Blue Box", action: #selector(NSApplication.terminate(_:)), keyEquivalent: ""))
+    }
+
+    @objc func resumeProgram(_ sender: NSMenuItem) {
+        if let path = sender.representedObject as? String, model.states.isSuspended(path) {
+            model.toggleSuspend(path: path)
+        }
     }
 
     @objc func launchRecent(_ sender: NSMenuItem) {
