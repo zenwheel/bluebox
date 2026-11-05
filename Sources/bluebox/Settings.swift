@@ -236,11 +236,13 @@ func requiredCPU(application path: String) -> Int? {
 
 /// Programs that need a compact Mac, by creator (PLAN M22): written for
 /// the Plus, they draw on its 512×342 one-bit screen themselves, rows of
-/// 64 bytes from ScrnBase, and on a bigger, deeper screen showed garbage.
-/// They run as a Plus unless a machine or processor is chosen.
+/// 64 bytes from ScrnBase, and on a bigger, deeper screen showed garbage,
+/// or they time themselves by its speed and on a faster Mac divided by
+/// zero.  They run as a Plus unless a machine or processor is chosen.
 let knownMachineRequirements: [UInt32: String] = [
     0x3F7A_2422: "plus", /* ?z$" Wave 15 (1985) */
     0x5350_2020: "plus", /* SP   PaintScroll 1.0 (1986) */
+    0x5348_4150: "plus", /* SHAP Down Hill Racer (1986): divides by the ticks a frame takes */
 ]
 
 func requiredMachine(application path: String) -> String? {

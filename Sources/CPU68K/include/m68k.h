@@ -53,6 +53,8 @@ struct cpu68k {
     bool strict;         /* a 68000 or a cache: the interpreter's slower paths */
     uint32_t odd_mask;   /* 1 on a 68000: the address bit that faults */
     uint64_t icount;     /* instructions executed */
+    uint64_t cycles;     /* a 68000's clock cycles, its bus's and its own (its timing) */
+    uint64_t timed;      /* the instructions those are for (the rest of icount is time passed) */
     bool stopped;        /* STOP executed */
     bool halted;         /* emulation must stop; see halt_reason */
     char halt_reason[160];

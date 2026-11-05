@@ -118,11 +118,21 @@ static inline bool ic_on(const cpu68k *c) { return c->icache && (c->cacr & CACR_
 /* ---------------------------------------------------------------------- */
 /* Memory */
 
+/* A 68000's time is mostly its bus's: four clocks a word read or
+ * written, instructions included (PLAN M22's timing; step_68000 adds what
+ * it spends inside).  Counted in the strict build, where the 68000 runs. */
+#define BUS(c, words)                         \
+    do {                                      \
+        if (CPU68K_STRICT)                    \
+            (c)->cycles += 4u * (words);      \
+    } while (0)
+
 /* Device windows (g_hw_map, a machine's memory-mapped chips) go to the
  * device callbacks in every model; a 68000's odd word or long faults
  * first, as the chip checked the address before the bus cycle. */
 static inline uint8_t mr8(cpu68k *c, uint32_t a)
 {
+    BUS(c, 1);
     a &= c->addr_mask;
     return hw_mapped(a) ? (uint8_t)g_hw_read(a, 1) : rd8(a);
 }
@@ -130,6 +140,7 @@ static inline uint16_t mr16(cpu68k *c, uint32_t a)
 {
     if (odd_fault(c, a))
         address_error(c, a, true, false);
+    BUS(c, 1);
     a &= c->addr_mask;
     return hw_mapped(a) ? (uint16_t)g_hw_read(a, 2) : rd16(a);
 }
@@ -137,6 +148,7 @@ static inline uint32_t mr32(cpu68k *c, uint32_t a)
 {
     if (odd_fault(c, a))
         address_error(c, a, true, false);
+    BUS(c, 2);
     a &= c->addr_mask;
     return hw_mapped(a) ? g_hw_read(a, 4) : rd32(a);
 }
@@ -154,6 +166,7 @@ static inline uint32_t mr32(cpu68k *c, uint32_t a)
     } while (0)
 static inline void mw8(cpu68k *c, uint32_t a, uint8_t v)
 {
+    BUS(c, 1);
     a &= c->addr_mask;
     if (hw_mapped(a)) { g_hw_write(a, 1, v); return; }
     watch_store(a, 1);
@@ -163,6 +176,7 @@ static inline void mw16(cpu68k *c, uint32_t a, uint16_t v)
 {
     if (odd_fault(c, a))
         address_error(c, a, false, false);
+    BUS(c, 1);
     a &= c->addr_mask;
     if (hw_mapped(a)) { g_hw_write(a, 2, v); return; }
     watch_store(a, 2);
@@ -172,6 +186,7 @@ static inline void mw32(cpu68k *c, uint32_t a, uint32_t v)
 {
     if (odd_fault(c, a))
         address_error(c, a, false, false);
+    BUS(c, 2);
     a &= c->addr_mask;
     if (hw_mapped(a)) { g_hw_write(a, 4, v); return; }
     watch_store(a, 4);
@@ -198,6 +213,7 @@ static uint16_t ifetch16_strict(cpu68k *c, uint32_t a)
 {
     if (odd_fault(c, a))
         address_error(c, a, true, true);
+    BUS(c, 1);
     a &= c->addr_mask;
     if (ic_on(c))
         return (uint16_t)(ic_long(c, a & ~3u) >> (a & 2 ? 0 : 16));
@@ -2531,6 +2547,96 @@ static void op_lineF(cpu68k *c, uint16_t op)
 static void execute(cpu68k *c, uint16_t op);
 
 #if CPU68K_STRICT
+/* The extra a 68000 effective address costs beyond its words: -(An) and
+ * the indexed modes take two clocks to work out. */
+static unsigned ea_cycles_68000(int mode, int reg)
+{
+    return mode == 4 || mode == 6 || (mode == 7 && reg == 3) ? 2 : 0;
+}
+
+/* The clocks a 68000 instruction spends inside, beyond its bus cycles
+ * (which the accesses counted), after the timing tables in the 68000
+ * User's Manual, section 8: long arithmetic in registers, shifts by the
+ * bit, multiplies and divides, and a branch refilling the prefetch.
+ * Close, not exact: enough that a program timing a loop by the tick sees
+ * what it saw on a Plus. */
+static unsigned internal_cycles_68000(cpu68k *c, uint16_t op)
+{
+    int mode = (op >> 3) & 7, reg = op & 7, size = (op >> 6) & 3;
+    uint32_t len = c->pc - c->op_pc;
+    switch (op >> 12) {
+    case 0x0:
+        if ((op & 0x0100) || (op & 0x0F00) == 0x0800) /* bit operations */
+            return mode == 0 ? 4 : ea_cycles_68000(mode, reg);
+        return mode == 0 && size == 2 ? 4 : ea_cycles_68000(mode, reg);
+    case 0x1:
+    case 0x2:
+    case 0x3:
+        return ea_cycles_68000(mode, reg) + ((op >> 6 & 7) == 6 ? 2 : 0);
+    case 0x4:
+        if ((op & 0xF1C0) == 0x41C0) /* LEA */
+            return mode == 6 || (mode == 7 && reg == 3) ? 4 : 0;
+        if ((op & 0xFFC0) == 0x4E80 || (op & 0xFFC0) == 0x4EC0) /* JSR, JMP */
+            return mode == 2 ? 4 : 2;
+        if (op == 0x4E75 || op == 0x4E73 || op == 0x4E77) /* RTS, RTE, RTR */
+            return 4;
+        if ((op & 0xFB80) == 0x4880 && mode >= 2) /* MOVEM */
+            return op & 0x0400 ? 4 : 0;
+        if ((op & 0xF900) == 0x4000 && size == 2 && mode == 0) /* NEGX, CLR, NEG, NOT .L Dn */
+            return 2;
+        if ((op & 0xFFF0) == 0x4E40) /* TRAP */
+            return 26;
+        return ea_cycles_68000(mode, reg);
+    case 0x5:
+        if ((op & 0xF0F8) == 0x50C8) { /* DBcc: looping, the condition met or the count out */
+            if (len != 4)
+                return 2;
+            return (c->d[reg] & 0xFFFF) == 0xFFFF ? 6 : 4; /* at -1 the count ran out */
+        }
+        if (size == 3) /* Scc, which reads memory before it writes it (the interpreter doesn't) */
+            return mode == 0 ? 2 : 4 + ea_cycles_68000(mode, reg);
+        if (mode == 1 || (mode == 0 && size == 2)) /* ADDQ, SUBQ .L or to An */
+            return 4;
+        return ea_cycles_68000(mode, reg);
+    case 0x6: {
+        bool taken = c->pc != c->op_pc + 2 + (op & 0xFF ? 0 : 2);
+        if ((op & 0x0F00) == 0x0100) /* BSR */
+            return op & 0xFF ? 6 : 2;
+        if (taken)
+            return op & 0xFF ? 6 : 2;
+        return 4;
+    }
+    case 0x8:
+    case 0xC:
+        if ((op & 0xF0C0) == 0x80C0) /* DIVU, DIVS */
+            return (op & 0x0100 ? 154 : 136) + ea_cycles_68000(mode, reg);
+        if ((op & 0xF0C0) == 0xC0C0) /* MULU, MULS */
+            return 66 + ea_cycles_68000(mode, reg);
+        if ((op & 0xF130) == 0xC100) /* EXG, ABCD */
+            return 2;
+        /* fall through */
+    case 0x9:
+    case 0xB:
+    case 0xD:
+        if (size == 3) /* ADDA, SUBA, CMPA */
+            return (mode <= 1 || (mode == 7 && reg == 4) || !(op & 0x0100) ? 4 : 2) + ea_cycles_68000(mode, reg);
+        if (!(op & 0x0100) && size == 2) /* .L into Dn */
+            return (mode <= 1 || (mode == 7 && reg == 4) ? 4 : 2) + ea_cycles_68000(mode, reg);
+        return ea_cycles_68000(mode, reg);
+    case 0xA: /* the trap: the exception and the dispatcher's own instructions */
+        return 100;
+    case 0xE:
+        if (size == 3) /* by one, in memory */
+            return ea_cycles_68000(mode, reg);
+        else {
+            unsigned n = op & 0x20 ? c->d[(op >> 9) & 7] & 63 : ((op >> 9) & 7 ? (op >> 9) & 7 : 8);
+            return 2 + 2 * n + (size == 2 ? 2 : 0);
+        }
+    default:
+        return 0;
+    }
+}
+
 /* A 68000's instruction, with somewhere for an address error to unwind
  * to (natives may run instructions of their own inside it). */
 static void step_68000(cpu68k *c)
@@ -2543,6 +2649,8 @@ static void step_68000(cpu68k *c)
         uint16_t op = fetch16(c);
         c->op = op;
         execute(c, op);
+        c->cycles += internal_cycles_68000(c, op);
+        c->timed++;
         if ((c->pc & 1) && !c->halted)
             odd_branch(c);
     }
