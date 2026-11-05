@@ -175,6 +175,8 @@ func usage() -> Never {
                      escape, delete or an arrow: left, right, up, down; or shift,
                      option, control or command, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
+                     the scroll wheel: wheel:x/y/n (n lines up, down when negative),
+                     hwheel:x/y/n (n columns left);
                      snap:F.png saves the screen; in a window, wait:N is N/1000 ms
     \(screensaverUsage)
       bluebox chooser [run options]
@@ -395,6 +397,14 @@ func queueScript(_ script: [String], start: UInt64) {
             let presses: [Int32] = kind == "click" ? [1, 0] : kind == "down" ? [1] : kind == "up" ? [0] : [-1]
             for b in presses { add(1, xy[0], xy[1], b, after: 0) }
             at += 200_000
+            continue
+        }
+        // The scroll wheel: wheel:x/y/n, n lines up (down when negative);
+        // hwheel:x/y/n, n columns left.
+        if let colon = step.firstIndex(of: ":"), ["wheel", "hwheel"].contains(String(step[..<colon])) {
+            let v = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
+            guard v.count == 3 else { fail("wheel steps take x/y/n: \(step)") }
+            add(step.hasPrefix("h") ? 8 : 7, v[0], v[1], v[2], after: 200_000)
             continue
         }
         // suspend and resume: the program sent to the background and back.

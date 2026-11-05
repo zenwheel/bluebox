@@ -70,6 +70,26 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
 
 /// A click, release or drag from the host: at the host pointer, or while
 /// captured at wherever the program's mouse is.
+/// The scroll wheel, in lines: a trackpad's or Magic Mouse's points made
+/// lines of a classic program's text (about 12 points), a wheel's notches
+/// a few lines each, as macOS scrolls its own windows.
+@MainActor private var wheelLeft = (x: CGFloat(0), y: CGFloat(0))
+
+@MainActor func postHostWheel(_ event: NSEvent, in view: MacScreenView) {
+    if event.phase == .began || event.phase == .mayBegin { wheelLeft = (0, 0) }
+    let (dx, dy) = event.hasPreciseScrollingDeltas
+        ? (event.scrollingDeltaX / 12, event.scrollingDeltaY / 12)
+        : (event.scrollingDeltaX * 3, event.scrollingDeltaY * 3)
+    wheelLeft.x += dx
+    wheelLeft.y += dy
+    let lines = (x: Int32(wheelLeft.x.rounded(.towardZero)), y: Int32(wheelLeft.y.rounded(.towardZero)))
+    guard lines.x != 0 || lines.y != 0 else { return }
+    wheelLeft.x -= CGFloat(lines.x)
+    wheelLeft.y -= CGFloat(lines.y)
+    let (x, y) = view.macPoint(screen: NSEvent.mouseLocation)
+    machine_post_wheel(x, y, lines.x, lines.y)
+}
+
 @MainActor func postHostMouse(button: Int32) {
     if mouseCaptured {
         guard button >= 0 else { return }
@@ -167,6 +187,7 @@ final class MacWindowView: NSView, MacScreenView {
         DragOut.shared.note(event, in: self)
     }
     override func mouseUp(with event: NSEvent) { post(event, button: 0) }
+    override func scrollWheel(with event: NSEvent) { postHostWheel(event, in: self) }
     override func mouseDragged(with event: NSEvent) {
         post(event, button: -1)
         DragOut.shared.note(event, in: self)

@@ -1704,6 +1704,80 @@ static uint32_t local_mouse(gaddr w)
 
 uint32_t ctl_local_mouse(gaddr ch) { return local_mouse(cowner(ch)); }
 
+static void call_action(gaddr action, gaddr ch, int16_t part);
+/* ---- The scroll wheel (events.c) ----
+ * Where to click for a step of it: the up or left arrow (back) or the down
+ * or right one of the front window's scroll bar along the mouse (global
+ * x, y), or the nearest; false when the mouse isn't over that window or it
+ * has no such scroll bar with anything to scroll. */
+bool ctl_wheel_arrow(int x, int y, bool vertical, bool back, int *ax, int *ay)
+{
+    gaddr w = tb_FrontWindow();
+    if (!w || !WindowRecord_visible(w))
+        return false;
+    gaddr rh = WindowRecord_contRgn(w);
+    qrect cont = rh && rd32(rh) ? qrect_get(rd32(rh) + 2) : (qrect){ 0, 0, 0, 0 };
+    if (x < cont.left || x >= cont.right || y < cont.top || y >= cont.bottom)
+        return false;
+    pixdst d = qd_port_pixels(w);
+    int lx = x + d.bounds.left, ly = y + d.bounds.top;
+    gaddr best = 0;
+    int best_score = 0;
+    int k = 0;
+    for (gaddr ch = WindowRecord_controlList(w); ch && rd32(ch) && k < 4096; ch = ControlRecord_nextControl(cp(ch)), k++) {
+        ctl_info *ci = ctl_find(ch);
+        if (!ci || (ci->cdef != 1 && ci->cdef != 24) || !ControlRecord_contrlVis(cp(ch)) || chilite(ch) == 255 ||
+            cmax(ch) <= cmin(ch))
+            continue;
+        qrect r = crect(ch);
+        if (sb_vertical(r) != vertical)
+            continue;
+        /* Along the mouse first, then the nearest across. */
+        bool along = vertical ? ly >= r.top && ly < r.bottom : lx >= r.left && lx < r.right;
+        int across = vertical ? abs(lx - (r.left + r.right) / 2) : abs(ly - (r.top + r.bottom) / 2);
+        int score = (along ? 0 : 1 << 20) + across;
+        if (!best || score < best_score) {
+            best = ch;
+            best_score = score;
+        }
+    }
+    if (!best)
+        return false;
+    /* The arrow where the control says it is (a theme may put both at
+     * one end), inside the window's content: a scroll bar starts on the
+     * frame's line, and a click there is in the title bar. */
+    qrect r = crect(best);
+    int16_t want = back ? 20 : 21; /* inUpButton, inDownButton */
+    int len = vertical ? r.bottom - r.top : r.right - r.left;
+    for (int i = 2; i < len - 2; i += 2) {
+        int at = back ? i : len - 1 - i;
+        int px = vertical ? (r.left + r.right) / 2 : r.left + at;
+        int py = vertical ? r.top + at : (r.top + r.bottom) / 2;
+        int gx = px - d.bounds.left, gy = py - d.bounds.top;
+        if (gx < cont.left || gx >= cont.right || gy < cont.top || gy >= cont.bottom)
+            continue;
+        if (tb_TestControl(best, make_pt((int16_t)py, (int16_t)px)) == want) {
+            *ax = px - d.bounds.left;
+            *ay = py - d.bounds.top;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* A wheel's click in an arrow (ev_wheel_click): one step, the mouse not
+ * followed (it isn't there). */
+static bool wheel_step(gaddr ch, int16_t part, gaddr a)
+{
+    if (!ev_wheel_click() || (part != 20 && part != 21))
+        return false;
+    if (a == 0xFFFFFFFFu)
+        call_cdef(ch, autoTrack, part);
+    else if (a)
+        call_action(a, ch, part);
+    return true;
+}
+
 static void call_action(gaddr action, gaddr ch, int16_t part)
 {
     uint32_t args[2] = { ch, (uint32_t)(uint16_t)part };
@@ -1722,6 +1796,8 @@ static int16_t track(gaddr ch, uint32_t p, gaddr a)
      * tracks itself, even when the caller passes none. */
     if (a == 0xFFFFFFFFu || (!a && ControlRecord_contrlAction(cp(ch)) == 0xFFFFFFFFu))
         a = ControlRecord_contrlAction(cp(ch));
+    if (wheel_step(ch, part, a))
+        return part;
     if (a == 0xFFFFFFFFu) {
         /* The CDEF tracks the mouse itself (pop-up menus). */
         call_cdef(ch, autoTrack, part);
@@ -1835,6 +1911,8 @@ int16_t tb_HandleControlClick(gaddr ch, uint32_t where, int16_t modifiers, gaddr
         tb_SetKeyboardFocus(cowner(ch), ch, -1);
     int16_t part = tb_TestControl(ch, where);
     int16_t done;
+    if (wheel_step(ch, part, action == 0xFFFFFFFFu || !action ? ControlRecord_contrlAction(cp(ch)) : action))
+        return hit(ch, part, modifiers);
     if (ap_ctl_track(ch, part, where, action, modifiers, &done)) {
         ap_after_track(ch, done);
         return hit(ch, done, modifiers);

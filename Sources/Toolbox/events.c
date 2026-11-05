@@ -31,6 +31,7 @@ typedef struct {
     uint16_t modifiers;
     bool menubar; /* a press in the menu bar for a host menu, not yet seen by Button */
     bool mounted; /* a disk-inserted event whose disk the File Manager was asked to mount */
+    bool wheel;   /* a step of the host's scroll wheel (ev_post_wheel_click) */
 } event;
 
 #define QSIZE 64
@@ -124,7 +125,8 @@ void machine_attach_host(bool attached)
 
 typedef struct {
     uint64_t at;
-    int kind; /* 0 key, 1 mouse, 2 menu, 3 key down, 4 key up, 5 screenshot (a: its path's index) */
+    int kind; /* 0 key, 1 mouse, 2 menu, 3 key down, 4 key up, 5 screenshot (a: its path's index),
+               * 6 suspend or resume, 7 and 8 the scroll wheel */
     int a, b, c;
 } script_step;
 
@@ -184,6 +186,8 @@ void events_script_pump(uint64_t now)
         case 2: machine_choose_menu((int16_t)s.a, (int16_t)s.b); break;
         case 5: machine_screenshot(snap_paths[s.a]); break;
         case 6: machine_post_suspend_resume(s.a != 0, false); break; /* a: resume */
+        case 7: machine_post_wheel(s.a, s.b, 0, s.c); break; /* the scroll wheel, c lines (up) */
+        case 8: machine_post_wheel(s.a, s.b, s.c, 0); break; /* sideways, c columns (left) */
         }
     }
 }
@@ -574,6 +578,66 @@ void ev_post_click_at(int x, int y)
     pthread_mutex_unlock(&lock);
 }
 
+/* ---- The scroll wheel ----
+ * Classic programs know no wheel.  As the mouse drivers of the time did
+ * (USB Overdrive), a step of it is a click in an arrow of the front
+ * window's scroll bar under the mouse (ctl_wheel_arrow), marked so that
+ * tracking takes it as one step; one at a time, the next when the program
+ * has taken the last. */
+static int wheel_x, wheel_y, wheel_dx, wheel_dy; /* under lock: steps not yet clicked */
+static bool wheel_click_now;
+
+void machine_post_wheel(int x, int y, int dx, int dy)
+{
+    pthread_mutex_lock(&lock);
+    wheel_x = x;
+    wheel_y = y;
+    wheel_dx = wheel_dx + dx > 30 ? 30 : wheel_dx + dx < -30 ? -30 : wheel_dx + dx;
+    wheel_dy = wheel_dy + dy > 30 ? 30 : wheel_dy + dy < -30 ? -30 : wheel_dy + dy;
+    pthread_mutex_unlock(&lock);
+    ev_wake();
+}
+
+bool ev_wheel_click(void) { return wheel_click_now; }
+
+static void wheel_poll(void)
+{
+    pthread_mutex_lock(&lock);
+    bool waiting = false;
+    for (int i = qhead; i != qtail; i = (i + 1) % QSIZE)
+        waiting |= queue[i].wheel;
+    int x = wheel_x, y = wheel_y, dx = wheel_dx, dy = wheel_dy;
+    pthread_mutex_unlock(&lock);
+    if (waiting || (!dx && !dy))
+        return;
+    bool vertical = dy != 0;
+    int step = vertical ? dy : dx;
+    int ax, ay;
+    bool to = ctl_wheel_arrow(x, y, vertical, step > 0, &ax, &ay);
+    pthread_mutex_lock(&lock);
+    /* Taken, or dropped when there is nothing there to scroll. */
+    if (vertical)
+        wheel_dy = to ? wheel_dy - (step > 0 ? 1 : -1) : 0;
+    else
+        wheel_dx = to ? wheel_dx - (step > 0 ? 1 : -1) : 0;
+    if (to) {
+        int16_t h = mouse_h, v = mouse_v;
+        bool down = button_down;
+        mouse_h = (int16_t)ax;
+        mouse_v = (int16_t)ay;
+        button_down = true;
+        enqueue(mouseDown, 0);
+        queue[(qtail + QSIZE - 1) % QSIZE].wheel = true;
+        button_down = false;
+        enqueue(mouseUp, 0);
+        queue[(qtail + QSIZE - 1) % QSIZE].wheel = true;
+        mouse_h = h;
+        mouse_v = v;
+        button_down = down;
+    }
+    pthread_mutex_unlock(&lock);
+}
+
 void ev_post_menubar_click(void)
 {
     pthread_mutex_lock(&lock);
@@ -687,6 +751,8 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
         return false;
     note_poll();
     wm_host_requests();
+    if (!os_only)
+        wheel_poll();
     opentransport_poll(); /* network events to the programs' notifiers */
     mactcp_poll();
     serial_poll();
@@ -738,6 +804,8 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     /* A key event handed to the program: KeyMap shows that key now, not
      * at the next emulation slice (Maelstrom reads it to see which key a
      * key-down was for). */
+    if (remove && !os_only)
+        wheel_click_now = found && e.what == mouseDown && e.wheel;
     uint8_t keys[16];
     bool key_event = found && remove && (e.what == keyDown || e.what == autoKey || e.what == keyUp);
     if (key_event)

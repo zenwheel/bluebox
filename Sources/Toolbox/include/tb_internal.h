@@ -275,6 +275,10 @@ void fm_flush_dirty(void); /* open forks written out (filemgr.c) */
 int16_t fm_flush_disks(void); /* and the disks on programs' drives, through their drivers */
 /* The mouse and modifiers now (events.c); the window under a global point (wm.c). */
 bool ev_still_down(void);
+/* The mouse-down being handled is a step of the host's scroll wheel: a
+ * click in a scroll arrow that tracking takes as one step. */
+bool ev_wheel_click(void);
+bool ctl_wheel_arrow(int x, int y, bool vertical, bool back, int *ax, int *ay);
 uint32_t ev_mouse_global(void);
 /* Mouse presses since boot, counted so a quick click is never missed (events.c). */
 uint32_t ev_press_count(void);

@@ -241,6 +241,9 @@ void machine_set_log(unsigned mask);
 void machine_post_mouse(int x, int y, int button);
 /* Mouse motion while the host has captured the mouse, in Mac pixels. */
 void machine_post_mouse_delta(double dx, double dy);
+/* The host's scroll wheel at (x, y), in steps (lines): dy > 0 up, dx > 0
+ * left.  Each is a click in an arrow of the scroll bar there. */
+void machine_post_wheel(int x, int y, int dx, int dy);
 /* The mouse's position; the count of the program's own moves of it; and
  * whether it is reading the mouse by recentring it (moved it lately). */
 uint32_t machine_mouse_state(int *x, int *y, bool *relative);

@@ -214,6 +214,7 @@ final class ScreenView: NSView, MacScreenView {
         DragOut.shared.note(event, in: self)
     }
     override func mouseUp(with event: NSEvent) { post(event, button: 0) }
+    override func scrollWheel(with event: NSEvent) { postHostWheel(event, in: self) }
     override func mouseDragged(with event: NSEvent) {
         post(event, button: -1)
         DragOut.shared.note(event, in: self)
