@@ -169,6 +169,10 @@ bool ap_text_rgb(int color, uint16_t out[3])
 {
     if (themed() && color >= 1 && thme_text_rgb(color, out))
         return true;
+    /* A Kaleidoscope scheme's menu text: root menu 31 to 33, items 34 to 36. */
+    if (color >= 31 && color <= 36 && theme_menu_text((color >= 34 ? 2 : 0) + ((color - 31) % 3 == 1),
+                                                      (color - 31) % 3 != 2, out))
+        return true;
     switch (color) {
     case -1: grey(out, 0); return true;
     case -2: grey(out, 0xFFFF); return true;
@@ -1148,6 +1152,8 @@ void ap_default_ring(qrect r, uint32_t state)
 {
     if (themed() && thme_default_ring(r, state))
         return;
+    if (theme_draw_ring(r, state != kThemeStateInactive))
+        return;
     bool active = state != kThemeStateInactive;
     qrect ring = inset(r, -4);
     uint16_t g[3];
@@ -2084,6 +2090,9 @@ static void platinum_progress(const track_info *t)
 
 static void draw_progress(const track_info *t)
 {
+    if (t->kind == kThemeProgressBar &&
+        theme_draw_progress(t->bounds, t->min, t->max, t->value, (t->attributes & kThemeTrackRightToLeft) != 0))
+        return;
     if (ap_in_color()) {
         platinum_progress(t);
         return;
@@ -2613,7 +2622,7 @@ int32_t tb_DrawThemeScrollBarDelimiters(uint16_t flavor, gaddr content, uint32_t
 int32_t tb_DrawThemeMenuBarBackground(gaddr rp, uint16_t state, uint32_t attrs)
 {
     qrect r = rect_arg(rp);
-    if (themed() && thme_menu_bar(r))
+    if ((themed() && thme_menu_bar(r)) || theme_menu_bar(r))
         return noErr;
     ap_fill_grey(r, 0xDDDD);
     if (ap_in_color())
@@ -2636,6 +2645,8 @@ int32_t tb_DrawThemeMenuTitle(gaddr bar, gaddr title, uint16_t state, uint32_t a
     r.top = (int16_t)(b.top + 1);
     r.bottom = (int16_t)(b.bottom - 1);
     if (themed() && thme_menu_title(b, (qrect){ b.top, r.left, b.bottom, r.right }, state == 1, state != 3))
+        ;
+    else if (theme_menu_title(r, state == 1))
         ;
     else if (state == 1)
         selection_fill(r);
@@ -2663,7 +2674,7 @@ int32_t tb_DrawThemeMenuBackground(gaddr rp, uint16_t type)
 {
     qrect r = rect_arg(rp);
     /* kThemeMenuTypePullDown 0, PopUp 1, Hierarchical 2 */
-    if (themed() && thme_menu_background(r, type & 3))
+    if ((themed() && thme_menu_background(r, type & 3)) || theme_menu_background(r))
         return noErr;
     ap_fill_grey(r, 0xDDDD);
     if (ap_in_color())
@@ -2697,12 +2708,16 @@ int32_t tb_DrawThemeMenuItem(gaddr menu_rect, gaddr item_rect, int16_t top, int1
         }
         return noErr;
     }
-    if (state == 1)
-        selection_fill(r);
-    else
-        ap_fill_grey(r, 0xDDDD);
     uint16_t c[3];
-    grey(c, state == 1 ? 0xFFFF : state == 3 ? 0x8888 : 0);
+    if (theme_menu_item(r, state == 1)) {
+        theme_menu_text(state == 1 ? 3 : 2, state != 3, c);
+    } else {
+        if (state == 1)
+            selection_fill(r);
+        else
+            ap_fill_grey(r, 0xDDDD);
+        grey(c, state == 1 ? 0xFFFF : state == 3 ? 0x8888 : 0);
+    }
     if (kind == 1) /* hierarchical: an arrow at the right */
         ap_arrow((qrect){ r.top, (int16_t)(r.right - 14), r.bottom, (int16_t)(r.right - 4) }, 2, 9, c);
     else if (kind == 2 || kind == 3)
@@ -2723,6 +2738,8 @@ int32_t tb_DrawThemeMenuSeparator(gaddr rp)
 {
     qrect r = rect_arg(rp);
     if (themed() && thme_menu_separator(r))
+        return noErr;
+    if (theme_menu_item(r, false) && theme_menu_divider(r))
         return noErr;
     ap_fill_grey(r, 0xDDDD);
     ap_separator(r, kThemeStateActive);

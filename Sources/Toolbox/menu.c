@@ -1126,6 +1126,28 @@ static void themed_title(int i, bool selected)
         draw_text_colored(r.left + 7, title_baseline(), title_of(mh), !on ? 33 : selected ? 32 : 31);
 }
 
+/* A title in a Kaleidoscope 1.x scheme's colours (false: no such scheme):
+ * its background, selected or not, and its text. */
+static bool scheme_title(int i, bool selected)
+{
+    gaddr mh = menu_at(i);
+    qrect r = title_rect(i);
+    uint16_t c[3];
+    if (themed() || !theme_menu_text(selected ? 1 : 0, (MenuInfo_enableFlags(menu_ptr(mh)) & 1) != 0, c) ||
+        !theme_menu_title(r, selected))
+        return false;
+    qd_set_fg_override(c);
+    draw_text_at(r.left + 7, title_baseline(), title_of(mh));
+    qd_set_fg_override(NULL);
+    return true;
+}
+
+static bool scheme_menus(void)
+{
+    uint16_t c[3];
+    return !themed() && theme_menu_text(0, true, c);
+}
+
 static void dim_rect(qrect r)
 {
     hrgn g;
@@ -1165,6 +1187,17 @@ void tb_DrawMenuBar(void)
         int16_t hil = (int16_t)rd16(LM_TheMenu);
         for (int i = 0; i < n; i++)
             themed_title(i, hil && MenuInfo_menuID(menu_ptr(menu_at(i))) == hil);
+        os9tbx_draw_clock();
+        tb_SetPort(saved);
+        return;
+    }
+    if (theme_menu_bar((qrect){ 0, 0, (int16_t)h, (int16_t)g_screen_width })) { /* a Kaleidoscope scheme's */
+        hrgn_free(&bar);
+        hrgn_free(&round);
+        int n = nmenus();
+        int16_t hil = (int16_t)rd16(LM_TheMenu);
+        for (int i = 0; i < n; i++)
+            scheme_title(i, hil && MenuInfo_menuID(menu_ptr(menu_at(i))) == hil);
         os9tbx_draw_clock();
         tb_SetPort(saved);
         return;
@@ -1215,6 +1248,10 @@ static void invert_title(int16_t mid)
             tb_SetPort(saved);
             continue;
         }
+        if (scheme_title(i, (int16_t)rd16(LM_TheMenu) != mid)) {
+            tb_SetPort(saved);
+            continue;
+        }
         hrgn t;
         hrgn_init(&t);
         hrgn_rect(&t, title_rect(i));
@@ -1239,13 +1276,16 @@ void tb_HiliteMenu(int16_t mid)
 void tb_FlashMenuBar(int16_t mid)
 {
     static int16_t flashed; /* a theme draws titles, not inverts them: which one is lit */
-    if (mid && themed()) {
+    if (mid && (themed() || scheme_menus())) {
         int n = nmenus();
         for (int i = 0; i < n; i++)
             if (MenuInfo_menuID(menu_ptr(menu_at(i))) == mid) {
                 gaddr saved;
                 with_wmgr_port(&saved);
-                themed_title(i, flashed != mid);
+                if (themed())
+                    themed_title(i, flashed != mid);
+                else
+                    scheme_title(i, flashed != mid);
                 tb_SetPort(saved);
             }
         flashed = flashed == mid ? 0 : mid;
@@ -1274,7 +1314,8 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
     gaddr rr = tb_NewPtr(8, false, false);
     qrect_put(rr, r);
     bool th = themed();
-    if (!th || !thme_menu_background(r, menu_kind))
+    bool k = !th && theme_menu_background(r); /* a Kaleidoscope scheme's colours */
+    if (!k && (!th || !thme_menu_background(r, menu_kind)))
         tb_EraseRect(rr);
     int n = tb_CountMItems(mh);
     item_layout L = layout_of(mh);
@@ -1310,6 +1351,8 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
             qd_set_fg_override(NULL);
             continue;
         }
+        if (nl > 0 && rd8(it + 1) == '-' && k && theme_menu_divider(ir))
+            continue;
         if (nl > 0 && rd8(it + 1) == '-') { /* divider */
             hrgn line;
             hrgn_init(&line);
@@ -1319,6 +1362,13 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
             continue;
         }
         uint8_t mark = rd8(it + 1 + nl + 2), key = rd8(it + 1 + nl + 1), style = rd8(it + 1 + nl + 3);
+        uint16_t kc[3];
+        bool kt = k && theme_menu_text(i == hilite_item ? 3 : 2, item_enabled(mh, i), kc);
+        if (kt) {
+            if (i == hilite_item) /* the rest are on the menu's background */
+                theme_menu_item(ir, true);
+            qd_set_fg_override(kc);
+        }
         GrafPort_set_txFace(port, style);
         draw_text_at(r.left + 15, top + 12, it);
         GrafPort_set_txFace(port, 0);
@@ -1330,6 +1380,10 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
             tb_MoveTo((int16_t)(r.right - 24), (int16_t)(top + 12));
             tb_DrawChar(0x11); /* command symbol */
             tb_DrawChar(key);
+        }
+        if (kt) {
+            qd_set_fg_override(NULL);
+            continue;
         }
         if (!item_enabled(mh, i))
             dim_rect(ir);

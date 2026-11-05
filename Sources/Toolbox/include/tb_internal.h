@@ -423,12 +423,27 @@ bool theme_active(void);
 bool theme_window_insets(int var, int *l, int *t, int *r, int *b);
 bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom, int param);
 void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom);
+void theme_decorate_float(gaddr w, int var, qrect bar, bool hilited, bool goaway, bool zoom);
+void theme_float_box_at(int var, qrect bar, int part, int *x, int *y);
+bool theme_press_box(gaddr w, bool small, int part, int x, int y);
 bool theme_window_region(gaddr w, int var, qrect c, hrgn *out);
 int theme_window_hit(gaddr w, int var, qrect c, int h, int v);
 bool theme_draw_grow(qrect c, bool active, bool small);
 bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
 bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
+/* A Kaleidoscope 1.x scheme's menus (false: draw the classic ones): the
+ * bar, a title's background, a menu's, an item's, a divider, and the text
+ * colours (0 title, 1 selected title, 2 item, 3 selected item). */
+bool theme_menu_bar(qrect r);
+bool theme_menu_title(qrect r, bool selected);
+bool theme_menu_background(qrect r);
+bool theme_menu_item(qrect r, bool selected);
+bool theme_menu_divider(qrect r);
+bool theme_menu_text(int what, bool enabled, uint16_t out[3]);
+/* A Kaleidoscope 1.x scheme's default button ring and progress bar. */
+bool theme_draw_ring(qrect button, bool active);
+bool theme_draw_progress(qrect r, int32_t min, int32_t max, int32_t value, bool rtl);
 /* Native controls (native_controls.c), drawn by the host. */
 bool native_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool native_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);

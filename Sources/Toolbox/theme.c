@@ -23,6 +23,7 @@
 
 typedef struct {
     int16_t id;
+    bool small; /* an 'ics8', not a 'cicn' */
     int w, h;
     uint8_t *rgba; /* alpha 0 or 255 */
 } image;
@@ -128,7 +129,7 @@ static bool decode_cicn(const uint8_t *d, uint32_t len, image *out)
 static const image *img(int16_t id)
 {
     for (int i = 0; i < nimages; i++)
-        if (images[i].id == id)
+        if (images[i].id == id && !images[i].small)
             return images[i].rgba ? &images[i] : NULL;
     if (!loaded || nimages >= MAX_IMAGES)
         return NULL;
@@ -140,6 +141,37 @@ static const image *img(int16_t id)
     if (!d || !decode_cicn(d, len, im))
         im->rgba = NULL;
     return im->rgba ? im : NULL;
+}
+
+/* A small icon: an 'ics8' (the standard 256 colours) in its 'ics#' mask.
+ * A Kaleidoscope 1.x scheme's widgets are these: the title bars' boxes,
+ * check boxes, radio buttons and scroll arrows. */
+static const image *ics(int16_t id)
+{
+    for (int i = 0; i < nimages; i++)
+        if (images[i].id == id && images[i].small)
+            return images[i].rgba ? &images[i] : NULL;
+    if (!loaded || nimages >= MAX_IMAGES)
+        return NULL;
+    image *im = &images[nimages++];
+    memset(im, 0, sizeof *im);
+    im->id = id;
+    im->small = true;
+    uint32_t len, mlen;
+    const uint8_t *d = find_res(fourcc("ics8"), id, &len), *m = find_res(fourcc("ics#"), id, &mlen);
+    if (!d || !m || len < 256 || mlen < 64)
+        return NULL;
+    im->w = im->h = 16;
+    im->rgba = malloc(16 * 16 * 4);
+    for (int i = 0; i < 256; i++) {
+        uint16_t c[3];
+        qd_std_rgb8(d[i], c);
+        uint8_t *p = im->rgba + i * 4;
+        for (int k = 0; k < 3; k++)
+            p[k] = (uint8_t)(c[k] >> 8);
+        p[3] = (m[32 + i / 8] >> (7 - i % 8)) & 1 ? 255 : 0;
+    }
+    return im;
 }
 
 static wnd_desc wnd_for(int16_t id)
@@ -699,13 +731,120 @@ static void k1_box(const image *im, int x, int y, bool zoom)
     }
 }
 
-/* After the classic frame is drawn: the title bar in the scheme's
- * colours, its racing stripes, boxes and title. */
+/* The scheme's icons for the boxes in a title bar ('ics8'): a document's
+ * close and zoom boxes (-14336, -14334; pressed -14333, -14331) and a
+ * floating window's (-14320, -14318; pressed -14317, -14315). */
+static const image *k1_box_icon(bool small, int part, bool pressed)
+{
+    static const int16_t ids[2][2][2] = { { { -14336, -14333 }, { -14334, -14331 } },
+                                          { { -14320, -14317 }, { -14318, -14315 } } };
+    return ics(ids[small][part == 2][pressed]);
+}
+
+/* A box from its icon, pressed or not, at (x, y): false without one. */
+static bool k1_icon_box(gaddr w, bool small, int part, int x, int y, const hrgn *clip)
+{
+    const image *im = k1_box_icon(small, part, is_down(w, part));
+    if (!im)
+        return false;
+    blit(im, 0, 0, im->w, im->h, x, y, clip);
+    return true;
+}
+
+/* A box pressed or let go (WDEF messages wInGoAway, wInZoomIn and Out):
+ * the scheme's pressed icon, or its normal one. */
+bool theme_press_box(gaddr w, bool small, int part, int x, int y)
+{
+    if (!theme_active() || !loaded || !k1 || !k1_box_icon(small, part, false) || !k1_box_icon(small, part, true))
+        return false;
+    toggle_down(w, part);
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    k1_icon_box(w, small, part, x, y, &clip);
+    hrgn_free(&clip);
+    return true;
+}
+
+/* A rectangle's edges in two colours of a map: light ones along its top
+ * and left, dark ones along its bottom and right, and the corners where
+ * they meet (top right, bottom left) in theirs. */
+static void k1_bevel(const image *m, qrect r, const int light[2], const int dark[2], const int tr[2], const int bl[2])
+{
+    int16_t t = r.top, l = r.left, b = r.bottom, rt = r.right;
+    k1_fill(m, light[0], light[1], (qrect){ t, l, (int16_t)(t + 1), (int16_t)(rt - 1) });
+    k1_fill(m, light[0], light[1], (qrect){ t, l, (int16_t)(b - 1), (int16_t)(l + 1) });
+    k1_fill(m, dark[0], dark[1], (qrect){ (int16_t)(b - 1), (int16_t)(l + 1), b, rt });
+    k1_fill(m, dark[0], dark[1], (qrect){ (int16_t)(t + 1), (int16_t)(rt - 1), b, rt });
+    k1_fill(m, tr[0], tr[1], (qrect){ t, (int16_t)(rt - 1), (int16_t)(t + 1), rt });
+    k1_fill(m, bl[0], bl[1], (qrect){ (int16_t)(b - 1), l, b, (int16_t)(l + 1) });
+}
+
+static qrect outset(qrect r, int n)
+{
+    return (qrect){ (int16_t)(r.top - n), (int16_t)(r.left - n), (int16_t)(r.bottom + n), (int16_t)(r.right + n) };
+}
+
+/* A dialog box's 8-pixel frame (dBoxProc) from the dialog map, as its
+ * rings run from the outside in: the outline, the light and dark edges,
+ * four of the fill, the well round the content (dark at the top and left,
+ * light at the bottom and right) and the inner outline. */
+static void k1_dialog_frame(const image *m, qrect c)
+{
+    qrect o = outset(c, 8);
+    static const int lt[2] = { 1, 1 }, dk[2] = { 14, 2 }, tr[2] = { 14, 1 }, bl[2] = { 1, 14 };
+    static const int wl[2] = { 4, 4 }, wd[2] = { 11, 5 }, wtr[2] = { 11, 4 }, wbl[2] = { 4, 11 };
+    static const int ol[2] = { 0, 0 }, in[2] = { 5, 5 };
+    k1_bevel(m, o, ol, ol, ol, ol);
+    k1_bevel(m, outset(c, 7), lt, dk, tr, bl);
+    qrect f = outset(c, 6), g = outset(c, 2);
+    k1_fill(m, 2, 2, (qrect){ f.top, f.left, g.top, f.right });
+    k1_fill(m, 2, 2, (qrect){ g.bottom, f.left, f.bottom, f.right });
+    k1_fill(m, 2, 2, (qrect){ g.top, f.left, g.bottom, g.left });
+    k1_fill(m, 2, 2, (qrect){ g.top, g.right, g.bottom, f.right });
+    k1_bevel(m, g, wl, wd, wtr, wbl);
+    k1_bevel(m, outset(c, 1), in, in, in, in);
+}
+
+/* A window kind's map and racing stripes: documents, dialog boxes and
+ * movable modal ones (the dialog's), and altDBoxProc's (the alert's). */
+static bool k1_kind(int var, bool hilited, const image **map, const image **st)
+{
+    switch (var) {
+    case 0: case 4: case 8: case 12:
+        *map = img(hilited ? -14332 : -14336);
+        *st = img(-14331);
+        return true;
+    case 1: case 5:
+        *map = img(hilited ? -14326 : -14328);
+        *st = img(-14325);
+        break;
+    case 3:
+        *map = img(hilited ? -14322 : -14324);
+        *st = img(-14321);
+        break;
+    default:
+        return false;
+    }
+    if (!*map) /* a scheme from before the dialogs had theirs */
+        *map = img(hilited ? -14332 : -14336);
+    if (!*st)
+        *st = img(-14331);
+    return true;
+}
+
+/* After the classic frame is drawn: a dialog box's frame, or the title
+ * bar in the scheme's colours with its racing stripes, boxes and title. */
 void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom)
 {
-    if (!theme_active() || !k1 || (var != 0 && var != 4 && var != 8 && var != 12))
+    const image *map, *st;
+    if (!theme_active() || !k1 || !k1_kind(var, hilited, &map, &st))
         return;
-    const image *map = img(hilited ? -14332 : -14336), *st = img(-14331);
+    if (var == 1 || var == 3) {
+        if (var == 1 && map && ap_in_color())
+            k1_dialog_frame(map, c);
+        return;
+    }
     qrect t = { (int16_t)(c.top - 18), c.left, (int16_t)(c.top - 1), c.right };
     if (map) {
         k1_fill(map, 2, 2, t);
@@ -750,9 +889,9 @@ void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway,
                 x = cuts[k][1];
         }
     }
-    if (hilited && map && goaway)
+    if (hilited && goaway && !k1_icon_box(w, false, 1, c.left + 7, t.top + 2, &clip) && map)
         k1_box(map, c.left + 7, t.top + 2, false);
-    if (hilited && map && zoom)
+    if (hilited && zoom && !k1_icon_box(w, false, 2, c.right - 21, t.top + 2, &clip) && map)
         k1_box(map, c.right - 21, t.top + 2, true);
     if (n && map) {
         uint16_t col[3];
@@ -768,6 +907,117 @@ void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway,
     hrgn_free(&clip);
 }
 
+/* A floating window's (WDEF 124's) title bar, after the classic one is
+ * drawn: from the utility map (-14316 active, -14320 inactive; with the
+ * title at the side -14315 and -14319, the same turned), its fill inside a
+ * light top and left and a dark right edge, the racing stripes (-14314,
+ * or -14318 at the side) tiled between the boxes and round the title, the
+ * boxes from their icons, and the title in the map's text colour. */
+static bool k1_upx(const image *m, bool side, int a, int b, uint16_t out[3])
+{
+    return k1_rgb(m, side ? b : a, side ? a : b, out);
+}
+
+static void k1_ufill(const image *m, bool side, int a, int b, qrect r)
+{
+    uint16_t c[3];
+    if (r.right > r.left && r.bottom > r.top && k1_upx(m, side, a, b, c))
+        ap_fill(r, c);
+}
+
+void theme_decorate_float(gaddr w, int var, qrect bar, bool hilited, bool goaway, bool zoom)
+{
+    if (!theme_active() || !loaded || !k1 || !ap_in_color())
+        return;
+    bool side = (var & 8) != 0;
+    const image *m = img(side ? (hilited ? -14315 : -14319) : (hilited ? -14316 : -14320));
+    if (!m || m->w < 12 || m->h < 12)
+        return;
+    /* inside the outline: along the bar from a to a1, across it from b to b1 */
+    qrect in = { (int16_t)(bar.top + 1), (int16_t)(bar.left + 1), (int16_t)(side ? bar.bottom - 1 : bar.bottom),
+                 (int16_t)(side ? bar.right : bar.right - 1) };
+    k1_ufill(m, side, 5, 2, in);
+    if (side) {
+        k1_ufill(m, side, 5, 1, (qrect){ in.top, in.left, in.bottom, (int16_t)(in.left + 1) });
+        k1_ufill(m, side, 1, 2, (qrect){ in.top, in.left, (int16_t)(in.top + 1), in.right });
+        k1_ufill(m, side, 10, 2, (qrect){ (int16_t)(in.bottom - 1), (int16_t)(in.left + 1), in.bottom, in.right });
+    } else {
+        k1_ufill(m, side, 5, 1, (qrect){ in.top, in.left, (int16_t)(in.top + 1), in.right });
+        k1_ufill(m, side, 1, 2, (qrect){ in.top, in.left, in.bottom, (int16_t)(in.left + 1) });
+        k1_ufill(m, side, 10, 2, (qrect){ (int16_t)(in.top + 1), (int16_t)(in.right - 1), in.bottom, in.right });
+    }
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    /* the boxes' places along the bar, and the title's */
+    int a0 = side ? in.top : in.left, a1 = side ? in.bottom : in.right;
+    int close_at = a0 + 1, zoom_at = a1 - 10;
+    int n = 0, tw = 0, tx = 0;
+    uint8_t s[256];
+    gaddr th = WindowRecord_titleHandle(w);
+    gaddr port = qd_port();
+    if (!side && th && rd32(th) && (n = rd8(rd32(th))) > 0) {
+        gget(s, rd32(th) + 1, (uint32_t)n);
+        GrafPort_set_txFont(port, 3);
+        GrafPort_set_txSize(port, 9);
+        GrafPort_set_txFace(port, 0);
+        tw = qd_text_width(port, s, n);
+        if (tw > bar.right - bar.left - 30)
+            n = 0; /* as the classic one: no room, no title */
+        tx = bar.left + (bar.right - bar.left - tw) / 2;
+    }
+    const image *st = side ? img(-14318) : NULL;
+    if (!st)
+        st = img(-14314);
+    if (hilited && st) {
+        int cuts[3][2] = { { goaway ? close_at - 1 : 0, goaway ? close_at + 11 : 0 },
+                           { n ? tx - 4 : 0, n ? tx + tw + 4 : 0 },
+                           { zoom ? zoom_at - 1 : 0, zoom ? zoom_at + 11 : 0 } };
+        int a = a0 + 1;
+        for (int k = 0; k <= 3; k++) {
+            if (k < 3 && !cuts[k][1])
+                continue;
+            int end = k < 3 ? cuts[k][0] : a1 - 1;
+            if (end > a) {
+                if (side)
+                    blit_tiled(st, 0, 0, st->w, st->h, in.left + 1, a, in.right - in.left - 2, end - a, &clip);
+                else
+                    blit_tiled(st, 0, 0, st->w, st->h, a, in.top + 1, end - a, in.bottom - in.top - 1, &clip);
+            }
+            if (k < 3)
+                a = cuts[k][1];
+        }
+    }
+    for (int part = 1; part <= 2 && hilited; part++) {
+        if (part == 1 ? !goaway : !zoom)
+            continue;
+        int at = part == 1 ? close_at : zoom_at;
+        const image *im = k1_box_icon(true, part, is_down(w, part));
+        if (im)
+            blit(im, 0, 0, im->w, im->h, side ? in.left : at, side ? at : in.top, &clip);
+    }
+    if (n) {
+        uint16_t col[3];
+        if (!k1_upx(m, side, 5, 3, col))
+            col[0] = col[1] = col[2] = 0;
+        GrafPort_set_txMode(port, 1);
+        tb_MoveTo((int16_t)tx, (int16_t)(bar.top + 9));
+        qd_set_fg_override(col);
+        qd_draw_text(port, s, n);
+        qd_set_fg_override(NULL);
+    }
+    hrgn_free(&clip);
+}
+
+/* Where a floating window's box icon goes, for theme_press_box. */
+void theme_float_box_at(int var, qrect bar, int part, int *x, int *y)
+{
+    bool side = (var & 8) != 0;
+    int a0 = side ? bar.top + 1 : bar.left + 1, a1 = side ? bar.bottom - 1 : bar.right - 1;
+    int at = part == 1 ? a0 + 1 : a1 - 10;
+    *x = side ? bar.left + 1 : at;
+    *y = side ? at : bar.top + 1;
+}
 bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom, int param)
 {
     if (appearance_theme()) {
@@ -930,13 +1180,28 @@ int theme_window_hit(gaddr w, int var, qrect c, int h, int v)
 /* ---------------------------------------------------------------------- */
 /* Controls */
 
+/* A Kaleidoscope 1.x scheme's (below, with its menus). */
+static bool k1_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
+static bool k1_check(qrect box, bool radio, bool on, bool pressed, bool disabled);
+static bool k1_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
+
 bool theme_draw_grow(qrect c, bool active, bool small)
 {
     if (appearance_theme())
         return thme_draw_grow(c, active, small);
     if (!theme_active())
         return false;
-    const image *im = img(k1 ? (active ? -14330 : -14334) : (active ? -14333 : -14334));
+    /* A Kaleidoscope 1.x scheme's floating windows have their own, 16 square. */
+    const image *im = k1 && small ? img(active ? -14313 : -14317) : NULL;
+    if (im) {
+        hrgn clip;
+        hrgn_init(&clip);
+        port_clip(&clip);
+        blit(im, 0, 0, im->w, im->h, c.right - 15, c.bottom - 15, &clip);
+        hrgn_free(&clip);
+        return true;
+    }
+    im = img(k1 ? (active ? -14330 : -14334) : (active ? -14333 : -14334));
     if (!im)
         return false;
     hrgn clip;
@@ -973,6 +1238,8 @@ bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool 
     }
     if (!theme_active())
         return false;
+    if (k1)
+        return k1_button(r, title, n, pressed, disabled);
     int16_t id = disabled ? -10240 : pressed ? -10238 : -10239;
     const image *im = img(id);
     if (!im)
@@ -1011,6 +1278,8 @@ bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disable
         return thme_check_box(box, radio, on ? 1 : 0, disabled ? 0 : pressed ? 2 : 1);
     if (!theme_active())
         return false;
+    if (k1)
+        return k1_check(box, radio, on, pressed, disabled);
     /* -9504.. check boxes (inactive, normal, pressed; unchecked then checked),
      * -9492.. radio buttons likewise. */
     int16_t base = radio ? -9492 : -9504;
@@ -1032,6 +1301,8 @@ bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool
         return thme_scroll_bar(r, vertical, hilite, enabled, active, thumb);
     if (!theme_active())
         return false;
+    if (k1)
+        return k1_scrollbar(r, vertical, hilite, enabled, active, thumb);
     hrgn clip;
     hrgn_init(&clip);
     port_clip(&clip);
@@ -1088,6 +1359,416 @@ bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool
             blit(th, th->w - half, 0, half, th->h, thumb.left + half, thumb.top, &clip);
         }
     }
+    hrgn_free(&clip);
+    return true;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Kaleidoscope 1.x menus */
+
+/* A Kaleidoscope 1.x scheme is in use and the port shows colour (in black
+ * and white the classic drawing stands). */
+static bool k1_colour(void) { return theme_active() && loaded && k1 && ap_in_color(); }
+
+/* A colour of a map icon, whether its mask shows the pixel or not (the
+ * menu bar's mask leaves out the very pixels that hold its colours). */
+static bool k1_px(const image *im, int x, int y, uint16_t out[3])
+{
+    if (!im || x < 0 || y < 0 || x >= im->w || y >= im->h)
+        return false;
+    const uint8_t *p = im->rgba + ((size_t)y * (size_t)im->w + (size_t)x) * 4;
+    for (int i = 0; i < 3; i++)
+        out[i] = (uint16_t)(p[i] * 0x101);
+    return true;
+}
+
+static void k1_fill_px(const image *im, int x, int y, qrect r)
+{
+    uint16_t c[3];
+    if (r.right > r.left && r.bottom > r.top && k1_px(im, x, y, c))
+        ap_fill(r, c);
+}
+
+/* The menu bar (-12288, 20 by 8): its fill, the text (row 2), the upper
+ * and lower divider lines of the pulled-down menus (rows 4 and 5), the
+ * highlight along its top and the shadow along its bottom; column 8's top
+ * and bottom pixels colour its left and right ends.  The pixels its mask
+ * shows at the sides are the bar's ends: its top seven rows the bar's,
+ * the last its bottom row, the seventh repeated between. */
+static const image *k1_bar(void)
+{
+    const image *m = img(-12288);
+    return m && m->w >= 20 && m->h >= 8 ? m : NULL;
+}
+
+/* A menu (-12272) or highlight map (8 by 4): its left column the light
+ * edge, its right the dark one, the fill between them and the text in its
+ * middle.  Without -12272 a menu is the menu bar's colours, as in
+ * Kaleidoscope before 1.7. */
+static const image *k1_menu_map(void)
+{
+    const image *m = img(-12272);
+    return m && m->w >= 8 && m->h >= 4 ? m : NULL;
+}
+
+/* The selected item's and title's map: the variation in the accent
+ * colour, among those the scheme has (-12287 lavender, the one every
+ * scheme has, -12286 to -12280 gold to silver, and -12256 to -12247 for
+ * Mac OS 8.5's other accents), the one whose light edge is the nearest. */
+static const image *k1_hilite_map(void)
+{
+    const image *best = NULL;
+    uint16_t acc[3];
+    if (!ap_brush_rgb(-5, acc))
+        acc[0] = acc[1] = acc[2] = 0;
+    long bestd = 0;
+    for (int id = -12287; id <= -12247; id++) {
+        if (id > -12280 && id < -12256)
+            continue;
+        const image *m = img((int16_t)id);
+        uint16_t c[3];
+        if (!m || m->w < 8 || m->h < 4 || !k1_px(m, 0, 0, c))
+            continue;
+        long d = 0;
+        for (int i = 0; i < 3; i++)
+            d += ((long)c[i] - acc[i]) / 256 * (((long)c[i] - acc[i]) / 256);
+        if (!best || d < bestd) {
+            best = m;
+            bestd = d;
+        }
+    }
+    return best;
+}
+
+static void mix(const uint16_t a[3], const uint16_t b[3], uint16_t out[3])
+{
+    for (int i = 0; i < 3; i++)
+        out[i] = (uint16_t)(((uint32_t)a[i] + b[i]) / 2);
+}
+
+/* Fill r as an 8-by-4 map has it: light left column, dark right one. */
+static void k1_map_rect(const image *m, qrect r)
+{
+    k1_fill_px(m, 2, 0, r);
+    k1_fill_px(m, 0, 1, (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) });
+    k1_fill_px(m, 7, 1, (qrect){ r.top, (int16_t)(r.right - 1), r.bottom, r.right });
+}
+
+/* The bar is drawn above the classic black line along its bottom, as
+ * Kaleidoscope drew it (Apple platinum 2 under Kaleidoscope 2.3.1). */
+bool theme_menu_bar(qrect r)
+{
+    const image *m = k1_bar();
+    if (!k1_colour() || !m)
+        return false;
+    uint16_t black[3] = { 0, 0, 0 };
+    ap_fill((qrect){ (int16_t)(r.bottom - 1), r.left, r.bottom, r.right }, black);
+    r.bottom--;
+    int w = r.right - r.left, h = r.bottom - r.top;
+    k1_fill_px(m, 9, 6, r);
+    k1_fill_px(m, 9, 0, (qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right });
+    k1_fill_px(m, 9, 7, (qrect){ (int16_t)(r.bottom - 1), r.left, r.bottom, r.right });
+    k1_fill_px(m, 8, 0, (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) });
+    k1_fill_px(m, 8, 7, (qrect){ r.top, (int16_t)(r.right - 1), r.bottom, r.right });
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    for (int y = 0; y < h; y++) {
+        int sy = y < 7 ? y : y == h - 1 ? 7 : 6;
+        blit(m, 0, sy, 8, 1, r.left, r.top + y, &clip);
+        if (w >= 16)
+            blit(m, m->w - 8, sy, 8, 1, r.right - 8, r.top + y, &clip);
+    }
+    hrgn_free(&clip);
+    return true;
+}
+
+/* A title (the bar's height less its bottom line): selected, the
+ * highlight's fill with its light edge along the top and its dark one
+ * along the bottom; else the bar's own rows. */
+bool theme_menu_title(qrect r, bool selected)
+{
+    const image *bar = k1_bar(), *hl = selected ? k1_hilite_map() : NULL;
+    if (!k1_colour() || !bar || (selected && !hl))
+        return false;
+    const image *m = selected ? hl : bar;
+    k1_fill_px(m, selected ? 2 : 9, selected ? 0 : 6, r);
+    k1_fill_px(m, selected ? 0 : 9, selected ? 1 : 0, (qrect){ r.top, r.left, (int16_t)(r.top + 1), r.right });
+    k1_fill_px(m, selected ? 7 : 9, selected ? 1 : 7, (qrect){ (int16_t)(r.bottom - 1), r.left, r.bottom, r.right });
+    return true;
+}
+
+/* A menu's or an item's: the map's fill between its light left and dark
+ * right edges; the menu has the light edge along its top too. */
+static bool k1_menu_rect(qrect r, bool top)
+{
+    const image *m = k1_menu_map(), *bar = k1_bar();
+    if (!k1_colour() || (!m && !bar))
+        return false;
+    if (m) {
+        k1_map_rect(m, r);
+        if (top)
+            k1_fill_px(m, 0, 1, (qrect){ r.top, r.left, (int16_t)(r.top + 1), (int16_t)(r.right - 1) });
+    } else {
+        k1_fill_px(bar, 9, 6, r);
+        k1_fill_px(bar, 8, 0, (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 1) });
+        k1_fill_px(bar, 8, 7, (qrect){ r.top, (int16_t)(r.right - 1), r.bottom, r.right });
+        if (top)
+            k1_fill_px(bar, 8, 0, (qrect){ r.top, r.left, (int16_t)(r.top + 1), (int16_t)(r.right - 1) });
+    }
+    return true;
+}
+
+bool theme_menu_background(qrect r) { return k1_menu_rect(r, true); }
+
+bool theme_menu_item(qrect r, bool selected)
+{
+    if (!selected)
+        return k1_menu_rect(r, false);
+    const image *hl = k1_hilite_map();
+    if (!k1_colour() || !hl)
+        return false;
+    k1_map_rect(hl, r);
+    return true;
+}
+
+/* A divider: the bar's upper divider colour over its lower one, across
+ * the middle of the item. */
+bool theme_menu_divider(qrect r)
+{
+    const image *bar = k1_bar();
+    if (!k1_colour() || !bar)
+        return false;
+    int y = r.top + (r.bottom - r.top) / 2 - 1;
+    k1_fill_px(bar, 9, 4, (qrect){ (int16_t)y, (int16_t)(r.left + 1), (int16_t)(y + 1), (int16_t)(r.right - 1) });
+    k1_fill_px(bar, 9, 5, (qrect){ (int16_t)(y + 1), (int16_t)(r.left + 1), (int16_t)(y + 2), (int16_t)(r.right - 1) });
+    return true;
+}
+
+/* Text colours: 0 a title in the bar, 1 a selected title, 2 an item, 3 a
+ * selected item.  A disabled one is halfway to its background. */
+bool theme_menu_text(int what, bool enabled, uint16_t out[3])
+{
+    const image *bar = k1_bar();
+    if (!k1_colour() || !bar)
+        return false;
+    const image *m = what == 1 || what == 3 ? k1_hilite_map() : what == 2 ? k1_menu_map() : NULL;
+    uint16_t fill[3];
+    bool ok;
+    if (m)
+        ok = k1_px(m, 3, 1, out) && k1_px(m, 2, 0, fill);
+    else
+        ok = k1_px(bar, 9, 2, out) && k1_px(bar, 9, 6, fill);
+    if (ok && !enabled)
+        mix(out, fill, out);
+    return ok;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Kaleidoscope 1.x controls */
+
+/* Which of the accent variations the scheme's selections take: 0 the
+ * lavender every scheme has, 1 to 7 gold to silver, or for Mac OS 8.5's
+ * other accents (-12256 to -12247) 8 and up. */
+static int k1_accent(void)
+{
+    const image *m = k1_hilite_map();
+    int id = m ? m->id : -12287;
+    return id >= -12287 && id <= -12280 ? -12287 - id : id >= -12256 && id <= -12247 ? 8 + (id + 12256) : 0;
+}
+
+/* Stretching: an icon's pixels before column (row) c keep their place at
+ * the start, those after it at the end, and column c fills between. */
+static int stretch_src(int d, int n, int len, int c)
+{
+    int tail = len - c - 1;
+    if (d >= n - tail)
+        return len - (n - d);
+    return d < c ? d : c;
+}
+
+static void blit_stretch(const image *im, int cx, int cy, qrect r, const hrgn *clip)
+{
+    int w = r.right - r.left, h = r.bottom - r.top, tail = im->w - cx - 1;
+    int rs = w - tail < 0 ? 0 : w - tail, ls = cx < rs ? cx : rs;
+    for (int y = 0; y < h; y++) {
+        int sy = stretch_src(y, h, im->h, cy);
+        blit(im, 0, sy, ls, 1, r.left, r.top + y, clip);
+        if (rs > ls)
+            blit_tiled(im, cx, sy, 1, 1, r.left + ls, r.top + y, rs - ls, 1, clip);
+        blit(im, im->w - (w - rs), sy, w - rs, 1, r.left + rs, r.top + y, clip);
+    }
+}
+
+/* A push button (-10239, pressed -10238, disabled -10240; 16 square,
+ * stretched at column and row 6).  Its middle holds a patch of the text's
+ * colour (columns 6 to 9 of rows 8 and 9), drawn as the face round it. */
+static bool k1_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled)
+{
+    const image *im = img(disabled ? -10240 : pressed ? -10238 : -10239);
+    uint16_t text[3], face[3];
+    if (!k1_colour() || !im || im->w != 16 || im->h != 16 || !k1_px(im, 7, 8, text) || !k1_px(im, 11, 8, face))
+        return false;
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    blit_stretch(im, 6, 6, r, &clip);
+    hrgn_free(&clip);
+    int w = r.right - r.left, h = r.bottom - r.top;
+    for (int y = 0; y < h; y++) {
+        int sy = stretch_src(y, h, 16, 6);
+        if (sy != 8 && sy != 9)
+            continue;
+        for (int x = 0; x < w; x++) {
+            int sx = stretch_src(x, w, 16, 6);
+            if (sx >= 6 && sx <= 9)
+                ap_fill((qrect){ (int16_t)(r.top + y), (int16_t)(r.left + x), (int16_t)(r.top + y + 1), (int16_t)(r.left + x + 1) },
+                        face);
+        }
+    }
+    gaddr port = qd_port();
+    gaddr fi = tb_NewPtr(8, false, false);
+    tb_GetFontInfo(fi);
+    int asc = (int16_t)rd16(fi), desc = (int16_t)rd16(fi + 2);
+    tb_DisposePtr(fi);
+    int tw = qd_text_width(port, title, n);
+    tb_MoveTo((int16_t)(r.left + (r.right - r.left - tw) / 2), (int16_t)(r.top + (r.bottom - r.top + asc - desc) / 2));
+    qd_set_fg_override(text);
+    qd_draw_text(port, title, n);
+    qd_set_fg_override(NULL);
+    return true;
+}
+
+/* A default button's ring (-10231, inactive -10232): 16 square round the
+ * button outset by 4, stretched at column and row 6, its middle masked. */
+bool theme_draw_ring(qrect button, bool active)
+{
+    const image *im = img(active ? -10231 : -10232);
+    if (!k1_colour() || !im || im->w != 16 || im->h != 16)
+        return false;
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    blit_stretch(im, 6, 6, outset(button, 4), &clip);
+    hrgn_free(&clip);
+    return true;
+}
+
+/* Check boxes and radio buttons are 'ics8's: check boxes from -10240,
+ * radio buttons from -10224, four to a state (disabled, normal, pressed),
+ * off, on and mixed in each.  Their 12-pixel box is the icon's top, two
+ * pixels in. */
+static bool k1_check(qrect box, bool radio, bool on, bool pressed, bool disabled)
+{
+    const image *im = k1_colour() ? ics((int16_t)((radio ? -10224 : -10240) + (disabled ? 0 : pressed ? 8 : 4) + on)) : NULL;
+    if (!im)
+        return false;
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    blit(im, 0, 0, im->w, im->h, box.left - 2, box.top, &clip);
+    hrgn_free(&clip);
+    return true;
+}
+
+/* A scroll bar: the arrows are 'ics8's (-10204 up, then down, left and
+ * right; pressed from -10200, inactive from -10208), the track between
+ * them the bar's icon stretched (pressed, -8277 or -8285, on the side of
+ * the thumb pressed), in two pieces round the thumb, which is drawn its
+ * own length (the accent's, -10208 on), centred on the thumb's place.
+ * In an inactive window the bar is its disabled icon stretched end to
+ * end; with nothing to scroll, its empty one between inactive arrows. */
+static bool k1_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb)
+{
+    if (!k1_colour())
+        return false;
+    int16_t base = vertical ? -8280 : -8288; /* disabled, empty, normal, pressed */
+    const image *dis = img(base), *empty = img((int16_t)(base + 1)), *norm = img((int16_t)(base + 2)),
+                *pr = img((int16_t)(base + 3));
+    if (!dis || !empty || !norm || dis->w != 16 || empty->w != 16 || norm->w != 16 || !ics(-10204))
+        return false;
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    if (!enabled) {
+        blit_stretch(dis, 7, 7, r, &clip);
+        hrgn_free(&clip);
+        return true;
+    }
+    int len = vertical ? r.bottom - r.top : r.right - r.left;
+    qrect a0 = vertical ? (qrect){ r.top, r.left, (int16_t)(r.top + 16), r.right }
+                        : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + 16) };
+    qrect a1 = vertical ? (qrect){ (int16_t)(r.bottom - 16), r.left, r.bottom, r.right }
+                        : (qrect){ r.top, (int16_t)(r.right - 16), r.bottom, r.right };
+    qrect tr = vertical ? (qrect){ (int16_t)(r.top + 15), r.left, (int16_t)(r.bottom - 15), r.right }
+                        : (qrect){ r.top, (int16_t)(r.left + 15), r.bottom, (int16_t)(r.right - 15) };
+    if (len >= 32) {
+        if (!active) {
+            blit_stretch(empty, 7, 7, tr, &clip);
+        } else {
+            const image *th = img((int16_t)((vertical ? -10208 : -10206) + 4 * (k1_accent() < 8 ? k1_accent() : 0) +
+                                             (hilite == 129)));
+            if (!th)
+                th = img((int16_t)((vertical ? -10208 : -10206) + (hilite == 129)));
+            int t0 = vertical ? tr.top : tr.left, t1 = vertical ? tr.bottom : tr.right;
+            int tl = th ? (vertical ? th->h : th->w) : 0, mid = vertical ? (thumb.top + thumb.bottom) / 2 : (thumb.left + thumb.right) / 2;
+            int s = mid - tl / 2;
+            if (s + tl > t1)
+                s = t1 - tl;
+            if (s < t0)
+                s = t0;
+            if (!th || tl > t1 - t0)
+                s = t1, tl = 0;
+            for (int k = 0; k < 2; k++) {
+                int p0 = k ? s + tl : t0, p1 = k ? t1 : s;
+                if (p1 <= p0)
+                    continue;
+                const image *im = hilite == (k ? 23 : 22) && pr ? pr : norm;
+                blit_stretch(im, 7, 7, vertical ? (qrect){ (int16_t)p0, r.left, (int16_t)p1, r.right }
+                                                : (qrect){ r.top, (int16_t)p0, r.bottom, (int16_t)p1 }, &clip);
+            }
+            if (tl)
+                blit(th, 0, 0, th->w, th->h, vertical ? r.left : s, vertical ? s : r.top, &clip);
+        }
+    }
+    for (int k = 0; k < 2; k++) {
+        int dir = vertical ? k : 2 + k; /* up, down, left, right */
+        int16_t set = !active ? -10208 : hilite == 20 + k ? -10200 : -10204;
+        const image *ar = ics((int16_t)(set + dir));
+        if (!ar)
+            ar = ics((int16_t)(-10204 + dir));
+        qrect a = k ? a1 : a0;
+        if (ar)
+            blit(ar, 0, 0, ar->w, ar->h, a.left, a.top, &clip);
+    }
+    hrgn_free(&clip);
+    return true;
+}
+
+/* A progress bar: the track (-10224) and the done part (the accent's,
+ * -10223 on, or -10080 on for Mac OS 8.5's other accents), both 12 by 14
+ * stretched at their middles.  Not the indeterminate kind (its barber
+ * pole is a 'ppat' this doesn't draw). */
+bool theme_draw_progress(qrect r, int32_t min, int32_t max, int32_t value, bool rtl)
+{
+    const image *track = img(-10224);
+    int k = k1_accent();
+    const image *fill = img((int16_t)(k < 8 ? -10223 + k : -10080 + (k - 8)));
+    if (!fill)
+        fill = img(-10223);
+    if (!k1_colour() || !track || !fill)
+        return false;
+    hrgn clip;
+    hrgn_init(&clip);
+    port_clip(&clip);
+    blit_stretch(track, track->w / 2, track->h / 2, r, &clip);
+    int w = r.right - r.left;
+    int done = max > min ? (int)((int64_t)(value - min) * w / (max - min)) : 0;
+    done = done < 0 ? 0 : done > w ? w : done;
+    if (done >= fill->w / 2)
+        blit_stretch(fill, fill->w / 2, fill->h / 2,
+                     rtl ? (qrect){ r.top, (int16_t)(r.right - done), r.bottom, r.right }
+                         : (qrect){ r.top, r.left, r.bottom, (int16_t)(r.left + done) }, &clip);
     hrgn_free(&clip);
     return true;
 }
