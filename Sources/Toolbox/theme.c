@@ -261,6 +261,18 @@ bool machine_load_theme(const char *path, char *err, size_t errlen)
     snprintf(scheme_name, sizeof scheme_name, "%s", base ? base + 1 : path);
     uint32_t len;
     k1 = !wnd_for(-14336).valid;
+    if (k1 && !find_res(fourcc("cicn"), -14336, &len) && !find_res(fourcc("cicn"), -12288, &len) &&
+        find_res(fourcc("cicn"), -14331, &len)) {
+        /* Kaleidoscope 2's Apple platinum: a few parts over the Platinum
+         * the control panel draws from its own maps (the windows' -14336
+         * and on, the menu bar's -12288), which the scheme leaves out.
+         * Blue Box's Platinum, as Apple's theme file has it. */
+        loaded = false;
+        if (!thme_load(path, scheme_fork, scheme_len, err, errlen))
+            return false;
+        machine_set_appearance(MACHINE_APPEARANCE_THEME);
+        return true;
+    }
     if (k1 && !find_res(fourcc("cicn"), -14331, &len)) {
         snprintf(err, errlen, "%s is not a Kaleidoscope scheme (no window artwork)", path);
         loaded = false;

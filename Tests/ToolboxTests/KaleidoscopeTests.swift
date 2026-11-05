@@ -62,7 +62,7 @@ extension BlueBox {
             let bar = cicnColours(w: 20, h: 8, [barFill, barText, barLight, barShadow]) { _, y in
                 y == 0 || y == 5 ? 2 : y == 2 ? 1 : y == 7 || y == 4 ? 3 : 0
             }
-            var fork = buildFork([
+            let fork = buildFork([
                 TestResource(type: "cicn", id: -14331, data: stripes),
                 TestResource(type: "cicn", id: -12288, data: bar),
                 TestResource(type: "cicn", id: -12272, data: menuMap(menuLight, menuFill, menuText, menuDark)),
@@ -77,7 +77,12 @@ extension BlueBox {
                 TestResource(type: "cicn", id: -14316,
                              data: cicnColours(w: 12, h: 12, [utilityFill, [0xFF, 0xFF, 0xFF]]) { _, y in y == 1 ? 1 : 0 }),
             ])
-            let url = tempDir().appendingPathComponent("Tiny K1 Scheme")
+            return save(fork, "Tiny K1 Scheme")
+        }
+
+        static func save(_ fork: [UInt8], _ name: String) -> URL {
+            var fork = fork
+            let url = tempDir().appendingPathComponent(name)
             var f = mac_file()
             var empty: [UInt8] = []
             empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
@@ -177,6 +182,26 @@ extension BlueBox {
             _ = window(1985, 500, 100, 600, 300)
             #expect(screen(200, 500 - 6) == Self.utilityFill)
             #expect(screen(200, 500 - 11) == [0xFF, 0xFF, 0xFF])           // its light top edge
+        }
+
+        /// Kaleidoscope 2's Apple platinum has a few parts and none of the
+        /// windows' or menu bar's maps (the control panel had those): it
+        /// is Platinum, as Apple's theme file is.
+        @Test func aSchemeWithoutTheWindowsMapsIsPlatinum() {
+            let stripes = cicnColours(w: 16, h: 13, [[0xFF, 0xFF, 0xFF], [0x77, 0x77, 0x77]]) { _, y in UInt8(y & 1) }
+            let url = Self.save(buildFork([TestResource(type: "cicn", id: -14331, data: stripes)]), "Sparse Platinum")
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_load_theme(url.path, &err, err.count))
+            defer { machine_set_appearance(Int32(MACHINE_APPEARANCE_BW)); thme_unload() }
+            #expect(thme_on() && String(cString: thme_name()) == "Sparse Platinum")
+            launchTestApp()
+            _ = initToolbox()
+            let file = tb_NewMenu(128, pstr("File"))
+            tb_AppendMenu(file, pstr("New;Quit"))
+            tb_InsertMenu(file, 0)
+            tb_DrawMenuBar()
+            let bar = screen(500, 10)                                         // Platinum's grey, not white
+            #expect(bar[0] == bar[1] && bar[1] == bar[2] && bar[0] > 0x80 && bar[0] < 0xFF)
         }
 
         @Test func pushButtonsStretchRoundTheirText() {
