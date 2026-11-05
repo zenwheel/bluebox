@@ -461,11 +461,12 @@ static void unite(pict_survey *s, qrect r)
 
 static int16_t survey_picture(pict_survey *s, gaddr pic)
 {
-    if (!pic || !rd32(pic) || tb_GetHandleSize(pic) < 12)
+    /* picSize and picFrame at least: a spooled picture has no more. */
+    if (!pic || !rd32(pic) || tb_GetHandleSize(pic) < 10)
         return pictureDataErr;
     gaddr p = rd32(pic);
     qrect frame = qrect_get(p + 2);
-    bool v2 = rd16(p + 10) == 0x0011 && rd16(p + 12) == 0x02FF;
+    bool v2 = tb_GetHandleSize(pic) >= 14 && rd16(p + 10) == 0x0011 && rd16(p + 12) == 0x02FF;
     if (s->version < (v2 ? 2 : 1))
         s->version = v2 ? 2 : 1;
     /* An extended version 2 header gives the resolution and the frame at it. */
@@ -495,12 +496,25 @@ static int16_t survey_picture(pict_survey *s, gaddr pic)
     tb_SetPortBits(bm);
     tb_SetEmptyRgn(GrafPort_visRgn(port));
     tb_SetEmptyRgn(GrafPort_clipRgn(port));
+    /* A picture spooled from a file (the handle holds only its header) is
+     * read through the current port's getPicProc, as DrawPicture would:
+     * SlideShow surveys each picture so, for its colours, then goes back
+     * in the file and draws it. */
+    gaddr outer_procs = saved ? GrafPort_grafProcs(saved) : 0;
+    gaddr get = outer_procs ? rd32(outer_procs + QDProcs_getPicProc_off) : 0;
+    gaddr procs = get ? tb_NewPtr(QDProcs_SIZEOF, false, true) : 0;
+    if (procs) {
+        tb_SetStdProcs(procs);
+        wr32(procs + QDProcs_getPicProc_off, get);
+        GrafPort_set_grafProcs(port, procs);
+    }
     qrect_put(dst, frame);
     pict_survey *outer = qd_survey;
     qd_survey = s;
     tb_DrawPicture(pic, dst);
     qd_survey = outer;
     tb_ClosePort(port);
+    tb_DisposePtr(procs);
     tb_SetPort(saved);
     tb_DisposePtr(dst);
     tb_DisposePtr(bits);

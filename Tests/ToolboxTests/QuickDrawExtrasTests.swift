@@ -342,10 +342,16 @@ extension BlueBox {
             wr16(rd32(pic), 22)
             for (i, v) in [0, 0, 20, 20].enumerated() { wr16(rd32(pic) + 2 + UInt32(i * 2), UInt16(v)) }
             tb_DrawPicture(pic, rect(0, 0, 20, 20))
-            GrafPort_set_grafProcs(rd32(port), 0)
             #expect(rd32(cursor) == src + UInt32(data.count)) // read to its end, no further
             #expect(black(5, 5))
             #expect(!black(15, 15))
+            // GetPictInfo reads it through the same proc (SlideShow surveys
+            // its spooled pictures for their colours so).
+            wr32(cursor, src)
+            let info = tb_NewPtr(200, false, true)
+            #expect(tb_GetPictInfo(pic, info, 0, 0, 0, 0) == 0)
+            #expect(rd32(cursor) == src + UInt32(data.count))
+            GrafPort_set_grafProcs(rd32(port), 0)
         }
 
         /// A comment with data, in a handle of its own.
