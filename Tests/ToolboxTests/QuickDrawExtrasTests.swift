@@ -1063,5 +1063,83 @@ extension BlueBox {
             #expect(wheelStepTrackedByHand(w2, down: false) == (20, 20))
             tb_DisposeWindow(w2)
         }
+
+        /// The thumb dragged as Internet Explorer drags it, asking the
+        /// scroll bar's definition itself: thumbCntl for how far the mouse
+        /// may take it from where it grabbed it, calcThumbRgn for where it
+        /// is, and posCntl for the value an offset gives.
+        private func dragThumbByHand(_ ch: UInt32, grab: Int16) -> (thumb: [Int], limit: [Int], axis: Int, ends: [Int16]) {
+            let rec = tb_NewPtr(18, false, true)
+            let rgn = tb_NewRgn()
+            defer { tb_DisposePtr(rec); tb_DisposeRgn(rgn) }
+            wr32(rec, UInt32(UInt16(bitPattern: grab)) << 16 | 292)
+            _ = ctl_call(ch, 6, Int32(bitPattern: rec))  // thumbCntl
+            let limit = (0..<4).map { Int(Int16(bitPattern: rd16(rec + UInt32($0 * 2)))) }
+            let axis = Int(rd16(rec + 16))
+            _ = ctl_call(ch, 11, Int32(bitPattern: rgn)) // calcThumbRgn
+            let thumb = (0..<4).map { Int(Int16(bitPattern: rd16(rd32(rgn) + 2 + UInt32($0 * 2)))) }
+            // To the bottom of the limit and back to its top.
+            let v0 = tb_GetControlValue(ch)
+            let down = Int16(limit[2] - 1) - grab
+            _ = ctl_call(ch, 5, Int32(bitPattern: UInt32(UInt16(bitPattern: down)) << 16)) // posCntl
+            let bottom = tb_GetControlValue(ch)
+            _ = ctl_call(ch, 5, Int32(bitPattern: UInt32(UInt16(bitPattern: Int16(limit[0]) - Int16(limit[2] - 1))) << 16))
+            let top = tb_GetControlValue(ch)
+            tb_SetControlValue(ch, v0)
+            return (thumb, limit, axis, [bottom, top])
+        }
+
+        /// A classic scroll bar: the 16-pixel thumb between the arrows.
+        @Test func aProgramDragsTheThumbOfAClassicScrollBarItself() {
+            launchTestApp()
+            _ = initToolbox()
+            let (w, ch) = documentWithScrollBar(value: 0)
+            let d = dragThumbByHand(ch, grab: 20)
+            #expect(d.thumb == [15, 285, 31, 301])  // below the up arrow
+            #expect(d.limit[0] == 20 && d.limit[2] - 1 == 20 + 239) // 287 long, less the arrows and thumb
+            #expect(d.axis == 2)                    // vAxisOnly
+            #expect(d.ends == [100, 0])
+            tb_DisposeWindow(w)
+        }
+
+        /// macOS's scroll bar: the knob where the host drew it, travelling
+        /// its slot.
+        @Test @MainActor func aProgramDragsTheKnobOfANativeScrollBarItself() {
+            launchTestApp()
+            _ = initToolbox()
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_NATIVE))
+            NativeControls.install()
+            defer {
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+                machine_set_control_renderer(nil, nil)
+            }
+            let (w, ch) = documentWithScrollBar(value: 0)
+            var klo: Int32 = 0, khi: Int32 = 0, slo: Int32 = 0, shi: Int32 = 0
+            #expect(native_scroll_knob(ch, &klo, &khi, &slo, &shi))
+            let d = dragThumbByHand(ch, grab: Int16(-1 + klo + 2))
+            #expect(d.thumb == [Int(-1 + klo), 285, Int(-1 + khi), 301])
+            #expect(d.limit[2] - 1 - d.limit[0] == Int((shi - slo) - (khi - klo)))
+            #expect(d.axis == 2)
+            #expect(d.ends == [100, 0])
+            tb_DisposeWindow(w)
+        }
+
+        /// Moving a scroll bar with the control it is embedded in leaves its
+        /// value alone (posCntl is its thumb moved).
+        @Test func movingAnEmbeddedScrollBarKeepsItsValue() {
+            launchTestApp()
+            _ = initToolbox()
+            let (w, ch) = documentWithScrollBar(value: 40)
+            let root = tb_NewPtr(4, false, true)
+            defer { tb_DisposePtr(root) }
+            _ = tb_CreateRootControl(w, root)
+            let cr = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 200, 300, 302].enumerated() { wr16(cr + UInt32(i * 2), UInt16(v)) }
+            let pane = tb_NewControl(w, cr, 0, 1, 0, 0, 0, 256, 0) // a user pane
+            _ = tb_EmbedControl(ch, pane)
+            tb_MoveControl(pane, 210, 10)
+            #expect(tb_GetControlValue(ch) == 40)
+            tb_DisposeWindow(w)
+        }
     }
 }

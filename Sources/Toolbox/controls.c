@@ -19,7 +19,8 @@
 #include "qt_movie_internal.h"
 #include "thme.h"
 
-enum { drawCntl = 0, testCntl, calcCRgns, initCntl, dispCntl, posCntl, thumbCntl, dragCntl, autoTrack };
+enum { drawCntl = 0, testCntl, calcCRgns, initCntl, dispCntl, posCntl, thumbCntl, dragCntl, autoTrack,
+       calcCntlRgn = 10, calcThumbRgn = 11 };
 enum { inButton = 10, inCheckBox = 11, inUpButton = 20, inDownButton = 21, inPageUp = 22, inPageDown = 23,
        inThumb = 129 };
 enum { patCopy = 8, patXor = 10, patBic = 11 };
@@ -613,6 +614,84 @@ static int32_t cdef1_test(gaddr ch, uint32_t pt)
     return inThumb;
 }
 
+/* Where the thumb travels along the bar (lo to hi, its leading edge from
+ * lo to hi less its length): between the arrows, or macOS's knob slot. */
+static void sb_track(gaddr ch, int *lo, int *hi)
+{
+    qrect r = crect(ch);
+    bool v = sb_vertical(r);
+    int a = v ? r.top : r.left, b = v ? r.bottom : r.right;
+    int klo, khi, slo, shi;
+    if (native_scroll_knob(ch, &klo, &khi, &slo, &shi)) {
+        *lo = a + slo;
+        *hi = a + shi;
+    } else if (sb_together(ch)) {
+        *lo = a;
+        *hi = b - 32;
+    } else {
+        *lo = a + 16;
+        *hi = b - 16;
+    }
+}
+
+/* thumbCntl: how far the mouse that grabbed the thumb at the point in
+ * limitRect.topLeft may take it (the thumb from one end of its track to
+ * the other), the slop it may stray across the bar, and the axis.  A
+ * program dragging the thumb itself asks this (Internet Explorer), as
+ * the Control Manager's TrackControl did. */
+static void cdef1_thumb_limits(gaddr ch, gaddr rec)
+{
+    qrect r = crect(ch), t = sb_thumb(ch);
+    bool v = sb_vertical(r);
+    uint32_t pt = rd32(rec);
+    int at = v ? pt_v(pt) : pt_h(pt), lo, hi;
+    sb_track(ch, &lo, &hi);
+    int tlo = v ? t.top : t.left, thi = v ? t.bottom : t.right;
+    int from = at - (tlo - lo), to = at + (hi - thi);
+    if (to < from)
+        to = from;
+    qrect limit = v ? (qrect){ (int16_t)from, r.left, (int16_t)(to + 1), r.right }
+                    : (qrect){ r.top, (int16_t)from, r.bottom, (int16_t)(to + 1) };
+    /* Along the bar the thumb follows the mouse anywhere (pinned at the
+     * ends); across it, some way either side. */
+    qrect slop = v ? (qrect){ -32768, (int16_t)(r.left - 24), 32767, (int16_t)(r.right + 24) }
+                   : (qrect){ (int16_t)(r.top - 24), -32768, (int16_t)(r.bottom + 24), 32767 };
+    qrect_put(rec, limit);
+    qrect_put(rec + 8, slop);
+    wr16(rec + 16, v ? 2 : 1); /* vAxisOnly, hAxisOnly */
+}
+
+/* posCntl: the thumb was dragged by the offset (a Point); the value that
+ * puts it there. */
+static void cdef1_moved_thumb(gaddr ch, uint32_t offset)
+{
+    qrect r = crect(ch), t = sb_thumb(ch);
+    bool v = sb_vertical(r);
+    int lo, hi;
+    sb_track(ch, &lo, &hi);
+    int travel = (hi - lo) - (v ? t.bottom - t.top : t.right - t.left);
+    int range = cmax(ch) - cmin(ch);
+    if (travel <= 0 || range <= 0)
+        return;
+    int d = v ? pt_v(offset) : pt_h(offset);
+    long nv = cvalue(ch) + ((long)d * range + (d < 0 ? -travel / 2 : travel / 2)) / travel;
+    tb_SetControlValue(ch, (int16_t)(nv < cmin(ch) ? cmin(ch) : nv > cmax(ch) ? cmax(ch) : nv));
+}
+
+/* calcCRgns (the thumb's when the handle's high bit is set), calcCntlRgn
+ * and calcThumbRgn. */
+static void calc_region(gaddr ch, gaddr rh, bool thumb)
+{
+    hrgn g;
+    hrgn_init(&g);
+    if (!thumb)
+        hrgn_rect(&g, crect(ch));
+    else if (ControlRecord_contrlVis(cp(ch)) && chilite(ch) != 255 && cmax(ch) > cmin(ch))
+        hrgn_rect(&g, sb_thumb(ch));
+    rgn_write(rh, &g);
+    hrgn_free(&g);
+}
+
 /* ---------------------------------------------------------------------- */
 /* The CDEF entry points: FUNCTION (varCode, theControl, message, param). */
 
@@ -635,6 +714,20 @@ static void cdef_entry(cpu68k *c, bool scroll)
         break;
     case testCntl:
         result = scroll ? cdef1_test(ch, (uint32_t)param) : cdef0_test(ch, (uint32_t)param);
+        break;
+    case calcCRgns: calc_region(ch, (gaddr)param & 0x7FFFFFFF, scroll && (param & 0x80000000)); break;
+    case calcCntlRgn: calc_region(ch, (gaddr)param, false); break;
+    case calcThumbRgn:
+        if (scroll)
+            calc_region(ch, (gaddr)param, true);
+        break;
+    case thumbCntl:
+        if (scroll)
+            cdef1_thumb_limits(ch, (gaddr)param);
+        break;
+    case posCntl:
+        if (scroll)
+            cdef1_moved_thumb(ch, (uint32_t)param);
         break;
     case kControlMsgTestNewMsgSupport: result = NEW_MSG_OK; break;
     case kControlMsgGetFeatures: result = standard_features(scroll); break;
@@ -1627,7 +1720,11 @@ static void offset_tree(gaddr ch, int dh, int dv)
     qrect r = crect(ch);
     qrect_put(cp(ch) + ControlRecord_contrlRect_off,
               (qrect){ (int16_t)(r.top + dv), (int16_t)(r.left + dh), (int16_t)(r.bottom + dv), (int16_t)(r.right + dh) });
-    call_cdef(ch, posCntl, (int32_t)make_pt((int16_t)dv, (int16_t)dh));
+    /* Our own definitions hear of the move (edit text keeps its text in
+     * place); not a scroll bar's, to which posCntl is the thumb moved. */
+    ctl_info *ci = ctl_find(ch);
+    if (!ci || (ci->cdef != 1 && ci->cdef != 24))
+        call_cdef(ch, posCntl, (int32_t)make_pt((int16_t)dv, (int16_t)dh));
     gaddr subs[512];
     int n = ctl_subcontrols(ch, subs, 512);
     for (int i = 0; i < n; i++)
