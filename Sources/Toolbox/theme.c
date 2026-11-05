@@ -851,10 +851,10 @@ int theme_window_hit(gaddr w, int var, qrect c, int h, int v)
 /* ---------------------------------------------------------------------- */
 /* Controls */
 
-bool theme_draw_grow(qrect c, bool active)
+bool theme_draw_grow(qrect c, bool active, bool small)
 {
     if (appearance_theme())
-        return thme_draw_grow(c, active);
+        return thme_draw_grow(c, active, small);
     if (!theme_active())
         return false;
     const image *im = img(k1 ? (active ? -14330 : -14334) : (active ? -14333 : -14334));

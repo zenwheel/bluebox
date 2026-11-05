@@ -421,7 +421,7 @@ bool theme_draw_window(gaddr w, int var, qrect c, bool hilited, bool goaway, boo
 void theme_decorate_window(gaddr w, int var, qrect c, bool hilited, bool goaway, bool zoom);
 bool theme_window_region(gaddr w, int var, qrect c, hrgn *out);
 int theme_window_hit(gaddr w, int var, qrect c, int h, int v);
-bool theme_draw_grow(qrect c, bool active);
+bool theme_draw_grow(qrect c, bool active, bool small);
 bool theme_draw_scrollbar(qrect r, bool vertical, int hilite, bool enabled, bool active, qrect thumb);
 bool theme_draw_button(qrect r, const uint8_t *title, int n, bool pressed, bool disabled);
 bool theme_draw_check(qrect box, bool radio, bool on, bool pressed, bool disabled);

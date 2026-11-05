@@ -67,6 +67,14 @@ static void unpack_rgb(uint64_t v, uint16_t out[3])
 /* A Mac OS 8.5 theme file in use: its parts, brushes and colours. */
 static bool themed(void) { return thme_in_use(); }
 
+/* An Apple theme's colour variation is the accent, not the host's. */
+static void theme_accent(void)
+{
+    uint16_t rgb[3];
+    if (themed() && thme_variation_rgb(3, rgb))
+        memcpy(accent, rgb, sizeof accent);
+}
+
 /* At event calls: the host's colours as they are now. */
 void appearance_poll(void)
 {
@@ -76,6 +84,7 @@ void appearance_poll(void)
     uint64_t a = atomic_load(&host_accent), h = atomic_load(&host_hilite);
     if (a)
         unpack_rgb(a, accent);
+    theme_accent();
     uint16_t rgb[3];
     if (h && !(themed() && thme_highlight_rgb(rgb))) { /* a theme's own highlight colour stays */
         unpack_rgb(h, rgb);
@@ -418,6 +427,7 @@ void appearance_reset(void)
     uint64_t a = atomic_load(&host_accent);
     if (a)
         unpack_rgb(a, accent);
+    theme_accent();
 }
 
 int32_t tb_RegisterAppearanceClient(void)
@@ -571,7 +581,8 @@ int32_t tb_GetThemeAccentColors(gaddr out)
     static const int8_t shades[n] = { 14, 12, 9, 6, 3, 0, -4, -8 };
     for (int i = 0; i < n; i++) {
         uint16_t rgb[3];
-        accent_shade(shades[i], rgb);
+        if (!(themed() && thme_variation_rgb(i, rgb))) /* an Apple theme's variation, as it is */
+            accent_shade(shades[i], rgb);
         wr16(p + 8 + i * 8, (uint16_t)i);
         wr16(p + 10 + i * 8, rgb[0]);
         wr16(p + 12 + i * 8, rgb[1]);
