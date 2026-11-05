@@ -1184,6 +1184,55 @@ void ap_push_button(qrect r, uint32_t state, bool is_default)
 }
 
 /* A check box or radio button's 12-pixel box: value 0 off, 1 on, 2 mixed. */
+/* Platinum's radio button: a smooth ball, lit from the top left; on, sunk
+ * (dark, lit from below) with a black dot in it; mixed, a dash. */
+static void platinum_radio(qrect box, int value, bool active, bool pressed)
+{
+    uint16_t bg[3];
+    gaddr c = tb_NewPtr(6, false, false);
+    tb_GetBackColor(c);
+    for (int i = 0; i < 3; i++)
+        bg[i] = rd16(c + (uint32_t)i * 2);
+    tb_DisposePtr(c);
+    int size = box.right - box.left < box.bottom - box.top ? box.right - box.left : box.bottom - box.top;
+    float rad = size / 2.0f + 0.5f, cx = box.left + size / 2.0f, cy = box.top + size / 2.0f;
+    bool sunk = value == 1 || pressed;
+    for (int y = box.top - 1; y < box.top + size + 1; y++)
+        for (int x = box.left - 1; x < box.left + size + 1; x++) {
+            float dx = x + 0.5f - cx, dy = y + 0.5f - cy, d = sqrtf(dx * dx + dy * dy);
+            float cover = rad - d;
+            if (cover <= 0)
+                continue;
+            if (cover > 1)
+                cover = 1;
+            float t = (dx + dy) / (2 * rad); /* -0.7 top left .. 0.7 bottom right */
+            float v;
+            if (d > rad - 1.4f) /* the rim */
+                v = active ? (sunk ? 0x20 : 0x30) + (t > 0 ? 0x20 : 0) : 0x99;
+            else if (sunk)
+                v = 0x50 + (t + 0.7f) / 1.4f * 0x90;
+            else {
+                float k = (t + 0.25f) / 0.95f;
+                v = 0xFE - (k < 0 ? 0 : k > 1 ? 1 : k) * 0x90;
+            }
+            if (!active)
+                v = 0xDD + (v - 0xDD) * 0.3f;
+            if (pressed && value != 1)
+                v *= 0.8f;
+            if (value == 1 && d < size / 5.0f + 0.8f) { /* the dot */
+                float dc = size / 5.0f + 0.8f - d;
+                float k = dc > 1 ? 1 : dc;
+                v = v * (1 - k) + (active ? 0 : 0x77) * k;
+            }
+            if (value == 2 && dy > -1.5f && dy < 1.0f && dx > -rad + 3 && dx < rad - 3)
+                v = active ? 0 : 0x77;
+            uint16_t px[3];
+            for (int i = 0; i < 3; i++)
+                px[i] = (uint16_t)(bg[i] + ((int)(v * 0x101) - (int)bg[i]) * cover);
+            ap_fill((qrect){ (int16_t)y, (int16_t)x, (int16_t)(y + 1), (int16_t)(x + 1) }, px);
+        }
+}
+
 void ap_check_box(qrect box, bool radio, int value, uint32_t state)
 {
     if (themed() && thme_check_box(box, radio, value, state))
@@ -1193,6 +1242,10 @@ void ap_check_box(qrect box, bool radio, int value, uint32_t state)
     grey(frame, active ? 0 : 0x8888);
     grey(face, pressed ? 0x8888 : active ? 0xDDDD : 0xEEEE);
     grey(mark, active ? 0 : 0x8888);
+    if (radio && ap_in_color()) {
+        platinum_radio(box, value, active, pressed);
+        return;
+    }
     if (radio) {
         hrgn g, in;
         hrgn_init(&g);
