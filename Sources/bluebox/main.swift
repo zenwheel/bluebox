@@ -177,7 +177,8 @@ func usage() -> Never {
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      the scroll wheel: wheel:x/y/n (n lines up, down when negative),
                      hwheel:x/y/n (n columns left);
-                     snap:F.png saves the screen; in a window, wait:N is N/1000 ms
+                     pause:N suspends the program (as Suspend in its menu) for N ms
+                     of real time; snap:F.png saves the screen; in a window, wait:N is N/1000 ms
     \(screensaverUsage)
       bluebox chooser [run options]
           Open the Chooser on its own (it is also in every program's Apple menu):
@@ -408,6 +409,11 @@ func queueScript(_ script: [String], start: UInt64) {
             let v = step[step.index(after: colon)...].split(separator: "/").compactMap { Int32($0) }
             guard v.count == 3 else { fail("wheel steps take x/y/n: \(step)") }
             add(step.hasPrefix("h") ? 8 : 7, v[0], v[1], v[2], after: 200_000)
+            continue
+        }
+        // pause:N: the host's Suspend for N ms of real time, then Resume.
+        if step.hasPrefix("pause:"), let ms = Int32(step.dropFirst(6)) {
+            add(9, ms, 0, after: 200_000)
             continue
         }
         // suspend and resume: the program sent to the background and back.

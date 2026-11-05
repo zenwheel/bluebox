@@ -570,7 +570,7 @@ bool machine_boot(bool census)
     wr32(LM_AppParmHandle, parms);
     apply_lowmem_overrides();
 
-    ticks_base_ns = now_ns();
+    ticks_base_ns = machine_unpaused_ns(now_ns());
     skipped_ns = 0;
     return true;
 }
@@ -958,7 +958,7 @@ uint64_t machine_time_ns(void)
             return cycles_ns(cpu.cycles) + (cpu.icount - cpu.timed) * 100u + skipped_ns;
         return cpu.icount * 100u + skipped_ns;
     }
-    return now_ns() - ticks_base_ns + skipped_ns;
+    return machine_unpaused_ns(now_ns()) - ticks_base_ns + skipped_ns;
 }
 
 void machine_skip_time(uint64_t ns) { skipped_ns += ns; }
@@ -999,6 +999,7 @@ void machine_charge_pixels(uint64_t n)
 /* Bring the 60 Hz tick counter up to the machine's time. */
 void machine_advance_ticks(void)
 {
+    machine_pause_point(); /* every wait in the Toolbox comes here */
     uint64_t ns = machine_time_ns();
     uint64_t ticks = ns * 60 / 1000000000u;
     if ((uint32_t)ticks > rd32(LM_Ticks))
@@ -1058,6 +1059,7 @@ run_status machine_run(uint64_t max)
     const uint64_t slice = timed_68000() ? 2000 : 20000;
     uint64_t done = 0;
     while (!cpu.halted && done < max) {
+        machine_pause_point(); /* suspended: no instructions, no time */
         uint64_t n = max - done < slice ? max - done : slice;
         if (g_ppc_mode) {
             /* The 68k CPU's count stays the machine's clock. */
