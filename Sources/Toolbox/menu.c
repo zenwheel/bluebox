@@ -1365,7 +1365,8 @@ static void mdef_draw(gaddr mh, qrect r, int hilite_item)
         uint16_t kc[3];
         bool kt = k && theme_menu_text(i == hilite_item ? 3 : 2, item_enabled(mh, i), kc);
         if (kt) {
-            theme_menu_item(ir, i == hilite_item);
+            if (i == hilite_item) /* the rest are on the menu's background */
+                theme_menu_item(ir, true);
             qd_set_fg_override(kc);
         }
         GrafPort_set_txFace(port, style);

@@ -2734,7 +2734,7 @@ int32_t tb_DrawThemeMenuSeparator(gaddr rp)
     qrect r = rect_arg(rp);
     if (themed() && thme_menu_separator(r))
         return noErr;
-    if (theme_menu_background(r) && theme_menu_divider(r))
+    if (theme_menu_item(r, false) && theme_menu_divider(r))
         return noErr;
     ap_fill_grey(r, 0xDDDD);
     ap_separator(r, kThemeStateActive);

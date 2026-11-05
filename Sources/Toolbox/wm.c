@@ -490,10 +490,17 @@ static void wdef_draw(gaddr w, int var, int32_t param)
             }
         }
         tb_DisposePtr(r);
+        theme_decorate_window(w, var, c, hilited, false, false);
         return;
     }
     qrect t;
     title_rect(c, &t);
+    if ((param == wInGoAway || param == wInZoomIn || param == wInZoomOut) &&
+        theme_press_box(w, false, param == wInGoAway ? 1 : 2, param == wInGoAway ? c.left + 7 : c.right - 21,
+                        c.top - TITLE_HEIGHT + 2)) {
+        tb_DisposePtr(r); /* a Kaleidoscope scheme's pressed box */
+        return;
+    }
     if (param == wInGoAway || param == wInZoomIn || param == wInZoomOut) {
         /* Toggle a pressed box: System 7 draws a starburst inside it, here
          * in XOR so a second call restores the box. */
@@ -750,6 +757,12 @@ static void wdef124_draw(gaddr w, int var, int32_t param)
     gaddr r = tb_NewPtr(8, false, false);
     tb_PenNormal();
     if (param == wInGoAway || param == wInZoomIn || param == wInZoomOut) {
+        int part = param == wInGoAway ? 1 : 2, px, py;
+        theme_float_box_at(var, b, part, &px, &py);
+        if (theme_press_box(w, true, part, px, py)) { /* a Kaleidoscope scheme's pressed box */
+            tb_DisposePtr(r);
+            return;
+        }
         qrect x = float_box(b, var, param != wInGoAway);
         set_rect(r, x.top + 1, x.left + 1, x.bottom - 1, x.right - 1);
         tb_InvertRect(r);
@@ -803,6 +816,7 @@ static void wdef124_draw(gaddr w, int var, int32_t param)
     if (!float_side(var))
         float_title_text(w, b);
     tb_DisposePtr(r);
+    theme_decorate_float(w, var, b, hilited, goaway, float_zoom(var));
 }
 
 static int32_t wdef124_hit(gaddr w, int var, uint32_t pt)
