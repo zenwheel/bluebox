@@ -9,3 +9,4 @@ build/
 releases/
 .build-asan/
 .finf/
+.claude/
