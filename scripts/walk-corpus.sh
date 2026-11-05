@@ -24,7 +24,7 @@
 #   CODECHECK=n checks a PowerPC program's code for changes every nth
 #   call (default 0, none),
 #   WALK_TIMEOUT=s gives each run s seconds (default 600), MAX=n instructions
-#   (default 4000000000), NOWALK=1 leaves the programs alone (no walk).
+#   (default 24000000000), NOWALK=1 leaves the programs alone (no walk).
 set -eu
 LC_ALL=C
 export LC_ALL
@@ -81,7 +81,7 @@ walk_one() {
 		mkdir -p "$home"
 		cp -cR "$folder" "$home/copy" 2>/dev/null || cp -R "$folder" "$home/copy"
 		status=0
-		set -- "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-4000000000}"
+		set -- "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-24000000000}"
 		[ -z "$app" ] || set -- "$@" --app "$app"
 		while IFS= read -r step; do
 			[ -z "$step" ] || set -- "$@" --walk-avoid "$step"
