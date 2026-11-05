@@ -929,5 +929,58 @@ extension BlueBox {
             #expect(tb_TestControl(ch, UInt32(15) << 16 | 292) == 22)   // inPageUp above it
             tb_DisposeWindow(w)
         }
+
+        /// A step of the wheel over the window: the mouse-down the program
+        /// gets, where FindControl and TrackControl see a click in an arrow.
+        private func wheelStep(_ w: UInt32, down: Bool) -> (part: Int16, tracked: Int16) {
+            machine_post_wheel(250, 200, 0, down ? -1 : 1)
+            let e = tb_NewPtr(16, false, true)
+            defer { tb_DisposePtr(e) }
+            guard tb_GetNextEvent(0x0002, e) != 0, rd16(e) == 1 else { return (-1, -1) } // mouseDown
+            let wp = tb_NewPtr(4, false, true)
+            let pt = tb_NewPtr(4, false, true)
+            defer { tb_DisposePtr(wp); tb_DisposePtr(pt) }
+            guard tb_FindWindow(rd32(e + 10), wp) == 3, rd32(wp) == w else { return (-2, -2) } // inContent
+            wr32(pt, rd32(e + 10))
+            tb_GlobalToLocal(pt)
+            let cp = tb_NewPtr(4, false, true)
+            defer { tb_DisposePtr(cp) }
+            let part = tb_FindControl(rd32(pt), w, cp)
+            guard part != 0 else { return (0, 0) }
+            let tracked = tb_TrackControl(rd32(cp), rd32(pt), 0)
+            _ = tb_GetNextEvent(0x0004, e) // its mouse-up
+            return (part, tracked)
+        }
+
+        /// The wheel clicks the arrows of a scroll bar that has none to
+        /// show: macOS's (the native appearance), as it does classic ones.
+        @Test func theWheelScrollsANativeScrollBar() {
+            launchTestApp()
+            _ = initToolbox()
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_NATIVE))
+            defer {
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+                machine_set_control_renderer(nil, nil)
+            }
+            machine_set_control_renderer({ rq, _, _ in
+                rq!.pointee.knob_lo = 120; rq!.pointee.knob_hi = 160
+                rq!.pointee.slot_lo = 2; rq!.pointee.slot_hi = 284
+                return true
+            }, nil)
+            let (w, _) = documentWithScrollBar(value: 50)
+            #expect(wheelStep(w, down: true) == (21, 21))  // inDownButton
+            #expect(wheelStep(w, down: false) == (20, 20)) // inUpButton
+            tb_DisposeWindow(w)
+        }
+
+        /// And classic ones, as before.
+        @Test func theWheelScrollsAClassicScrollBar() {
+            launchTestApp()
+            _ = initToolbox()
+            let (w, _) = documentWithScrollBar(value: 50)
+            #expect(wheelStep(w, down: true) == (21, 21))
+            #expect(wheelStep(w, down: false) == (20, 20))
+            tb_DisposeWindow(w)
+        }
     }
 }
