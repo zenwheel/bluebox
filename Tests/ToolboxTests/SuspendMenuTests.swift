@@ -52,6 +52,25 @@ extension BlueBox {
             #expect(m[2].title == "Quit TeachText")
         }
 
+        /// Hide, Hide Others (Command-Option-H) and Show All, sent to the
+        /// application, then a separator before Suspend and Quit.
+        @Test @MainActor func hideItems() {
+            let m = HostHideItems.items(title: "Replace")
+            #expect(m.map(\.title) == ["Hide Replace", "Hide Others", "Show All", ""])
+            #expect(m[0].keyEquivalent == "h" && m[0].keyEquivalentModifierMask == [.command])
+            #expect(m[0].action == #selector(NSApplication.hide(_:)))
+            #expect(m[1].keyEquivalent == "h" && m[1].keyEquivalentModifierMask == [.command, .option])
+            #expect(m[1].action == #selector(NSApplication.hideOtherApplications(_:)))
+            #expect(m[2].keyEquivalent == "" && m[2].action == #selector(NSApplication.unhideAllApplications(_:)))
+            #expect(m[3].isSeparatorItem)
+            #expect(m.allSatisfy { $0.target == nil && !$0.isAlternate }) // up the responder chain to NSApp
+            // Typed, Command-H is the program's; suspended, the host's.
+            #expect(HostKey.classify([.command], "h", suspended: false) == .classic)
+            #expect(HostKey.classify([.command, .option], "h", suspended: false) == .classic)
+            #expect(HostKey.classify([.command], "h", suspended: true) == .hide)
+            #expect(HostKey.classify([.command, .option], "h", suspended: true) == .hideOthers)
+        }
+
         /// A background program's status item menu: Suspend and Quit, no keys.
         @Test @MainActor func statusItemHasNoKeys() {
             let m = items(suspended: false, quitKeys: false)

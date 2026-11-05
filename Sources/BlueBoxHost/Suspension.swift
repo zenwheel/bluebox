@@ -106,6 +106,9 @@ public enum HostKey: Equatable {
     case forceQuit
     /// Command-Q while suspended: resume and ask the program to quit.
     case quit
+    /// Command-H and Command-Option-H while suspended: Hide and Hide
+    /// Others (running, the program has them, as a Mac gave them).
+    case hide, hideOthers
     /// Anything else while suspended: nothing.
     case ignore
 
@@ -115,6 +118,10 @@ public enum HostKey: Equatable {
             if mods == [.command, .option, .control] { return .forceQuit }
             if mods == [.command, .option] { return .toggleSuspend }
             if mods == [.command] && suspended { return .quit }
+        }
+        if key?.lowercased() == "h" && suspended {
+            if mods == [.command] { return .hide }
+            if mods == [.command, .option] { return .hideOthers }
         }
         return suspended ? .ignore : .classic
     }
@@ -142,6 +149,22 @@ public enum HostKey: Equatable {
         force.isAlternate = true
         force.target = target
         return [toggle, .separator(), quitItem, alternate, force]
+    }
+}
+
+/// The application menu's Hide, Hide Others and Show All, above Suspend
+/// and Quit, as a Mac application's.  Their keys show, but Command-H and
+/// Command-Option-H typed go to the classic program as Command-Q does (many
+/// use Command-H themselves); chosen, they hide.
+@MainActor public enum HostHideItems {
+    public static func items(title: String) -> [NSMenuItem] {
+        let hide = NSMenuItem(title: "Hide \(title)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let others = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)),
+                                keyEquivalent: "h")
+        others.keyEquivalentModifierMask = [.command, .option]
+        let all = NSMenuItem(title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)),
+                             keyEquivalent: "")
+        return [hide, others, all, .separator()]
     }
 }
 

@@ -73,6 +73,8 @@ import Toolbox
         case .toggleSuspend: toggle()
         case .forceQuit: NSApp.terminate(nil)
         case .quit: quit()
+        case .hide: NSApp.hide(nil)
+        case .hideOthers: NSApp.hideOtherApplications(nil)
         case .ignore: break
         }
         return true
@@ -82,7 +84,13 @@ import Toolbox
     @objc func quitApp(_ sender: Any?) { quit() }
     @objc func forceQuit(_ sender: Any?) { NSApp.terminate(nil) }
 
-    /// The application menu's Suspend, Quit and their alternates.
+    /// The application menu's Hide items, then Suspend, Quit and their
+    /// alternates.
+    func applicationMenuItems(title: String) -> [NSMenuItem] {
+        HostHideItems.items(title: title) + menuItems(title: title)
+    }
+
+    /// Suspend, Quit and their alternates.
     func menuItems(title: String, quitKeys: Bool = true) -> [NSMenuItem] {
         HostQuitItems.items(title: title, suspended: suspended, target: self, quit: #selector(quitApp(_:)),
                             suspend: #selector(toggleSuspend(_:)), forceQuit: #selector(forceQuit(_:)),

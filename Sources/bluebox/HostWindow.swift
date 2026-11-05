@@ -677,15 +677,16 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
-    // Minimal app menu: Suspend, and Quit, chosen with the mouse (Command-Q
-    // itself goes to the app as a keystroke), asks the app to quit; Option
-    // shows Suspend, Control-Option Force Quit.
+    // Minimal app menu: Hide, Hide Others and Show All; Suspend; and Quit,
+    // which chosen with the mouse (Command-Q itself goes to the app as a
+    // keystroke, as Command-H does) asks the app to quit; Option shows
+    // Suspend, Control-Option Force Quit.
     let menu = NSMenu()
     let appItem = NSMenuItem()
     menu.addItem(appItem)
     let appMenu = NSMenu()
     appMenu.autoenablesItems = false
-    Suspender.shared.menuItems(title: title).forEach { appMenu.addItem($0) }
+    Suspender.shared.applicationMenuItems(title: title).forEach { appMenu.addItem($0) }
     appItem.submenu = appMenu
     app.mainMenu = menu
     app.run()

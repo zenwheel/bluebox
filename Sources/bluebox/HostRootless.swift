@@ -746,11 +746,12 @@ final class TransientView: NSView {
             for ni in hostItems(&m) { target.addItem(ni) }
         }
         if appMenu.numberOfItems > 0 { appMenu.addItem(.separator()) }
-        // Suspend, and Quit, which asks the classic app to quit; with Option
-        // held Suspend, with Control-Option Force Quit, which ends it at
-        // once.  (Command keys themselves go to the app: the key monitor
-        // keeps the host's.)
-        Suspender.shared.menuItems(title: title).forEach { appMenu.addItem($0) }
+        // Hide, Hide Others and Show All; Suspend, and Quit, which asks the
+        // classic app to quit; with Option held Suspend, with Control-Option
+        // Force Quit, which ends it at once.  (Command keys themselves go to
+        // the app, Command-H and Command-Q too: the key monitor keeps the
+        // host's.)
+        Suspender.shared.applicationMenuItems(title: title).forEach { appMenu.addItem($0) }
         NSApp.mainMenu = bar
     }
 
