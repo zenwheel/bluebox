@@ -78,6 +78,12 @@ sweep_one() {
 	rel=$1
 	k=$2
 	name=$(printf '%s' "$rel" | tr '/ ' '__')
+	# Paths the mapping makes the same ("interfazed 680x0/..." and
+	# "interfazed_680x0/...") would share a work folder, and parallel runs
+	# delete each other's: kept apart by the path's checksum.
+	if [ -f "$work/ambiguous.txt" ] && grep -Fqx -- "$name" "$work/ambiguous.txt"; then
+		name=${name}_$(printf '%s' "$rel" | cksum | cut -d ' ' -f 1)
+	fi
 	if [ "$(printf '%s' "$name" | wc -c)" -gt 200 ]; then
 		name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-160)_$(printf '%s' "$name" | cksum | cut -d ' ' -f 1)
 	fi
@@ -243,6 +249,8 @@ if [ $# -ge 6 ]; then
 fi
 
 list=${LIST:-$dir/census_list.txt}
+# The names two or more paths map to (see sweep_one).
+grep -v '^$' "$list" | tr '/ ' '__' | sort | uniq -d >"$work/ambiguous.txt"
 pass() {
 	grep -v '^$' "$1" | while IFS= read -r rel; do
 		printf '%s\0' "$rel"
