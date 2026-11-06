@@ -90,7 +90,7 @@ extension BlueBox {
             let mh = UInt32(bitPattern: tb_GetMediaHandler(media))
             #expect(mh != 0)
             let desc = tb_NewPtr(8, false, true)
-            _ = tb_GetMediaHandlerDescription(media, desc, 0, 0)
+            tb_GetMediaHandlerDescription(media, desc, 0, 0)
             let text = cString("Hello world")
             let time = tb_NewPtr(4, false, true)
             let black = tb_NewPtr(6, false, true), white = tb_NewPtr(6, false, true)

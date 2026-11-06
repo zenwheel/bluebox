@@ -516,7 +516,7 @@ private func uniquePath(_ base: String) -> String {
     return path
 }
 
-private func cError(_ err: [CChar]) -> String {
+func cError(_ err: [CChar]) -> String {
     String(decoding: err.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
 }
 

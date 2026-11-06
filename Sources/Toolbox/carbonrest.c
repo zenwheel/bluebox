@@ -9,7 +9,7 @@
 size_t rest_cstr(gaddr p, char *out, size_t max)
 {
     size_t n = 0;
-    while (p && n + 1 < max && rd8(p + n))
+    while (p && n + 1 < max && rd8(p + (gaddr)n))
         out[n] = (char)rd8(p + (uint32_t)n), n++;
     out[n] = 0;
     return n;

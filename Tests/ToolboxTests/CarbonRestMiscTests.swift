@@ -54,8 +54,7 @@ extension BlueBox {
         }
 
         @Test func fileOpenedAsOrphanIsOutOfTheChain() {
-            let dir = launchTestApp([TestResource(type: "TEST", id: 5, data: [5])])
-            let path = dir.appendingPathComponent("Test App").path
+            _ = launchTestApp([TestResource(type: "TEST", id: 5, data: [5])])
             // The guest's POSIX path: the volume by name, then the names below it.
             let folderPath = svcString(svcCall("CFURLCopyFileSystemPath", svcCall("CFBundleCopyBundleURL", svcCall("CFBundleGetMainBundle")), 0))
             let posix = folderPath + "/Test App"

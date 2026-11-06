@@ -13,6 +13,7 @@
 #include "tb_internal.h"
 
 #define R(n) (c->gpr[3 + (n)])
+#undef RETURN
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; } while (0)
 
 /* CSCopyUserName(useShortName): the account's short name, or its full one. */

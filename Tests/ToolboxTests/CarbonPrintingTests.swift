@@ -139,7 +139,7 @@ extension BlueBox {
         @Test func dialogInitAndAccessors() {
             launchTestApp()
             _ = initToolbox()
-            _ = tb_InitDialogs(0)
+            tb_InitDialogs(0)
             let v = svcPtr(16)
             svcCall("PMCreateSession", v)
             let session = rd32(v)

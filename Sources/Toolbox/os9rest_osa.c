@@ -15,7 +15,8 @@
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(int32_t)(v); c->pc = c->lr; return; } while (0)
 
 enum { errOSABadStorageType = -1752, typeOSAGenericStorage = 0x73637074 /* 'scpt' */ };
-enum { TRAILER = 12, TRAILER_MARK = 0xFADEDEADu };
+enum { TRAILER = 12 };
+enum { TRAILER_MARK = 0xFADEDEADu };
 
 /* ---- Storage types ---- */
 

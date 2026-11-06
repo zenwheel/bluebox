@@ -231,8 +231,8 @@ static int id_entry(gaddr id, entry **out)
 static void get_cstr(gaddr p, char *out, size_t max)
 {
     size_t n = 0;
-    while (n + 1 < max && rd8(p + n)) {
-        out[n] = (char)rd8(p + n);
+    while (n + 1 < max && rd8(p + (gaddr)n)) {
+        out[n] = (char)rd8(p + (gaddr)n);
         n++;
     }
     out[n] = 0;
@@ -490,7 +490,7 @@ static void ds_CStrEntryToPath(ppc_cpu *c)
     if (len + 1 > R(2))
         RETURN(nrOverrunErr);
     for (size_t i = 0; i <= len; i++)
-        wr8(R(1) + i, (uint8_t)path[i]);
+        wr8(R(1) + (gaddr)i, (uint8_t)path[i]);
     RETURN(noErr);
 }
 
@@ -506,7 +506,7 @@ static void ds_CStrEntryToName(ppc_cpu *c)
         id_put(R(1), e->parent);
     if (R(2))
         for (size_t i = 0; i <= strlen(e->name); i++)
-            wr8(R(2) + i, (uint8_t)e->name[i]);
+            wr8(R(2) + (gaddr)i, (uint8_t)e->name[i]);
     if (R(3))
         wr8(R(3), !e->parent || !e->parent->parent);
     RETURN(noErr);
@@ -748,7 +748,7 @@ static void ds_PropertyIterate(ppc_cpu *c)
     }
     const char *name = it->names[it->at++];
     for (size_t i = 0; i <= strlen(name); i++)
-        wr8(R(1) + i, (uint8_t)name[i]);
+        wr8(R(1) + (gaddr)i, (uint8_t)name[i]);
     if (R(2))
         wr8(R(2), it->at >= it->n);
     RETURN(noErr);
@@ -1018,7 +1018,7 @@ static void ds_CStrEntryToOFPath(ppc_cpu *c)
     if (len + 1 > R(2))
         RETURN(nrOverrunErr);
     for (size_t i = 0; i <= len; i++)
-        wr8(R(1) + i, (uint8_t)path[i]);
+        wr8(R(1) + (gaddr)i, (uint8_t)path[i]);
     RETURN(noErr);
 }
 

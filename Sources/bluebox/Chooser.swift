@@ -140,7 +140,7 @@ func chooserCommand(_ args: [String]) {
             f.has_finder_info = true
             return appledouble_write(path, &f, &err, err.count)
         }
-        guard written else { fail("could not make \(path): \(String(cString: err))") }
+        guard written else { fail("could not make \(path): \(cError(err))") }
     }
     runCommand([path] + args)
 }
