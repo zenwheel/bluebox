@@ -1689,6 +1689,13 @@ static int32_t receive(uint32_t n, gaddr list, double timeout, bool pull, cevent
             err = eventLoopQuitErr;
             break;
         }
+        if (drain_wanted() && drain_abandon()) {
+            /* The machine drains: the program's call (ReceiveNextEvent,
+             * RunApplicationEventLoop, a modal loop) is made again after
+             * resuming, as if no time had passed. */
+            err = eventLoopTimedOutErr;
+            break;
+        }
         fire_timers();
         mp_run_tasks();
         cevent *e = queue_head;

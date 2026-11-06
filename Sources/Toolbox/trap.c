@@ -514,7 +514,9 @@ static void note_entry(const cpu68k *c, entry_regs *r)
 
 static bool rewound(cpu68k *c, uint16_t op, const entry_regs *r, gaddr sp0, const uint8_t *args, size_t nargs)
 {
-    if (call_depth != 0 || c->halted || !drain_take_rewind(c, op))
+    /* A PowerPC program's call is the one put back (cfm.c), not the 68k
+     * trap run for it. */
+    if (call_depth != 0 || g_ppc_mode || c->halted || !drain_take_rewind(c, op))
         return false;
     if (args)
         gput(sp0, args, (uint32_t)nargs);
@@ -523,6 +525,26 @@ static bool rewound(cpu68k *c, uint16_t op, const entry_regs *r, gaddr sp0, cons
     c->sr = r->sr;
     c->pc = r->pc;
     c->icount--;
+    return true;
+}
+
+/* The ThreadDispatch call under way at each nesting of the running
+ * thread, where a thread switching away waits (threadmgr.c): what its
+ * caller pushed, read while the thread waits (its host frame lives on). */
+BB_HOST static struct {
+    int depth, thread;
+    gaddr sp0;
+    const uint8_t *args;
+    uint16_t prev_trapword;
+} tm_call = { -1, -1, 0, NULL, 0 };
+
+bool trap_tm_call(int depth, gaddr *sp0, uint8_t args[ARGS_KEPT], uint16_t *prev_trapword)
+{
+    if (tm_call.depth != depth || tm_call.thread != thread_current_index() || !tm_call.args)
+        return false;
+    *sp0 = tm_call.sp0;
+    memcpy(args, tm_call.args, ARGS_KEPT);
+    *prev_trapword = tm_call.prev_trapword;
     return true;
 }
 
@@ -557,7 +579,13 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
             current_trap = op;
             uint16_t saved = last_trapword;
             last_trapword = op;
+            bool tm = (op & 0x3FF) == 0x3F2; /* ThreadDispatch */
+            if (tm)
+                tm_call.depth = call_depth, tm_call.thread = thread_current_index(), tm_call.sp0 = sp0,
+                tm_call.args = args, tm_call.prev_trapword = saved;
             natives[n].fn(c, op);
+            if (tm)
+                tm_call.depth = -1, tm_call.args = NULL;
             last_trapword = saved;
             current_trap = 0;
             if (rewound(c, op, &er, sp0, args, sizeof args))
@@ -808,6 +836,7 @@ void trap_ctx_load(const trap_ctx *t)
 }
 
 static void guest_return_native(cpu68k *c, uint16_t tw) { returned_depth = call_depth; }
+static void run_to_return(void);
 
 /* Call fn and return with the registers it left (the caller saves what it needs). */
 void guest_call_regs(gaddr fn)
@@ -821,30 +850,50 @@ void guest_call_regs(gaddr fn)
         natives[n].fn(c, natives[n].trapword);
         cpu_pop32(c);
     } else {
-        int depth = ++call_depth;
+        ++call_depth;
         cpu_push32(c, guest_return_stub);
         c->pc = fn;
-        uint64_t pumped = c->icount;
-        while (!c->halted && returned_depth != depth) {
-            cpu_step(c);
-            /* Interrupt-time work goes on inside callbacks too: a program
-             * may wait there for Ticks to move or a VBL task's flag. */
-            if (c->icount - pumped >= 20000) {
-                pumped = c->icount;
-                machine_advance_ticks();
-                time_pump();
-            }
-            if (icount_cap && c->icount >= icount_cap) {
-                if (machine_waiting_for_input()) /* an event loop inside a callback */
-                    cpu_halt(c, "instruction limit reached waiting for input");
-                else
-                    cpu_halt(c, "instruction limit reached in a call from the Toolbox (pc %08X)", c->pc);
-            }
-        }
-        returned_depth = 0;
-        call_depth--;
+        run_to_return();
     }
     c->pc = saved_pc;
+}
+
+/* A resumed thread's 68k entry routine goes on (threadmgr.c): the call
+ * guest_call made in the process that hibernated, counted in the depth
+ * the thread's context put back, its return to guest_return_stub on the
+ * thread's stack.  The thread's ThreadDispatch call it waited in is
+ * answered by the caller; the trap word before it is put back. */
+void guest_call_resume(uint16_t prev_trapword)
+{
+    current_trap = 0;
+    last_trapword = prev_trapword;
+    run_to_return();
+}
+
+/* Run until the call at the current depth returns, then leave it. */
+static void run_to_return(void)
+{
+    cpu68k *c = g_cpu;
+    int depth = call_depth;
+    uint64_t pumped = c->icount;
+    while (!c->halted && returned_depth != depth) {
+        cpu_step(c);
+        /* Interrupt-time work goes on inside callbacks too: a program
+         * may wait there for Ticks to move or a VBL task's flag. */
+        if (c->icount - pumped >= 20000) {
+            pumped = c->icount;
+            machine_advance_ticks();
+            time_pump();
+        }
+        if (icount_cap && c->icount >= icount_cap) {
+            if (machine_waiting_for_input()) /* an event loop inside a callback */
+                cpu_halt(c, "instruction limit reached waiting for input");
+            else
+                cpu_halt(c, "instruction limit reached in a call from the Toolbox (pc %08X)", c->pc);
+        }
+    }
+    returned_depth = 0;
+    call_depth--;
 }
 
 /* Call a low-memory hook (MenuHook, DragHook, DeskHook ...): D0 and A0 as

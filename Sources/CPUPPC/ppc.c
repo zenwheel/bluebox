@@ -945,7 +945,7 @@ uint64_t ppc_run(ppc_cpu *c, uint64_t max)
     if (ppc_jit_enabled && !c->trace)
         return ppc_jit_run(c, max);
     uint64_t start = c->icount;
-    while (!c->halted && c->icount - start < max)
+    while (!c->halted && !c->stop && c->icount - start < max)
         ppc_step(c);
     return c->icount - start;
 }

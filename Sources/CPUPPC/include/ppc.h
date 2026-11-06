@@ -46,6 +46,7 @@ struct ppc_cpu {
     void (*illegal)(ppc_cpu *c);
     void *user;
     uint32_t mq; /* the 601's MQ register, for the POWER multiply and divide */
+    bool stop;   /* ppc_run returns before the next instruction (a drain's safe point) */
 };
 
 /* XER bits */

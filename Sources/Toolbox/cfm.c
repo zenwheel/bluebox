@@ -49,6 +49,7 @@ typedef struct {
     void (*fn)(ppc_cpu *c);
     char name[64];   /* for the unimplemented stub's message */
     gaddr tvector;   /* the transition vector made for it, once */
+    bool idle;       /* an event loop's idle call, where a drain stops (drain.c) */
 } ppc_native;
 
 static ppc_native natives[MAX_PPC_NATIVES];
@@ -74,6 +75,36 @@ static gaddr glue_alloc(uint32_t n)
 static void unimplemented_import(ppc_cpu *c);
 static void missing_library_import(ppc_cpu *c);
 
+/* The calls a program's event loop makes, where a drain stops best
+ * (drain.c): each can be made again after resuming as if for the first
+ * time. */
+static bool idle_import(const char *name)
+{
+    static const char *const idle[] = { "WaitNextEvent", "GetNextEvent", "SystemTask", "ModalDialog", "Alert",
+                                        "StopAlert", "NoteAlert", "CautionAlert", "Delay", "ReceiveNextEvent",
+                                        "RunApplicationEventLoop" };
+    for (unsigned i = 0; i < sizeof idle / sizeof idle[0]; i++)
+        if (!strcmp(name, idle[i]))
+            return true;
+    return false;
+}
+
+/* The native called at the program's own level now, for a drain's
+ * reasons and its abandoning (drain.c); -1 outside one. */
+BB_HOST static int level_call = -1;
+
+int cfm_level_call(void) { return level_call; }
+const char *cfm_native_name(uint32_t index) { return index < (uint32_t)nnatives ? natives[index].name : "?"; }
+
+/* The registers a call at the program's level was made with: put back
+ * when the native abandons it to let the machine drain, with the program
+ * counter on its NATIVE word, so it is made again after resuming.  The
+ * caller's parameter area is the caller's and natives only read it. */
+typedef struct {
+    uint32_t gpr[32];
+    uint32_t cr, lr, ctr, xer;
+} call_regs;
+
 static void dispatch_native(ppc_cpu *c, uint32_t index)
 {
     if (index >= (uint32_t)nnatives) {
@@ -88,6 +119,10 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
         ppc_halt(c, "library not found: %s", natives[index].name);
         return;
     }
+    gaddr at = c->pc - 4; /* the NATIVE word */
+    bool level = drain_program_level();
+    if (level && drain_at_native(c, at, natives[index].idle, natives[index].name))
+        return;
     trap_set_current_word(0); /* not a trap: no HFS or async bits */
     LOGF(LOG_TRAPS, "%08X PowerPC %s\n", c->lr, natives[index].name);
     walker_note_call(c->lr, index);
@@ -100,7 +135,23 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
         ppc_halt(c, "code changed before %s", natives[index].name);
         return;
     }
+    call_regs r;
+    int outer = level_call;
+    if (level) {
+        memcpy(r.gpr, c->gpr, sizeof r.gpr);
+        r.cr = c->cr, r.lr = c->lr, r.ctr = c->ctr, r.xer = c->xer;
+        level_call = (int)index;
+    }
     natives[index].fn(c);
+    level_call = outer;
+    if (level && !c->halted && drain_take_rewind_ppc(c, natives[index].name)) {
+        memcpy(c->gpr, r.gpr, sizeof r.gpr);
+        c->cr = r.cr, c->lr = r.lr, c->ctr = r.ctr, c->xer = r.xer;
+        c->pc = at;
+        c->icount--; /* not made: made again when the machine goes on */
+        c->tb--;
+        return;
+    }
     if (!mm_debug_after_call(natives[index].name))
         ppc_halt(c, "heap damaged by %s", natives[index].name);
     else if (!code_check_after_call(natives[index].name))
@@ -122,6 +173,7 @@ static gaddr native_tvector(void (*fn)(ppc_cpu *), const char *name)
     int i = nnatives++;
     natives[i].fn = fn;
     snprintf(natives[i].name, sizeof natives[i].name, "%s", name);
+    natives[i].idle = idle_import(name);
     gaddr code = glue_alloc(4), tv = glue_alloc(8);
     if (!code || !tv)
         return 0;
@@ -1603,6 +1655,16 @@ static void trace_instruction(ppc_cpu *c)
 
 static bool ppc_cpu_ready;
 
+/* BLUEBOX_PPC_TRACE is the run's, not the program's: a resumed program
+ * traces as its own process was asked to. */
+static bool ppc_trace_wanted(void) { return getenv("BLUEBOX_PPC_TRACE") != NULL; }
+
+void cfm_after_resume(void)
+{
+    g_ppc.trace = ppc_cpu_ready && ppc_trace_wanted() ? trace_instruction : NULL;
+    g_ppc.stop = false;
+}
+
 /* A launch starts the Code Fragment Manager afresh: no fragments, no
  * native glue, no PowerPC processor set up yet. */
 void cfm_reset(void)
@@ -1637,8 +1699,7 @@ bool cfm_ppc_cpu(void)
     ppc_init(&g_ppc);
     g_ppc.native = dispatch_native;
     g_ppc.illegal = name_nil_call;
-    if (getenv("BLUEBOX_PPC_TRACE"))
-        g_ppc.trace = trace_instruction;
+    g_ppc.trace = ppc_trace_wanted() ? trace_instruction : NULL;
     g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;
     wr32(g_ppc.gpr[1], 0);
     ppc_cpu_ready = true;

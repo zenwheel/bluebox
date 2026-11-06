@@ -1075,8 +1075,38 @@ bool drain_slice_point(void);
 bool drain_exits(void);
 bool drain_expired(void);
 void drain_poll(void);
+/* The PowerPC side (cfm.c's dispatcher): drain_program_level, whether a
+ * call made now is the program's own, from its main thread with no host
+ * frame running guest code under it (no call from native code into 68k
+ * or PowerPC code, no 68k trap run for PowerPC code); drain_at_native,
+ * the CPU stops on an idle call's NATIVE word at `at`, the call not made;
+ * drain_take_rewind_ppc, a native abandoned its call (its registers are
+ * put back by the dispatcher). */
+bool drain_program_level(void);
+bool drain_at_native(struct ppc_cpu *c, gaddr at, bool idle, const char *name);
+bool drain_take_rewind_ppc(struct ppc_cpu *c, const char *name);
 /* The program's own threads (Thread Manager), besides the application's. */
 int threads_live(void);
+/* The running thread's index (0: the application's). */
+int thread_current_index(void);
+int threads_parked(void);
+/* What the threads leave a snapshot unable to carry: the reason, or NULL
+ * (each thread must wait in a Thread Manager call of its own level, or not
+ * have started); after a resume, their host threads made again. */
+const char *threads_blocker(void);
+void threads_after_resume(void);
+/* 68k ThreadDispatch calls (trap.c): the arguments and return address of
+ * the one under way at this nesting, as the caller pushed them, for a
+ * thread parked in it. */
+bool trap_tm_call(int depth, gaddr *sp0, uint8_t args[64], uint16_t *prev_trapword);
+/* A resumed 68k thread's entry routine goes on (its call made in the
+ * process that hibernated; the depth its context put back). */
+void guest_call_resume(uint16_t last_trapword);
+/* The PowerPC native called at the program's level now (-1: none), and a
+ * native's name; the CFM's host settings after a resume. */
+int cfm_level_call(void);
+const char *cfm_native_name(uint32_t index);
+void cfm_after_resume(void);
 /* Open connections, ports and print jobs a snapshot cannot carry
  * (reattach.c): the reason, or NULL. */
 const char *hibernate_io_blocker(void);
@@ -1142,5 +1172,12 @@ void ot_inet_set_dns(uint32_t ip, uint16_t port);
 void opentransport_poll(void);
 bool mm_ctx_returned(void);
 void mm_ctx_set_returned(bool r);
+/* Calls into PowerPC code from native code under way (ppc_call), switched
+ * with a thread's registers; a resumed thread's entry call going on. */
+int mm_call_depth(void);
+void mm_ctx_set_depth(int d);
+uint32_t ppc_call_resume(void);
+/* 68k traps run for PowerPC code under way (ppc_glue.c). */
+int ppc_trap_depth(void);
 
 #endif

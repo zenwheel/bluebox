@@ -72,7 +72,7 @@ void ppc_jit_enable(bool on, const char *cache_dir, const char *cache_name) { pp
 uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max)
 {
     uint64_t start = c->icount;
-    while (!c->halted && c->icount - start < max)
+    while (!c->halted && !c->stop && c->icount - start < max)
         ppc_step(c);
     return c->icount - start;
 }
@@ -1204,12 +1204,12 @@ uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max)
     uint64_t start = c->icount;
     if (!E.ready && !setup()) {
         ppc_jit_enabled = false;
-        while (!c->halted && c->icount - start < max)
+        while (!c->halted && !c->stop && c->icount - start < max)
             ppc_step(c);
         return c->icount - start;
     }
     E.ctx.mem = g_mem;
-    while (!c->halted) {
+    while (!c->halted && !c->stop) {
         uint64_t done = c->icount - start;
         if (done >= max)
             break;
