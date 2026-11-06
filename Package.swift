@@ -1,9 +1,15 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
+/// The package's own folder: the state header is passed by its full path.
+let packageDir = String(#filePath.dropLast("/Package.swift".count))
+
 let warnings: [CSetting] = [
     .unsafeFlags(["-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-unused-function",
-                  "-Werror=int-conversion"]), // a host pointer passed as a guest address
+                  "-Werror=int-conversion", // a host pointer passed as a guest address
+                  // Every mutable static in a state section, and the tracked
+                  // allocator declared (Sources/CCore/state/bbstate.h).
+                  "-include", packageDir + "/Sources/CCore/state/bbstate.h"]),
     // glibc hides POSIX/BSD declarations (strdup, localtime_r, MAP_ANON) under strict C17.
     .define("_DEFAULT_SOURCE"),
 ]
@@ -28,7 +34,7 @@ let package = Package(
         // PowerPC interpreter (32-bit user mode).
         .target(name: "CPUPPC", dependencies: ["CCore"], cSettings: warnings),
         // AppleDouble, MacBinary, resource fork parsing and decompression (host side).
-        .target(name: "ForkStore", cSettings: warnings),
+        .target(name: "ForkStore", dependencies: ["CCore"], cSettings: warnings),
         // Trap dispatch and the Toolbox managers.
         // MACE 3:1 and 6:1 decoding, from FFmpeg: this target alone is LGPL 2.1+.
         .target(name: "MACE"),
