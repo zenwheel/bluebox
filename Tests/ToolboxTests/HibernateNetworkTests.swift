@@ -395,6 +395,57 @@ extension BlueBox {
             for ep in [udp, server, conn] { #expect(ot("OTCloseProvider", ep) == 0) }
         }
 
+        /// Open Transport's AppleTalk resumed: an adsp connection is over,
+        /// T_DISCONNECT for both its ends at the next poll, while the
+        /// listener goes on and takes a connection made after resuming; a ddp
+        /// endpoint's socket goes on.
+        @Test func openTransportADSPDisconnectsAndListensOn() {
+            #expect(machine_set_appletalk("local"))
+            let dir = launchTestApp()
+            startLoop()
+            func atBind(_ ep: UInt32, qlen: UInt32 = 0) -> UInt8 {
+                let req = tb_NewPtr(16, false, true), ret = tb_NewPtr(16, false, true), buf = tb_NewPtr(8, false, true)
+                wr32(req + 12, qlen)
+                wr32(ret, 8); wr32(ret + 8, buf)
+                #expect(ot("OTBind", ep, qlen > 0 ? req : 0, ret) == 0)
+                return rd8(buf + 5)
+            }
+            func pump(until done: () -> Bool) {
+                for _ in 0..<500 where !done() {
+                    usleep(1000)
+                    appletalk_poll()
+                }
+            }
+            let listener = endpoint("adsp"), worker = endpoint("adsp"), client = endpoint("adsp")
+            let ls = atBind(listener, qlen: 1)
+            _ = atBind(client)
+            let addr = tb_NewPtr(8, false, true)
+            ot("OTInitDDPAddress", addr, 0, UInt32(at_node()), UInt32(ls), 0)
+            let call = tb_NewPtr(40, false, true)
+            wr32(call, 8); wr32(call + 4, 8); wr32(call + 8, addr)
+            #expect(Int32(bitPattern: ot("OTConnect", client, call, 0)) == -3162)  // T_CONNECT to come
+            let heard = tb_NewPtr(40, false, true), hbuf = tb_NewPtr(8, false, true)
+            wr32(heard, 8); wr32(heard + 8, hbuf)
+            pump { ot("OTListen", listener, heard) == 0 }
+            #expect(ot("OTAccept", listener, worker, heard) == 0)
+            pump { ot("OTRcvConnect", client, 0) == 0 }
+            #expect(ot("OTGetEndpointState", client) == 5 && ot("OTGetEndpointState", worker) == 5)
+
+            let snap = hibernate(dir, "otadsp.bbhib")
+            resume(snap)
+            opentransport_poll()
+            #expect(ot("OTLook", client) == 0x10 && ot("OTLook", worker) == 0x10)  // T_DISCONNECT
+            #expect(ot("OTRcvDisconnect", client, 0) == 0 && ot("OTRcvDisconnect", worker, 0) == 0)
+            #expect(ot("OTGetEndpointState", client) == 2)                    // T_IDLE
+            // The listener hears a connection made now.
+            let again = endpoint("adsp")
+            _ = atBind(again)
+            #expect(Int32(bitPattern: ot("OTConnect", again, call, 0)) == -3162)
+            pump { ot("OTListen", listener, heard) == 0 }
+            #expect(ot("OTListen", listener, heard) == 0)
+            for ep in [listener, worker, client, again] { #expect(ot("OTCloseProvider", ep) == 0) }
+        }
+
         /// PowerPC code from its words.
         func ppcCode(_ words: [UInt32]) -> UInt32 {
             let p = tb_NewPtr(Int32(words.count * 4), false, false)
@@ -541,6 +592,49 @@ extension BlueBox {
                 }
             }
 
+            /// What came meanwhile, dropped.
+            func flush() {
+                var buf = [UInt8](repeating: 0, count: 2048)
+                while recv(fd, &buf, buf.count, 0) > 0 {}
+            }
+
+            /// An LLAP frame as it is (destination, source, type, data).
+            func sendRaw(_ frame: [UInt8]) {
+                let f = Self.id + frame
+                var to = sockaddr_in()
+                to.sin_family = sa_family_t(AF_INET)
+                to.sin_port = UInt16(1954).bigEndian
+                to.sin_addr.s_addr = inet_addr("239.192.76.84")
+                _ = withUnsafePointer(to: &to) {
+                    $0.withMemoryRebound(to: Darwin.sockaddr.self, capacity: 1) {
+                        sendto(fd, f, f.count, 0, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    }
+                }
+            }
+
+            /// On a thread of its own until the first semaphore is
+            /// signalled (it then signals the second): an enquiry for `node`
+            /// is answered, as by a node that has it.
+            func defend(_ node: UInt8) -> (stop: DispatchSemaphore, done: DispatchSemaphore) {
+                let fd = self.fd
+                let me = self
+                let stop = DispatchSemaphore(value: 0), done = DispatchSemaphore(value: 0)
+                DispatchQueue.global().async {
+                    var buf = [UInt8](repeating: 0, count: 2048)
+                    while stop.wait(timeout: .now() + .milliseconds(2)) == .timedOut {
+                        while true {
+                            let n = recv(fd, &buf, buf.count, 0)
+                            if n < 4 + 3 { break }
+                            if Array(buf[0..<4]) != Self.id && buf[6] == 0x81 && buf[4] == node {
+                                me.sendRaw([node, node, 0x82])
+                            }
+                        }
+                    }
+                    done.signal()
+                }
+                return (stop, done)
+            }
+
             /// The DDP data of the frames to this node of a DDP type (the
             /// stack polled meanwhile).
             func receive(type: UInt8, timeout ms: Int = 1000) -> [UInt8]? {
@@ -604,6 +698,37 @@ extension BlueBox {
             peer.send(to: node, socket: skt, from: 201, type: 3, [0x40, 1, 0, 77, 0, 0, 0, 0, 0x68, 0x69])
             atPoll { rd16(get + 16) != 1 }
             #expect(rd16(get + 16) == 0 && rd16(get + 34) == 2 && rd8(get + 32) == Peer.node)
+        }
+
+        /// AppleTalk resumed while another node has taken this one's address:
+        /// a new node is claimed, and the names table answers lookups with it.
+        @Test func aNodeTakenMeanwhileIsClaimedAnew() {
+            #expect(machine_set_appletalk("local"))
+            let dir = launchTestApp()
+            startLoop()
+            let mpp = atOpen(".MPP")
+            let node = at_node()
+            let pb = tb_NewPtr(80, false, true), nte = tb_NewPtr(120, false, true)
+            wr8(nte + 7, 77)
+            entity(["Moved", "BlueBoxHib2", "*"], at: nte + 9)
+            wr32(pb + 30, nte)
+            #expect(atCall(mpp, 253, pb) == 0)                                // registerName
+            let snap = hibernate(dir, "taken.bbhib")
+            let peer = Peer()
+            defer { close(peer.fd) }
+            let defender = peer.defend(node)
+            usleep(50_000)
+            resume(snap)
+            defender.stop.signal()
+            defender.done.wait()
+            let now = at_node()
+            #expect(now != node && now >= 1 && now <= 254)
+            #expect(rd8(rd32(UInt32(LM_ABusVars))) == now && rd8(nte + 6) == now)
+            peer.flush()
+            peer.send(to: 255, socket: 2, from: 200, type: 2,
+                      [0x21, 11, 0, 0, Peer.node, 200, 0, 1, 0x3D, 11] + Array("BlueBoxHib2".utf8) + [1, 0x2A])
+            let reply = peer.receive(type: 2)
+            #expect(reply != nil && reply?[4] == now && reply?[5] == 77)
         }
 
         /// ADSP resumed: an open connection is torn down at the next poll (its

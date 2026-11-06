@@ -1131,10 +1131,12 @@ void mactcp_after_resume(void)
             early[i].fd = listen_on(early[i].port);
             early[i].used = early[i].fd >= 0;
         }
+    int n = 0, udp = 0, listening_again = 0, opening = 0, ended = 0;
     for (int s = 0; s < MAX_STREAMS; s++) {
         mstream *m = &streams[s];
         if (!m->used)
             continue;
+        n++;
         bool listening = m->lfd >= 0;
         m->fd = m->lfd = -1;
         m->told_data = false;
@@ -1143,6 +1145,7 @@ void mactcp_after_resume(void)
             struct sockaddr_in la = inet(0, m->lport);
             if (m->fd >= 0 && bind(m->fd, (struct sockaddr *)&la, sizeof la) == 0) {
                 set_nonblocking(m->fd);
+                udp++;
             } else {
                 close_fd(&m->fd);
                 LOGF(LOG_IDLE, "resume: MacTCP: UDP port %u is taken: its stream reads nothing\n", m->lport);
@@ -1151,10 +1154,13 @@ void mactcp_after_resume(void)
         }
         if (m->state == stListen && listening) {
             m->lfd = listen_on(m->lport);
-            if (m->lfd >= 0)
+            if (m->lfd >= 0) {
+                listening_again++;
                 continue;
+            }
             LOGF(LOG_IDLE, "resume: MacTCP: port %u is taken: its passive open ends\n", m->lport);
         } else if (m->state == stSynSent) {
+            opening++;
             continue; /* step_open connects again: the other end never had the connection */
         } else if (m->state == stClosed) {
             continue;
@@ -1164,7 +1170,12 @@ void mactcp_after_resume(void)
         m->lost = true;
         m->gave_lost = m->gave_pb != 0;
         active = true;
+        ended++;
     }
+    if (n)
+        LOGF(LOG_IDLE, "resume: MacTCP: %d stream%s: %d UDP bound again, %d listening again, %d open%s made again, "
+             "%d connection%s ended\n", n, n == 1 ? "" : "s", udp, listening_again, opening, opening == 1 ? "" : "s",
+             ended, ended == 1 ? "" : "s");
 }
 
 /* The host's sockets closed, as when the process ends (the tests' end of

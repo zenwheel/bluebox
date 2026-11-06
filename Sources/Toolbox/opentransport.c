@@ -1863,10 +1863,12 @@ static void lose_connection(provider *p)
  * A connection waiting for OTAccept is gone with the old process. */
 void ot_after_resume(void)
 {
+    int n = 0, bound_again = 0, listening = 0, connecting = 0, ended = 0;
     for (int i = 0; i < MAX_PROVIDERS; i++) {
         provider *p = &providers[i];
         if (!p->used)
             continue;
+        n++;
         p->fd = p->pending_fd = -1;
         if (OT_ATALK(p)) {
             ota_after_resume(p);
@@ -1889,9 +1891,13 @@ void ot_after_resume(void)
             if (bind(p->fd, (struct sockaddr *)&p->local, sizeof p->local) < 0)
                 LOGF(LOG_IDLE, "resume: Open Transport: port %u is taken: endpoint %d is bound to another\n",
                      ntohs(p->local.sin_port), i);
+            else
+                bound_again++;
         }
         if (listener && listen(p->fd, p->qlen) < 0)
             LOGF(LOG_IDLE, "resume: Open Transport: endpoint %d cannot listen again\n", i);
+        else if (listener)
+            listening++;
         if (p->kind != P_TCP)
             continue;
         if (p->state == T_OUTCON && p->connecting) {
@@ -1902,8 +1908,14 @@ void ot_after_resume(void)
             }
             p->connecting = r < 0;
             p->connected = r == 0;
+            connecting++;
         } else if (p->state == T_OUTCON || p->state == T_DATAXFER || p->state == T_OUTREL || p->state == T_INREL) {
             lose_connection(p);
+            ended++;
         }
     }
+    if (n)
+        LOGF(LOG_IDLE, "resume: Open Transport: %d provider%s: %d bound again, %d listening again, %d connect%s made "
+             "again, %d TCP connection%s ended\n", n, n == 1 ? "" : "s", bound_again, listening, connecting,
+             connecting == 1 ? "" : "s", ended, ended == 1 ? "" : "s");
 }
