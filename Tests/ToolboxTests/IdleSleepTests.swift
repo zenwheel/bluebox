@@ -116,6 +116,27 @@ extension BlueBox {
             #expect(try run(loop + [back(loop.count)]).sleeps == 0)
         }
 
+        /// GetKeys into -48(A5), then BitTst of its Caps Lock bit (57).
+        let keys = [0x486D, 0xFFD0, 0xA976,                         // GetKeys(-48(A5))
+                    0x4267, 0x486D, 0xFFD0, 0x2F3C, 0, 57, 0xA85D, 0x341F] // BitTst(-48(A5), 57)
+
+        /// A pause waiting for Caps Lock (Apeiron's, PowerPC or 68k): the
+        /// keyboard read and a bit of it tested, which only answers.
+        @Test func testingAKeyBitLetsTheHostSleep() throws {
+            let loop = keys + button
+            let r = try run(loop + [back(loop.count)])
+            #expect(!r.halted)
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// BitSet changes the program's memory, which the store watch can't
+        /// see (the Toolbox's own writes): work.
+        @Test func settingABitIsWork() throws {
+            let bitSet = [0x486D, 0xFFC0, 0x2F3C, 0, 3, 0xA85E]     // BitSet(-64(A5), 3)
+            let loop = bitSet + button
+            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+        }
+
         // Drawing (QuickDraw on the screen, through a port of the program's
         // own).  Below A5: specs at -256 and -248, rects at -232 and -224,
         // QuickDraw's globals from -206.

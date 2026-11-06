@@ -18,7 +18,8 @@
  *   - it ran fewer than MAX_RUN instructions (a poll loop) or, with no
  *     calls, stayed within a few hundred bytes of code;
  *   - every Toolbox call it made is a query with no lasting effect
- *     (quiet_names: polls, FrontWindow, GetPort, LoadSeg ...) or drawing
+ *     (quiet_names: polls, FrontWindow, GetPort, LoadSeg, BitTst, FixMul,
+ *     PtInRect ...: what only reads and answers) or drawing
  *     (draw_names: CopyBits, PaintRect, DrawString, PlotCIcon, RGBForeColor,
  *     SetEntries ...), no sound, file or memory work;
  *   - the registers are as they were at the iteration before ending at the
@@ -675,19 +676,22 @@ void idle_interrupt_leave(void)
 /* Calls with no lasting effect, made again and again by a program waiting:
  * the polls themselves and the queries around them. */
 static const char *quiet_names[] = {
-    "Button", "CharWidth", "EventAvail", "FlushEvents", "FrontNonFloatingWindow", "FrontWindow", "Gestalt",
-    "GestaltDispatch", "GetBackColor", "GetCCursor", "GetCPixel", "GetCTSeed", "GetCaretTime", "GetClip",
-    "GetCursor", "GetDateTime", "GetDblTime", "GetDeviceList", "GetEntryColor", "GetFontInfo", "GetForeColor",
-    "GetGDevice", "GetGWorld", "GetGWorldDevice", "GetGWorldPixMap", "GetHandleSize", "GetKeys", "GetMainDevice",
-    "GetMaxDevice", "GetMouse", "GetNextDevice", "GetNextEvent", "GetOSEvent", "GetOSTrapAddress", "GetPalette",
-    "GetPenState", "GetPixBaseAddr", "GetPixel", "GetPixelsState", "GetPort", "GetPortBitMapForCopyBits",
-    "GetPortBounds", "GetPortPixMap", "GetPtrSize", "GetQDGlobalsScreenBits", "GetQDGlobalsThePort",
-    "GetToolTrapAddress", "GetToolboxTrapAddress", "GetTrapAddress", "GetWindowPort", "GetWindowPortBounds",
-    "GetZone", "HGetState", "HLock", "HNoPurge", "HSetState", "HUnlock", "InitCursor", "LMGetTicks", "LMGetTime",
-    "LoadSeg", "LockPixels", "Microseconds", "NGetTrapAddress", "OSEventAvail", "ObscureCursor", "PixMap32Bit",
-    "QDError", "ReadDateTime", "SetCCursor", "SetCursor", "SetEventMask", "SetGDevice", "SetGWorld", "SetPixelsState",
-    "SetPort", "SetZone", "StillDown", "StringWidth", "StripAddress", "SystemTask", "TestDeviceAttribute", "TextWidth",
-    "TickCount", "UnloadSeg", "UnlockPixels", "WaitMouseUp", "WaitNextEvent",
+    "BitAnd", "BitNot", "BitOr", "BitShift", "BitTst", "BitXor", "Button", "CharWidth", "CountMItems", "DeltaPoint",
+    "EmptyRect", "EmptyRgn", "EqualPt", "EqualRect", "EqualRgn", "EventAvail", "Fix2Frac", "Fix2Long", "FixATan2",
+    "FixDiv", "FixMul", "FixRatio", "FixRound", "FlushEvents", "Frac2Fix", "FracCos", "FracDiv", "FracMul", "FracSin",
+    "FracSqrt", "FrontNonFloatingWindow", "FrontWindow", "Gestalt", "GestaltDispatch", "GetBackColor", "GetCCursor",
+    "GetCPixel", "GetCTSeed", "GetCaretTime", "GetClip", "GetControlValue", "GetCursor", "GetDateTime", "GetDblTime",
+    "GetDeviceList", "GetEntryColor", "GetFontInfo", "GetForeColor", "GetGDevice", "GetGWorld", "GetGWorldDevice",
+    "GetGWorldPixMap", "GetHandleSize", "GetKeys", "GetMainDevice", "GetMaxDevice", "GetMenuHandle", "GetMouse",
+    "GetNextDevice", "GetNextEvent", "GetOSEvent", "GetOSTrapAddress", "GetPalette", "GetPenState", "GetPixBaseAddr",
+    "GetPixel", "GetPixelsState", "GetPort", "GetPortBitMapForCopyBits", "GetPortBounds", "GetPortPixMap",
+    "GetPtrSize", "GetQDGlobalsScreenBits", "GetQDGlobalsThePort", "GetToolTrapAddress", "GetToolboxTrapAddress",
+    "GetTrapAddress", "GetWRefCon", "GetWindowPort", "GetWindowPortBounds", "GetZone", "HGetState", "HLock",
+    "HNoPurge", "HSetState", "HUnlock", "HiWord", "InitCursor", "IsDialogEvent", "LoWord", "LoadSeg", "LockPixels",
+    "Long2Fix", "Microseconds", "NGetTrapAddress", "OSEventAvail", "ObscureCursor", "PixMap32Bit", "PtInRect",
+    "PtInRgn", "QDError", "ReadDateTime", "RectInRgn", "SetCCursor", "SetCursor", "SetEventMask", "SetGDevice",
+    "SetGWorld", "SetPixelsState", "SetPort", "SetZone", "StillDown", "StringWidth", "StripAddress", "SystemTask",
+    "TestDeviceAttribute", "TextWidth", "TickCount", "UnloadSeg", "UnlockPixels", "WaitMouseUp", "WaitNextEvent",
 };
 
 /* Drawing, and the port and colour settings it is done with: what they
@@ -730,7 +734,8 @@ enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK };
 
 static uint8_t kind_of(const char *name)
 {
-    if (in_list(name, quiet_names, sizeof quiet_names / sizeof *quiet_names))
+    /* The low-memory accessors' getters (LMGetTicks, LMGetMBarHeight) only read. */
+    if (in_list(name, quiet_names, sizeof quiet_names / sizeof *quiet_names) || (name && !strncmp(name, "LMGet", 5)))
         return QUIET;
     if (in_list(name, draw_names, sizeof draw_names / sizeof *draw_names))
         return DRAWS;
