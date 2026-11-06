@@ -498,6 +498,7 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
             census_note(op, -1, entry != unimpl_stub);
         LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
         walker_note_call(c->op_pc, op);
+        idle_trap(op);
         if (!(op & 0x0400))
             cpu_push32(c, c->pc);
         if (n >= 0) {
@@ -557,6 +558,7 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
         census_note(op, -1, entry != unimpl_stub);
     LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
     walker_note_call(c->op_pc, op);
+    idle_trap(op);
     if (n >= 0) {
         if (!mm_debug_before_call(trap_name(op))) {
             cpu_halt(c, "heap damaged before %s", trap_name(op));
@@ -618,6 +620,10 @@ uint64_t trap_instruction_limit(void) { return icount_cap; }
  * so an app waiting for input (often in a Toolbox loop such as ModalDialog
  * that runs no guest code) still meets the instruction limit. */
 static uint64_t last_idle; /* instruction count at the last idle moment */
+/* What the instruction count moved on by for time passing, not
+ * instructions run (idle.c tells the program's own from it). */
+static uint64_t icount_passed;
+uint64_t trap_icount_passed(void) { return icount_passed; }
 
 bool machine_waiting_for_input(void) { return g_cpu && g_cpu->icount - last_idle < 2000000; }
 
@@ -654,6 +660,7 @@ void machine_idle_for(int32_t sleep)
         return;
     last_idle = c->icount;
     c->icount += 1000;
+    icount_passed += 1000;
     uint32_t presses = ev_press_count();
     if (!answering) {
         answered = 0;
@@ -698,13 +705,32 @@ void machine_idle_for(int32_t sleep)
                 next = at;
         }
     }
-    if (next > c->icount && (!icount_cap || next < icount_cap))
+    if (next > c->icount && (!icount_cap || next < icount_cap)) {
+        icount_passed += next - c->icount;
         c->icount = next;
+    }
     events_script_pump(c->icount);
     events_sync_lowmem();
     if (icount_cap && c->icount >= icount_cap)
         cpu_halt(c, "instruction limit reached waiting for input");
 }
+/* A headless run on the wall clock, its program idle while the host slept
+ * (idle.c): the instruction count moves on as if it had run meanwhile, at
+ * the headless clock's 100 ns an instruction, so the run still meets its
+ * instruction limit and scripted input comes. */
+void machine_pass_time(uint64_t ns)
+{
+    cpu68k *c = g_cpu;
+    if (!c || c->halted)
+        return;
+    uint64_t n = ns / 100;
+    c->icount += n;
+    icount_passed += n;
+    events_script_pump(c->icount);
+    if (icount_cap && c->icount >= icount_cap)
+        cpu_halt(c, "instruction limit reached waiting for input");
+}
+
 /* A tick spent in a Toolbox loop (mouse tracking) with no host attached. */
 void machine_pass_tick(void)
 {
@@ -712,6 +738,7 @@ void machine_pass_tick(void)
     if (!c || c->halted)
         return;
     c->icount += 20000;
+    icount_passed += 20000;
     events_script_pump(c->icount);
     if (icount_cap && c->icount >= icount_cap)
         cpu_halt(c, "instruction limit reached");

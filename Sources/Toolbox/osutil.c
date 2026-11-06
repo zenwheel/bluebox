@@ -45,6 +45,7 @@ void tb_SetTime(gaddr d)
 
 uint32_t tb_TickCount(void)
 {
+    idle_poll();
     machine_tick_polled();
     sound_pump();
     return rd32(LM_Ticks);

@@ -12,6 +12,7 @@ enum {
     LOG_CPU = 1 << 5,    /* instruction trace */
     LOG_SPEECH = 1 << 6, /* the Speech Manager's callbacks, with their host times */
     LOG_DEBUGGER = 1 << 7, /* Debugger, DebugStr and SysBreak entered (on by default; --log keeps it) */
+    LOG_IDLE = 1 << 8,   /* a program found waiting by spinning, the host asleep meanwhile, and when it goes on */
 };
 
 extern unsigned g_log_mask;

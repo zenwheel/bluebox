@@ -572,7 +572,9 @@ static void call_at_interrupt(gaddr fn)
     uint16_t sr = g_cpu->sr;
     if (!(sr & 0x0700))
         g_cpu->sr = (uint16_t)((sr & ~0x0700) | 0x0100);
+    idle_interrupt_enter();
     guest_call(fn);
+    idle_interrupt_leave();
     g_cpu->sr = (uint16_t)((g_cpu->sr & ~0x0700) | (sr & 0x0700));
 }
 

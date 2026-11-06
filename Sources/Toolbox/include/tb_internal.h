@@ -114,6 +114,18 @@ void walker_note_drawn(gaddr port, int top, int left, int bottom, int right); /*
 void walker_note_hit(gaddr port, int top, int left, int bottom, int right, int x, int y, uint32_t pt);
 void walker_note_text(gaddr port, int top, int left, int bottom, int right, const uint8_t *text, int len);
 void walker_note_call(uint32_t pc, uint32_t what);
+/* A program waiting by spinning, the host asleep meanwhile (idle.c): a
+ * Toolbox call made (a trap, a PowerPC import), an empty poll (true if the
+ * host slept in it), something done that is not waiting, the end of an
+ * emulation slice, and interrupt-time work around guest code. */
+void idle_trap(uint16_t op);
+void idle_native(uint32_t index, const char *name);
+bool idle_poll(void);
+void idle_work(void);
+void idle_slice(void);
+void idle_interrupt_enter(void);
+void idle_interrupt_leave(void);
+void idle_reset(void);
 void walker_note_cursor(gaddr data); /* a cursor set: its image */
 void walker_note_shape(gaddr port, int top, int left, int bottom, int right); /* a round rectangle: a button */
 

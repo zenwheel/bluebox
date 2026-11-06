@@ -603,8 +603,14 @@ static const window *window_at(gaddr a)
     return NULL;
 }
 
+/* The processor's accesses to the I/O space, for idle.c: a loop polling
+ * a chip is waiting on the hardware's time, not the tick's. */
+static uint64_t accesses;
+uint64_t hw_device_accesses(void) { return accesses; }
+
 static uint32_t hw_read_cb(gaddr a, int size)
 {
+    accesses++;
     const window *w = window_at(a);
     if (!w)
         return size == 1 ? rd8(a) : size == 2 ? rd16(a) : rd32(a);
@@ -616,6 +622,7 @@ static uint32_t hw_read_cb(gaddr a, int size)
 
 static void hw_write_cb(gaddr a, int size, uint32_t v)
 {
+    accesses++;
     const window *w = window_at(a);
     if (!w) {
         if (size == 1) wr8(a, (uint8_t)v);

@@ -85,7 +85,9 @@ func usage() -> Never {
           --census   keep going past unimplemented traps and report every trap used
           --max N    stop after N instructions (default 50000000)
           --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu, speech (the Speech
-                     Manager's callbacks, timed); the debugger's entries are always logged
+                     Manager's callbacks, timed), idle (a program waiting by spinning, found
+                     and let the host sleep: with a host or --realtime; BLUEBOX_IDLE_SLEEP=0
+                     turns that off); the debugger's entries are always logged
           --debugger D  what Debugger, DebugStr and SysBreak do, Blue Box being a Mac with
                      MacsBug installed: log (the default: log the message, where from and how
                      often, and go on, as "g" in MacsBug), halt (stop the run there) or quiet
@@ -173,7 +175,7 @@ func usage() -> Never {
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
                      keydown:K and keyup:K (K a character, space, return, tab,
                      escape, delete or an arrow: left, right, up, down; or shift,
-                     option, control or command, held for what follows), and
+                     option, control, command or capslock, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      the scroll wheel: wheel:x/y/n (n lines up, down when negative),
                      hwheel:x/y/n (n columns left);
@@ -358,7 +360,7 @@ func scriptKeyChar(_ name: String) -> Int32 {
 /// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item,
 /// keydown:K and keyup:K (K a character or return, tab, space, delete, escape,
 /// left, right, up, down: held for games that poll the keyboard; or shift,
-/// option, control, command, held for the clicks and keys after them), and the mouse.  Each step is queued at an instruction count (the waits
+/// option, control, command, capslock, held for the clicks and keys after them), and the mouse.  Each step is queued at an instruction count (the waits
 /// add up; other steps are spaced a little apart) and applied by the
 /// emulator when due, even while the application waits in the Toolbox.
 func queueScript(_ script: [String], start: UInt64) {
@@ -425,7 +427,8 @@ func queueScript(_ script: [String], start: UInt64) {
             let name = String(step[step.index(after: colon)...])
             // A modifier: no key event, only the modifiers of what follows.
             let modifiers: [String: (code: Int32, bit: Int32)] = ["shift": (56, 0x200), "option": (58, 0x800),
-                                                                   "control": (59, 0x1000), "command": (55, 0x100)]
+                                                                   "control": (59, 0x1000), "command": (55, 0x100),
+                                                                   "capslock": (57, 0x400)]
             if let m = modifiers[name] {
                 let down = step.hasPrefix("keydown")
                 add(down ? 3 : 4, -1, down ? m.bit : 0, m.code, after: 50_000)
@@ -665,6 +668,7 @@ func runCommand(_ args: [String]) {
                 case "mem": logMask |= UInt32(LOG_MEM)
                 case "cpu": logMask |= UInt32(LOG_CPU)
                 case "speech": logMask |= UInt32(LOG_SPEECH)
+                case "idle": logMask |= UInt32(LOG_IDLE)
                 case "debugger": break
                 default: fail("unknown log category \(item)")
                 }

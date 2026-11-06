@@ -661,6 +661,44 @@ static void debug_watch_written(gaddr a, uint32_t len)
                    g_ppc.pc, g_ppc.lr);
 }
 
+/* The screen's range, watched for the program's own stores to it; and
+ * while idle.c is making sure a program waiting changes nothing, every
+ * store, to it as well. */
+static gaddr screen_watch_lo, screen_watch_len;
+static void (*all_stores)(gaddr a, uint32_t len);
+
+static void any_store(gaddr a, uint32_t len)
+{
+    if (a - screen_watch_lo < screen_watch_len)
+        screen_written(a, len);
+    all_stores(a, len);
+}
+
+static void apply_watch(void)
+{
+    if (all_stores) {
+        g_watch_fn = any_store;
+        g_watch_lo = 0;
+        g_watch_len = 0xFFFFFFFFu;
+    } else {
+        g_watch_fn = screen_written;
+        g_watch_lo = screen_watch_lo;
+        g_watch_len = screen_watch_len;
+    }
+}
+
+static bool debug_watch(void);
+
+/* False if they can't be (BLUEBOX_WATCH has the watch). */
+bool display_watch_all_stores(void (*fn)(gaddr a, uint32_t len))
+{
+    all_stores = fn;
+    if (debug_watch())
+        return false;
+    apply_watch();
+    return true;
+}
+
 static bool debug_watch(void)
 {
     static int on = -1;
@@ -694,13 +732,13 @@ static void check_screen_mode(void)
     direct_written = false;
     int w, h;
     machine_screen_size(&w, &h);
-    g_watch_fn = screen_written;
-    g_watch_lo = rd32(LM_ScrnBase);
-    g_watch_len = screen_reason ? 0 : qd_screen_row_bytes() * (uint32_t)h; /* decided: no more watching */
-    if (hw_machine()->via_sound && g_watch_len) { /* and the alternate page below the main */
-        g_watch_lo -= 0x8000;
-        g_watch_len += 0x8000;
+    screen_watch_lo = rd32(LM_ScrnBase);
+    screen_watch_len = screen_reason ? 0 : qd_screen_row_bytes() * (uint32_t)h; /* decided: no more watching */
+    if (hw_machine()->via_sound && screen_watch_len) { /* and the alternate page below the main */
+        screen_watch_lo -= 0x8000;
+        screen_watch_len += 0x8000;
     }
+    apply_watch();
 }
 
 /* Called by the Event Manager on the emulator thread: a safe point. */
@@ -744,6 +782,8 @@ void display_reset(void)
     pthread_mutex_unlock(&ov_lock);
     screen_reason = NULL;
     direct_written = false;
+    screen_watch_len = 0;
+    all_stores = NULL;
     g_watch_len = 0;
     wins_dirty = menus_dirty = true;
     pending_choice = 0;

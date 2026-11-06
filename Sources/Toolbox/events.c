@@ -485,6 +485,8 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
     }
     if (charcode >= 0)
         enqueue(down ? (repeat ? autoKey : keyDown) : keyUp, ((uint32_t)(keycode & 0xFF) << 8) | (uint8_t)charcode);
+    else
+        pthread_cond_broadcast(&arrived); /* a modifier alone: a program polling the keyboard waits for it */
     pthread_mutex_unlock(&lock);
 }
 
@@ -684,6 +686,23 @@ void ev_wait_tick(void)
         ts.tv_sec++;
         ts.tv_nsec -= 1000000000;
     }
+    pthread_cond_timedwait(&arrived, &lock, &ts);
+    pthread_mutex_unlock(&lock);
+}
+
+/* A program waiting by spinning (idle.c): the host thread sleeps up to ns,
+ * or until input comes.  Events already queued don't end it: the program
+ * just asked and didn't take them (its mask leaves them). */
+void ev_idle_sleep(uint64_t ns)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += (long)ns;
+    while (ts.tv_nsec >= 1000000000) {
+        ts.tv_sec++;
+        ts.tv_nsec -= 1000000000;
+    }
+    pthread_mutex_lock(&lock);
     pthread_cond_timedwait(&arrived, &lock, &ts);
     pthread_mutex_unlock(&lock);
 }
@@ -933,6 +952,7 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
             return gne_filtered(evt, false);
         LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evt), rd32(evt + 2), rd32(evt + 6), rd32(evt + 10), rd16(evt + 14));
         note_repeated_update(evt);
+        idle_work();
         return gne_filtered(evt, true);
     }
     afterdark_idle();
@@ -940,12 +960,18 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
      * waits up to a tick for input, as time passed on a real Mac too. */
     if (host_attached) {
         ev_wait_tick();
-        return gne_take(em, evt);
+        bool got = gne_take(em, evt);
+        if (got)
+            idle_work();
+        return got;
     }
     bool got = gne_filtered(evt, false);
     if (!got) {
         machine_idle();
         gne_idled = true;
+        idle_poll();
+    } else {
+        idle_work();
     }
     return got;
 }
@@ -957,6 +983,10 @@ static bool polled(bool got)
 {
     if (!got && !host_attached && g_cpu)
         walker_idle(g_cpu->icount);
+    if (got)
+        idle_work();
+    else
+        idle_poll();
     return got;
 }
 
@@ -1013,6 +1043,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
     if (wne_event(mask, evp, &idled)) {
         LOGF(LOG_TRAPS, "  event %d message %08X when %u where %08X modifiers %04X\n", (int16_t)rd16(evp), rd32(evp + 2), rd32(evp + 6), rd32(evp + 10), rd16(evp + 14));
         note_repeated_update(evp);
+        idle_work();
         return 1;
     }
     /* Long enough without input: the screen saver, until input comes. */
@@ -1066,10 +1097,18 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
                 return 0;
         }
         machine_advance_ticks();
-        return wne_event(mask, evp, &idled);
+        bool got = wne_event(mask, evp, &idled);
+        if (got)
+            idle_work();
+        return got;
     }
     if (!host_attached && !idled)
         machine_idle_for(sleep < 0 ? 0 : sleep);
+    /* No sleep asked for (a game paused, waiting for a key): the host may
+     * sleep all the same if the program only asks again.  (A patch on
+     * GetNextEvent got here through ours, which counted the poll.) */
+    if (!idled)
+        idle_poll();
     return 0;
 }
 
@@ -1182,6 +1221,10 @@ int8_t tb_Button(void)
     }
     if (!down && !host_attached)
         machine_idle();
+    if (down)
+        idle_work();
+    else if (idle_poll())
+        down = button_now();
     return down;
 }
 int8_t tb_StillDown(void)
@@ -1217,6 +1260,11 @@ void tb_GetMouse(gaddr p)
     pthread_mutex_lock(&lock);
     uint32_t g = wheel_click_now ? wheel_click_where : make_pt(mouse_v, mouse_h);
     pthread_mutex_unlock(&lock);
+    static uint32_t last;
+    if (g != last) { /* the mouse moved: what the program does with it is news */
+        last = g;
+        idle_work();
+    }
     int16_t h = pt_h(g), v = pt_v(g);
     gaddr port = qd_port();
     if (port) {
@@ -1299,7 +1347,17 @@ void tb_GetKeys(gaddr keys)
     /* A program waiting for a key by polling (Diamonds' title, which never
      * calls the Event Manager) is waiting for input too. */
     static const uint8_t none[16];
-    polled(memcmp(now, none, sizeof now) != 0);
+    if (!host_attached && g_cpu && !memcmp(now, none, sizeof now))
+        walker_idle(g_cpu->icount);
+    /* For idle.c, a key held (Caps Lock, pausing Apeiron) is no news;
+     * a change is. */
+    static uint8_t last[16];
+    if (memcmp(now, last, sizeof now)) {
+        memcpy(last, now, sizeof last);
+        idle_work();
+    } else {
+        idle_poll();
+    }
 }
 
 int32_t tb_GetDblTime(void) { return (int32_t)rd32(LM_DoubleTime); }

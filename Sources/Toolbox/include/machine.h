@@ -794,6 +794,12 @@ int machine_bpf_helper(const char *sockpath, const char *ifname);
  * run (10 million a second), so runs repeat exactly; real time instead
  * for programs that talk to other programs over the network. */
 void machine_set_realtime(bool on);
+/* With the wall clock (a host attached or real time), a program waiting
+ * by spinning (a poll loop doing nothing, again and again) lets the host
+ * thread sleep (idle.c); on by default, BLUEBOX_IDLE_SLEEP=0 too turns it
+ * off.  The sleeps so far, and the time they took (ns). */
+void machine_set_idle_sleep(bool allowed);
+uint64_t machine_idle_sleeps(uint64_t *ns);
 /* The system and application heaps checked after every nth Toolbox call
  * (0: never; BLUEBOX_HEAPCHECK=n sets it too): a call that damages one
  * halts the run with its name. */
