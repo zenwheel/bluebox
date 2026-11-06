@@ -92,7 +92,7 @@ func addScripting(_ info: inout [String: Any], resources: String) throws {
     if (try? Data(contentsOf: url)) != data { try data.write(to: url) }
 }
 
-private func infoPlist(app: String, name: String, executable: String, bundle: FinderBundle, creator: UInt32,
+func infoPlist(app: String, name: String, executable: String, bundle: FinderBundle, creator: UInt32,
                        hasIcon: Bool) -> [String: Any] {
     let slug = name.lowercased().map { $0.isLetter || $0.isNumber ? String($0) : "-" }.joined()
     var info: [String: Any] = [

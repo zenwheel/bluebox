@@ -83,6 +83,8 @@ func migrateDataFolder() {
 }
 
 func defaultLibrary() -> String {
+    // An exported application keeps its own, beside its program.
+    if let support = exportSupport() { return support + "/Library" }
     let env = ProcessInfo.processInfo.environment
     if let lib = env["BLUEBOX_LIBRARY"], !lib.isEmpty { return lib }
     migrateDataFolder()
@@ -98,6 +100,7 @@ func defaultLibrary() -> String {
 /// The folder that is the classic Mac's disk (Macintosh HD), where
 /// installers put what they install (see filemgr.c).
 func defaultDisk() -> String {
+    if let support = exportSupport() { return support + "/Macintosh HD" }
     let env = ProcessInfo.processInfo.environment
     let home = env["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path
     #if os(macOS)

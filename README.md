@@ -153,6 +153,20 @@ can move to `/Applications`:
 bluebox install "Moose Folder/Moose1.21" --background --name "Talking Moose"
 ```
 
+`export` goes further: a Mac application that runs the program on a Mac
+without Blue Box, to copy anywhere or give away (when its licence lets
+you). It carries its own Blue Box, the program's folder, the fonts and
+extensions of Blue Box's System Folder, the program's settings and theme,
+its icon and document types, signed ad hoc or with a Developer ID
+(`--sign`), and notarized when asked (`--notarize` with a notarytool
+keychain profile). What the program saves goes to
+`~/Library/Application Support/<bundle id>`, never into the application.
+The shell's Export as App… does the same:
+
+```sh
+bluebox export SimpleText --to ~/Desktop
+```
+
 The shell is a window listing the library's applications with their
 settings. Its sidebar's search field finds applications by name or folder,
 and a folder's context menu moves the whole folder to the Trash. You can drop

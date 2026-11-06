@@ -43,6 +43,7 @@ nonisolated(unsafe) var speechGiven = false
 /// Where --jit keeps translations: the user's caches folder.
 func defaultJITCache() -> String {
     let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
+    if let e = currentExport { return ExportBundle.cacheFolder(home: home, bundleIdentifier: e.bundleIdentifier) + "/JIT" }
     #if os(macOS)
     return home + "/Library/Caches/Blue Box/JIT"
     #else
@@ -203,6 +204,7 @@ func usage() -> Never {
           run --background) and carries its own copy of Blue Box and of the program's
           folder, so it can be moved to /Applications and opened at login; for a desk
           accessory file such as the Talking Moose.
+    \(exportUsage())
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default]
                 [cpu 68000|68020|68030|68040|ppc|default] [fpu none|68881|68882|68040|default]
                 [addressing 24|32|default] [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
@@ -735,7 +737,7 @@ func runCommand(_ args: [String]) {
         case "bw", "classic": appearance = Int32(MACHINE_APPEARANCE_BW)
         case "native": appearance = Int32(MACHINE_APPEARANCE_NATIVE)
         default:
-            if let path = findTheme(a) {
+            if let path = exportedTheme(a) ?? findTheme(a) {
                 themePath = path
                 appearance = Int32(MACHINE_APPEARANCE_THEME)
             } else {
@@ -833,6 +835,7 @@ func runCommand(_ args: [String]) {
         eprint("bluebox: printer \"\(printer)\" (from the settings) is not panel, pdf, host:NAME, laserwriter:NAME@ZONE or driver:FILE\n")
     }
     installChooserHost(app: app, keep: !census)
+    machine_set_disk(defaultDisk()) // an exported application's own
     guard machine_boot(census) else { fail("could not set up guest memory") }
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_override(sel, v) }
@@ -942,7 +945,8 @@ func runCommand(_ args: [String]) {
     if interactive {
         runningApp = app
         // A bundle's own name for the program it carries (install --name).
-        let bundleTitle = bundledRun().flatMap { _ in Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String }
+        let bundleTitle = bundledRun() != nil || currentExport != nil
+            ? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String : nil
         let title = bundleTitle ?? (app as NSString).lastPathComponent
         let script = keyScript
         let icons = finderBundle(applicationAt: app).appIcons
@@ -1675,9 +1679,11 @@ func withCStringArray<R>(_ strings: [String], _ body: (UnsafePointer<UnsafePoint
 
 // MARK: - Main
 
-migrateDataFolder()
+if currentExport == nil { migrateDataFolder() }
 // Launch Services once added a process serial number argument.
 let argv = Array(CommandLine.arguments.dropFirst()).filter { !$0.hasPrefix("-psn_") }
+// An exported application opened (bluebox export): the program it carries.
+runExported(argv)
 #if canImport(AppKit)
 // Blue Box.app opened from the Finder or the Dock: the shell.
 if argv.isEmpty && Bundle.main.bundleIdentifier == shellBundleIdentifier { shellCommand([]) }
@@ -1734,6 +1740,7 @@ case "bpf-helper": /* run as root by bridged AppleTalk: not for people */
     exit(machine_bpf_helper(rest[0], rest[1]))
 #if canImport(AppKit)
 case "install": installCommand(rest)
+case "export": exportCommand(rest)
 case "make-iconset": makeIconsetCommand(rest)
 #endif
 default: usage()
