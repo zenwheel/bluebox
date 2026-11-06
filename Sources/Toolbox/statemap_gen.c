@@ -1861,6 +1861,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/midi.c", "in_pump", 1, 0 },
     { "Toolbox/midi.c", "out_parser", 4116, 0 },
     { "Toolbox/midi.c", "ports", 551936, 76 },
+    { "Toolbox/mixedmode.c", "level_frame", 4, 0 },
     { "Toolbox/mixedmode.c", "mm_routine_sel.depth", 4, 0 },
     { "Toolbox/mixedmode.c", "nprocs_68k", 4, 0 },
     { "Toolbox/mixedmode.c", "ppc_call.return_code", 4, 0 },
@@ -2694,7 +2695,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1690;
+const unsigned hb_nstatics = 1691;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
@@ -2973,7 +2974,7 @@ const hb_typemap hb_types[] = {
     { "rsrcmgr.c", "ref_rec", 272, 0 },
     { "thme.c", "tcoord", 12, 0 },
     { "thme.c", "trec", 32, 0 },
-    { "threadmgr.c", "exec_ctx", 3336, 222 },
+    { "threadmgr.c", "exec_ctx", 3344, 222 },
     { "wm.c", "window_property", 24, 157 },
 };
 const unsigned hb_ntypes = 277;

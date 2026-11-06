@@ -203,26 +203,73 @@ extension BlueBox {
         }
 
         /// A PowerPC program waiting in 68k code it called through
-        /// CallUniversalProc (Disk Copy's dialogs) is under a call from
-        /// native code: refused, saying so.
-        @Test func waitingIn68kCodeCalledThroughMixedModeIsRefusedSayingSo() {
+        /// CallUniversalProc (Disk Copy's dialogs, in ModalDialog): the
+        /// routine runs on the guest, so the machine stops on its idle trap
+        /// there; restored, it goes on, and when it returns its result
+        /// reaches the PowerPC code and the 68k registers are as they were.
+        @Test func waitingIn68kCodeCalledThroughMixedModeHibernates() {
+            defer { g_ppc_mode = false }
+            let cup = export("CallUniversalProc"), task = export("SystemTask")
+            // pascal long routine(long *vars): loop { vars[0] += 1; SystemTask } until vars[1]; return $BEE
+            let words: [UInt16] = [0x206F, 0x0004, 0x5290, 0xA9B4, 0x206F, 0x0004, 0x4AA8, 0x0004, 0x67F2,
+                                   0x205F, 0x588F, 0x2EBC, 0x0000, 0x0BEE, 0x4ED0]
+            let routine = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(routine + UInt32(i * 2), w) }
+            let vars = ptr(12) // count, flag, result
+            wr32(vars + 8, 0x7777)
+            let sp68 = ptr(65536) + 65000
+            g_cpu!.pointee.a.7 = sp68
+            g_cpu!.pointee.d.7 = 0x1234_5678
+            // vars[2] := CallUniversalProc(routine, kPascalStackBased | RESULT_SIZE(4) | STACK_ROUTINE_PARAMETER(1, 4), vars)
+            _ = start(load(29, vars) + load(3, routine) + [0x3880_00F0, 0x7FA5_EB78] + call(cup) + [0x907D_0008]
+                      + call(task) + [branch(back: 5)])
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > 0)                         // in the 68k routine
+            #expect(mm_level_68k())
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "SystemTask")
+            let snap = snapshot("ppc68klevel.bbhib")
+            machine_drain_end()
+            restore(snap)
+            #expect(mm_level_68k())
+            let n = rd32(vars)
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > n)
+            #expect(rd32(vars + 8) == 0x7777)
+            wr32(vars + 4, 1)
+            _ = machine_run(200_000)
+            #expect(rd32(vars + 8) == 0xBEE)                // the routine's result, returned to the call
+            #expect(!mm_level_68k())
+            #expect(g_cpu!.pointee.a.7 == sp68)             // the 68k registers as they were
+            #expect(g_cpu!.pointee.d.7 == 0x1234_5678)
+        }
+
+        /// 68k code called through CallUniversalProc from a callback (under
+        /// a host frame) is not the program's level: run from native code
+        /// as before, and a drain there is refused, the program being in a
+        /// routine of its own the Toolbox called.
+        @Test func waitingIn68kCodeCalledFromACallbackIsRefused() {
             defer { g_ppc_mode = false }
             let cup = export("CallUniversalProc")
             let words: [UInt16] = [0xA9B4, 0x60FC] // loop: _SystemTask; BRA.S loop
             let routine = tb_NewPtr(Int32(words.count * 2), false, false)
             for (i, w) in words.enumerated() { wr16(routine + UInt32(i * 2), w) }
             g_cpu!.pointee.a.7 = ptr(65536) + 65000
-            // CallUniversalProc(routine, kPascalStackBased)
-            _ = start(load(3, routine) + [0x3880_0000] + call(cup) + [branch(back: 0)])
+            // a callback: CallUniversalProc(routine, kPascalStackBased)
+            let callback = tvector(code(load(3, routine) + [0x3880_0000] + call(cup) + [branch(back: 0)]))
+            _ = start([branch(back: 0)])
             machine_hibernate_at(machine_instruction_count() + 1_000_000)
             machine_set_instruction_limit(machine_instruction_count() + 6_000_000)
-            _ = machine_run(10_000_000)
+            _ = ppc_call(callback, nil, 0)
+            #expect(!mm_level_68k())
+            _ = drain_slice_point() // machine_run's, the machine stopped at the limit
             machine_hibernate_at(0)
             machine_set_instruction_limit(0)
             #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
             let why = String(cString: machine_drain_reason())
-            #expect(why.contains("68k code it called through Mixed Mode (CallUniversalProc)"),
-                    Comment(rawValue: why))
+            #expect(why.contains("a routine of its own called by the Toolbox"), Comment(rawValue: why))
             machine_drain_end()
         }
 

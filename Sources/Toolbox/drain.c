@@ -126,7 +126,7 @@ static bool abandon_level(void)
 {
     if (thread_current_index() != 0 || trap_call_depth() != 0 || mm_call_depth() != 0)
         return false;
-    return g_ppc_mode ? cfm_level_call() >= 0 : ppc_trap_depth() == 0;
+    return g_ppc_mode && !mm_level_68k() ? cfm_level_call() >= 0 : ppc_trap_depth() == 0;
 }
 
 static void refuse(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -216,9 +216,10 @@ static bool idle_call(uint16_t op)
 
 bool drain_at_trap(cpu68k *c, uint16_t op)
 {
-    /* A PowerPC program's 68k code runs only under a host frame (a trap
-     * or a callback run for it): never its own level. */
-    if (atomic_load(&state) != MACHINE_DRAIN_GOING || g_ppc_mode || !drain_program_level())
+    /* A PowerPC program's 68k code runs at its own level only when its
+     * PowerPC code called it there (mixedmode.c); otherwise under a host
+     * frame (a trap or a callback run for it). */
+    if (atomic_load(&state) != MACHINE_DRAIN_GOING || (g_ppc_mode && !mm_level_68k()) || !drain_program_level())
         return false;
     if (!idle_call(op))
         return false;

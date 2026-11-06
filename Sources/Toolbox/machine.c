@@ -1099,18 +1099,23 @@ run_status machine_run(uint64_t max)
     uint64_t done = 0;
     while (!cpu.halted && done < max) {
         machine_pause_point(); /* suspended: no instructions, no time */
-        uint64_t n = max - done < slice ? max - done : slice;
-        if (g_ppc_mode) {
-            /* The 68k CPU's count stays the machine's clock. */
-            uint64_t ran = ppc_run(&g_ppc, n);
-            cpu.icount += ran;
-            done += ran;
-            if (g_ppc.halted && !cpu.halted)
-                cpu_halt(&cpu, "%s", g_ppc.halt_reason);
-        } else {
-            done += cpu_run(&cpu, n);
-            pace_68000();
-        }
+        uint64_t n = max - done < slice ? max - done : slice, ran = 0;
+        /* A PowerPC program's call into 68k code at its own level, and its
+         * return, switch processors within the slice (mixedmode.c). */
+        do {
+            if (g_ppc_mode && !mm_level_68k()) {
+                /* The 68k CPU's count stays the machine's clock. */
+                uint64_t r = ppc_run(&g_ppc, n - ran);
+                cpu.icount += r;
+                ran += r;
+                if (g_ppc.halted && !cpu.halted)
+                    cpu_halt(&cpu, "%s", g_ppc.halt_reason);
+            } else {
+                ran += cpu_run(&cpu, n - ran);
+                pace_68000();
+            }
+        } while (mm_take_switch() && ran < n && !cpu.halted);
+        done += ran;
         if (drain_slice_point()) {
             /* A safe point (drain.c): a snapshot's, or Suspend's. */
             if (drain_exits())
@@ -1140,7 +1145,7 @@ void machine_continue(uint64_t more)
 }
 bool machine_halted(void) { return cpu.halted; }
 uint64_t machine_instruction_count(void) { return cpu.icount; }
-uint32_t machine_pc(void) { return g_ppc_mode ? g_ppc.pc : cpu.pc; }
+uint32_t machine_pc(void) { return g_ppc_mode && !mm_level_68k() ? g_ppc.pc : cpu.pc; }
 
 static void trace_cpu(cpu68k *c)
 {

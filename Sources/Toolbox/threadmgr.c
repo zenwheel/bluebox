@@ -62,6 +62,7 @@ typedef struct {
     ppc_trap_ctx ppc_trap;
     bool ppc_returned;
     int ppc_depth;
+    gaddr level_68k; /* 68k code run at the program's level for PowerPC code (mixedmode.c) */
 } exec_ctx;
 
 /* The host thread a guest thread runs on: it may go on only when told. */
@@ -228,6 +229,7 @@ static void save_ctx(exec_ctx *x)
     ppc_trap_ctx_save(&x->ppc_trap);
     x->ppc_returned = mm_ctx_returned();
     x->ppc_depth = mm_call_depth();
+    x->level_68k = mm_level_ctx();
 }
 
 /* The registers and nesting; the instruction count, the machine's halt and
@@ -268,6 +270,7 @@ static void load_ctx(const exec_ctx *x)
     ppc_trap_ctx_load(&x->ppc_trap);
     mm_ctx_set_returned(x->ppc_returned);
     mm_ctx_set_depth(x->ppc_depth);
+    mm_set_level_ctx(x->level_68k);
 }
 
 /* ---- Where a thread waits ---- */

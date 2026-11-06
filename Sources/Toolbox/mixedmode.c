@@ -562,55 +562,34 @@ static void put16(gaddr p, uint32_t v)
         wr16(p, (uint16_t)v);
 }
 
-/* PowerPC code called a special case's 68k routine (registers saved by the
- * caller): the parameters into its registers, its results to the
- * PowerPC routine's pointers; the function result. */
-static uint32_t special_to_68k(gaddr code, int which, const uint32_t *args, int nargs)
+/* PowerPC code calling a special case's 68k routine (registers saved by
+ * the caller): the parameters into its registers (x, nine of them, the
+ * ones not passed 0), or on its stack. */
+static void special_set_up(int which, const uint32_t *x)
 {
     cpu68k *c = g_cpu;
     uint32_t *d = c->d, *a = c->a;
-    uint32_t x[9] = { 0 };
-    for (int i = 0; i < nargs && i < 9; i++)
-        x[i] = args[i];
-    uint32_t r = 0;
     switch (which) {
     case kSpecialCaseHighHook:
         cpu_push32(c, x[0]);
         a[3] = x[1];
-        guest_call_regs(code);
         break;
     case kSpecialCaseEOLHook:
         d[0] = x[0] & 0xFF, a[3] = x[1], a[4] = x[2];
-        guest_call_regs(code);
-        r = (c->sr & CCR_Z) != 0;
         break;
     case kSpecialCaseWidthHook:
     case kSpecialCaseDrawHook:
         d[0] = lo16(x[0]), d[1] = lo16(x[1]), a[0] = x[2], a[3] = x[3], a[4] = x[4];
-        guest_call_regs(code);
-        if (which == kSpecialCaseWidthHook)
-            r = lo16(d[1]);
         break;
     case kSpecialCaseNWidthHook:
         d[0] = lo16(x[0]), d[1] = lo16(x[1]), d[2] = (x[3] << 16) | lo16(x[2]);
         a[0] = x[4], a[2] = x[5], a[3] = x[6], a[4] = x[7];
-        guest_call_regs(code);
-        r = lo16(d[1]);
         break;
     case kSpecialCaseHitTestHook:
         d[0] = lo16(x[0]), d[1] = lo16(x[1]), d[2] = lo16(x[2]), a[0] = x[3], a[3] = x[4], a[4] = x[5];
-        guest_call_regs(code);
-        put16(x[6], d[0]);
-        put16(x[7], d[1]);
-        if (x[8])
-            wr8(x[8], lo16(d[2]) != 0);
-        r = (d[0] >> 16) != 0;
         break;
     case kSpecialCaseTEFindWord:
         d[0] = lo16(x[0]), d[2] = lo16(x[1]), a[3] = x[2], a[4] = x[3];
-        guest_call_regs(code);
-        put16(x[4], d[0]);
-        put16(x[5], d[1]);
         break;
     case kSpecialCaseProtocolHandler:
     case kSpecialCaseSocketListener:
@@ -620,41 +599,67 @@ static uint32_t special_to_68k(gaddr code, int which, const uint32_t *args, int 
             d[0] = x[5] & 0xFF, d[1] = lo16(x[6]);
         else
             d[1] = lo16(x[5]);
-        guest_call_regs(code);
-        r = (c->sr & CCR_Z) != 0;
         break;
     case kSpecialCaseTERecalc:
         a[3] = x[0], d[7] = lo16(x[1]);
-        guest_call_regs(code);
-        put16(x[2], d[2]);
-        put16(x[3], d[3]);
-        put16(x[4], d[4]);
         break;
     case kSpecialCaseTEDoText:
         a[3] = x[0], d[3] = lo16(x[1]), d[4] = lo16(x[2]), d[7] = lo16(x[3]);
-        guest_call_regs(code);
-        if (x[4])
-            wr32(x[4], a[0]);
-        put16(x[5], d[0]);
-        r = lo16(d[0]);
         break;
     case kSpecialCaseGNEFilterProc: {
         bool b = x[1] && rd8(x[1]);
         cpu_push16(c, b ? 0x0100 : 0); /* GetNextEvent's result */
-        gaddr at = a[7];
         a[1] = x[0], d[0] = b;
-        guest_call_regs(code);
-        if (x[1])
-            wr8(x[1], rd16(at) != 0);
         break;
     }
     case kSpecialCaseMBarHook:
         cpu_push32(c, x[0]);
-        guest_call_regs(code);
-        r = widen(2, d[0]);
         break;
     }
-    return r;
+}
+
+/* A special case's result and its results through pointers, the routine
+ * returned; sp is where the 68k stack was before special_set_up. */
+static uint32_t special_result(int which, const uint32_t *x, gaddr sp)
+{
+    cpu68k *c = g_cpu;
+    uint32_t *d = c->d, *a = c->a;
+    switch (which) {
+    case kSpecialCaseEOLHook:
+    case kSpecialCaseProtocolHandler:
+    case kSpecialCaseSocketListener:
+        return (c->sr & CCR_Z) != 0;
+    case kSpecialCaseWidthHook:
+    case kSpecialCaseNWidthHook:
+        return lo16(d[1]);
+    case kSpecialCaseHitTestHook:
+        put16(x[6], d[0]);
+        put16(x[7], d[1]);
+        if (x[8])
+            wr8(x[8], lo16(d[2]) != 0);
+        return (d[0] >> 16) != 0;
+    case kSpecialCaseTEFindWord:
+        put16(x[4], d[0]);
+        put16(x[5], d[1]);
+        return 0;
+    case kSpecialCaseTERecalc:
+        put16(x[2], d[2]);
+        put16(x[3], d[3]);
+        put16(x[4], d[4]);
+        return 0;
+    case kSpecialCaseTEDoText:
+        if (x[4])
+            wr32(x[4], a[0]);
+        put16(x[5], d[0]);
+        return lo16(d[0]);
+    case kSpecialCaseGNEFilterProc:
+        if (x[1])
+            wr8(x[1], rd16(sp - 2) != 0);
+        return 0;
+    case kSpecialCaseMBarHook:
+        return widen(2, d[0]);
+    }
+    return 0;
 }
 
 /* _MixedModeMagic: 68k code called a routine descriptor (at op_pc).  The
@@ -781,17 +786,30 @@ static void mixed_mode_native(cpu68k *c, uint16_t tw)
 /* ---------------------------------------------------------------------- */
 /* PowerPC code calling 68k code */
 
-/* Call 68k code at `code` as procInfo describes, with the arguments. */
-static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int nargs)
+enum { SPECIAL_ARGS = 9 };
+
+/* A special case's arguments as special_set_up and special_result take
+ * them. */
+static void special_args(const uint32_t *args, int nargs, uint32_t x[SPECIAL_ARGS])
+{
+    for (int i = 0; i < SPECIAL_ARGS; i++)
+        x[i] = i < nargs ? args[i] : 0;
+}
+
+/* A call to 68k code as procInfo describes it, made ready: the arguments
+ * on the 68k stack (the result's room first for Pascal's) or in its
+ * registers; false for a convention we don't know. */
+static bool set_up_68k(uint32_t pi, const uint32_t *args, int nargs)
 {
     int conv = (int)(pi & 0xF), rcode = (int)((pi >> 4) & 3);
-    uint32_t r = 0;
-    LOGF(LOG_TRAPS, "Mixed Mode: 68k routine %08X (%s), procInfo %08X, %d arguments (%08X %08X)\n", code,
-         native_name_at(native_index_for(code)) ? native_name_at(native_index_for(code)) : "guest code", pi, nargs,
-         nargs > 0 ? args[0] : 0, nargs > 1 ? args[1] : 0);
-    ppc_trap_begin();
-    running_68k++;
-    if (dispatched(conv) && nargs >= 1) {
+    if (conv == kSpecialCase) {
+        int which = (int)((pi >> 4) & 0x3F);
+        if (which >= kSpecialCaseCount)
+            return false;
+        uint32_t x[SPECIAL_ARGS];
+        special_args(args, nargs, x);
+        special_set_up(which, x);
+    } else if (dispatched(conv) && nargs >= 1) {
         /* The selector in D0 or D1 or pushed last; Pascal or C parameters. */
         int scode = (int)((pi >> 6) & 3);
         uint32_t sel = args[0];
@@ -811,9 +829,6 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
             ppc_trap_push(scode == 3 ? 4 : scode == 1 ? 1 : 2, sel);
         else
             ppc_trap_set(conv == kD1DispatchedPascalStackBased ? 1 : 0, sel);
-        guest_call_regs(code);
-        if (rcode)
-            r = widen(rcode, pascal ? ppc_trap_result(rcode == 3 ? 4 : rcode == 1 ? 1 : 2) : g_cpu->d[0]);
     } else if (conv == kPascalStackBased) {
         if (rcode)
             ppc_trap_push(rcode == 3 ? 4 : 2, 0);
@@ -821,31 +836,66 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
             int code_i = (int)((pi >> (6 + 2 * i)) & 3);
             ppc_trap_push(code_i == 3 ? 4 : code_i == 1 ? 1 : 2, args[i]);
         }
-        guest_call_regs(code);
-        if (rcode)
-            r = widen(rcode, ppc_trap_result(rcode == 3 ? 4 : rcode == 1 ? 1 : 2));
     } else if (conv == kCStackBased || conv == kThinkCStackBased) {
         for (int i = nargs - 1; i >= 0; i--) {
             int code_i = (int)((pi >> (6 + 2 * i)) & 3);
             ppc_trap_push(code_i == 3 || conv == kCStackBased ? 4 : code_i == 1 ? 1 : 2, args[i]);
         }
-        guest_call_regs(code);
-        r = widen(rcode ? rcode : 3, g_cpu->d[0]);
     } else if (conv == kRegisterBased) {
         for (int i = 0; i < nargs && i < 4; i++) {
             unsigned f = (pi >> (11 + 5 * i)) & 31;
             if (f & 3)
                 *reg68((int)(f >> 2)) = args[i];
         }
+    } else {
+        return false;
+    }
+    return true;
+}
+
+/* The result of a call set_up_68k made ready with these arguments, the
+ * 68k stack at sp before, the routine returned. */
+static uint32_t result_68k(uint32_t pi, const uint32_t *args, int nargs, gaddr sp)
+{
+    int conv = (int)(pi & 0xF), rcode = (int)((pi >> 4) & 3);
+    if (conv == kSpecialCase) {
+        uint32_t x[SPECIAL_ARGS];
+        special_args(args, nargs, x);
+        return special_result((int)((pi >> 4) & 0x3F), x, sp);
+    }
+    if (dispatched(conv)) {
+        bool pascal = conv != kD0DispatchedCStackBased;
+        if (!rcode)
+            return 0;
+        return widen(rcode, pascal ? ppc_trap_result(rcode == 3 ? 4 : rcode == 1 ? 1 : 2) : g_cpu->d[0]);
+    }
+    if (conv == kPascalStackBased)
+        return rcode ? widen(rcode, ppc_trap_result(rcode == 3 ? 4 : rcode == 1 ? 1 : 2)) : 0;
+    if (conv == kCStackBased || conv == kThinkCStackBased)
+        return widen(rcode ? rcode : 3, g_cpu->d[0]);
+    int loc = (int)((pi >> 6) & 31);
+    uint32_t *out = result_reg68(loc);
+    if (rcode && out)
+        return widen(rcode, *out);
+    if (rcode && result_ccr_bit(loc) >= 0)
+        return (g_cpu->sr >> result_ccr_bit(loc)) & 1;
+    return 0;
+}
+
+/* Call 68k code at `code` as procInfo describes, with the arguments. */
+static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int nargs)
+{
+    int conv = (int)(pi & 0xF);
+    uint32_t r = 0;
+    LOGF(LOG_TRAPS, "Mixed Mode: 68k routine %08X (%s), procInfo %08X, %d arguments (%08X %08X)\n", code,
+         native_name_at(native_index_for(code)) ? native_name_at(native_index_for(code)) : "guest code", pi, nargs,
+         nargs > 0 ? args[0] : 0, nargs > 1 ? args[1] : 0);
+    ppc_trap_begin();
+    running_68k++;
+    gaddr sp = g_cpu->a[7];
+    if (set_up_68k(pi, args, nargs)) {
         guest_call_regs(code);
-        int loc = (int)((pi >> 6) & 31);
-        uint32_t *out = result_reg68(loc);
-        if (rcode && out)
-            r = widen(rcode, *out);
-        else if (rcode && result_ccr_bit(loc) >= 0)
-            r = (g_cpu->sr >> result_ccr_bit(loc)) & 1;
-    } else if (conv == kSpecialCase && (int)((pi >> 4) & 0x3F) < kSpecialCaseCount) {
-        r = special_to_68k(code, (int)((pi >> 4) & 0x3F), args, nargs);
+        r = result_68k(pi, args, nargs, sp);
     } else {
         ppc_halt(&g_ppc, "Mixed Mode: calling convention %d (procInfo %08X) to 68k code", conv, pi);
     }
@@ -854,6 +904,118 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
     if (g_cpu->halted && !g_ppc.halted)
         ppc_halt(&g_ppc, "%s", g_cpu->halt_reason);
     return r;
+}
+
+/* ---- 68k code called at the program's own level ----
+ *
+ * CallUniversalProc made by a PowerPC program at its own level (drain.c:
+ * its main thread, nothing of ours on the host's stack) runs the 68k
+ * routine on the guest rather than from native code: the routine's
+ * arguments and a return address of ours go on the 68k stack, over a
+ * frame keeping the 68k registers, the PowerPC processor waits at the
+ * call's return, and machine_run goes on with the 68k processor.  When
+ * the routine returns to our stub, its result goes to r3, the 68k
+ * registers are put back as they were and machine_run goes on with the
+ * PowerPC code.  So a program whose 68k code waits for the user (Disk
+ * Copy's dialogs, in ModalDialog) is at its own level there and can be
+ * hibernated: what the call needs is in the frame and in level_frame. */
+enum {
+    LF_PROCINFO = 0,  /* the call's procInfo */
+    LF_PC = 4,        /* the 68k processor's, D0-D7, A0-A7 and SR as they were */
+    LF_REGS = 8,
+    LF_SR = 72,
+    LF_NARGS = 74,    /* the arguments, for a special case's results through pointers */
+    LF_ARGS = 76,
+    LF_SIZE = 76 + 4 * SPECIAL_ARGS,
+};
+
+static gaddr level_frame;          /* the call under way's frame, or 0 */
+BB_HOST static gaddr level_stub;   /* the 68k return address (mixedmode_init) */
+BB_HOST static bool level_switched; /* the processor machine_run runs changed */
+
+bool mm_level_68k(void) { return level_frame != 0; }
+gaddr mm_level_ctx(void) { return level_frame; }
+void mm_set_level_ctx(gaddr f) { level_frame = f; }
+
+bool mm_take_switch(void)
+{
+    if (!level_switched)
+        return false;
+    level_switched = false;
+    g_ppc.stop = false;
+    g_cpu->stopped = false;
+    return true;
+}
+
+static void ppc_CallUniversalProc(ppc_cpu *c);
+static void ppc_CallOSTrapUniversalProc(ppc_cpu *c);
+
+/* CallUniversalProc's 68k routine, run on the guest if the call is made at
+ * the program's level: true if so, the machine going on into it. */
+static bool level_call_68k(ppc_cpu *c, gaddr code, uint32_t pi, const uint32_t *args, int nargs)
+{
+    int conv = (int)(pi & 0xF);
+    /* Made by the program's own code, at its level: not by ours (a native
+     * calling the export), whose caller expects the routine to have run. */
+    if (level_frame || !level_stub || !drain_program_level() || native_index_for(code) >= 0 || mm_is_native(code) ||
+        !(cfm_level_call_is(ppc_CallUniversalProc) || cfm_level_call_is(ppc_CallOSTrapUniversalProc)))
+        return false;
+    if (conv == kSpecialCase ? (int)((pi >> 4) & 0x3F) >= kSpecialCaseCount
+        : dispatched(conv)   ? nargs < 1
+                             : conv != kPascalStackBased && conv != kCStackBased && conv != kThinkCStackBased &&
+                                 conv != kRegisterBased)
+        return false;
+    cpu68k *m = g_cpu;
+    gaddr f = (m->a[7] - LF_SIZE) & ~1u;
+    wr32(f + LF_PROCINFO, pi);
+    wr32(f + LF_PC, m->pc);
+    for (int i = 0; i < 8; i++) {
+        wr32(f + LF_REGS + 4 * (uint32_t)i, m->d[i]);
+        wr32(f + LF_REGS + 32 + 4 * (uint32_t)i, m->a[i]);
+    }
+    wr16(f + LF_SR, m->sr);
+    wr16(f + LF_NARGS, (uint16_t)nargs);
+    for (int i = 0; i < SPECIAL_ARGS; i++)
+        wr32(f + LF_ARGS + 4 * (uint32_t)i, i < nargs ? args[i] : 0);
+    m->a[7] = f;
+    LOGF(LOG_TRAPS, "Mixed Mode: 68k routine %08X on the guest, procInfo %08X, %d arguments (%08X %08X)\n", code, pi,
+         nargs, nargs > 0 ? args[0] : 0, nargs > 1 ? args[1] : 0);
+    set_up_68k(pi, args, nargs);
+    cpu_push32(m, level_stub);
+    m->pc = code;
+    running_68k++;
+    level_frame = f;
+    c->pc = c->lr; /* where the PowerPC code goes on, r3 the result */
+    c->stop = true;
+    level_switched = true;
+    return true;
+}
+
+/* The 68k routine returned to the stub: its result to r3, the 68k
+ * registers as they were, and the PowerPC code goes on. */
+static void level_returned(cpu68k *m, uint16_t tw)
+{
+    (void)tw;
+    gaddr f = level_frame;
+    if (!f) {
+        cpu_halt(m, "Mixed Mode: a return to PowerPC code with no call from it under way");
+        return;
+    }
+    uint32_t args[SPECIAL_ARGS];
+    int nargs = rd16(f + LF_NARGS);
+    for (int i = 0; i < SPECIAL_ARGS; i++)
+        args[i] = rd32(f + LF_ARGS + 4 * (uint32_t)i);
+    g_ppc.gpr[3] = result_68k(rd32(f + LF_PROCINFO), args, nargs < SPECIAL_ARGS ? nargs : SPECIAL_ARGS, f);
+    m->pc = rd32(f + LF_PC);
+    for (int i = 0; i < 8; i++) {
+        m->d[i] = rd32(f + LF_REGS + 4 * (uint32_t)i);
+        m->a[i] = rd32(f + LF_REGS + 32 + 4 * (uint32_t)i);
+    }
+    m->sr = rd16(f + LF_SR);
+    running_68k--;
+    level_frame = 0;
+    m->stopped = true;
+    level_switched = true;
 }
 
 /* The number of arguments procInfo describes. */
@@ -961,6 +1123,8 @@ static void ppc_CallUniversalProc(ppc_cpu *c)
         ppc_halt(c, "CallUniversalProc: NULL routine");
         return;
     }
+    if (level_call_68k(c, code, pi, args + skip, n - skip))
+        return;
     c->gpr[3] = call_68k(code, pi, args + skip, n - skip);
     c->pc = c->lr;
 }
@@ -970,7 +1134,10 @@ static void ppc_CallUniversalProc(ppc_cpu *c)
 static void ppc_CallOSTrapUniversalProc(ppc_cpu *c)
 {
     uint32_t a1 = g_cpu->a[1], d1 = g_cpu->d[1], d2 = g_cpu->d[2];
+    gaddr outer = level_frame;
     ppc_CallUniversalProc(c);
+    if (level_frame != outer) /* run on the guest: every register put back when it returns */
+        return;
     g_cpu->a[1] = a1;
     g_cpu->d[1] = d1;
     g_cpu->d[2] = d2;
@@ -1076,5 +1243,8 @@ gaddr mm_call_component_upp(void)
 void mixedmode_init(void)
 {
     nprocs_68k = running_68k = 0;
+    level_frame = 0;
+    level_switched = false;
+    level_stub = native_register(level_returned, "Mixed Mode return to PowerPC", 0);
     wr32(TB_TRAP_TABLE + 0x2FEu * 4, native_register(mixed_mode_native, "MixedModeMagic", 0xAAFE));
 }

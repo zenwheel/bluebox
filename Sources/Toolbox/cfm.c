@@ -94,6 +94,7 @@ static bool idle_import(const char *name)
 BB_HOST static int level_call = -1;
 
 int cfm_level_call(void) { return level_call; }
+bool cfm_level_call_is(void (*fn)(ppc_cpu *)) { return level_call >= 0 && natives[level_call].fn == fn; }
 const char *cfm_native_name(uint32_t index) { return index < (uint32_t)nnatives ? natives[index].name : "?"; }
 
 /* The registers a call at the program's level was made with: put back

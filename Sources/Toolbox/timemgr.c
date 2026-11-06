@@ -211,7 +211,7 @@ static void interrupt_call_at(gaddr fn, gaddr a0, gaddr a1, uint32_t d0, gaddr a
     memcpy(c->d, d, sizeof d);
     memcpy(c->a, a, sizeof a);
     c->sr = sr;
-    if (back != pc && !g_ppc_mode && !c->halted)
+    if (back != pc && (!g_ppc_mode || mm_level_68k()) && !c->halted)
         c->pc = back;
 }
 
