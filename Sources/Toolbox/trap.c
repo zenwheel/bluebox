@@ -480,6 +480,8 @@ static void keep_arguments(cpu68k *c, gaddr sp0, const uint8_t *args)
 /* Calls from native code into the guest under way, and the one returned. */
 static int call_depth, returned_depth;
 
+int trap_call_depth(void) { return call_depth; }
+
 void trap_aline(cpu68k *c, uint16_t op)
 {
     if (rd32(0x28) != aline_vector_stub) {
@@ -487,7 +489,41 @@ void trap_aline(cpu68k *c, uint16_t op)
         cpu_exception(c, 10, c->op_pc);
         return;
     }
+    if (drain_at_trap(c, op)) /* the machine stops here, the call not made */
+        return;
     dispatch_aline(c, op);
+}
+
+/* The registers at a trap the program made itself, for a native that
+ * abandons its call to let the machine drain (drain.c): put back, with
+ * the arguments on the stack, and the program counter on the trap, so the
+ * call is made again when the machine goes on. */
+typedef struct {
+    uint32_t d[8], a[8];
+    uint16_t sr;
+    uint32_t pc;
+} entry_regs;
+
+static void note_entry(const cpu68k *c, entry_regs *r)
+{
+    memcpy(r->d, c->d, sizeof r->d);
+    memcpy(r->a, c->a, sizeof r->a);
+    r->sr = c->sr;
+    r->pc = c->op_pc;
+}
+
+static bool rewound(cpu68k *c, uint16_t op, const entry_regs *r, gaddr sp0, const uint8_t *args, size_t nargs)
+{
+    if (call_depth != 0 || c->halted || !drain_take_rewind(c, op))
+        return false;
+    if (args)
+        gput(sp0, args, (uint32_t)nargs);
+    memcpy(c->d, r->d, sizeof r->d);
+    memcpy(c->a, r->a, sizeof r->a);
+    c->sr = r->sr;
+    c->pc = r->pc;
+    c->icount--;
+    return true;
 }
 
 static void dispatch_aline(cpu68k *c, uint16_t op)
@@ -500,6 +536,8 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
         LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
         walker_note_call(c->op_pc, op);
         idle_trap(op);
+        entry_regs er;
+        note_entry(c, &er);
         if (!(op & 0x0400))
             cpu_push32(c, c->pc);
         if (n >= 0) {
@@ -522,6 +560,8 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
             natives[n].fn(c, op);
             last_trapword = saved;
             current_trap = 0;
+            if (rewound(c, op, &er, sp0, args, sizeof args))
+                return;
             if (!mm_debug_after_call(trap_name(op)))
                 cpu_halt(c, "heap damaged by %s", trap_name(op));
             else if (!code_check_after_call(trap_name(op)))
@@ -569,6 +609,8 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
             cpu_halt(c, "code changed before %s", trap_name(op));
             return;
         }
+        entry_regs er;
+        note_entry(c, &er);
         uint32_t a0 = c->a[0], a1 = c->a[1], d1 = c->d[1], d2 = c->d[2];
         c->d[1] = op;
         current_trap = op;
@@ -577,6 +619,8 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
         natives[n].fn(c, op);
         last_trapword = saved;
         current_trap = 0;
+        if (rewound(c, op, &er, 0, NULL, 0))
+            return;
         if (!mm_debug_after_call(trap_name(op)))
             cpu_halt(c, "heap damaged by %s", trap_name(op));
         else if (!code_check_after_call(trap_name(op)))

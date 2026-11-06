@@ -9,6 +9,7 @@
 typedef enum {
     RUN_LIMIT = 0,   /* instruction limit reached, still runnable */
     RUN_HALTED = 1,  /* the app quit or an error stopped the CPU */
+    RUN_DRAINED = 2, /* stopped at a safe point for a snapshot (machine_drain_begin(true)) */
 } run_status;
 
 /* Reset everything and set up an empty machine. Returns false on failure. */
@@ -955,6 +956,39 @@ bool machine_pause_parked(void);
 bool machine_wait_parked(uint32_t ms);
 /* The machine's thread: stop here while suspended. */
 void machine_pause_point(void);
+
+/* Draining (drain.c): the machine runs on to a safe point, its event loop
+ * with nothing of the Toolbox on the host's stack, where a snapshot of it
+ * can be taken and resumed in another process.  machine_pause starts one
+ * (and stops there if it comes in time); exit_run makes machine_run
+ * return RUN_DRAINED there instead.  Refused, with a reason to show, if
+ * no safe point comes within two seconds or the program holds what a
+ * snapshot cannot carry (machine_hibernate_blocker).  From any thread. */
+enum { MACHINE_DRAIN_NONE, MACHINE_DRAIN_GOING, MACHINE_DRAIN_PARKED, MACHINE_DRAIN_REFUSED };
+void machine_drain_begin(bool exit_run);
+void machine_drain_end(void);
+int machine_drain_state(void);
+const char *machine_drain_reason(void);
+/* Where it stopped: the trap (the program counter back on it), or "between
+ * instructions". */
+const char *machine_drain_point(void);
+/* Stopped at a safe point: a snapshot may be taken now. */
+bool machine_hibernatable(void);
+/* Why the program cannot be saved now (its own threads, a connection, a
+ * serial port, a print job), or NULL. */
+const char *machine_hibernate_blocker(void);
+/* Headless: a drain (exit_run) once the instruction count reaches this. */
+void machine_hibernate_at(uint64_t icount);
+/* Hibernating (reattach.c): the snapshot of a machine stopped at a safe
+ * point written to path (compressed), with the host's record of the launch
+ * (text, read back with hb_file_extra) and its size in *bytes.  Restore:
+ * into a fresh process booted (machine_boot) as the record says, instead
+ * of machine_launch; the program goes on with machine_run. */
+bool machine_hibernate_save(const char *path, const char *record, uint64_t *bytes, char *err, size_t errlen);
+bool machine_hibernate_restore(const char *path, char *err, size_t errlen);
+/* Whether a resumed program's date catches up to the host's (the default)
+ * or goes on from where it stopped. */
+void machine_set_resume_date_catch_up(bool on);
 /* A host monotonic time (ns) less the time spent suspended. */
 uint64_t machine_unpaused_ns(uint64_t now);
 

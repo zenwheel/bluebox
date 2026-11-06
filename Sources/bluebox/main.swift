@@ -465,8 +465,14 @@ func queueScript(_ script: [String], start: UInt64) {
 
 // MARK: - Commands
 
-func runCommand(_ args: [String]) {
+/// `resume`: a snapshot to put back (bluebox resume) in place of launching
+/// the application, booted as its run was.
+func runCommand(_ args: [String], resume: String? = nil) {
     var app: String?
+    var hibernateAt: UInt64?
+    var hibernateTo: String?
+    var thenRun: UInt64?
+    var snapshotEnd: String?
     var documents: [String] = []
     var appName: String?
     var census = false
@@ -510,6 +516,15 @@ func runCommand(_ args: [String]) {
         switch a {
         case "--census": census = true
         case "--headless": headless = true
+        case "--hibernate-at", "--then":
+            i += 1
+            guard i < args.count, let n = parseNumber(args[i]) else { fail("\(a) takes an instruction count") }
+            if a == "--then" { thenRun = n } else { hibernateAt = n }
+        case "--hibernate-to", "--snapshot-end":
+            i += 1
+            guard i < args.count else { usage() }
+            let p = URL(fileURLWithPath: args[i]).standardizedFileURL.path
+            if a == "--snapshot-end" { snapshotEnd = p } else { hibernateTo = p }
         case "--background": background = true
         case "--realtime": machine_set_realtime(true)
         case "--walk-menus":
@@ -730,7 +745,7 @@ func runCommand(_ args: [String]) {
         // Not given on the command line: if it says it needs another depth
         // (even one set for it, which it cannot run at), it runs again at
         // that one, kept as its setting.
-        depthRelaunch = (app, !census && screenshot == nil && printTo == nil)
+        depthRelaunch = resume == nil ? (app, !census && screenshot == nil && printTo == nil) : nil
     }
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
@@ -740,7 +755,7 @@ func runCommand(_ args: [String]) {
     // comes forward instead.
     if runRegisters(headless: headless, census: census, walkMenus: walkMenus, screenshot: screenshot != nil,
                     printToFile: printTo != nil) {
-        registerRun(app: app, documents: documents, newCopy: newCopy)
+        registerRun(app: app, documents: documents, newCopy: newCopy || resume != nil)
     }
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
@@ -892,12 +907,19 @@ func runCommand(_ args: [String]) {
     for f in initFiles {
         guard machine_add_init(resolveFile(f, kinds: ["INIT", "appe", "ZSYS", "dfil"])) else { fail("too many --init files") }
     }
-    guard machine_launch(app, &err, err.count) else { fail(str(err)) }
+    if let resume {
+        // The program as it hibernated, in place of a fresh launch.
+        guard machine_hibernate_restore(resume, &err, err.count) else { fail("\(resume): \(str(err))") }
+        print("resumed: \(resume) at instruction \(machine_instruction_count())")
+        forgetHibernated(snapshot: resume)
+    } else {
+        guard machine_launch(app, &err, err.count) else { fail(str(err)) }
+    }
     // Other programs (other runs, bluebox send) can send it Apple Events.
     _ = machine_listen_for_apple_events()
     // As the Finder does: open the documents, or just open the application.
     // An interactive host waits, since the Finder may still hand it documents.
-    if !documents.isEmpty {
+    if !documents.isEmpty && resume == nil {
         var cpaths = documents.map { strdup($0) }
         cpaths.withUnsafeMutableBufferPointer { buf in
             buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) {
@@ -920,10 +942,10 @@ func runCommand(_ args: [String]) {
             return true
         }, nil)
     }
-    launchDocumentsSent = !documents.isEmpty
-    if !interactive && documents.isEmpty { machine_send_open_application() }
+    launchDocumentsSent = !documents.isEmpty || resume != nil
+    if !interactive && documents.isEmpty && resume == nil { machine_send_open_application() }
     #else
-    if documents.isEmpty { machine_send_open_application() }
+    if documents.isEmpty && resume == nil { machine_send_open_application() }
     #endif
 
     #if canImport(AppKit)
@@ -1003,9 +1025,27 @@ func runCommand(_ args: [String]) {
     #endif
 
     let budget = maxInstructions
-    machine_set_instruction_limit(machine_instruction_count() + maxInstructions)
-    queueScript(keyScript, start: machine_instruction_count())
-    let status = machine_run(budget)
+    let start = machine_instruction_count()
+    machine_set_instruction_limit(start + maxInstructions)
+    queueScript(keyScript, start: start)
+    if let hibernateAt { machine_hibernate_at(start + hibernateAt) }
+    var status = machine_run(budget)
+    while status == RUN_DRAINED {
+        // At a safe point: saved, then this run ends (or, with --then, goes
+        // on N more instructions, the reference a resumed run is compared with).
+        let saved = hibernateRun(app: app, runArgs: args, to: hibernateTo, startedAt: start)
+        machine_drain_end()
+        if saved != nil, let more = thenRun {
+            machine_set_instruction_limit(machine_instruction_count() + more)
+            status = machine_run(more)
+            thenRun = nil
+        } else if saved != nil {
+            exit(0)
+        } else {
+            let left = start + budget > machine_instruction_count() ? start + budget - machine_instruction_count() : 0
+            status = machine_run(left)
+        }
+    }
 
     let count = machine_instruction_count()
     relaunchAtWantedDepth()
@@ -1032,6 +1072,16 @@ func runCommand(_ args: [String]) {
     var regs = [CChar](repeating: 0, count: 1024)
     machine_describe_cpu(&regs, regs.count)
     print(str(regs))
+    if let snapshotEnd {
+        // The state as the run left it, for bluebox hibernate-diff.
+        var stats = hb_stats()
+        var serr = [CChar](repeating: 0, count: 512)
+        if hb_save_file(snapshotEnd, &stats, &serr, serr.count) {
+            print("snapshot: \(snapshotEnd) (\(stats.file_bytes) bytes)")
+        } else {
+            eprint("bluebox: \(str(serr))\n")
+        }
+    }
     var jitLine = [CChar](repeating: 0, count: 1024)
     machine_jit_report(&jitLine, jitLine.count)
     if jitLine[0] != 0 { print(str(jitLine)) }
@@ -1735,6 +1785,8 @@ guard let command = argv.first else { usage() }
 let rest = Array(argv.dropFirst())
 switch command {
 case "run": runCommand(rest)
+case "resume": resumeCommand(rest)
+case "hibernate-diff": hibernateDiffCommand(rest)
 case "screensaver": screensaverCommand(rest)
 case "import": importCommand(rest)
 case "send": sendCommand(rest)

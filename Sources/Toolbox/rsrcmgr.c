@@ -32,6 +32,8 @@ typedef struct {
     gaddr maph;       /* guest handle to the map */
     bool read_only;
     bool rd_perm;     /* opened with fsRdPerm: its fork isn't written through the File Manager */
+    bool gone;        /* its file changed or went while the program hibernated: never written */
+    int64_t disk[4];  /* the file as read or last written (fm_disk_stamp) */
 } resfile;
 
 /* A compressed resource whose decompressor is not built in: run the
@@ -880,9 +882,12 @@ static int16_t open_fork(const char *path, const uint8_t *fork, uint32_t len, bo
     f->maph = maph;
     f->read_only = read_only;
     f->rd_perm = false;
+    f->gone = false;
     wr16(m + 20, (uint16_t)f->refnum);
-    if (path)
+    if (path) {
         fm_fcb_record(f->refnum, path, true, !read_only, len, 0);
+        fm_disk_stamp(path, f->disk);
+    }
     if (read_only)
         wr16(m + 22, rd16(m + 22) | 0x80); /* mapReadOnly */
 
@@ -1372,8 +1377,12 @@ static int16_t update_file(resfile *f)
     uint32_t len;
     uint8_t *fork = build_fork(f, &l, attrs, &len);
     int16_t err = noErr;
-    if (f->path && !f->read_only && !write_host_fork(f->path, fork, len))
+    if (f->gone)
+        err = ioErr; /* changed while hibernated: not overwritten */
+    else if (f->path && !f->read_only && !write_host_fork(f->path, fork, len))
         err = ioErr;
+    if (f->path && !f->gone)
+        fm_disk_stamp(f->path, f->disk);
     bb_free(f->fork);
     f->fork = fork;
     f->len = len;
@@ -1394,6 +1403,34 @@ void tb_UpdateResFile(int16_t rn)
         return;
     }
     set_res_err(update_file(f));
+}
+
+void rm_files_before_hibernate(void)
+{
+    for (int i = 0; i < MAX_RESFILES; i++)
+        if (files[i].used && files[i].path && !files[i].gone)
+            fm_disk_stamp(files[i].path, files[i].disk);
+}
+
+/* Resumed after hibernating (reattach.c): each resource file opened from
+ * the host whose file changed or went meanwhile is gone, never written
+ * again (its resources stay as they were read).  Returns how many. */
+int rm_files_after_resume(void)
+{
+    int n = 0;
+    for (int i = 0; i < MAX_RESFILES; i++) {
+        resfile *f = &files[i];
+        if (!f->used || !f->path || f->gone)
+            continue;
+        int64_t now[4];
+        fm_disk_stamp(f->path, now);
+        if (memcmp(now, f->disk, sizeof now)) {
+            f->gone = true;
+            n++;
+            LOGF(LOG_IDLE, "resume: %s (resource file) changed while hibernated: not written from now on\n", f->path);
+        }
+    }
+    return n;
 }
 
 /* At ExitToShell, as the Resource Manager did when closing every file. */

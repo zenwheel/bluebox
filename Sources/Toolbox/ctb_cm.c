@@ -1161,3 +1161,12 @@ void cm_reset_all(void)
     }
     booted = true;
 }
+
+/* A connection open, opening or listening (CMNew alone opens none). */
+bool ctb_connections_open(void)
+{
+    for (int i = 0; i < MAX_CONNS; i++)
+        if (conns[i].used && conns[i].state != ST_CLOSED)
+            return true;
+    return false;
+}

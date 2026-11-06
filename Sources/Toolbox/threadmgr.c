@@ -115,6 +115,16 @@ void threads_reset(void)
     scheduler = dbg_new = dbg_dispose = dbg_schedule = 0;
 }
 
+/* The program's own threads, besides the application's: each on a host
+ * thread a snapshot cannot carry. */
+int threads_live(void)
+{
+    int n = 0;
+    for (int i = 1; i < MAX_THREADS; i++)
+        n += threads[i].used;
+    return n;
+}
+
 static int find(int32_t id)
 {
     if (id == kCurrentThreadID)

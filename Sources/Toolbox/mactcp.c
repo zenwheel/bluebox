@@ -1055,3 +1055,13 @@ void mactcp_install_resolver(void)
     appledouble_write(path, &mf, err, sizeof err);
     mac_file_free(&mf);
 }
+
+/* A stream made and not released (reattach.c: a hibernated program
+ * cannot take its connections along). */
+bool mactcp_any_open(void)
+{
+    for (int i = 0; i < MAX_STREAMS; i++)
+        if (streams[i].used)
+            return true;
+    return false;
+}

@@ -25,6 +25,10 @@ uint32_t mac_now(void)
     return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET + clock_set);
 }
 
+/* A resumed program whose date does not catch up (reattach.c): the
+ * clock as it was when it hibernated, the seconds away taken off. */
+void osutil_clock_back(int64_t secs) { clock_set -= secs; }
+
 /* SetDateTime: the clock set, for the session (the host's stays). */
 int16_t tb_SetDateTime(uint32_t secs)
 {

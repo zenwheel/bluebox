@@ -51,6 +51,7 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
+#include <zlib.h>
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
@@ -939,20 +940,152 @@ void hb_free_buffer(uint8_t *buf)
     bb_host_free(buf);
 }
 
-bool hb_save_file(const char *path, hb_stats *stats, char *err, size_t errlen)
+/* ---- Files ----
+ *
+ * A snapshot file: a header (its own magic, the build's UUID, the sizes),
+ * the caller's record of the launch (bytes, kept as they are, so a host
+ * can read what program it is without inflating the rest), then the
+ * snapshot deflated with zlib (most of it is zero: the state sections'
+ * bss, the guest's memory the program never touched). */
+#define FILE_MAGIC "BBHIBZ01"
+
+typedef struct {
+    char magic[8];
+    uint32_t version, flags;
+    uint8_t uuid[16];
+    uint64_t raw_len, data_len, extra_len;
+} file_wrapper;
+
+static bool write_all(FILE *f, const void *p, size_t n) { return !n || fwrite(p, 1, n, f) == n; }
+
+bool hb_save_file_extra(const char *path, const void *extra, size_t extra_len, hb_stats *stats, char *err,
+                        size_t errlen)
 {
     uint8_t *buf;
     size_t len;
     if (!hb_save_buffer(&buf, &len, stats, err, errlen))
         return false;
-    FILE *f = fopen(path, "wb");
-    bool ok = f && fwrite(buf, 1, len, f) == len;
+    uLongf zlen = compressBound((uLong)len);
+    uint8_t *z = bb_host_malloc(zlen);
+    if (!z || compress2(z, &zlen, buf, (uLong)len, 6) != Z_OK) {
+        bb_host_free(z);
+        hb_free_buffer(buf);
+        snprintf(err, errlen, "out of memory compressing the snapshot");
+        return false;
+    }
+    file_wrapper fw;
+    memset(&fw, 0, sizeof fw);
+    memcpy(fw.magic, FILE_MAGIC, 8);
+    fw.version = VERSION;
+    memcpy(fw.uuid, img.uuid, 16);
+    fw.raw_len = len;
+    fw.data_len = zlen;
+    fw.extra_len = extra_len;
+    hb_free_buffer(buf);
+    /* Written beside, then renamed over: never half a snapshot. */
+    char tmp[2048];
+    snprintf(tmp, sizeof tmp, "%s.partial", path);
+    FILE *f = fopen(tmp, "wb");
+    bool ok = f && write_all(f, &fw, sizeof fw) && write_all(f, extra, extra_len) && write_all(f, z, zlen);
     if (f && fclose(f) != 0)
         ok = false;
-    hb_free_buffer(buf);
-    if (!ok)
+    bb_host_free(z);
+    if (ok && rename(tmp, path) != 0)
+        ok = false;
+    if (!ok) {
+        unlink(tmp);
         snprintf(err, errlen, "%s: cannot write", path);
-    return ok;
+        return false;
+    }
+    if (stats)
+        stats->file_bytes = sizeof fw + extra_len + zlen;
+    return true;
+}
+
+bool hb_save_file(const char *path, hb_stats *stats, char *err, size_t errlen)
+{
+    return hb_save_file_extra(path, NULL, 0, stats, err, errlen);
+}
+
+static bool read_wrapper(FILE *f, const char *path, file_wrapper *fw, char *err, size_t errlen)
+{
+    if (fread(fw, 1, sizeof *fw, f) != sizeof *fw || memcmp(fw->magic, FILE_MAGIC, 8)) {
+        snprintf(err, errlen, "%s: not a snapshot", path);
+        return false;
+    }
+    if (fw->version != VERSION) {
+        snprintf(err, errlen, "%s: not a snapshot this version of Blue Box reads", path);
+        return false;
+    }
+    if (fw->extra_len > (1u << 24) || fw->raw_len > ((uint64_t)1 << 36) || fw->data_len > ((uint64_t)1 << 36)) {
+        snprintf(err, errlen, "%s: the snapshot is damaged", path);
+        return false;
+    }
+    return true;
+}
+
+bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *same_build, char *err, size_t errlen)
+{
+    *extra = NULL;
+    *extra_len = 0;
+    if (!ready(err, errlen))
+        return false;
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        snprintf(err, errlen, "%s: cannot open", path);
+        return false;
+    }
+    file_wrapper fw;
+    bool ok = read_wrapper(f, path, &fw, err, errlen);
+    uint8_t *e = ok ? bb_host_malloc(fw.extra_len + 1) : NULL;
+    if (ok && (!e || fread(e, 1, fw.extra_len, f) != fw.extra_len)) {
+        snprintf(err, errlen, "%s: cannot read", path);
+        ok = false;
+    }
+    fclose(f);
+    if (!ok) {
+        bb_host_free(e);
+        return false;
+    }
+    e[fw.extra_len] = 0;
+    *extra = e;
+    *extra_len = fw.extra_len;
+    if (same_build)
+        *same_build = !memcmp(fw.uuid, img.uuid, 16);
+    return true;
+}
+
+bool hb_file_load(const char *path, uint8_t **out, size_t *len, char *err, size_t errlen)
+{
+    *out = NULL;
+    *len = 0;
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        snprintf(err, errlen, "%s: cannot open", path);
+        return false;
+    }
+    file_wrapper fw;
+    bool ok = read_wrapper(f, path, &fw, err, errlen);
+    uint8_t *z = ok ? bb_host_malloc(fw.data_len ? fw.data_len : 1) : NULL;
+    uint8_t *raw = ok ? bb_host_malloc(fw.raw_len ? fw.raw_len : 1) : NULL;
+    if (ok && (!z || !raw || fseek(f, (long)fw.extra_len, SEEK_CUR) != 0 || fread(z, 1, fw.data_len, f) != fw.data_len)) {
+        snprintf(err, errlen, "%s: cannot read", path);
+        ok = false;
+    }
+    fclose(f);
+    uLongf rlen = (uLongf)fw.raw_len;
+    if (ok && (uncompress(raw, &rlen, z, (uLong)fw.data_len) != Z_OK || rlen != fw.raw_len)) {
+        snprintf(err, errlen, "%s: the snapshot is damaged", path);
+        ok = false;
+    }
+    bb_host_free(z);
+    if (!ok) {
+        bb_host_free(raw);
+        return false;
+    }
+    *out = raw;
+    *len = rlen;
+    return true;
 }
 
 /* ---- Reading ---- */
@@ -1242,24 +1375,12 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
 
 bool hb_restore_file(const char *path, int flags, hb_stats *stats, char *err, size_t errlen)
 {
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        snprintf(err, errlen, "%s: cannot open", path);
+    uint8_t *buf;
+    size_t n;
+    if (!hb_file_load(path, &buf, &n, err, errlen))
         return false;
-    }
-    fseek(f, 0, SEEK_END);
-    long n = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t *buf = n > 0 ? bb_host_malloc((size_t)n) : NULL;
-    bool ok = buf && fread(buf, 1, (size_t)n, f) == (size_t)n;
-    fclose(f);
-    if (!ok) {
-        bb_host_free(buf);
-        snprintf(err, errlen, "%s: cannot read", path);
-        return false;
-    }
-    ok = hb_restore_buffer(buf, (size_t)n, flags, stats, err, errlen);
-    bb_host_free(buf);
+    bool ok = hb_restore_buffer(buf, n, flags, stats, err, errlen);
+    hb_free_buffer(buf);
     return ok;
 }
 

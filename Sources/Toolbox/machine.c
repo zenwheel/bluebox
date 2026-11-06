@@ -1025,6 +1025,29 @@ const uint8_t *machine_system_resource(uint32_t type, int16_t id, uint32_t *len)
     return NULL;
 }
 
+/* A snapshot put back in another process (reattach.c): the machine's
+ * clock goes on from saved_ns, the time it read when the snapshot was
+ * taken, whatever this process's monotonic clock reads (it starts again at
+ * every boot); Ticks, the Time Manager, sound and UpTime with it.  The
+ * date catches up by the host's seconds since (away), or goes on as if
+ * none had passed. */
+void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away)
+{
+    if (machine_wall_clock()) {
+        ticks_base_ns = machine_unpaused_ns(now_ns()) + skipped_ns - saved_ns;
+    } else {
+        uint64_t ran = timed_68000() ? cycles_ns(cpu.cycles) + (cpu.icount - cpu.timed) * 100u : cpu.icount * 100u;
+        skipped_ns = saved_ns > ran ? saved_ns - ran : 0;
+    }
+    if (catch_up_date) {
+        boot_time += (uint32_t)away;
+        uint32_t secs = boot_time + (uint32_t)(machine_time_ns() / 1000000000u);
+        wr32(LM_Time, secs);
+    } else {
+        osutil_clock_back((int64_t)away);
+    }
+}
+
 /* SetDateTime: Time from now on counts from secs. */
 void machine_set_time(uint32_t secs)
 {
@@ -1073,6 +1096,12 @@ run_status machine_run(uint64_t max)
         } else {
             done += cpu_run(&cpu, n);
             pace_68000();
+        }
+        if (drain_slice_point()) {
+            /* A safe point (drain.c): a snapshot's, or Suspend's. */
+            if (drain_exits())
+                return RUN_DRAINED;
+            machine_pause_point();
         }
         idle_slice();
         machine_advance_ticks();
