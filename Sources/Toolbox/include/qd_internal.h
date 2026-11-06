@@ -36,12 +36,17 @@ static inline uint32_t make_pt(int16_t v, int16_t h) { return ((uint32_t)(uint16
 typedef struct {
     int16_t top, bottom;
     int n;           /* number of x values (2 per interval) */
-    int16_t *x;
+    int16_t *x;      /* in its region's xs */
 } rband;
 
+/* The bands' x values share one block (xs, nx used of xcap): a block per
+ * band was a million allocations a second in a program that redraws
+ * (Shards), each of them tracked for a snapshot. */
 typedef struct {
     int nbands, cap;
     rband *bands;
+    int nx, xcap;
+    int16_t *xs;
 } hrgn;
 
 void hrgn_init(hrgn *r);

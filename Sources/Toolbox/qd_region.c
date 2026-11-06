@@ -20,17 +20,16 @@ void hrgn_init(hrgn *r) { memset(r, 0, sizeof *r); }
 
 void hrgn_free(hrgn *r)
 {
-    for (int i = 0; i < r->nbands; i++)
-        bb_free(r->bands[i].x);
+    bb_free(r->xs);
     bb_free(r->bands);
     memset(r, 0, sizeof *r);
 }
 
+/* Empty, keeping the room for the next shape. */
 static void clear(hrgn *r)
 {
-    for (int i = 0; i < r->nbands; i++)
-        bb_free(r->bands[i].x);
     r->nbands = 0;
+    r->nx = 0;
 }
 
 static bool same_x(const int16_t *a, int na, const int16_t *b, int nb)
@@ -54,12 +53,28 @@ static void add_band(hrgn *r, int top, int bottom, const int16_t *x, int n)
         r->cap = r->cap ? r->cap * 2 : 8;
         r->bands = bb_realloc(r->bands, (size_t)r->cap * sizeof *r->bands, BB_TAG(rband));
     }
+    if (r->nx + n > r->xcap) {
+        /* The bands point into xs: when it moves they move with it, and so
+         * does x if it is one of them (a region adding its own runs). */
+        uintptr_t old = (uintptr_t)r->xs, end = old + (size_t)r->xcap * sizeof *r->xs;
+        uintptr_t from = (uintptr_t)x;
+        int cap = r->xcap ? r->xcap * 2 : 32;
+        while (cap < r->nx + n)
+            cap *= 2;
+        r->xs = bb_realloc(r->xs, (size_t)cap * sizeof *r->xs, BB_BYTES);
+        r->xcap = cap;
+        for (int i = 0; i < r->nbands; i++)
+            r->bands[i].x = r->xs + ((uintptr_t)r->bands[i].x - old) / sizeof *r->xs;
+        if (from >= old && from < end)
+            x = r->xs + (from - old) / sizeof *r->xs;
+    }
     rband *b = &r->bands[r->nbands++];
     b->top = (int16_t)top;
     b->bottom = (int16_t)bottom;
     b->n = n;
-    b->x = bb_malloc((size_t)n * sizeof *b->x, BB_BYTES);
-    memcpy(b->x, x, (size_t)n * sizeof *b->x);
+    b->x = r->xs + r->nx;
+    r->nx += n;
+    memmove(b->x, x, (size_t)n * sizeof *b->x);
 }
 
 void hrgn_rect(hrgn *r, qrect q)

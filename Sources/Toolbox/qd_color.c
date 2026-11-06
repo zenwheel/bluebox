@@ -115,7 +115,10 @@ void qd_px_rgb_all(int depth, gaddr ctab, uint16_t (*rgb)[3])
     }
 }
 
-static uint32_t dist(const uint16_t a[3], const uint16_t b[3])
+/* Inlined: at -Os it was a call in qd_rgb_px's search, and a call in a loop
+ * that tight ran 13% slower or not by where the linker put it (an
+ * address 4 bytes off a multiple of 8: Sirtet Voyager's fades). */
+static inline __attribute__((always_inline)) uint32_t dist(const uint16_t a[3], const uint16_t b[3])
 {
     int dr = (a[0] >> 8) - (b[0] >> 8), dg = (a[1] >> 8) - (b[1] >> 8), db = (a[2] >> 8) - (b[2] >> 8);
     return (uint32_t)(dr * dr * 3 + dg * dg * 4 + db * db * 2);
