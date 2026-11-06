@@ -174,5 +174,188 @@ extension BlueBox {
             #expect(px(image, 64, 1, 1) == 0x000000)
             for obj in [box, null, shader, tex, descStorage, dataStorage, v, dc] { Q.call("Q3Object_Dispose", [obj]) }
         }
+
+        // ---- OpenGL ----
+
+        typealias G = OpenGL
+        let g = OpenGL()
+
+        func checksum(_ mem: UInt32, _ n: Int) -> UInt64 {
+            var h: UInt64 = 1469598103934665603
+            for i in 0..<n { h = (h ^ UInt64(rd32(mem + UInt32(4 * i)) & 0xFFFFFF)) &* 1099511628211 }
+            return h
+        }
+
+        /// Values glGet answers for a few of each kind of state.
+        func dump() -> [UInt32] {
+            let out = tb_NewPtr(64 * 4, false, true)
+            defer { tb_DisposePtr(out) }
+            var all: [UInt32] = []
+            for (pname, n) in [(0x0BA6, 16), (0x0BA7, 16), (0x0BA3, 1), (0x0C22, 4), (0x0B66, 4), (0x0BA2, 4),
+                               (0x8069, 1), (0x0B63, 1), (0x0B64, 1), (0x0B74, 1), (0x0B53, 4), (0x0B00, 4),
+                               (0x0B65, 1), (0x0B22, 1), (0x0B21, 1), (0x0BA0, 1), (0x0B11, 1)] {
+                g.gl("glGetFloatv", [UInt32(pname), out])
+                all += (0..<n).map { rd32(out + UInt32(4 * $0)) }
+            }
+            g.gl("glGetLightfv", [0x4000, 0x1203 /* GL_POSITION */, out])
+            all += (0..<4).map { rd32(out + UInt32(4 * $0)) }
+            for cap: UInt32 in [0x0B71, 0x0B50, 0x4000, 0x0B60, 0x0DE1, 0x0B57] { all.append(g.gl("glIsEnabled", [cap])) }
+            return all
+        }
+
+        /// A context drawing off screen with much of its state set: depth
+        /// tested, lit, fogged and textured (its pixels gone from the
+        /// program's memory), a model-view stack two deep, and display
+        /// lists of immediate calls, a vertex array and a GLU sphere.  The
+        /// one that goes on after hibernating and the resumed one show the
+        /// frame as it was (the framebuffer carried), have the same state,
+        /// and draw the same frame again.
+        @Test func openGLContextComesBack() {
+            let dir = launchTestApp()
+            startLoop()
+            _ = initToolbox()
+            let ctx = g.context()
+            let w = 32, mem = tb_NewPtr(Int32(w * w * 4), false, true)
+            #expect(g.gl("aglSetOffScreen", [ctx, UInt32(w), UInt32(w), UInt32(w * 4), mem]) == 1)
+            g.gl("glClearColor", fp: [0.1, 0.2, 0.3, 1])
+            g.gl("glEnable", [0x0B71]); g.gl("glDepthFunc", [0x0203]) // DEPTH_TEST, LEQUAL
+            g.gl("glMatrixMode", [0x1701]); g.gl("glLoadIdentity")
+            g.gl("glFrustum", fp: [-1, 1, -1, 1, 1, 10])
+            g.gl("glMatrixMode", [0x1700]); g.gl("glLoadIdentity")
+            g.gl("glTranslatef", fp: [0, 0, -3])
+            g.gl("glLightfv", [0x4000, 0x1203, g.floats([1, 1, 1, 0])])  // under the translation: eye coordinates
+            g.gl("glPushMatrix")
+            g.gl("glRotatef", fp: [30, 0, 1, 0])
+            g.gl("glEnable", [0x0B50]); g.gl("glEnable", [0x4000])          // LIGHTING, LIGHT0
+            g.gl("glLightfv", [0x4000, 0x1201, g.floats([1, 0.5, 0.25, 1])])
+            g.gl("glMaterialfv", [0x0404, 0x1602, g.floats([0.8, 0.8, 0.8, 1])]) // FRONT, AMBIENT_AND_DIFFUSE
+            g.gl("glEnable", [0x0B60]); g.gl("glFogi", [0x0B65, 0x2601])    // FOG, LINEAR
+            g.gl("glFogf", [0x0B63], fp: [2]); g.gl("glFogf", [0x0B64], fp: [5])
+            g.gl("glFogfv", [0x0B66, g.floats([0, 1, 0, 1])])
+            let names = tb_NewPtr(8, false, true)
+            g.gl("glGenTextures", [1, names])
+            g.gl("glBindTexture", [G.GL_TEXTURE_2D, rd32(names)])
+            g.gl("glTexParameteri", [G.GL_TEXTURE_2D, 0x2801, 0x2600])
+            g.gl("glTexParameteri", [G.GL_TEXTURE_2D, 0x2800, 0x2600])
+            let texels = g.words([0xFF00_00FF, 0x00FF_00FF, 0x0000_FFFF, 0xFFFF_FFFF]) // RGBA bytes
+            g.gl("glTexImage2D", [G.GL_TEXTURE_2D, 0, G.GL_RGBA, 2, 2, 0, G.GL_RGBA, G.GL_UNSIGNED_BYTE, texels])
+            for i in 0..<4 { wr32(texels + UInt32(4 * i), 0) }
+            g.gl("glEnable", [G.GL_TEXTURE_2D])
+            let list = g.gl("glGenLists", [3])
+            #expect(list != 0)
+            g.gl("glNewList", [list, 0x1300]) // GL_COMPILE
+            g.gl("glBegin", [G.GL_QUADS])
+            for (x, y, s, t) in [(-1.0, -1.0, 0.0, 0.0), (1.0, -1.0, 1.0, 0.0), (1.0, 1.0, 1.0, 1.0), (-1.0, 1.0, 0.0, 1.0)] {
+                g.gl("glNormal3f", fp: [0, 0, 1]); g.gl("glTexCoord2f", fp: [s, t]); g.gl("glVertex3f", fp: [x, y, 0])
+            }
+            g.gl("glEnd")
+            g.gl("glEndList")
+            #expect(g.gl("glIsList", [list + 2]) == 1)
+            g.gl("glNewList", [list + 1, 0x1300])
+            g.gl("glDisable", [G.GL_TEXTURE_2D])
+            let quadric = g.gl("gluNewQuadric")
+            g.gl("gluQuadricDrawStyle", [quadric, 100012 /* GLU_LINE */])
+            g.gl("gluSphere", [quadric, 0, 0, 8, 6], fp: [0.5])
+            let verts = g.floats([0.6, 0.6, 0.5, 0.9, 0.6, 0.5, 0.9, 0.9, 0.5])
+            g.gl("glVertexPointer", [3, G.GL_FLOAT, 0, verts])
+            g.gl("glEnableClientState", [G.GL_VERTEX_ARRAY])
+            g.gl("glDrawArrays", [G.GL_TRIANGLES, 0, 3])
+            g.gl("glDisableClientState", [G.GL_VERTEX_ARRAY])
+            g.gl("glEnable", [G.GL_TEXTURE_2D])
+            g.gl("glEndList")
+            for i in 0..<9 { wr32(verts + UInt32(4 * i), 0) }
+            g.gl("gluQuadricDrawStyle", [quadric, 100011 /* GLU_POINT: the list keeps GLU_LINE */])
+            #expect(hostgl_display_lists() == 3)
+            func frame() -> UInt64 {
+                g.gl("glClear", [0x4100])
+                g.gl("glCallList", [list])
+                g.gl("glCallList", [list + 1])
+                g.gl("aglSwapBuffers", [ctx])
+                return checksum(mem, w * w)
+            }
+            #expect(g.gl("glGetError") == 0)
+            let before = frame()
+            let state = dump()
+            #expect(g.gl("glGetError") == 0)
+            #expect(rd32(mem + UInt32(4 * (16 * w + 16))) & 0xFFFFFF != 0x1A334C) // something drawn mid-way
+
+            let snap = hibernate(dir, "gl.bbhib")
+            #expect(hostgl_saved_bytes() == 0)
+            #expect(dump() == state)              // the process that hibernated, as it was
+            #expect(g.gl("glGetError") == 0)
+            #expect(frame() == before)
+            g.gl("glPopMatrix")
+            g.gl("glClearColor", fp: [1, 1, 1, 1])
+            _ = frame()
+
+            resume(snap)
+            #expect(hostgl_saved_bytes() > 32 * 32 * 8)
+            for i in 0..<(w * w) { wr32(mem + UInt32(4 * i), 0) }
+            g.gl("aglSwapBuffers", [ctx])         // the frame as it was, before anything is drawn
+            #expect(checksum(mem, w * w) == before)
+            #expect(hostgl_saved_bytes() == 0)
+            #expect(hostgl_display_lists() == 3)
+            #expect(dump() == state)
+            #expect(frame() == before)
+            #expect(g.gl("glGetError") == 0)
+            #expect(g.gl("glIsList", [list + 2]) == 1)
+            g.gl("aglDestroyContext", [ctx])
+        }
+
+        /// Texture names after resuming are the ones the host would have
+        /// given: one made and never bound is still taken, the next made
+        /// is the one after; an error the host had is the program's still.
+        @Test func openGLNamesAndErrors() {
+            let dir = launchTestApp()
+            startLoop()
+            let ctx = g.context()
+            let mem = tb_NewPtr(8 * 8 * 4, false, true)
+            #expect(g.gl("aglSetOffScreen", [ctx, 8, 8, 32, mem]) == 1)
+            let names = tb_NewPtr(16, false, true)
+            g.gl("glGenTextures", [3, names])
+            let t = (0..<3).map { rd32(names + UInt32(4 * $0)) }
+            g.gl("glBindTexture", [G.GL_TEXTURE_2D, t[0]])
+            g.gl("glBindTexture", [G.GL_TEXTURE_2D, t[2]])
+            g.gl("glBindTexture", [G.GL_TEXTURE_2D, 0])
+            g.gl("glEnable", [0x1234])  // GL_INVALID_ENUM, not yet asked for
+            let snap = hibernate(dir, "names.bbhib")
+            g.gl("glGenTextures", [1, names])
+            let next = rd32(names)
+            #expect(!t.contains(next))
+            #expect(g.gl("glGetError") == 0x0500)
+            resume(snap)
+            #expect(g.gl("glGetError") == 0x0500)
+            #expect(g.gl("glGetError") == 0)
+            #expect(g.gl("glIsTexture", [t[0]]) == 1 && g.gl("glIsTexture", [t[1]]) == 0)
+            g.gl("glGenTextures", [1, names])
+            #expect(rd32(names) == next)
+            g.gl("aglDestroyContext", [ctx])
+        }
+
+        /// A program between glBegin and glEnd, or compiling a display
+        /// list, at its event loop: refused, saying so.
+        @Test func openGLMidwayIsRefused() {
+            launchTestApp()
+            startLoop()
+            let ctx = g.context()
+            g.gl("glBegin", [G.GL_TRIANGLES])
+            machine_drain_begin(true)
+            _ = machine_run(10_000_000)
+            #expect(!machine_hibernatable())
+            #expect(String(cString: machine_drain_reason()).contains("glBegin"))
+            machine_drain_end()
+            g.gl("glEnd")
+            g.gl("glNewList", [g.gl("glGenLists", [1]), 0x1300])
+            machine_drain_begin(true)
+            _ = machine_run(10_000_000)
+            #expect(String(cString: machine_drain_reason()).contains("display list"))
+            machine_drain_end()
+            g.gl("glEndList")
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable())
+            machine_drain_end()
+            g.gl("aglDestroyContext", [ctx])
+        }
     }
 }

@@ -23,7 +23,9 @@
  *   the 3D       QuickDraw 3D's and RAVE's frames and textures are the
  *                machine's (r3d.c), what the host had drawn and held read
  *                back into it for the snapshot; the host's are made again
- *                as each is first used
+ *                as each is first used; OpenGL's contexts the same way,
+ *                their state, textures, framebuffers and display lists
+ *                (opengl.c, opengl_hib.c)
  *
  * What a snapshot cannot carry is refused before it is taken
  * (hibernate_io_blocker): connections, serial ports, print jobs.
@@ -41,6 +43,7 @@
 #include <unistd.h>
 
 #include "hibernate.h"
+#include "hostgl.h"
 #include "machine.h"
 #include "mem.h"
 #include "r3d.h"
@@ -95,6 +98,7 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     saved.layout = g_mem_layout;
     files_before_hibernate();
     r3d_before_hibernate(); /* what the host drew and holds, into the machine */
+    hostgl_before_hibernate();
     /* BLUEBOX_HIBERNATE_SCAN=1: what the snapshot holds of the host's memory
      * (and any pointer the map misses), listed first. */
     const char *scan = getenv("BLUEBOX_HIBERNATE_SCAN");
@@ -103,6 +107,7 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     hb_stats st;
     bool ok = hb_save_file_extra(path, record, record ? strlen(record) : 0, &st, err, errlen);
     r3d_after_hibernate();
+    hostgl_after_hibernate();
     if (ok && bytes)
         *bytes = st.file_bytes;
     if (ok) {
@@ -194,8 +199,9 @@ const char *print_job_open(void) { return print_job_in_progress() ? "is printing
  * files) and is not reattached yet: refused too. */
 const char *host_media_open(void)
 {
-    if (hostgl_any_live())
-        return "has an OpenGL context open";
+    const char *gl = hostgl_blocker();
+    if (gl)
+        return gl;
     if (qt_host_movies_open())
         return "has a QuickTime movie the host plays open";
     if (drivevol_any_mounted())
@@ -217,4 +223,5 @@ void hibernate_reattach_host(void)
     sound_input_after_resume(); /* a recording stops */
     q3_view_after_resume();  /* QuickDraw 3D's textures, made again from its objects */
     r3d_after_resume();      /* QuickDraw 3D's and RAVE's frames and textures, made again as used */
+    hostgl_after_resume();   /* OpenGL's contexts, made again as used */
 }

@@ -48,6 +48,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "hostgl.h"
 #include "machine.h"
 #include "ppc.h"
 #include "tb_internal.h"
@@ -156,6 +157,8 @@ bool drain_expired(void)
                "code), which did not come back", in ? " to " : "", in ? in : "");
     else if (in)
         refuse("the program is waiting inside %s, which could not be interrupted", in);
+    else if (hostgl_blocker())
+        refuse("the program %s and did not come out of it", hostgl_blocker());
     else
         refuse("the program did not come to a point where it could be saved");
     return true;
@@ -305,8 +308,8 @@ bool drain_slice_point(void)
         stopped_here = false;
     } else if (drain_expired()) {
         return true;
-    } else if (c->icount < grace_until || !drain_program_level()) {
-        return false;
+    } else if (c->icount < grace_until || !drain_program_level() || hostgl_blocker()) {
+        return false; /* OpenGL mid-way (glBegin, a list compiling): it comes out of it soon */
     } else {
         snprintf(stopped_at, sizeof stopped_at, "between instructions (pc %08X)", machine_pc());
     }

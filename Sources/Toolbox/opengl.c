@@ -25,6 +25,14 @@
  * the drawable on aglSwapBuffers (and on glFlush when single-buffered).
  * Without a host OpenGL (Linux) there are no gl exports and no
  * OpenGLLibrary.
+ *
+ * Hibernating: a context's state is the host's, read back into the
+ * machine before a snapshot (opengl_hib.c); its display lists the host
+ * cannot give back, so each call compiled into one is recorded as it is
+ * compiled, and compiled again from the record.  A resumed program's
+ * contexts are made again at their first use (rebuild): sharing as they
+ * did, their textures and lists, their framebuffers' contents, then their
+ * state.  GLU's quadrics are made again with their settings.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -33,54 +41,14 @@
 #include "tb_protos_gen.h"
 
 #ifdef __APPLE__
-/* Deprecated since macOS 10.14, and still there. */
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#include <OpenGL/OpenGL.h>
-#include <OpenGL/gl.h>
-#include <OpenGL/glext.h>
-#include <OpenGL/glu.h>
+#include "hostgl_internal.h"
 
 /* ---------------------------------------------------------------------- */
 /* Contexts */
 
-/* A vertex array as the program described it. */
-typedef struct {
-    bool on;
-    GLint size;
-    GLenum type;
-    GLsizei stride;
-    gaddr ptr;
-    void *host; /* converted elements */
-    size_t host_cap;
-} garray;
-
-enum { MAX_UNITS = 8, CLIENT_STACK = 16 };
-
-typedef struct {
-    garray vertex, normal, color, index, edge, tex[MAX_UNITS];
-} arrays;
-
-struct hostgl_ctx {
-    CGLContextObj cgl;
-    GLuint fbo, color, depth;
-    int depth_bits, stencil_bits;
-    int width, height;
-    bool sized;
-    GLenum draw_buffer, read_buffer; /* as the program set them */
-    arrays a;
-    arrays saved[CLIENT_STACK]; /* glPushClientAttrib's vertex array state */
-    int nsaved;
-    GLenum client_unit; /* glClientActiveTexture, from 0 */
-    /* glSelectBuffer and glFeedbackBuffer: the host's, and the program's */
-    GLuint *select;
-    GLfloat *feedback;
-    gaddr select_to, feedback_to;
-    GLsizei select_n, feedback_n;
-    GLenum render_mode;
-};
-
 static hostgl_ctx *cur;
-static int gl_live;
+enum { MAX_CONTEXTS = 64 };
+static hostgl_ctx *contexts[MAX_CONTEXTS]; /* every one made and not destroyed */
 BB_HOST static CGLPixelFormatObj pixel_format;
 BB_HOST static int available = -1; /* with pixel_format: this process's */
 
@@ -112,47 +80,71 @@ bool hostgl_available(void)
     return available;
 }
 
+static bool rebuild(hostgl_ctx *h);
+
 /* Make h current for a while (AGL works on contexts that aren't), then
- * put the program's back. */
-static void use(hostgl_ctx *h)
+ * put the program's back.  False when h has no host context and none can
+ * be made (resumed where the host has no OpenGL). */
+static bool use(hostgl_ctx *h)
 {
+    if (!h->cgl && !rebuild(h))
+        return false;
     if (CGLGetCurrentContext() != h->cgl)
         CGLSetCurrentContext(h->cgl);
+    return true;
 }
 static void unuse(void) { CGLSetCurrentContext(cur ? cur->cgl : NULL); }
+
+/* The framebuffer object and its renderbuffers, in h's new host context. */
+static void make_framebuffer(hostgl_ctx *h)
+{
+    glGenFramebuffersEXT(1, &h->fbo);
+    glGenRenderbuffersEXT(1, &h->color);
+    h->depth = 0;
+    if (h->depth_bits || h->stencil_bits)
+        glGenRenderbuffersEXT(1, &h->depth);
+    glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_TRUE);
+    glPixelStorei(GL_PACK_SWAP_BYTES, GL_TRUE);
+}
 
 hostgl_ctx *hostgl_create(hostgl_ctx *share, int depth_bits, int stencil_bits)
 {
     if (!hostgl_available())
+        return NULL;
+    int slot = -1;
+    for (int i = 0; i < MAX_CONTEXTS && slot < 0; i++)
+        if (!contexts[i])
+            slot = i;
+    if (slot < 0 || (share && !use(share)))
         return NULL;
     hostgl_ctx *h = bb_calloc(1, sizeof *h, BB_TAG(hostgl_ctx));
     if (!h)
         return NULL;
     if (CGLCreateContext(pixel_format, share ? share->cgl : NULL, &h->cgl) != kCGLNoError) {
         bb_free(h);
+        unuse();
         return NULL;
     }
+    h->group = share ? share->group : bb_calloc(1, sizeof *h->group, BB_TAG(glgroup));
+    if (!h->group) {
+        CGLDestroyContext(h->cgl);
+        bb_free(h);
+        unuse();
+        return NULL;
+    }
+    h->group->refs++;
     h->depth_bits = depth_bits;
     h->stencil_bits = stencil_bits;
     h->draw_buffer = h->read_buffer = GL_BACK;
     h->render_mode = GL_RENDER;
     use(h);
-    glGenFramebuffersEXT(1, &h->fbo);
-    glGenRenderbuffersEXT(1, &h->color);
-    if (depth_bits || stencil_bits)
-        glGenRenderbuffersEXT(1, &h->depth);
-    glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_TRUE);
-    glPixelStorei(GL_PACK_SWAP_BYTES, GL_TRUE);
+    make_framebuffer(h);
     unuse();
     hostgl_resize(h, 1, 1);
     h->sized = false;
-    gl_live++;
+    contexts[slot] = h;
     return h;
 }
-
-/* Contexts made and not destroyed: OpenGL's state is the host's, which a
- * hibernated program cannot take along (yet). */
-bool hostgl_any_live(void) { return gl_live > 0; }
 
 static void free_arrays(arrays *a)
 {
@@ -165,21 +157,39 @@ static void free_arrays(arrays *a)
         bb_free(a->tex[i].host);
 }
 
+static void free_group(glgroup *g)
+{
+    for (int i = 0; i < g->nlists; i++)
+        bb_free(g->lists[i].ops);
+    bb_free(g->lists);
+    bb_free(g->tex);
+    glh_free_textures(g);
+    bb_free(g);
+}
+
 void hostgl_destroy(hostgl_ctx *h)
 {
     if (!h)
         return;
-    gl_live--;
+    for (int i = 0; i < MAX_CONTEXTS; i++)
+        if (contexts[i] == h)
+            contexts[i] = NULL;
     if (cur == h)
         cur = NULL;
-    use(h);
-    glDeleteFramebuffersEXT(1, &h->fbo);
-    glDeleteRenderbuffersEXT(1, &h->color);
-    if (h->depth)
-        glDeleteRenderbuffersEXT(1, &h->depth);
-    unuse();
-    CGLDestroyContext(h->cgl);
+    if (h->cgl) {
+        use(h);
+        glDeleteFramebuffersEXT(1, &h->fbo);
+        glDeleteRenderbuffersEXT(1, &h->color);
+        if (h->depth)
+            glDeleteRenderbuffersEXT(1, &h->depth);
+        unuse();
+        CGLDestroyContext(h->cgl);
+    }
+    if (--h->group->refs <= 0)
+        free_group(h->group);
+    glh_free(h);
     free_arrays(&h->a);
+    bb_free(h->compiling.ops);
     bb_free(h->select);
     bb_free(h->feedback);
     bb_free(h);
@@ -188,7 +198,7 @@ void hostgl_destroy(hostgl_ctx *h)
 void hostgl_set_current(hostgl_ctx *h)
 {
     cur = h;
-    CGLSetCurrentContext(h ? h->cgl : NULL);
+    CGLSetCurrentContext(h ? h->cgl : NULL); /* made again (resumed) at its first call */
 }
 
 void hostgl_resize(hostgl_ctx *h, int width, int height)
@@ -203,7 +213,8 @@ void hostgl_resize(hostgl_ctx *h, int width, int height)
         height = 4096;
     if (h->sized && width == h->width && height == h->height)
         return;
-    use(h);
+    if (!use(h))
+        return;
     GLint rb = 0;
     glGetIntegerv(GL_RENDERBUFFER_BINDING_EXT, &rb);
     glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, h->fbo);
@@ -247,7 +258,8 @@ void hostgl_read_frame(hostgl_ctx *h, int x, int y, int width, int height, gaddr
         frame = n;
         frame_cap = need;
     }
-    use(h);
+    if (!use(h))
+        return;
     glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
     glPixelStorei(GL_PACK_ALIGNMENT, 4);
     glPixelStorei(GL_PACK_ROW_LENGTH, 0);
@@ -266,14 +278,18 @@ void hostgl_read_frame(hostgl_ctx *h, int x, int y, int width, int height, gaddr
 
 void hostgl_copy_state(hostgl_ctx *src, hostgl_ctx *dst, uint32_t mask)
 {
-    if (src && dst)
+    if (src && dst && use(src) && use(dst))
         CGLCopyContext(src->cgl, dst->cgl, mask);
+    unuse();
 }
+
+static void glyph_recorded(uint32_t list, int width, int height, int row_bytes, float xorig, float yorig, float xmove,
+                           const uint8_t *bits);
 
 void hostgl_glyph_list(uint32_t list, int width, int height, int row_bytes, float xorig, float yorig, float xmove,
                        const uint8_t *bits)
 {
-    if (!cur)
+    if (!cur || !use(cur))
         return;
     uint8_t *flipped = bb_malloc((size_t)(row_bytes * height) + 1, BB_BYTES);
     if (!flipped)
@@ -290,6 +306,7 @@ void hostgl_glyph_list(uint32_t list, int width, int height, int row_bytes, floa
     glBitmap(width, height, xorig, yorig, xmove, 0, flipped);
     glEndList();
     glPopClientAttrib();
+    glyph_recorded(list, width, height, row_bytes, xorig, yorig, xmove, flipped);
     bb_free(flipped);
 }
 
@@ -421,8 +438,11 @@ static gaddr guest_string(gaddr *slot_, const char *s)
             c->pc = c->lr;                                                                                            \
             return;                                                                                                   \
         }                                                                                                             \
-        if (CGLGetCurrentContext() != cur->cgl)                                                                       \
-            CGLSetCurrentContext(cur->cgl);                                                                           \
+        if (!use(cur)) {                                                                                              \
+            c->gpr[3] = 0;                                                                                            \
+            c->pc = c->lr;                                                                                            \
+            return;                                                                                                   \
+        }                                                                                                             \
     } while (0)
 #define DONE() (c->pc = c->lr)
 #define I(k) ((GLint)iv[k])
@@ -439,6 +459,7 @@ static gaddr guest_string(gaddr *slot_, const char *s)
         double fv[16];                                                                                                \
         ENTER();                                                                                                      \
         args_get(c, sig, iv, fv);                                                                                     \
+        hook(OP_##name, sig, iv, fv);                                                                                 \
         call;                                                                                                         \
         DONE();                                                                                                       \
     }
@@ -450,6 +471,8 @@ static gaddr guest_string(gaddr *slot_, const char *s)
         ENTER();                                                                                                      \
         T t[4];                                                                                                       \
         gread(t, c->gpr[3], n, sizeof(T));                                                                            \
+        if (cur->recording)                                                                                           \
+            record(OP_##name, NULL, 0, t, n * sizeof(T));                                                             \
         name(t);                                                                                                      \
         DONE();                                                                                                       \
     }
@@ -459,6 +482,8 @@ static gaddr guest_string(gaddr *slot_, const char *s)
         ENTER();                                                                                                      \
         T t[4];                                                                                                       \
         gread(t, c->gpr[4], n, sizeof(T));                                                                            \
+        if (cur->recording)                                                                                           \
+            record(OP_##name, &c->gpr[3], 1, t, n * sizeof(T));                                                       \
         host((GLenum)c->gpr[3], t);                                                                                   \
         DONE();                                                                                                       \
     }
@@ -466,10 +491,12 @@ static gaddr guest_string(gaddr *slot_, const char *s)
     static void w_##name(ppc_cpu *c)                                                                                  \
     {                                                                                                                 \
         ENTER();                                                                                                      \
-        T a[2], b[2];                                                                                                 \
-        gread(a, c->gpr[3], 2, sizeof(T));                                                                            \
-        gread(b, c->gpr[4], 2, sizeof(T));                                                                            \
-        name(a, b);                                                                                                   \
+        T ab[4];                                                                                                      \
+        gread(ab, c->gpr[3], 2, sizeof(T));                                                                           \
+        gread(ab + 2, c->gpr[4], 2, sizeof(T));                                                                       \
+        if (cur->recording)                                                                                           \
+            record(OP_##name, NULL, 0, ab, sizeof ab);                                                                \
+        name(ab, ab + 2);                                                                                             \
         DONE();                                                                                                       \
     }
 #define EXPORT(name, ...) { #name, w_##name },
@@ -792,10 +819,63 @@ static gaddr guest_string(gaddr *slot_, const char *s)
     X(glIsTexture, "i", glIsTexture(U(0))) \
     X(glIsTextureEXT, "i", glIsTexture(U(0))) \
     X(glGenLists, "i", glGenLists(I(0))) \
-    X(glGetError, "", glGetError()) \
+    X(glGetError, "", get_error()) \
     X(gluBuild1DMipmaps, "iiiiii", gluBuild1DMipmaps(U(0), I(1), I(2), U(3), U(4), P(5))) \
     X(gluBuild2DMipmaps, "iiiiiii", gluBuild2DMipmaps(U(0), I(1), I(2), I(3), U(4), U(5), P(6))) \
     X(gluScaleImage, "iiiiiiiii", gluScaleImage(U(0), I(1), I(2), U(3), P(4), I(5), I(6), U(7), P(8)))
+
+/* Lights, materials, texturing and fog, from vectors in guest memory;
+ * the gets of them. */
+#define GL_PARAMS(X, X1, XG) \
+    X(glLightfv, GLfloat) X(glLightiv, GLint) X(glMaterialfv, GLfloat) X(glMaterialiv, GLint) \
+    X(glTexEnvfv, GLfloat) X(glTexEnviv, GLint) X(glTexParameterfv, GLfloat) X(glTexParameteriv, GLint) \
+    X(glTexGendv, GLdouble) X(glTexGenfv, GLfloat) X(glTexGeniv, GLint) \
+    X1(glFogfv, GLfloat) X1(glFogiv, GLint) X1(glLightModelfv, GLfloat) X1(glLightModeliv, GLint) \
+    XG(glGetLightfv, GLfloat) XG(glGetLightiv, GLint) XG(glGetMaterialfv, GLfloat) XG(glGetMaterialiv, GLint) \
+    XG(glGetTexEnvfv, GLfloat) XG(glGetTexEnviv, GLint) XG(glGetTexParameterfv, GLfloat) \
+    XG(glGetTexParameteriv, GLint) XG(glGetTexGendv, GLdouble) XG(glGetTexGenfv, GLfloat) XG(glGetTexGeniv, GLint)
+
+/* Matrices from guest memory. */
+#define GL_MATRICES(X) \
+    X(glLoadMatrixf, glLoadMatrixf, GLfloat) X(glLoadMatrixd, glLoadMatrixd, GLdouble) \
+    X(glMultMatrixf, glMultMatrixf, GLfloat) X(glMultMatrixd, glMultMatrixd, GLdouble) \
+    X(glLoadTransposeMatrixfARB, glLoadTransposeMatrixf, GLfloat) \
+    X(glLoadTransposeMatrixdARB, glLoadTransposeMatrixd, GLdouble) \
+    X(glMultTransposeMatrixfARB, glMultTransposeMatrixf, GLfloat) \
+    X(glMultTransposeMatrixdARB, glMultTransposeMatrixd, GLdouble)
+
+/* GLU's quadrics: their settings and what they draw. */
+#define Q() GLUquadric *q = quadric(iv[0]); if (q)
+#define GLU_QUADRICS(X) \
+    X(gluQuadricDrawStyle, "ii", Q() gluQuadricDrawStyle(q, U(1))) \
+    X(gluQuadricNormals, "ii", Q() gluQuadricNormals(q, U(1))) \
+    X(gluQuadricOrientation, "ii", Q() gluQuadricOrientation(q, U(1))) \
+    X(gluQuadricTexture, "ii", Q() gluQuadricTexture(q, (GLboolean)U(1))) \
+    X(gluSphere, "idii", Q() gluSphere(q, D(1), I(2), I(3))) \
+    X(gluCylinder, "idddii", Q() gluCylinder(q, D(1), D(2), D(3), I(4), I(5))) \
+    X(gluDisk, "iddii", Q() gluDisk(q, D(1), D(2), I(3), I(4))) \
+    X(gluPartialDisk, "iddiidd", Q() gluPartialDisk(q, D(1), D(2), I(3), I(4), D(5), D(6)))
+
+/* Every call a display list can record, by its name. */
+enum {
+    OP_NONE,
+#define OP_ENUM(name, ...) OP_##name,
+#define OP_NO(...)
+    GL_IMMEDIATE(OP_ENUM) GL_IMMEDIATE_V(OP_ENUM, OP_ENUM, OP_ENUM) GL_STATE(OP_ENUM) GL_RESULTS(OP_ENUM)
+    GL_PARAMS(OP_ENUM, OP_ENUM, OP_NO) GL_MATRICES(OP_ENUM) GLU_QUADRICS(OP_ENUM)
+#undef OP_ENUM
+#undef OP_NO
+    OP_glClipPlane, OP_glCallLists, OP_glDrawBuffer, OP_glPixelMapfv, OP_glPixelMapuiv, OP_glPixelMapusv,
+    OP_glMap1d, OP_glMap1f, OP_glMap2d, OP_glMap2f,
+    OP_arrays,  /* glDrawArrays, glDrawElements: the arrays' elements as they were */
+    OP_element, /* glArrayElement: the element's values */
+    OP_COUNT
+};
+
+static void hook(int op, const char *sig, const uint32_t *iv, const double *fv);
+static void record(int op, const uint32_t *words, int nwords, const void *data, uint32_t nbytes);
+static GLenum get_error(void);
+static void lists_made(GLuint first, GLsizei range);
 
 #define DEFINE_RESULT(name, sig, expr)                                                                                \
     static void w_##name(ppc_cpu *c)                                                                                  \
@@ -804,7 +884,10 @@ static gaddr guest_string(gaddr *slot_, const char *s)
         double fv[16];                                                                                                \
         ENTER();                                                                                                      \
         args_get(c, sig, iv, fv);                                                                                     \
+        hook(OP_##name, sig, iv, fv);                                                                                 \
         c->gpr[3] = (uint32_t)(expr);                                                                                 \
+        if (OP_##name == OP_glGenLists)                                                                               \
+            lists_made(c->gpr[3], I(0));                                                                              \
         DONE();                                                                                                       \
     }
 
@@ -869,7 +952,10 @@ static void w_glDrawBuffer(ppc_cpu *c)
 {
     ENTER();
     cur->draw_buffer = (GLenum)c->gpr[3];
-    glDrawBuffer(cur->draw_buffer == GL_NONE ? GL_NONE : GL_COLOR_ATTACHMENT0_EXT);
+    uint32_t host = cur->draw_buffer == GL_NONE ? GL_NONE : GL_COLOR_ATTACHMENT0_EXT;
+    if (cur->recording)
+        record(OP_glDrawBuffer, &host, 1, NULL, 0);
+    glDrawBuffer(host);
     DONE();
 }
 static void w_glReadBuffer(ppc_cpu *c)
@@ -902,7 +988,10 @@ static int param_count(GLenum pname)
     {                                                                                                                 \
         ENTER();                                                                                                      \
         T t[4];                                                                                                       \
-        gread(t, c->gpr[5], param_count((GLenum)c->gpr[4]), sizeof(T));                                               \
+        int n = param_count((GLenum)c->gpr[4]);                                                                       \
+        gread(t, c->gpr[5], n, sizeof(T));                                                                            \
+        if (cur->recording)                                                                                           \
+            record(OP_##name, &c->gpr[3], 2, t, (uint32_t)n * sizeof(T));                                             \
         name((GLenum)c->gpr[3], (GLenum)c->gpr[4], t);                                                                \
         DONE();                                                                                                       \
     }
@@ -911,7 +1000,10 @@ static int param_count(GLenum pname)
     {                                                                                                                 \
         ENTER();                                                                                                      \
         T t[4];                                                                                                       \
-        gread(t, c->gpr[4], param_count((GLenum)c->gpr[3]), sizeof(T));                                               \
+        int n = param_count((GLenum)c->gpr[3]);                                                                       \
+        gread(t, c->gpr[4], n, sizeof(T));                                                                            \
+        if (cur->recording)                                                                                           \
+            record(OP_##name, &c->gpr[3], 1, t, (uint32_t)n * sizeof(T));                                             \
         name((GLenum)c->gpr[3], t);                                                                                   \
         DONE();                                                                                                       \
     }
@@ -925,14 +1017,6 @@ static int param_count(GLenum pname)
             gwrite(c->gpr[5], t, param_count((GLenum)c->gpr[4]), sizeof(T));                                          \
         DONE();                                                                                                       \
     }
-#define GL_PARAMS(X, X1, XG) \
-    X(glLightfv, GLfloat) X(glLightiv, GLint) X(glMaterialfv, GLfloat) X(glMaterialiv, GLint) \
-    X(glTexEnvfv, GLfloat) X(glTexEnviv, GLint) X(glTexParameterfv, GLfloat) X(glTexParameteriv, GLint) \
-    X(glTexGendv, GLdouble) X(glTexGenfv, GLfloat) X(glTexGeniv, GLint) \
-    X1(glFogfv, GLfloat) X1(glFogiv, GLint) X1(glLightModelfv, GLfloat) X1(glLightModeliv, GLint) \
-    XG(glGetLightfv, GLfloat) XG(glGetLightiv, GLint) XG(glGetMaterialfv, GLfloat) XG(glGetMaterialiv, GLint) \
-    XG(glGetTexEnvfv, GLfloat) XG(glGetTexEnviv, GLint) XG(glGetTexParameterfv, GLfloat) \
-    XG(glGetTexParameteriv, GLint) XG(glGetTexGendv, GLdouble) XG(glGetTexGenfv, GLfloat) XG(glGetTexGeniv, GLint)
 GL_PARAMS(DEFINE_PV, DEFINE_PV1, DEFINE_GETPV)
 
 #define DEFINE_MATRIX(name, host, T)                                                                                  \
@@ -941,16 +1025,11 @@ GL_PARAMS(DEFINE_PV, DEFINE_PV1, DEFINE_GETPV)
         ENTER();                                                                                                      \
         T m[16];                                                                                                      \
         gread(m, c->gpr[3], 16, sizeof(T));                                                                           \
+        if (cur->recording)                                                                                           \
+            record(OP_##name, NULL, 0, m, sizeof m);                                                                  \
         host(m);                                                                                                      \
         DONE();                                                                                                       \
     }
-#define GL_MATRICES(X) \
-    X(glLoadMatrixf, glLoadMatrixf, GLfloat) X(glLoadMatrixd, glLoadMatrixd, GLdouble) \
-    X(glMultMatrixf, glMultMatrixf, GLfloat) X(glMultMatrixd, glMultMatrixd, GLdouble) \
-    X(glLoadTransposeMatrixfARB, glLoadTransposeMatrixf, GLfloat) \
-    X(glLoadTransposeMatrixdARB, glLoadTransposeMatrixd, GLdouble) \
-    X(glMultTransposeMatrixfARB, glMultTransposeMatrixf, GLfloat) \
-    X(glMultTransposeMatrixdARB, glMultTransposeMatrixd, GLdouble)
 GL_MATRICES(DEFINE_MATRIX)
 
 static void w_glClipPlane(ppc_cpu *c)
@@ -958,6 +1037,8 @@ static void w_glClipPlane(ppc_cpu *c)
     ENTER();
     GLdouble e[4];
     gread(e, c->gpr[4], 4, 8);
+    if (cur->recording)
+        record(OP_glClipPlane, &c->gpr[3], 1, e, sizeof e);
     glClipPlane((GLenum)c->gpr[3], e);
     DONE();
 }
@@ -989,6 +1070,409 @@ static void w_glGetTexLevelParameteriv(ppc_cpu *c)
 
 /* ---- Texture and list names ---- */
 
+/* The texture names a group has made or bound, for hibernating: sorted. */
+static int name_at(const glgroup *g, uint32_t name, bool *found)
+{
+    int lo = 0, hi = g->ntex;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (g->tex[mid] < name)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    *found = lo < g->ntex && g->tex[lo] == name;
+    return lo;
+}
+static void name_add(glgroup *g, uint32_t name)
+{
+    bool found;
+    int at = name_at(g, name, &found);
+    if (found || !name)
+        return;
+    if (g->ntex == g->captex) {
+        int cap = g->captex ? g->captex * 2 : 64;
+        uint32_t *n = bb_realloc(g->tex, (size_t)cap * 4, BB_BYTES);
+        if (!n)
+            return;
+        g->tex = n;
+        g->captex = cap;
+    }
+    memmove(g->tex + at + 1, g->tex + at, (size_t)(g->ntex - at) * 4);
+    g->tex[at] = name;
+    g->ntex++;
+}
+static void name_remove(glgroup *g, uint32_t name)
+{
+    bool found;
+    int at = name_at(g, name, &found);
+    if (!found)
+        return;
+    memmove(g->tex + at, g->tex + at + 1, (size_t)(g->ntex - at - 1) * 4);
+    g->ntex--;
+}
+
+/* ---- Display lists, recorded ----
+ *
+ * The host compiles a list, and keeps it where no snapshot can reach; so
+ * that a resumed program has its lists, each call compiled into one is
+ * recorded as well, as the host was given it (its arguments in host
+ * order, the guest memory it read copied), and compiled again from the
+ * record in the new context (replay).  A record is an op (u16), a pad, the
+ * payload's length (u32) and the payload, padded to 8 bytes. */
+
+static size_t type_size(GLenum t);
+
+static int list_at(const glgroup *g, uint32_t name, bool *found)
+{
+    int lo = 0, hi = g->nlists;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (g->lists[mid].name < name)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    *found = lo < g->nlists && g->lists[lo].name == name;
+    return lo;
+}
+
+/* The group's list `name`, made (empty) if it has none. */
+static gllist *list_get(glgroup *g, uint32_t name)
+{
+    bool found;
+    int at = list_at(g, name, &found);
+    if (found)
+        return &g->lists[at];
+    if (g->nlists == g->caplists) {
+        int cap = g->caplists ? g->caplists * 2 : 64;
+        gllist *n = bb_realloc(g->lists, (size_t)cap * sizeof *n, BB_TAG(gllist));
+        if (!n)
+            return NULL;
+        g->lists = n;
+        g->caplists = cap;
+    }
+    memmove(g->lists + at + 1, g->lists + at, (size_t)(g->nlists - at) * sizeof *g->lists);
+    g->nlists++;
+    g->lists[at] = (gllist){ name, NULL, 0, 0 };
+    return &g->lists[at];
+}
+
+/* glGenLists: empty lists, as the host has them. */
+static void lists_made(GLuint first, GLsizei range)
+{
+    for (GLsizei i = 0; first && i < range; i++)
+        list_get(cur->group, first + (GLuint)i);
+}
+
+static void lists_deleted(GLuint first, GLsizei range)
+{
+    glgroup *g = cur->group;
+    for (int i = 0; i < g->nlists;) {
+        if (g->lists[i].name >= first && g->lists[i].name - first < (GLuint)range) {
+            bb_free(g->lists[i].ops);
+            memmove(g->lists + i, g->lists + i + 1, (size_t)(g->nlists - i - 1) * sizeof *g->lists);
+            g->nlists--;
+        } else {
+            i++;
+        }
+    }
+}
+
+static void list_begin(GLuint name, GLenum mode)
+{
+    if (cur->recording || !name || (mode != GL_COMPILE && mode != GL_COMPILE_AND_EXECUTE))
+        return; /* errors: the host compiles nothing */
+    cur->recording = true;
+    cur->list_mode = mode;
+    cur->compiling.name = name;
+    cur->compiling.len = 0;
+}
+
+/* glEndList: the record replaces what the list had. */
+static void list_end(void)
+{
+    if (!cur->recording)
+        return;
+    cur->recording = false;
+    gllist *l = list_get(cur->group, cur->compiling.name);
+    if (!l)
+        return;
+    bb_free(l->ops);
+    l->ops = cur->compiling.ops;
+    l->len = cur->compiling.len;
+    l->cap = cur->compiling.cap;
+    cur->compiling = (gllist){ 0, NULL, 0, 0 };
+}
+
+static uint8_t *rec_room(gllist *l, uint32_t n)
+{
+    if (l->len + n > l->cap) {
+        uint32_t cap = l->cap ? l->cap : 256;
+        while (cap < l->len + n)
+            cap *= 2;
+        uint8_t *p = bb_realloc(l->ops, cap, BB_BYTES);
+        if (!p)
+            return NULL;
+        l->ops = p;
+        l->cap = cap;
+    }
+    uint8_t *at = l->ops + l->len;
+    l->len += n;
+    return at;
+}
+
+/* An op's record, its payload put in parts (rec_put) and closed. */
+static uint32_t rec_open(gllist *l, int op)
+{
+    uint32_t at = l->len;
+    uint8_t *h = rec_room(l, 8);
+    if (h) {
+        uint16_t o = (uint16_t)op, z = 0;
+        memcpy(h, &o, 2);
+        memcpy(h + 2, &z, 2);
+        memset(h + 4, 0, 4);
+    }
+    return at;
+}
+static void rec_put(gllist *l, const void *data, uint32_t n)
+{
+    uint8_t *p = n ? rec_room(l, n) : NULL;
+    if (p)
+        memcpy(p, data, n);
+}
+static void rec_u32(gllist *l, uint32_t v) { rec_put(l, &v, 4); }
+static void rec_close(gllist *l, uint32_t at)
+{
+    if (!l->ops || at + 8 > l->len)
+        return;
+    uint32_t len = l->len - at - 8;
+    memcpy(l->ops + at + 4, &len, 4);
+    uint32_t pad = (8 - (l->len & 7)) & 7;
+    uint8_t *p = pad ? rec_room(l, pad) : NULL;
+    if (p)
+        memset(p, 0, pad);
+}
+
+/* An op of words then bytes. */
+static void record(int op, const uint32_t *words, int nwords, const void *data, uint32_t nbytes)
+{
+    gllist *l = &cur->compiling;
+    uint32_t at = rec_open(l, op);
+    rec_put(l, words, 4 * (uint32_t)nwords);
+    rec_put(l, data, nbytes);
+    rec_close(l, at);
+}
+
+/* A call's arguments by its signature: integers as words, floats as
+ * floats and doubles as doubles. */
+static void rec_args(gllist *l, const char *sig, const uint32_t *iv, const double *fv)
+{
+    for (int k = 0; sig[k]; k++) {
+        if (sig[k] == 'f') {
+            float f = (float)fv[k];
+            rec_put(l, &f, 4);
+        } else if (sig[k] == 'd') {
+            rec_put(l, &fv[k], 8);
+        } else {
+            rec_u32(l, iv[k]);
+        }
+    }
+}
+
+static void record_map(int op, const char *sig, const uint32_t *iv, const double *fv, const void *data, uint32_t n)
+{
+    gllist *l = &cur->compiling;
+    uint32_t at = rec_open(l, op);
+    rec_args(l, sig, iv, fv);
+    rec_u32(l, n);
+    rec_put(l, data, n);
+    rec_close(l, at);
+}
+
+/* ---- The pixels a call reads, as the unpacking state has them ---- */
+
+enum { EXTRA_PIXELS = 1, EXTRA_QUADRIC = 2 };
+static const GLenum unpack_names[8] = {
+    GL_UNPACK_SWAP_BYTES, GL_UNPACK_LSB_FIRST, GL_UNPACK_ROW_LENGTH, GL_UNPACK_SKIP_ROWS,
+    GL_UNPACK_SKIP_PIXELS, GL_UNPACK_ALIGNMENT, GL_UNPACK_IMAGE_HEIGHT, GL_UNPACK_SKIP_IMAGES,
+};
+
+static int format_components(GLenum f)
+{
+    switch (f) {
+    case GL_LUMINANCE_ALPHA: return 2;
+    case GL_RGB: case GL_BGR: return 3;
+    case GL_RGBA: case GL_BGRA: case GL_ABGR_EXT: return 4;
+    default: return 1;
+    }
+}
+
+/* Bytes per element (a component, or a packed pixel: then n is 1). */
+static size_t element_size(GLenum type, int *n)
+{
+    switch (type) {
+    case GL_UNSIGNED_BYTE_3_3_2: case GL_UNSIGNED_BYTE_2_3_3_REV: *n = 1; return 1;
+    case GL_UNSIGNED_SHORT_5_6_5: case GL_UNSIGNED_SHORT_5_6_5_REV: case GL_UNSIGNED_SHORT_4_4_4_4:
+    case GL_UNSIGNED_SHORT_4_4_4_4_REV: case GL_UNSIGNED_SHORT_5_5_5_1: case GL_UNSIGNED_SHORT_1_5_5_5_REV:
+        *n = 1;
+        return 2;
+    case GL_UNSIGNED_INT_8_8_8_8: case GL_UNSIGNED_INT_8_8_8_8_REV: case GL_UNSIGNED_INT_10_10_10_2:
+    case GL_UNSIGNED_INT_2_10_10_10_REV: case GL_UNSIGNED_INT_24_8_EXT:
+        *n = 1;
+        return 4;
+    default: return type_size(type);
+    }
+}
+
+/* What an image of w by h by d read with the unpacking state u spans,
+ * from its pointer (the OpenGL specification's unpacking, 3.6.4). */
+static size_t image_bytes(int w, int h, int d, GLenum format, GLenum type, const GLint *u)
+{
+    if (w <= 0 || h <= 0 || d <= 0)
+        return 0;
+    size_t l = u[2] > 0 ? (size_t)u[2] : (size_t)w, a = u[5] > 0 ? (size_t)u[5] : 1;
+    size_t rows = u[6] > 0 ? (size_t)u[6] : (size_t)h;
+    int n = format_components(format);
+    if (type == GL_BITMAP) {
+        size_t k = a * (((size_t)n * l + 8 * a - 1) / (8 * a));
+        size_t bits = (size_t)u[4] + (size_t)w * (size_t)n;
+        return (size_t)u[3] * k + ((size_t)h - 1) * k + (bits + 7) / 8;
+    }
+    size_t s = element_size(type, &n);
+    if (!s)
+        return 0;
+    size_t k = s >= a ? (size_t)n * l * s : a * (((size_t)n * l * s + a - 1) / a);
+    size_t start = (size_t)u[4] * (size_t)n * s + (size_t)u[3] * k + (size_t)u[7] * k * rows;
+    return start + (((size_t)d - 1) * rows + ((size_t)h - 1)) * k + (size_t)w * (size_t)n * s;
+}
+
+/* The calls that read an image from the program's memory: where, and
+ * its size and layout. */
+static bool image_args(int op, const uint32_t *iv, gaddr *ptr, int *w, int *h, int *d, GLenum *f, GLenum *t)
+{
+    *h = *d = 1;
+    switch (op) {
+    case OP_glTexImage1D: *ptr = iv[7], *w = I(3), *f = U(5), *t = U(6); return true;
+    case OP_glTexImage2D: *ptr = iv[8], *w = I(3), *h = I(4), *f = U(6), *t = U(7); return true;
+    case OP_glTexImage3D: case OP_glTexImage3DEXT:
+        *ptr = iv[9], *w = I(3), *h = I(4), *d = I(5), *f = U(7), *t = U(8);
+        return true;
+    case OP_glTexSubImage1D: *ptr = iv[6], *w = I(3), *f = U(4), *t = U(5); return true;
+    case OP_glTexSubImage2D: *ptr = iv[8], *w = I(4), *h = I(5), *f = U(6), *t = U(7); return true;
+    case OP_glTexSubImage3D: case OP_glTexSubImage3DEXT:
+        *ptr = iv[10], *w = I(5), *h = I(6), *d = I(7), *f = U(8), *t = U(9);
+        return true;
+    case OP_glDrawPixels: *ptr = iv[4], *w = I(0), *h = I(1), *f = U(2), *t = U(3); return true;
+    case OP_glBitmap: *ptr = iv[6], *w = I(0), *h = I(1), *f = GL_COLOR_INDEX, *t = GL_BITMAP; return true;
+    case OP_glPolygonStipple: *ptr = iv[0], *w = *h = 32, *f = GL_COLOR_INDEX, *t = GL_BITMAP; return true;
+    case OP_gluBuild1DMipmaps: *ptr = iv[5], *w = I(2), *f = U(3), *t = U(4); return true;
+    case OP_gluBuild2DMipmaps: *ptr = iv[6], *w = I(2), *h = I(3), *f = U(4), *t = U(5); return true;
+    default: return false;
+    }
+}
+
+static void rec_pixels(gllist *l, const GLint *unpack, const void *data, size_t n)
+{
+    rec_u32(l, EXTRA_PIXELS);
+    rec_put(l, unpack, 32);
+    rec_u32(l, (uint32_t)n);
+    rec_put(l, data, (uint32_t)n);
+}
+
+/* GLU's quadrics: their settings (draw style, normals, orientation,
+ * texture), kept for each (a display list draws one as it was set). */
+enum { MAX_QUADRICS = 64 };
+static uint32_t quadric_settings[MAX_QUADRICS][4];
+static int quadric_index(gaddr q);
+
+/* What each call does as it compiles into a list, before the host call. */
+static bool compiled(int op)
+{
+    switch (op) {
+    case OP_glNewList: case OP_glEndList: case OP_glDeleteLists: case OP_glGetPolygonStipple:
+    case OP_glGetTexImage: case OP_glReadPixels: case OP_glPixelStoref: case OP_glPixelStorei:
+    case OP_glLockArraysEXT: case OP_glUnlockArraysEXT: case OP_glIsEnabled: case OP_glIsList: case OP_glIsTexture:
+    case OP_glIsTextureEXT: case OP_glGenLists: case OP_glGetError: case OP_gluScaleImage:
+    case OP_gluQuadricDrawStyle: case OP_gluQuadricNormals: case OP_gluQuadricOrientation:
+    case OP_gluQuadricTexture:
+        return false;
+    default: return true;
+    }
+}
+
+static void hook(int op, const char *sig, const uint32_t *iv, const double *fv)
+{
+    switch (op) {
+    case OP_glBegin: case OP_glEnd:
+        if (!cur->recording || cur->list_mode == GL_COMPILE_AND_EXECUTE)
+            cur->in_begin = op == OP_glBegin;
+        break;
+    case OP_glBindTexture: case OP_glBindTextureEXT: name_add(cur->group, iv[1]); break;
+    case OP_glNewList: list_begin(iv[0], iv[1]); return;
+    case OP_glEndList: list_end(); return;
+    case OP_glDeleteLists: lists_deleted(iv[0], (GLsizei)iv[1]); return;
+    case OP_gluQuadricDrawStyle: case OP_gluQuadricNormals: case OP_gluQuadricOrientation:
+    case OP_gluQuadricTexture: {
+        int q = quadric_index(iv[0]);
+        if (q >= 0)
+            quadric_settings[q][op - OP_gluQuadricDrawStyle] = iv[1];
+        return;
+    }
+    }
+    if (!cur->recording || !compiled(op))
+        return;
+    gllist *l = &cur->compiling;
+    uint32_t at = rec_open(l, op);
+    rec_args(l, sig, iv, fv);
+    gaddr ptr = 0;
+    int w, h, d;
+    GLenum f, t;
+    if (image_args(op, iv, &ptr, &w, &h, &d, &f, &t) && ptr) {
+        GLint u[8];
+        for (int k = 0; k < 8; k++)
+            glGetIntegerv(unpack_names[k], &u[k]);
+        rec_pixels(l, u, gptr(ptr), image_bytes(w, h, d, f, t, u));
+    }
+    if (op >= OP_gluSphere && op <= OP_gluPartialDisk) {
+        int q = quadric_index(iv[0]);
+        rec_u32(l, EXTRA_QUADRIC);
+        static const uint32_t defaults[4] = { GLU_FILL, GLU_SMOOTH, GLU_OUTSIDE, GL_FALSE };
+        rec_put(l, q >= 0 ? quadric_settings[q] : defaults, 16);
+    }
+    rec_close(l, at);
+}
+
+/* aglUseFont's glyph: its list one glBitmap of the bits given. */
+static void glyph_recorded(uint32_t list, int width, int height, int row_bytes, float xorig, float yorig, float xmove,
+                           const uint8_t *bits)
+{
+    gllist *dst = list_get(cur->group, list);
+    if (!dst)
+        return;
+    gllist l = { list, NULL, 0, 0 };
+    uint32_t iv[7] = { (uint32_t)width, (uint32_t)height, 0, 0, 0, 0, 0 };
+    double fv[7] = { 0, 0, xorig, yorig, xmove, 0, 0 };
+    uint32_t at = rec_open(&l, OP_glBitmap);
+    rec_args(&l, "iiffffi", iv, fv);
+    GLint u[8] = { 0, 0, row_bytes * 8, 0, 0, 1, 0, 0 };
+    rec_pixels(&l, u, bits, (size_t)row_bytes * (size_t)height);
+    rec_close(&l, at);
+    bb_free(dst->ops);
+    *dst = l;
+}
+
+/* glGetError: one the host had when hibernating comes first. */
+static GLenum get_error(void)
+{
+    GLenum e = cur->pending_error;
+    if (e) {
+        cur->pending_error = GL_NO_ERROR;
+        return e;
+    }
+    return glGetError();
+}
+
 static void w_glGenTextures(ppc_cpu *c)
 {
     ENTER();
@@ -997,6 +1481,8 @@ static void w_glGenTextures(ppc_cpu *c)
     if (t) {
         glGenTextures(n, t);
         gwrite(c->gpr[4], t, n, 4);
+        for (GLsizei i = 0; i < n; i++)
+            name_add(cur->group, t[i]);
     }
     DONE();
 }
@@ -1008,6 +1494,8 @@ static void w_glDeleteTextures(ppc_cpu *c)
     if (t) {
         gread(t, c->gpr[4], n, 4);
         glDeleteTextures(n, t);
+        for (GLsizei i = 0; i < n; i++)
+            name_remove(cur->group, t[i]);
     }
     DONE();
 }
@@ -1049,11 +1537,16 @@ static void w_glCallLists(ppc_cpu *c)
                                                                                    : 0;
     if (n > 0 && lists) {
         if (!size) { /* bytes, and GL_2_BYTES and the like, which are big-endian by definition */
+            size_t bytes = type == GL_2_BYTES ? 2 : type == GL_3_BYTES ? 3 : type == GL_4_BYTES ? 4 : 1;
+            if (cur->recording)
+                record(OP_glCallLists, &c->gpr[3], 2, gptr(lists), (uint32_t)(bytes * (size_t)n));
             glCallLists(n, type, gptr(lists));
         } else {
             void *t = scratch((size_t)n * size);
             if (t) {
                 gread(t, lists, n, size);
+                if (cur->recording)
+                    record(OP_glCallLists, &c->gpr[3], 2, t, (uint32_t)(size * (size_t)n));
                 glCallLists(n, type, t);
             }
         }
@@ -1078,6 +1571,8 @@ static GLint pixel_map_size(GLenum map)
         T *t = n > 0 ? scratch((size_t)n * sizeof(T)) : NULL;                                                         \
         if (t) {                                                                                                      \
             gread(t, c->gpr[5], n, sizeof(T));                                                                        \
+            if (cur->recording)                                                                                       \
+                record(OP_##name, &c->gpr[3], 2, t, (uint32_t)((size_t)n * sizeof(T)));                               \
             name((GLenum)c->gpr[3], n, t);                                                                            \
         }                                                                                                             \
         DONE();                                                                                                       \
@@ -1096,6 +1591,8 @@ static GLint pixel_map_size(GLenum map)
 DEFINE_PIXELMAP(glPixelMapfv, glGetPixelMapfv, GLfloat)
 DEFINE_PIXELMAP(glPixelMapuiv, glGetPixelMapuiv, GLuint)
 DEFINE_PIXELMAP(glPixelMapusv, glGetPixelMapusv, GLushort)
+
+static void record_map(int op, const char *sig, const uint32_t *iv, const double *fv, const void *data, uint32_t n);
 
 /* The values of one point of an evaluator's map. */
 static int map_dims(GLenum target)
@@ -1122,6 +1619,8 @@ static int map_dims(GLenum target)
         T *t = n > 0 ? scratch((size_t)n * sizeof(T)) : NULL;                                                         \
         if (t) {                                                                                                      \
             gread(t, iv[5], n, sizeof(T));                                                                            \
+            if (cur->recording)                                                                                       \
+                record_map(OP_##name##1##host1, sig1, iv, fv, t, (uint32_t)((size_t)n * sizeof(T)));                  \
             glMap1##host1(U(0), (T)D(1), (T)D(2), stride, order, t);                                                  \
         }                                                                                                             \
         DONE();                                                                                                       \
@@ -1137,6 +1636,8 @@ static int map_dims(GLenum target)
         T *t = n > 0 ? scratch((size_t)n * sizeof(T)) : NULL;                                                         \
         if (t) {                                                                                                      \
             gread(t, iv[9], n, sizeof(T));                                                                            \
+            if (cur->recording)                                                                                       \
+                record_map(OP_##name##2##host2, sig2, iv, fv, t, (uint32_t)((size_t)n * sizeof(T)));                  \
             glMap2##host2(U(0), (T)D(1), (T)D(2), us, uo, (T)D(5), (T)D(6), vs, vo, t);                               \
         }                                                                                                             \
         DONE();                                                                                                       \
@@ -1316,6 +1817,7 @@ static void w_glFeedbackBuffer(ppc_cpu *c)
     cur->feedback = n > 0 ? bb_calloc((size_t)n, 4, BB_BYTES) : NULL;
     cur->feedback_n = cur->feedback ? n : 0;
     cur->feedback_to = c->gpr[5];
+    cur->feedback_type = (GLenum)c->gpr[4];
     if (cur->feedback)
         glFeedbackBuffer(n, (GLenum)c->gpr[4], cur->feedback);
     DONE();
@@ -1597,13 +2099,49 @@ static bool arrays_to_host(int first, int count)
     return true;
 }
 
+/* A draw from the arrays into a list: the elements arrays_to_host
+ * converted (count of each enabled array), and the indices (none for
+ * glDrawArrays). */
+static void record_arrays(GLenum mode, int count, const GLuint *idx, int nidx)
+{
+    gllist *l = &cur->compiling;
+    arrays *a = &cur->a;
+    struct which { garray *a; GLenum which; int unit; } list[5 + MAX_UNITS] = {
+        { &a->vertex, GL_VERTEX_ARRAY, 0 }, { &a->normal, GL_NORMAL_ARRAY, 0 }, { &a->color, GL_COLOR_ARRAY, 0 },
+        { &a->index, GL_INDEX_ARRAY, 0 }, { &a->edge, GL_EDGE_FLAG_ARRAY, 0 },
+    };
+    for (int u = 0; u < MAX_UNITS; u++)
+        list[5 + u] = (struct which){ &a->tex[u], GL_TEXTURE_COORD_ARRAY, u };
+    uint32_t at = rec_open(l, OP_arrays);
+    rec_u32(l, mode);
+    rec_u32(l, (uint32_t)count);
+    rec_u32(l, (uint32_t)nidx);
+    rec_put(l, idx, 4 * (uint32_t)nidx);
+    for (unsigned k = 0; k < sizeof list / sizeof list[0]; k++) {
+        garray *g = list[k].a;
+        size_t es = type_size(g->type) * (size_t)g->size;
+        if (!g->on || !g->ptr || !g->host || !es)
+            continue;
+        uint32_t n = (uint32_t)(es * (size_t)count), pad = (8 - (n & 7)) & 7;
+        uint32_t head[6] = { list[k].which, (uint32_t)list[k].unit, (uint32_t)g->size, g->type, n, pad };
+        rec_put(l, head, sizeof head);
+        rec_put(l, g->host, n);
+        static const uint8_t zeros[8];
+        rec_put(l, zeros, pad);
+    }
+    rec_close(l, at);
+}
+
 static void w_glDrawArrays(ppc_cpu *c)
 {
     ENTER();
     GLint first = (GLint)c->gpr[4];
     GLsizei count = (GLsizei)c->gpr[5];
-    if (first >= 0 && count > 0 && arrays_to_host(first, count))
+    if (first >= 0 && count > 0 && arrays_to_host(first, count)) {
+        if (cur->recording)
+            record_arrays((GLenum)c->gpr[3], count, NULL, 0);
         glDrawArrays((GLenum)c->gpr[3], 0, count);
+    }
     DONE();
 }
 
@@ -1631,8 +2169,11 @@ static void draw_elements(GLenum mode, GLsizei count, GLenum type, gaddr indices
         return;
     for (GLsizei i = 0; i < count; i++)
         idx[i] -= lo;
-    if (arrays_to_host((int)lo, (int)(hi - lo + 1)))
+    if (arrays_to_host((int)lo, (int)(hi - lo + 1))) {
+        if (cur->recording)
+            record_arrays(mode, (int)(hi - lo + 1), idx, count);
         glDrawElements(mode, count, GL_UNSIGNED_INT, idx);
+    }
 }
 
 static void w_glDrawElements(ppc_cpu *c)
@@ -1660,69 +2201,124 @@ static bool element(garray *a, int i, void *out)
     return true;
 }
 
-static void w_glArrayElement(ppc_cpu *c)
+/* An element's values, as glArrayElement gives them to the host. */
+typedef union {
+    GLbyte b[4];
+    GLubyte ub[4];
+    GLshort s[4];
+    GLushort us[4];
+    GLint i[4];
+    GLuint ui[4];
+    GLfloat f[4];
+    GLdouble d[4];
+} evalue;
+typedef struct {
+    uint32_t has; /* EV_ bits, and 1 << (EV_TEX + unit) */
+    GLenum color_type, index_type, normal_type;
+    int color_n;
+    GLubyte edge;
+    evalue color, index, normal;
+    GLdouble tex[MAX_UNITS][4], vertex[4];
+} element_values;
+enum { EV_EDGE = 1, EV_COLOR = 2, EV_INDEX = 4, EV_NORMAL = 8, EV_VERTEX = 16, EV_TEX = 5 };
+
+static void element_get(int i, element_values *e)
 {
-    ENTER();
-    int i = (int)c->gpr[3];
     arrays *a = &cur->a;
-    union {
-        GLbyte b[4];
-        GLubyte ub[4];
-        GLshort s[4];
-        GLushort us[4];
-        GLint i[4];
-        GLuint ui[4];
-        GLfloat f[4];
-        GLdouble d[4];
-    } v;
-    if (element(&a->edge, i, &v))
-        glEdgeFlag(v.ub[0]);
+    evalue v;
+    memset(e, 0, sizeof *e);
+    if (element(&a->edge, i, &v)) {
+        e->has |= EV_EDGE;
+        e->edge = v.ub[0];
+    }
     for (int u = 0; u < MAX_UNITS; u++)
         if (element(&a->tex[u], i, &v)) {
-            GLdouble t[4] = { 0, 0, 0, 1 };
+            e->has |= 1u << (EV_TEX + u);
+            GLdouble *t = e->tex[u];
+            t[0] = t[1] = t[2] = 0;
+            t[3] = 1;
             for (int k = 0; k < a->tex[u].size && k < 4; k++)
                 t[k] = a->tex[u].type == GL_SHORT ? v.s[k] : a->tex[u].type == GL_INT ? v.i[k]
                        : a->tex[u].type == GL_FLOAT ? v.f[k] : v.d[k];
-            glMultiTexCoord4dv(GL_TEXTURE0 + (GLenum)u, t);
         }
-    if (element(&a->color, i, &v)) {
-        bool four = a->color.size == 4;
-        switch (a->color.type) {
-        case GL_BYTE: four ? glColor4bv(v.b) : glColor3bv(v.b); break;
-        case GL_UNSIGNED_BYTE: four ? glColor4ubv(v.ub) : glColor3ubv(v.ub); break;
-        case GL_SHORT: four ? glColor4sv(v.s) : glColor3sv(v.s); break;
-        case GL_UNSIGNED_SHORT: four ? glColor4usv(v.us) : glColor3usv(v.us); break;
-        case GL_INT: four ? glColor4iv(v.i) : glColor3iv(v.i); break;
-        case GL_UNSIGNED_INT: four ? glColor4uiv(v.ui) : glColor3uiv(v.ui); break;
-        case GL_FLOAT: four ? glColor4fv(v.f) : glColor3fv(v.f); break;
-        case GL_DOUBLE: four ? glColor4dv(v.d) : glColor3dv(v.d); break;
-        }
+    if (element(&a->color, i, &e->color)) {
+        e->has |= EV_COLOR;
+        e->color_type = a->color.type;
+        e->color_n = a->color.size;
     }
-    if (element(&a->index, i, &v)) {
-        switch (a->index.type) {
-        case GL_UNSIGNED_BYTE: glIndexub(v.ub[0]); break;
-        case GL_SHORT: glIndexs(v.s[0]); break;
-        case GL_INT: glIndexi(v.i[0]); break;
-        case GL_FLOAT: glIndexf(v.f[0]); break;
-        case GL_DOUBLE: glIndexd(v.d[0]); break;
-        }
+    if (element(&a->index, i, &e->index)) {
+        e->has |= EV_INDEX;
+        e->index_type = a->index.type;
     }
-    if (element(&a->normal, i, &v)) {
-        switch (a->normal.type) {
-        case GL_BYTE: glNormal3bv(v.b); break;
-        case GL_SHORT: glNormal3sv(v.s); break;
-        case GL_INT: glNormal3iv(v.i); break;
-        case GL_FLOAT: glNormal3fv(v.f); break;
-        case GL_DOUBLE: glNormal3dv(v.d); break;
-        }
+    if (element(&a->normal, i, &e->normal)) {
+        e->has |= EV_NORMAL;
+        e->normal_type = a->normal.type;
     }
     if (element(&a->vertex, i, &v)) {
-        GLdouble p[4] = { 0, 0, 0, 1 };
+        e->has |= EV_VERTEX;
+        GLdouble *p = e->vertex;
+        p[0] = p[1] = p[2] = 0;
+        p[3] = 1;
         for (int k = 0; k < a->vertex.size && k < 4; k++)
             p[k] = a->vertex.type == GL_SHORT ? v.s[k] : a->vertex.type == GL_INT ? v.i[k]
                    : a->vertex.type == GL_FLOAT ? v.f[k] : v.d[k];
-        glVertex4dv(p);
     }
+}
+
+/* The values as immediate-mode calls, the vertex last. */
+static void element_put(const element_values *e)
+{
+    if (e->has & EV_EDGE)
+        glEdgeFlag(e->edge);
+    for (int u = 0; u < MAX_UNITS; u++)
+        if (e->has & (1u << (EV_TEX + u)))
+            glMultiTexCoord4dv(GL_TEXTURE0 + (GLenum)u, e->tex[u]);
+    if (e->has & EV_COLOR) {
+        bool four = e->color_n == 4;
+        const evalue *v = &e->color;
+        switch (e->color_type) {
+        case GL_BYTE: four ? glColor4bv(v->b) : glColor3bv(v->b); break;
+        case GL_UNSIGNED_BYTE: four ? glColor4ubv(v->ub) : glColor3ubv(v->ub); break;
+        case GL_SHORT: four ? glColor4sv(v->s) : glColor3sv(v->s); break;
+        case GL_UNSIGNED_SHORT: four ? glColor4usv(v->us) : glColor3usv(v->us); break;
+        case GL_INT: four ? glColor4iv(v->i) : glColor3iv(v->i); break;
+        case GL_UNSIGNED_INT: four ? glColor4uiv(v->ui) : glColor3uiv(v->ui); break;
+        case GL_FLOAT: four ? glColor4fv(v->f) : glColor3fv(v->f); break;
+        case GL_DOUBLE: four ? glColor4dv(v->d) : glColor3dv(v->d); break;
+        }
+    }
+    if (e->has & EV_INDEX) {
+        const evalue *v = &e->index;
+        switch (e->index_type) {
+        case GL_UNSIGNED_BYTE: glIndexub(v->ub[0]); break;
+        case GL_SHORT: glIndexs(v->s[0]); break;
+        case GL_INT: glIndexi(v->i[0]); break;
+        case GL_FLOAT: glIndexf(v->f[0]); break;
+        case GL_DOUBLE: glIndexd(v->d[0]); break;
+        }
+    }
+    if (e->has & EV_NORMAL) {
+        const evalue *v = &e->normal;
+        switch (e->normal_type) {
+        case GL_BYTE: glNormal3bv(v->b); break;
+        case GL_SHORT: glNormal3sv(v->s); break;
+        case GL_INT: glNormal3iv(v->i); break;
+        case GL_FLOAT: glNormal3fv(v->f); break;
+        case GL_DOUBLE: glNormal3dv(v->d); break;
+        }
+    }
+    if (e->has & EV_VERTEX)
+        glVertex4dv(e->vertex);
+}
+
+static void w_glArrayElement(ppc_cpu *c)
+{
+    ENTER();
+    element_values e;
+    element_get((int)c->gpr[3], &e);
+    if (cur->recording)
+        record(OP_element, NULL, 0, &e, sizeof e);
+    element_put(&e);
     DONE();
 }
 
@@ -1794,17 +2390,36 @@ static void w_gluUnProject(ppc_cpu *c)
     DONE();
 }
 
-/* Quadrics: a system-heap word naming the host's. */
-enum { MAX_QUADRICS = 64 };
+/* Quadrics: a system-heap word naming the host's, which a resumed
+ * program has made again with its settings (quadric_settings) when it
+ * next uses it. */
 static GLUquadric *quadrics[MAX_QUADRICS];
 static gaddr quadric_names[MAX_QUADRICS];
 
-static GLUquadric *quadric(gaddr q)
+static int quadric_index(gaddr q)
 {
     for (int i = 0; q && i < MAX_QUADRICS; i++)
         if (quadric_names[i] == q)
-            return quadrics[i];
-    return NULL;
+            return i;
+    return -1;
+}
+
+static void quadric_set(GLUquadric *q, const uint32_t *s)
+{
+    gluQuadricDrawStyle(q, s[0]);
+    gluQuadricNormals(q, s[1]);
+    gluQuadricOrientation(q, s[2]);
+    gluQuadricTexture(q, (GLboolean)s[3]);
+}
+
+static GLUquadric *quadric(gaddr q)
+{
+    int i = quadric_index(q);
+    if (i < 0)
+        return NULL;
+    if (!quadrics[i] && (quadrics[i] = gluNewQuadric()) != NULL)
+        quadric_set(quadrics[i], quadric_settings[i]);
+    return quadrics[i];
 }
 
 static void w_gluNewQuadric(ppc_cpu *c)
@@ -1816,6 +2431,10 @@ static void w_gluNewQuadric(ppc_cpu *c)
             gaddr q = tb_NewPtr(4, true, true);
             if (q && (quadrics[i] = gluNewQuadric()) != NULL) {
                 quadric_names[i] = q;
+                quadric_settings[i][0] = GLU_FILL;
+                quadric_settings[i][1] = GLU_SMOOTH;
+                quadric_settings[i][2] = GLU_OUTSIDE;
+                quadric_settings[i][3] = GL_FALSE;
                 c->gpr[3] = q;
             }
             break;
@@ -1827,7 +2446,8 @@ static void w_gluDeleteQuadric(ppc_cpu *c)
     ENTER();
     for (int i = 0; i < MAX_QUADRICS; i++)
         if (quadric_names[i] && quadric_names[i] == c->gpr[3]) {
-            gluDeleteQuadric(quadrics[i]);
+            if (quadrics[i])
+                gluDeleteQuadric(quadrics[i]);
             tb_DisposePtr(quadric_names[i]);
             quadrics[i] = NULL;
             quadric_names[i] = 0;
@@ -1835,17 +2455,428 @@ static void w_gluDeleteQuadric(ppc_cpu *c)
     DONE();
 }
 
-#define Q() GLUquadric *q = quadric(iv[0]); if (q)
-#define GLU_QUADRICS(X) \
-    X(gluQuadricDrawStyle, "ii", Q() gluQuadricDrawStyle(q, U(1))) \
-    X(gluQuadricNormals, "ii", Q() gluQuadricNormals(q, U(1))) \
-    X(gluQuadricOrientation, "ii", Q() gluQuadricOrientation(q, U(1))) \
-    X(gluQuadricTexture, "ii", Q() gluQuadricTexture(q, (GLboolean)U(1))) \
-    X(gluSphere, "idii", Q() gluSphere(q, D(1), I(2), I(3))) \
-    X(gluCylinder, "idddii", Q() gluCylinder(q, D(1), D(2), D(3), I(4), I(5))) \
-    X(gluDisk, "iddii", Q() gluDisk(q, D(1), D(2), I(3), I(4))) \
-    X(gluPartialDisk, "iddiidd", Q() gluPartialDisk(q, D(1), D(2), I(3), I(4), D(5), D(6)))
 GLU_QUADRICS(DEFINE)
+
+/* ---------------------------------------------------------------------- */
+/* Display lists, compiled again from their records (a resumed context) */
+
+BB_HOST static GLUquadric *replay_q; /* a quadric set as a recorded draw had it */
+
+static uint32_t unpack_args(const char *sig, const uint8_t *p, uint32_t len, uint32_t *iv, double *fv)
+{
+    uint32_t o = 0;
+    for (int k = 0; sig[k] && o + 4 <= len; k++) {
+        if (sig[k] == 'f') {
+            float f;
+            memcpy(&f, p + o, 4);
+            fv[k] = f;
+            o += 4;
+        } else if (sig[k] == 'd') {
+            memcpy(&fv[k], p + o, 8);
+            o += 8;
+        } else {
+            memcpy(&iv[k], p + o, 4);
+            o += 4;
+        }
+    }
+    return o;
+}
+
+/* After an op's arguments, what else it read: the pixels (the unpacking
+ * state set as it was), or the settings of the quadric it drew. */
+static const void *replay_extra(const uint8_t *p, uint32_t len, uint32_t at)
+{
+    uint32_t kind = 0;
+    if (at + 4 > len)
+        return NULL;
+    memcpy(&kind, p + at, 4);
+    if (kind == EXTRA_PIXELS && at + 40 <= len) {
+        GLint u[8];
+        memcpy(u, p + at + 4, 32);
+        for (int k = 0; k < 8; k++)
+            glPixelStorei(unpack_names[k], u[k]);
+        return p + at + 40;
+    }
+    if (kind == EXTRA_QUADRIC && at + 20 <= len) {
+        uint32_t q[4];
+        memcpy(q, p + at + 4, 16);
+        if (!replay_q)
+            replay_q = gluNewQuadric();
+        if (replay_q)
+            quadric_set(replay_q, q);
+    }
+    return NULL;
+}
+
+typedef void (*replay_fn)(const uint8_t *p, uint32_t len);
+
+#undef P
+#define P(k) ((void *)blob)
+#undef Q
+#define Q() GLUquadric *q = replay_q; if (q)
+#define REPLAY(name, sig, call)                                                                                       \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        uint32_t iv[16] = { 0 };                                                                                      \
+        double fv[16] = { 0 };                                                                                        \
+        const void *blob = replay_extra(p, len, unpack_args(sig, p, len, iv, fv));                                    \
+        (void)blob;                                                                                                   \
+        call;                                                                                                         \
+    }
+#define REPLAY_RESULT(name, sig, expr) REPLAY(name, sig, (void)(expr))
+#define REPLAY_V(name, n, T)                                                                                          \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        T t[4] = { 0 };                                                                                               \
+        memcpy(t, p, len < sizeof t ? len : sizeof t);                                                                \
+        name(t);                                                                                                      \
+    }
+#define REPLAY_T(name, host, n, T)                                                                                    \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        uint32_t e = 0;                                                                                               \
+        T t[4] = { 0 };                                                                                               \
+        memcpy(&e, p, 4);                                                                                             \
+        memcpy(t, p + 4, len - 4 < sizeof t ? len - 4 : sizeof t);                                                    \
+        host((GLenum)e, t);                                                                                           \
+    }
+#define REPLAY_R(name, T)                                                                                             \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        T ab[4] = { 0 };                                                                                              \
+        memcpy(ab, p, len < sizeof ab ? len : sizeof ab);                                                             \
+        name(ab, ab + 2);                                                                                             \
+    }
+#define REPLAY_PV(name, T)                                                                                            \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        uint32_t w[2] = { 0 };                                                                                        \
+        T t[4] = { 0 };                                                                                               \
+        memcpy(w, p, 8);                                                                                              \
+        memcpy(t, p + 8, len - 8 < sizeof t ? len - 8 : sizeof t);                                                    \
+        name((GLenum)w[0], (GLenum)w[1], t);                                                                          \
+    }
+#define REPLAY_PV1(name, T)                                                                                           \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        uint32_t w = 0;                                                                                               \
+        T t[4] = { 0 };                                                                                               \
+        memcpy(&w, p, 4);                                                                                             \
+        memcpy(t, p + 4, len - 4 < sizeof t ? len - 4 : sizeof t);                                                    \
+        name((GLenum)w, t);                                                                                           \
+    }
+#define REPLAY_NO(...)
+#define REPLAY_MATRIX(name, host, T)                                                                                  \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        T m[16] = { 0 };                                                                                              \
+        memcpy(m, p, len < sizeof m ? len : sizeof m);                                                                \
+        host(m);                                                                                                      \
+    }
+GL_IMMEDIATE(REPLAY)
+GL_IMMEDIATE_V(REPLAY_V, REPLAY_T, REPLAY_R)
+GL_STATE(REPLAY)
+GL_RESULTS(REPLAY_RESULT)
+GL_PARAMS(REPLAY_PV, REPLAY_PV1, REPLAY_NO)
+GL_MATRICES(REPLAY_MATRIX)
+GLU_QUADRICS(REPLAY)
+#undef P
+#define P(k) host_ptr(iv[k])
+
+static void r_glClipPlane(const uint8_t *p, uint32_t len)
+{
+    uint32_t plane = 0;
+    GLdouble e[4] = { 0 };
+    memcpy(&plane, p, 4);
+    memcpy(e, p + 4, len >= 36 ? 32 : 0);
+    glClipPlane(plane, e);
+}
+
+static void r_glCallLists(const uint8_t *p, uint32_t len)
+{
+    uint32_t w[2];
+    if (len < 8)
+        return;
+    memcpy(w, p, 8);
+    glCallLists((GLsizei)w[0], w[1], p + 8);
+}
+
+static void r_glDrawBuffer(const uint8_t *p, uint32_t len)
+{
+    uint32_t b = 0;
+    memcpy(&b, p, len >= 4 ? 4 : 0);
+    glDrawBuffer(b);
+}
+
+#define REPLAY_PIXELMAP(name, T)                                                                                      \
+    static void r_##name(const uint8_t *p, uint32_t len)                                                              \
+    {                                                                                                                 \
+        uint32_t w[2];                                                                                                \
+        if (len < 8)                                                                                                  \
+            return;                                                                                                   \
+        memcpy(w, p, 8);                                                                                              \
+        name(w[0], (GLsizei)w[1], (const T *)(p + 8));                                                                \
+    }
+REPLAY_PIXELMAP(glPixelMapfv, GLfloat)
+REPLAY_PIXELMAP(glPixelMapuiv, GLuint)
+REPLAY_PIXELMAP(glPixelMapusv, GLushort)
+
+/* glMap: the arguments, the values' size, the values. */
+#define REPLAY_MAP(name, T, sig1, sig2, host1, host2)                                                                 \
+    static void r_##name##1##host1(const uint8_t *p, uint32_t len)                                                    \
+    {                                                                                                                 \
+        uint32_t iv[16] = { 0 };                                                                                      \
+        double fv[16] = { 0 };                                                                                        \
+        uint32_t at = unpack_args(sig1, p, len, iv, fv) + 4;                                                          \
+        if (at <= len)                                                                                                \
+            glMap1##host1(U(0), (T)D(1), (T)D(2), I(3), I(4), (const T *)(p + at));                                   \
+    }                                                                                                                 \
+    static void r_##name##2##host2(const uint8_t *p, uint32_t len)                                                    \
+    {                                                                                                                 \
+        uint32_t iv[16] = { 0 };                                                                                      \
+        double fv[16] = { 0 };                                                                                        \
+        uint32_t at = unpack_args(sig2, p, len, iv, fv) + 4;                                                          \
+        if (at <= len)                                                                                                \
+            glMap2##host2(U(0), (T)D(1), (T)D(2), I(3), I(4), (T)D(5), (T)D(6), I(7), I(8), (const T *)(p + at));     \
+    }
+REPLAY_MAP(glMap, GLdouble, "iddiii", "iddiiddiii", d, d)
+REPLAY_MAP(glMap, GLfloat, "iffiii", "iffiiffiii", f, f)
+
+static void r_arrays(const uint8_t *p, uint32_t len)
+{
+    uint32_t h[3];
+    if (len < 12)
+        return;
+    memcpy(h, p, 12);
+    uint32_t at = 12 + 4 * h[2];
+    if (at > len)
+        return;
+    const GLuint *idx = (const GLuint *)(p + 12);
+    glPushClientAttrib(GL_CLIENT_VERTEX_ARRAY_BIT);
+    static const GLenum all[] = { GL_VERTEX_ARRAY, GL_NORMAL_ARRAY, GL_COLOR_ARRAY, GL_INDEX_ARRAY,
+                                  GL_EDGE_FLAG_ARRAY };
+    for (unsigned k = 0; k < sizeof all / sizeof all[0]; k++)
+        glDisableClientState(all[k]);
+    for (int u = 0; u < MAX_UNITS; u++) {
+        glClientActiveTexture(GL_TEXTURE0 + (GLenum)u);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    }
+    while (at + 24 <= len) {
+        uint32_t a[6];
+        memcpy(a, p + at, 24);
+        const void *data = p + at + 24;
+        at += 24 + a[4] + a[5];
+        if (at > len)
+            break;
+        switch (a[0]) {
+        case GL_VERTEX_ARRAY: glVertexPointer((GLint)a[2], a[3], 0, data); break;
+        case GL_NORMAL_ARRAY: glNormalPointer(a[3], 0, data); break;
+        case GL_COLOR_ARRAY: glColorPointer((GLint)a[2], a[3], 0, data); break;
+        case GL_INDEX_ARRAY: glIndexPointer(a[3], 0, data); break;
+        case GL_EDGE_FLAG_ARRAY: glEdgeFlagPointer(0, data); break;
+        case GL_TEXTURE_COORD_ARRAY:
+            glClientActiveTexture(GL_TEXTURE0 + a[1]);
+            glTexCoordPointer((GLint)a[2], a[3], 0, data);
+            break;
+        }
+        glEnableClientState(a[0]);
+    }
+    if (h[2])
+        glDrawElements(h[0], (GLsizei)h[2], GL_UNSIGNED_INT, idx);
+    else
+        glDrawArrays(h[0], 0, (GLsizei)h[1]);
+    glPopClientAttrib();
+}
+
+static void r_element(const uint8_t *p, uint32_t len)
+{
+    element_values e;
+    if (len < sizeof e)
+        return;
+    memcpy(&e, p, sizeof e);
+    element_put(&e);
+}
+
+#define RP(name, ...) [OP_##name] = r_##name,
+#define RP_NO(...)
+static const replay_fn replays[OP_COUNT] = {
+    GL_IMMEDIATE(RP) GL_IMMEDIATE_V(RP, RP, RP) GL_STATE(RP) GL_RESULTS(RP) GL_PARAMS(RP, RP, RP_NO)
+    GL_MATRICES(RP) GLU_QUADRICS(RP)
+    [OP_glClipPlane] = r_glClipPlane, [OP_glCallLists] = r_glCallLists, [OP_glDrawBuffer] = r_glDrawBuffer,
+    [OP_glPixelMapfv] = r_glPixelMapfv, [OP_glPixelMapuiv] = r_glPixelMapuiv, [OP_glPixelMapusv] = r_glPixelMapusv,
+    [OP_glMap1d] = r_glMap1d, [OP_glMap1f] = r_glMap1f, [OP_glMap2d] = r_glMap2d, [OP_glMap2f] = r_glMap2f,
+    [OP_arrays] = r_arrays, [OP_element] = r_element,
+};
+#undef RP
+#undef RP_NO
+
+/* Each of the group's lists compiled again, in its new context. */
+static void replay_lists(const glgroup *g)
+{
+    for (int i = 0; i < g->nlists; i++) {
+        const gllist *l = &g->lists[i];
+        glNewList(l->name, GL_COMPILE);
+        for (uint32_t at = 0; l->ops && at + 8 <= l->len;) {
+            uint16_t op;
+            uint32_t len;
+            memcpy(&op, l->ops + at, 2);
+            memcpy(&len, l->ops + at + 4, 4);
+            if (at + 8 + len > l->len)
+                break;
+            if (op < OP_COUNT && replays[op])
+                replays[op](l->ops + at + 8, len);
+            at += 8 + ((len + 7) & ~7u);
+        }
+        glEndList();
+    }
+    if (replay_q) {
+        gluDeleteQuadric(replay_q);
+        replay_q = NULL;
+    }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hibernating (opengl_hib.c has the state) */
+
+static hostgl_ctx *live_mate(const hostgl_ctx *h)
+{
+    for (int i = 0; i < MAX_CONTEXTS; i++)
+        if (contexts[i] && contexts[i] != h && contexts[i]->group == h->group && contexts[i]->cgl)
+            return contexts[i];
+    return NULL;
+}
+
+/* A resumed program's context, made again at its first use: a host
+ * context sharing with any of its group made again already (else the
+ * group's textures and lists given to this one), its framebuffer, then
+ * its state. */
+static bool rebuild(hostgl_ctx *h)
+{
+    if (!hostgl_available())
+        return false;
+    hostgl_ctx *mate = live_mate(h);
+    if (CGLCreateContext(pixel_format, mate ? mate->cgl : NULL, &h->cgl) != kCGLNoError) {
+        h->cgl = NULL;
+        return false;
+    }
+    CGLSetCurrentContext(h->cgl);
+    make_framebuffer(h);
+    h->sized = false;
+    hostgl_resize(h, h->width, h->height);
+    CGLSetCurrentContext(h->cgl);
+    size_t tex = glh_saved_texture_bytes(h->group), state = glh_saved_bytes(h);
+    if (!mate) {
+        glh_restore_textures(h->group);
+        replay_lists(h->group);
+    }
+    glh_restore(h);
+    if (h->select)
+        glSelectBuffer(h->select_n, h->select);
+    if (h->feedback)
+        glFeedbackBuffer(h->feedback_n, h->feedback_type, h->feedback);
+    LOGF(LOG_IDLE, "resume: OpenGL context made again (%dx%d; %zu bytes of state and framebuffer%s)\n", h->width,
+         h->height, state, mate ? ", sharing" : "");
+    if (!mate && (tex || h->group->nlists))
+        LOGF(LOG_IDLE, "resume: OpenGL: %zu bytes of textures, %d display lists\n", tex, h->group->nlists);
+    return true;
+}
+
+/* What keeps a context from being saved as it is, or NULL: for the drain
+ * to wait on at a slice point, and refuse at an idle call. */
+const char *hostgl_blocker(void)
+{
+    const char *why = NULL;
+    CGLContextObj was = CGLGetCurrentContext();
+    for (int i = 0; i < MAX_CONTEXTS && !why; i++) {
+        hostgl_ctx *h = contexts[i];
+        if (!h || !h->cgl)
+            continue; /* resumed and not used yet: as the snapshot had it */
+        if (h->in_begin)
+            why = "is between glBegin and glEnd (OpenGL)";
+        else if (h->recording)
+            why = "is compiling an OpenGL display list";
+        else if (h->render_mode != GL_RENDER)
+            why = "has OpenGL in selection or feedback mode";
+        else if (h->nsaved > 0)
+            why = "has OpenGL client attributes pushed (glPushClientAttrib)";
+        if (why)
+            break;
+        GLint depth = 0;
+        CGLSetCurrentContext(h->cgl);
+        glGetIntegerv(GL_ATTRIB_STACK_DEPTH, &depth);
+        if (depth > 0)
+            why = "has OpenGL attributes pushed (glPushAttrib)";
+    }
+    CGLSetCurrentContext(was);
+    return why;
+}
+
+/* Before the snapshot: each context's state, and each group's textures,
+ * into the machine.  From any thread, the machine standing still. */
+void hostgl_before_hibernate(void)
+{
+    CGLContextObj was = CGLGetCurrentContext();
+    for (int i = 0; i < MAX_CONTEXTS; i++) {
+        hostgl_ctx *h = contexts[i];
+        if (!h || !h->cgl || h->hib)
+            continue;
+        CGLLockContext(h->cgl);
+        CGLSetCurrentContext(h->cgl);
+        glh_capture(h);
+        glh_capture_textures(h->group);
+        CGLUnlockContext(h->cgl);
+    }
+    CGLSetCurrentContext(was);
+}
+
+/* Saved, and going on: what was read back let go of where the host still has it. */
+void hostgl_after_hibernate(void)
+{
+    for (int i = 0; i < MAX_CONTEXTS; i++) {
+        hostgl_ctx *h = contexts[i];
+        if (h && h->cgl) {
+            glh_free(h);
+            glh_free_textures(h->group);
+        }
+    }
+}
+
+/* Resumed: no context is the host's any more (a test resumes in the
+ * process that saved: its old ones are left alone), each made again at
+ * its first use; GLU's quadrics as well. */
+void hostgl_after_resume(void)
+{
+    int n = 0;
+    for (int i = 0; i < MAX_CONTEXTS; i++)
+        if (contexts[i]) {
+            contexts[i]->cgl = NULL;
+            n++;
+        }
+    for (int i = 0; i < MAX_QUADRICS; i++)
+        quadrics[i] = NULL;
+    if (available > 0)
+        CGLSetCurrentContext(NULL);
+    if (n)
+        LOGF(LOG_IDLE, "resume: OpenGL: %d context%s to make again\n", n, n == 1 ? "" : "s");
+}
+
+/* What the snapshot holds of OpenGL's state, for the tests. */
+size_t hostgl_saved_bytes(void)
+{
+    size_t n = 0;
+    for (int i = 0; i < MAX_CONTEXTS; i++)
+        if (contexts[i]) {
+            n += glh_saved_bytes(contexts[i]);
+            bool first = true;
+            for (int k = 0; k < i; k++)
+                first = first && !(contexts[k] && contexts[k]->group == contexts[i]->group);
+            if (first)
+                n += glh_saved_texture_bytes(contexts[i]->group);
+        }
+    return n;
+}
+
+int hostgl_display_lists(void) { return cur ? cur->group->nlists : 0; }
 
 /* ---------------------------------------------------------------------- */
 
@@ -1961,6 +2992,12 @@ void hostgl_glyph_list(uint32_t list, int width, int height, int row_bytes, floa
     (void)list, (void)width, (void)height, (void)row_bytes, (void)xorig, (void)yorig, (void)xmove, (void)bits;
 }
 void hostgl_reset(void) {}
+const char *hostgl_blocker(void) { return NULL; }
+void hostgl_before_hibernate(void) {}
+void hostgl_after_hibernate(void) {}
+void hostgl_after_resume(void) {}
+size_t hostgl_saved_bytes(void) { return 0; }
+int hostgl_display_lists(void) { return 0; }
 const ppc_export gl_exports[] = { { "", NULL } };
 const unsigned gl_export_count = 0;
 

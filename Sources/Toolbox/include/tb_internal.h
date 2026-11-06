@@ -1149,7 +1149,6 @@ void aem_after_resume(void);
 void aem_suspended_after_resume(void);
 void display_after_resume(void);
 const char *host_media_open(void);
-bool hostgl_any_live(void);
 void q3_view_after_resume(void);
 bool qt_host_movies_open(void);
 bool drivevol_any_mounted(void);
