@@ -200,6 +200,11 @@ static bool mm_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *
     return mm_routine_sel(rd, want, NULL, procinfo, isa, proc, NULL);
 }
 
+bool mm_descriptor_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *proc)
+{
+    return mm_routine(rd, want, procinfo, isa, proc);
+}
+
 static gaddr new_descriptor(int count)
 {
     gaddr rd = tb_NewPtr(RD_SIZE + RR_SIZE * count, false, true);

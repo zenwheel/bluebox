@@ -65,6 +65,69 @@ extension BlueBox {
             machine_drain_end()
         }
 
+        /// A program that never comes back from a routine of its own the
+        /// Toolbox called (a ModalDialog filter, as Anthem's loop inside its
+        /// Apple Event handler): the instruction limit, reached first in a
+        /// headless run, is refused for where the program waited, not for
+        /// the limit.
+        @Test func theLimitInACallbackIsRefusedForWhereItWas() {
+            launchTestApp()
+            let items = tb_NewHandle(2, false, true)
+            wr16(rd32(items), 0xFFFF) // no items
+            let r = ptr(8)
+            for (i, v) in [100, 100, 200, 300].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            _ = tb_NewDialog(0, r, ptr(2), 1, 0, 0xFFFF_FFFF, 0, 0, items)
+            let filter = code([0x60FE]) // BRA.S self: never returns
+            let item = ptr(2)
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            // ModalDialog(filter, &item), for ever
+            _ = start([0x2F3C, hi(filter), lo(filter), 0x2F3C, hi(item), lo(item), 0xA991, 0x60F2])
+            // In the filter, the drain asked for there; the limit ends it.
+            machine_hibernate_at(machine_instruction_count() + 1_000_000)
+            machine_set_instruction_limit(machine_instruction_count() + 6_000_000)
+            _ = machine_run(10_000_000)
+            machine_hibernate_at(0)
+            machine_set_instruction_limit(0)
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            let why = String(cString: machine_drain_reason())
+            #expect(why.contains("routine of its own called by the Toolbox (ModalDialog)"), Comment(rawValue: why))
+            machine_drain_end()
+        }
+
+        /// While the machine drains, a press being tracked is let go of far
+        /// outside everything, but a mouse left up stays where it is: a
+        /// screen saver watching it (Coca-Cola Animations) would take the
+        /// drain for the user moving it and quit.
+        @Test func aDrainMovesOnlyAMouseHeldDown() {
+            launchTestApp()
+            let p = ptr(4)
+            machine_post_mouse(120, 80, 0)
+            machine_drain_begin(true)
+            tb_GetMouse(p)
+            #expect(rd16(p) == 80 && rd16(p + 2) == 120)   // v, h: where it was
+            machine_post_mouse(120, 80, 1)
+            tb_GetMouse(p)
+            #expect(Int16(bitPattern: rd16(p)) == -32000)  // a press: let go of far away
+            #expect(tb_Button() == 0)
+            machine_drain_end()
+            machine_post_mouse(120, 80, 0)
+        }
+
+        /// A drain is refused when its time is up only once the machine has
+        /// also run its least: a busy host's slow machine gets as far as a
+        /// fast one's.
+        @Test func aSlowMachineGetsItsLeastBeforeARefusal() {
+            launchTestApp()
+            machine_drain_begin(true)
+            Thread.sleep(forTimeInterval: 2.1)
+            #expect(!drain_expired())                       // past the time, not the instructions
+            g_cpu!.pointee.icount += 50_000_000
+            #expect(drain_expired())
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            machine_drain_end()
+        }
+
         /// Suspend drains too: stopped at a safe point, the machine could be
         /// hibernated, and goes on when resumed.
         @Test func suspendStopsAtASafePoint() {
@@ -130,6 +193,55 @@ extension BlueBox {
             #expect(tb_FSWriteFork(rn, 1, pos, 3, buf, actual) == -36)
             #expect(tb_FSCloseFork(rn) == 0)
             #expect(try String(contentsOf: file, encoding: .utf8) == "changed")
+        }
+
+        /// A program running its event loop inside its Apple Event handler
+        /// (Anthem 1.01's Open Application): the handler is called on the
+        /// program's own stack, so the machine stops at its idle call there,
+        /// its snapshot is put back, and when the handler returns the
+        /// program's AEProcessAppleEvent call answers its result, the
+        /// registers it had kept.
+        @Test func aLoopInsideAnAppleEventHandlerHibernates() {
+            launchTestApp(sizeFlags: 0x0040)
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            let vars = ptr(12) // count, flag, result (word)
+            let count = vars, flag = vars + 4, result = vars + 8
+            // pascal OSErr handler(evt, reply, refcon):
+            //   loop { count += 1; _SystemTask } until flag; return -1700 (errAECoercionFail, say)
+            let handler = code([0x52B9, hi(count), lo(count), 0xA9B4, 0x4AB9, hi(flag), lo(flag), 0x67F0,
+                                0x205F, 0x4FEF, 0x000C, 0x3EBC, 0xF95C, 0x4ED0])
+            #expect(tb_AEInstallEventHandler(Int32(bitPattern: fourCC("aevt")), Int32(bitPattern: fourCC("oapp")),
+                                             handler, 0, 0) == 0)
+            machine_send_apple_event(fourCC("aevt"), fourCC("oapp"), nil, 0, nil, nil, nil)
+            let e = ptr(UInt32(EventRecord_SIZEOF))
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd16(e) == 23)
+            wr16(result, 0x7777)
+            // MOVEQ #5,D3; CLR.W -(SP); MOVE.L #e,-(SP); MOVE.W #$021B,D0; _Pack8; MOVE.W (SP)+,result;
+            // loop: _SystemTask; BRA.S loop
+            _ = start([0x7605, 0x4267, 0x2F3C, hi(e), lo(e), 0x303C, 0x021B, 0xA816, 0x33DF, hi(result), lo(result),
+                       0xA9B4, 0x60FC])
+            g_cpu!.pointee.d.3 = 0
+            _ = machine_run(200_000)
+            #expect(rd32(count) > 0)                        // in the handler
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "SystemTask")
+            let snap = tempDir().appendingPathComponent("aehandler.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            #expect(machine_hibernate_restore(snap, &err, err.count), Comment(rawValue: String(cString: err)))
+            let n = rd32(count)
+            _ = machine_run(200_000)
+            #expect(rd32(count) > n)                        // the handler's loop goes on
+            #expect(rd16(result) == 0x7777)
+            g_cpu!.pointee.d.3 = 9                          // a register the handler changed
+            wr32(flag, 1)
+            _ = machine_run(200_000)
+            #expect(Int16(bitPattern: rd16(result)) == -1700) // the handler's result, returned to the call
+            #expect(g_cpu!.pointee.d.3 == 5)                // as the program had it
         }
 
         /// Hibernate in a window: the machine runs on its own thread (as the

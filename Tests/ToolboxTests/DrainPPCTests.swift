@@ -157,6 +157,75 @@ extension BlueBox {
             machine_drain_end()
         }
 
+        /// A PowerPC program running its event loop inside its Apple Event
+        /// handler (UnrealFinder, HexaSuper): the handler is called from the
+        /// program's own code, so the machine stops on its idle call there,
+        /// and when the handler returns, restored, AEProcessAppleEvent
+        /// answers its result.
+        @Test func aLoopInsideAnAppleEventHandlerHibernates() {
+            defer { g_ppc_mode = false }
+            launchTestApp(sizeFlags: 0x0040)
+            _ = cfm_ppc_cpu()
+            g_cpu!.pointee.halted = false
+            g_ppc.halted = false
+            let task = export("SystemTask"), process = export("AEProcessAppleEvent")
+            let vars = ptr(12) // count, flag, result
+            // handler: loop { count += 1; SystemTask } until flag; return -1700
+            let handler = tvector(code(
+                [0x7FC8_02A6] + load(29, vars)                                   // mflr r30
+                    + [0x839D_0000, 0x3B9C_0001, 0x939D_0000] + call(task)      // count += 1; SystemTask
+                    + [0x839D_0004, 0x2C1C_0000, 0x4182_FFD8]                   // until flag
+                    + [0x3860_F95C, 0x7FC8_03A6, 0x4E80_0020]))                 // li r3,-1700; mtlr r30; blr
+            #expect(tb_AEInstallEventHandler(Int32(bitPattern: fourCC("aevt")), Int32(bitPattern: fourCC("oapp")),
+                                             handler, 0, 0) == 0)
+            machine_send_apple_event(fourCC("aevt"), fourCC("oapp"), nil, 0, nil, nil, nil)
+            let e = ptr(UInt32(EventRecord_SIZEOF))
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd16(e) == 23)
+            wr32(vars + 8, 0x7777)
+            // result := AEProcessAppleEvent(e); loop { SystemTask }
+            _ = start(load(29, vars) + load(3, e) + call(process) + [0x907D_0008] + call(task) + [branch(back: 5)])
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > 0)                         // in the handler
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "SystemTask")
+            let snap = snapshot("ppcaehandler.bbhib")
+            machine_drain_end()
+            restore(snap)
+            let n = rd32(vars)
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > n)
+            #expect(rd32(vars + 8) == 0x7777)
+            wr32(vars + 4, 1)
+            _ = machine_run(200_000)
+            #expect(Int32(bitPattern: rd32(vars + 8)) == -1700) // the handler's result, returned to the call
+        }
+
+        /// A PowerPC program waiting in 68k code it called through
+        /// CallUniversalProc (Disk Copy's dialogs) is under a call from
+        /// native code: refused, saying so.
+        @Test func waitingIn68kCodeCalledThroughMixedModeIsRefusedSayingSo() {
+            defer { g_ppc_mode = false }
+            let cup = export("CallUniversalProc")
+            let words: [UInt16] = [0xA9B4, 0x60FC] // loop: _SystemTask; BRA.S loop
+            let routine = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(routine + UInt32(i * 2), w) }
+            g_cpu!.pointee.a.7 = ptr(65536) + 65000
+            // CallUniversalProc(routine, kPascalStackBased)
+            _ = start(load(3, routine) + [0x3880_0000] + call(cup) + [branch(back: 0)])
+            machine_hibernate_at(machine_instruction_count() + 1_000_000)
+            machine_set_instruction_limit(machine_instruction_count() + 6_000_000)
+            _ = machine_run(10_000_000)
+            machine_hibernate_at(0)
+            machine_set_instruction_limit(0)
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            let why = String(cString: machine_drain_reason())
+            #expect(why.contains("68k code it called through Mixed Mode (CallUniversalProc)"),
+                    Comment(rawValue: why))
+            machine_drain_end()
+        }
+
         /// A PowerPC thread waiting in YieldToThread is saved with the
         /// program; restored, it goes on: its YieldToThread answers noErr and
         /// its loop runs again.
@@ -188,8 +257,10 @@ extension BlueBox {
         }
 
         /// The same for a 68k thread waiting in _ThreadDispatch: its
-        /// YieldToThread's result on the stack, its loop going on.
-        @Test func a68kThreadGoesOnAfterARestore() {
+        /// YieldToThread's result on the stack, its loop going on; also
+        /// with D0's high word set, as the selector is loaded with MOVE.W
+        /// (IPNetRouter's threads had FFFF0512).
+        @Test(arguments: [false, true]) func a68kThreadGoesOnAfterARestore(highWordSet: Bool) {
             func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
             func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
             func code68(_ words: [UInt16]) -> UInt32 {
@@ -198,13 +269,15 @@ extension BlueBox {
                 return p
             }
             let vars = ptr(8) // result (word), count
-            let yieldCall: [UInt16] = [0x4267, 0x42A7, 0x303C, 0x0205, 0xABF2] // YieldToThread(kNoThreadID)
+            let dirty: [UInt16] = highWordSet ? [0x70FF] : [] // moveq #-1,d0
+            let yieldCall: [UInt16] = [0x4267, 0x42A7] + dirty + [0x303C, 0x0205, 0xABF2] // YieldToThread(kNoThreadID)
+            let back = UInt16(yieldCall.count * 2)
             // pascal entry: loop { count += 1; result := YieldToThread(0) }
-            let entry = code68([0x52B9, hi(vars + 4), lo(vars + 4)] + yieldCall + [0x33DF, hi(vars), lo(vars), 0x60E8])
+            let entry = code68([0x52B9, hi(vars + 4), lo(vars + 4)] + yieldCall + [0x33DF, hi(vars), lo(vars), 0x6000 | (0xF2 - back)])
             let made = ptr(4)
             #expect(tb_NewThread(1, entry, 0, 0, 0, 0, made) == 0)
             // the program: loop { _SystemTask; YieldToThread(0) }
-            let app = code68([0xA9B4] + yieldCall + [0x548F, 0x60F0])
+            let app = code68([0xA9B4] + yieldCall + [0x548F, 0x6000 | (0xFA - back)])
             g_cpu!.pointee.a.7 = ptr(65536) + 65000
             g_cpu!.pointee.sr = 0x2000
             g_cpu!.pointee.pc = app
@@ -215,7 +288,7 @@ extension BlueBox {
             #expect(String(cString: machine_drain_point()) == "SystemTask")
             #expect(machine_hibernate_blocker() == nil)
             #expect(threads_parked() == 1)
-            let snap = snapshot("68kthread.bbhib")
+            let snap = snapshot("68kthread\(highWordSet ? "-d0" : "").bbhib")
             machine_drain_end()
             restore(snap)
             let count = rd32(vars + 4)

@@ -209,6 +209,7 @@ static void ppc_SysBeep(ppc_cpu *c)
 }
 
 static const ppc_export manual_exports[] = {
+    { "AEProcessAppleEvent", aem_ppc_ProcessAppleEvent }, /* its handlers called on the program's stack */
     { "Debugger", ppc_Debugger },
     { "DebugStr", ppc_DebugStr },
     { "debugstr", ppc_debugstr },
