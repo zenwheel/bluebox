@@ -95,6 +95,25 @@ extension BlueBox {
             machine_drain_end()
         }
 
+        /// While the machine drains, a press being tracked is let go of far
+        /// outside everything, but a mouse left up stays where it is: a
+        /// screen saver watching it (Coca-Cola Animations) would take the
+        /// drain for the user moving it and quit.
+        @Test func aDrainMovesOnlyAMouseHeldDown() {
+            launchTestApp()
+            let p = ptr(4)
+            machine_post_mouse(120, 80, 0)
+            machine_drain_begin(true)
+            tb_GetMouse(p)
+            #expect(rd16(p) == 80 && rd16(p + 2) == 120)   // v, h: where it was
+            machine_post_mouse(120, 80, 1)
+            tb_GetMouse(p)
+            #expect(Int16(bitPattern: rd16(p)) == -32000)  // a press: let go of far away
+            #expect(tb_Button() == 0)
+            machine_drain_end()
+            machine_post_mouse(120, 80, 0)
+        }
+
         /// Suspend drains too: stopped at a safe point, the machine could be
         /// hibernated, and goes on when resumed.
         @Test func suspendStopsAtASafePoint() {

@@ -541,8 +541,9 @@ void machine_pass_tick(void);
 
 /* The button itself, as Button reports it (MBState). */
 /* While the machine drains to a safe point the button reads as let go,
- * and the mouse far outside everything: each tracking loop (a control, a
- * menu, a window's drag) ends as if released where it does nothing. */
+ * and the mouse, if it was down, far outside everything: each tracking
+ * loop (a control, a menu, a window's drag) ends as if released where it
+ * does nothing. */
 static bool drain_released(void) { return drain_wanted(); }
 
 static bool button_now(void)
@@ -1297,8 +1298,12 @@ void tb_GetMouse(gaddr p)
      * hand's click. */
     pthread_mutex_lock(&lock);
     uint32_t g = wheel_click_now ? wheel_click_where : make_pt(mouse_v, mouse_h);
+    bool down = button_down;
     pthread_mutex_unlock(&lock);
-    if (drain_released())
+    /* Only a press being tracked is let go of far away: a mouse left up
+     * stays where it is, or a screen saver watching it for a move
+     * (Coca-Cola Animations) takes the drain for the user and quits. */
+    if (down && drain_released())
         g = make_pt(-32000, -32000);
     static uint32_t last;
     if (g != last) { /* the mouse moved: what the program does with it is news */
