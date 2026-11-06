@@ -95,6 +95,13 @@ static void record(const machine_speech_request *rq, void *ctx)
     machine_speech_event(rq->channel, 0, 0, 0);
 }
 
+/* A mark in the log: the snapshot written, or put back. */
+void speech_record_note(const char *what)
+{
+    if (out)
+        fprintf(out, "-- %s\n", what);
+}
+
 bool machine_set_speech_record(const char *path)
 {
     if (out && out != stderr)

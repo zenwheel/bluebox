@@ -704,6 +704,10 @@ void machine_set_notification_handler(machine_notify_fn fn, void *ctx);
 typedef void (*machine_sound_fn)(int channel, const int16_t *pcm, int frames, int channels, double rate, float volume,
                                  void *ctx);
 void machine_set_sound_handler(machine_sound_fn fn, void *ctx);
+/* The record backend: the sound and MIDI the host would get written to
+ * path ("-" for stderr) a line each, played nowhere (sound_record.c).
+ * For tests and comparing runs. */
+bool machine_set_sound_record(const char *path);
 
 /* MIDI for the host's General MIDI synthesizer (QuickTime music tracks):
  * each message to be played delay_ms from now, on a synthesizer of the
