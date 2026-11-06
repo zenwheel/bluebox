@@ -173,6 +173,53 @@ extension BlueBox {
             #expect(tb_FrontWindow() != w)
         }
 
+        /// Its close box, clicked: FindWindow says inSysWindow, as for any
+        /// desk accessory's window, and SystemClick closes it.
+        @Test func closesFromItsCloseBox() {
+            boot()
+            defer { restore() }
+            let (_, w, h, v) = open()
+            update(w)
+            let wp = tb_NewPtr(4, false, true)
+            #expect(tb_FindWindow(UInt32(v - 9) << 16 | UInt32(h + 13), wp) == 2) // inSysWindow
+            #expect(rd32(wp) == w)
+            click(w, (h, v), 13, -9)
+            #expect(tb_FrontWindow() != w)
+        }
+
+        /// The host frame's close button (the native appearance's): the
+        /// action FindWindow takes is inSysWindow for a desk accessory's
+        /// window, not inGoAway, so the program passes it to SystemClick,
+        /// which closes the desk accessory.  (The desk accessory host, and
+        /// most programs, ignored an inGoAway for a window not theirs.)
+        @Test func closesFromTheHostFramesCloseButton() {
+            boot()
+            machine_set_appearance(Int32(MACHINE_APPEARANCE_NATIVE))
+            defer {
+                machine_set_appearance(Int32(MACHINE_APPEARANCE_BW))
+                restore()
+            }
+            let (_, w, h, v) = open()
+            update(w)
+            // the host draws its frame, with a close button
+            display_sync()
+            var wins = [machine_window](repeating: machine_window(), count: 8)
+            let n = Int(machine_windows(&wins, 8))
+            let flags = wins.prefix(n).first { $0.id == w }?.flags ?? 0
+            #expect(flags & UInt8(MACHINE_WINDOW_NATIVE | MACHINE_WINDOW_CLOSE) == UInt8(MACHINE_WINDOW_NATIVE | MACHINE_WINDOW_CLOSE))
+            machine_window_action(w, Int32(MACHINE_ACTION_CLOSE), 0, 0, Int32(h + 2), Int32(v + 2))
+            let wp = tb_NewPtr(4, false, true)
+            let pt = UInt32(v + 2) << 16 | UInt32(h + 2)
+            #expect(tb_FindWindow(pt, wp) == 2) // inSysWindow
+            #expect(rd32(wp) == w)
+            let ev = tb_NewPtr(16, false, true)
+            wr16(ev, 1)
+            wr32(ev + 10, pt)
+            tb_SystemClick(ev, w)
+            tb_FlushEvents(-1, 0)
+            #expect(tb_FrontWindow() != w)
+        }
+
         /// The Printer device lists the host's printers; choosing one
         /// sends the Printing Manager's pages to it, without a panel.
         @Test func choosingAHostPrinter() {

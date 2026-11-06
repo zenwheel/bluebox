@@ -335,9 +335,28 @@ static int16_t take_action(gaddr wpp)
         case MACHINE_ACTION_RESIZE: part = 5; break;  /* inGrow */
         default: pending.taken = false; break;
         }
+        /* A desk accessory's window is the system's, whatever part: the
+         * program passes the click to SystemClick, which asks
+         * wm_window_hit for the part and closes, drags or passes it on. */
+        if (part && pending.w && WindowRecord_windowKind(pending.w) < 0)
+            part = inSysWindow;
     }
     pthread_mutex_unlock(&action_lock);
     return part;
+}
+
+/* The window part a host close or move taken by FindWindow stands for,
+ * for SystemClick, whose TrackGoAway and DragWindow complete it (0 if
+ * none is pending for this window).  A zoom or resize goes on to the desk
+ * accessory as the click it is, for its own TrackBox or GrowWindow. */
+static int32_t action_hit(gaddr w)
+{
+    pthread_mutex_lock(&action_lock);
+    int32_t hit = 0;
+    if (pending.taken && pending.w == w)
+        hit = pending.action == MACHINE_ACTION_CLOSE ? wInGoAway : pending.action == MACHINE_ACTION_MOVE ? wInDrag : 0;
+    pthread_mutex_unlock(&action_lock);
+    return hit;
 }
 
 /* The pending action for this window and kind, consumed; false if none. */
@@ -1838,7 +1857,11 @@ int16_t tb_FindWindow(uint32_t p, gaddr wpp)
 }
 
 /* Where in a window a point is (wInContent ... ), for SystemClick. */
-int32_t wm_window_hit(gaddr w, uint32_t pt) { return call_wdef(w, wHit, (int32_t)pt); }
+int32_t wm_window_hit(gaddr w, uint32_t pt)
+{
+    int32_t hit = action_hit(w); /* the host frame's close button and the rest */
+    return hit ? hit : call_wdef(w, wHit, (int32_t)pt);
+}
 
 /* ---------------------------------------------------------------------- */
 /* Update regions */
