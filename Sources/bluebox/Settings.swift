@@ -289,7 +289,13 @@ func saveSettings(_ all: [String: AppSettings], library: String) {
 /// The settings key for an application given by path or by name.
 func settingsKey(_ app: String) -> String { (app as NSString).lastPathComponent }
 
-func settings(for app: String) -> AppSettings? { loadSettings(defaultLibrary())[settingsKey(app)] }
+/// An exported application's program has the settings it was exported
+/// with under those its runs have kept since.
+func settings(for app: String) -> AppSettings? {
+    let own = loadSettings(defaultLibrary())[settingsKey(app)]
+    guard let baked = exportedSettings(for: app) else { return own }
+    return (own ?? AppSettings()).over(baked)
+}
 
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
