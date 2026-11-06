@@ -56,7 +56,7 @@ static bool push(qt_edit_track *t, qt_edit e)
         t->e[t->n - 1].len += e.len;
         return true;
     }
-    qt_edit *grown = realloc(t->e, sizeof *grown * (size_t)(t->n + 1));
+    qt_edit *grown = bb_realloc(t->e, sizeof *grown * (size_t)(t->n + 1), BB_TAG(qt_edit));
     if (!grown)
         return false;
     t->e = grown;
@@ -82,7 +82,7 @@ bool qt_edits_read(const uint8_t *moov, uint32_t len, qt_edits *out)
         if (tn < 8 || tn > (uint64_t)(end - t))
             break;
         if (!memcmp(t + 4, "trak", 4)) {
-            qt_edit_track *grown = realloc(out->tracks, sizeof *grown * (size_t)(out->ntracks + 1));
+            qt_edit_track *grown = bb_realloc(out->tracks, sizeof *grown * (size_t)(out->ntracks + 1), BB_TAG(qt_edit_track));
             if (!grown)
                 return false;
             out->tracks = grown;
@@ -107,7 +107,7 @@ bool qt_edits_read(const uint8_t *moov, uint32_t len, qt_edits *out)
                     const uint8_t *e = elst + 16 + i * 12;
                     qt_edit ed = { be32(e), (int32_t)be32(e + 4), (int32_t)be32(e + 8) };
                     if (ed.len > 0) { /* kept as they are: no joining on reading */
-                        qt_edit *g = realloc(tr->e, sizeof *g * (size_t)(tr->n + 1));
+                        qt_edit *g = bb_realloc(tr->e, sizeof *g * (size_t)(tr->n + 1), BB_TAG(qt_edit));
                         if (!g)
                             return false;
                         tr->e = g;
@@ -126,8 +126,8 @@ bool qt_edits_read(const uint8_t *moov, uint32_t len, qt_edits *out)
 void qt_edits_free(qt_edits *e)
 {
     for (int i = 0; i < e->ntracks; i++)
-        free(e->tracks[i].e);
-    free(e->tracks);
+        bb_free(e->tracks[i].e);
+    bb_free(e->tracks);
     memset(e, 0, sizeof *e);
 }
 
@@ -179,7 +179,7 @@ static bool extract(const qt_edit_track *t, int64_t from, int64_t len, qt_edit_t
 
 static void replace(qt_edit_track *t, qt_edit_track *with)
 {
-    free(t->e);
+    bb_free(t->e);
     t->e = with->e;
     t->n = with->n;
 }
@@ -194,7 +194,7 @@ bool qt_edits_delete(qt_edits *m, int64_t from, int64_t len)
         out.n = 0;
         int64_t d = qt_edits_track_duration(t);
         if (!extract(t, 0, from, &out) || !extract(t, from + len, d, &out)) {
-            free(out.e);
+            bb_free(out.e);
             return false;
         }
         replace(t, &out);
@@ -215,7 +215,7 @@ bool qt_edits_insert_empty(qt_edits *m, int64_t at, int64_t len)
         if (ok && d > at) /* a track that ends before stays as it is */
             ok = push(&out, (qt_edit){ len, -1, 0x10000 }) && extract(t, at, d, &out);
         if (!ok) {
-            free(out.e);
+            bb_free(out.e);
             return false;
         }
         replace(t, &out);
@@ -252,14 +252,14 @@ bool qt_edits_insert(qt_edits *dst, const qt_edits *src, int64_t src_from, int64
             }
             if (ok && have < len)
                 ok = push(&out, (qt_edit){ len - have, -1, 0x10000 });
-            free(got.e);
+            bb_free(got.e);
         } else if (ok) {
             ok = push(&out, (qt_edit){ len, -1, 0x10000 });
         }
         if (ok && d > dst_at)
             ok = extract(t, dst_at, d, &out);
         if (!ok) {
-            free(out.e);
+            bb_free(out.e);
             return false;
         }
         replace(t, &out);
@@ -271,7 +271,7 @@ bool qt_edits_copy(const qt_edits *src, int64_t from, int64_t len, qt_edits *out
 {
     memset(out, 0, sizeof *out);
     out->scale = src->scale;
-    out->tracks = calloc((size_t)(src->ntracks ? src->ntracks : 1), sizeof *out->tracks);
+    out->tracks = bb_calloc((size_t)(src->ntracks ? src->ntracks : 1), sizeof *out->tracks, BB_TAG(qt_edit_track));
     if (!out->tracks)
         return false;
     out->ntracks = src->ntracks;
@@ -291,7 +291,7 @@ uint8_t *qt_edits_write(const uint8_t *moov, uint32_t len, const qt_edits *e, ui
     size_t cap = len + 64;
     for (int i = 0; i < e->ntracks; i++)
         cap += 36 + (size_t)e->tracks[i].n * 12;
-    uint8_t *out = malloc(cap);
+    uint8_t *out = bb_malloc(cap, BB_BYTES);
     if (!out)
         return NULL;
     size_t o = 8;

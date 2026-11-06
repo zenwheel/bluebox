@@ -52,7 +52,7 @@ static bool image_rgba(const uint8_t *data, size_t len, uint8_t *out, int w, int
     CGImageRef img = src ? CGImageSourceCreateImageAtIndex(src, 0, NULL) : NULL;
     if (img) {
         int rows = (h - first_row + row_step - 1) / row_step;
-        uint8_t *buf = calloc((size_t)w * (size_t)rows, 4);
+        uint8_t *buf = bb_host_calloc((size_t)w * (size_t)rows, 4);
         CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
         CGContextRef ctx = buf ? CGBitmapContextCreate(buf, (size_t)w, (size_t)rows, 8, (size_t)w * 4, cs,
                                                        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big)
@@ -69,7 +69,7 @@ static bool image_rgba(const uint8_t *data, size_t len, uint8_t *out, int w, int
             ok = true;
         }
         CGColorSpaceRelease(cs);
-        free(buf);
+        bb_host_free(buf);
         CGImageRelease(img);
     }
     if (src)
@@ -234,7 +234,7 @@ hostvideo_dec *hostvideo_open(uint32_t format, int width, int height, const uint
 {
     if (!hostvideo_supported(format) || width <= 0 || height <= 0)
         return NULL;
-    hostvideo_dec *d = calloc(1, sizeof *d);
+    hostvideo_dec *d = bb_host_calloc(1, sizeof *d);
     if (!d)
         return NULL;
     d->format = format;
@@ -259,12 +259,12 @@ bool hostvideo_decode(hostvideo_dec *d, const uint8_t *data, size_t len, uint8_t
         return image_rgba(data, len, frame, d->w, d->h, 1, 0);
     CMBlockBufferRef block = NULL;
     CMSampleBufferRef sample = NULL;
-    void *copy = malloc(len);
+    void *copy = bb_host_malloc(len);
     if (!copy)
         return false;
     memcpy(copy, data, len);
     if (CMBlockBufferCreateWithMemoryBlock(NULL, copy, len, kCFAllocatorMalloc, NULL, 0, len, 0, &block) != noErr) {
-        free(copy);
+        bb_host_free(copy);
         return false;
     }
     size_t size = len;
@@ -293,7 +293,7 @@ void hostvideo_close(hostvideo_dec *d)
     }
     if (d->desc)
         CFRelease(d->desc);
-    free(d);
+    bb_host_free(d);
 }
 
 /* ---- Still images out (ImageIO) ---- */
@@ -350,7 +350,7 @@ bool hostimage_encode(uint32_t file_type, const uint8_t *rgba, int w, int h, dou
     }
     if (ok) {
         *len = (size_t)CFDataGetLength(data);
-        *out = malloc(*len ? *len : 1);
+        *out = bb_host_malloc(*len ? *len : 1);
         if (*out)
             memcpy(*out, CFDataGetBytePtr(data), *len);
         ok = *out != NULL;
@@ -457,7 +457,7 @@ hostaudio_dec *hostaudio_open(uint32_t format, int channels, double rate, const 
     AudioFormatID id = audio_id(format);
     if (!id || channels < 1 || channels > 2)
         return NULL;
-    hostaudio_dec *d = calloc(1, sizeof *d);
+    hostaudio_dec *d = bb_host_calloc(1, sizeof *d);
     if (d && !make_converter(d, id, channels, rate, cookie, cookie_len)) {
         hostaudio_close(d);
         return NULL;
@@ -499,7 +499,7 @@ static int mpeg_packets(const uint8_t *data, size_t len, AudioStreamPacketDescri
           { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0 } },
     };
     int cap = 64, n = 0;
-    AudioStreamPacketDescription *p = malloc((size_t)cap * sizeof *p);
+    AudioStreamPacketDescription *p = bb_host_malloc((size_t)cap * sizeof *p);
     size_t at = 0;
     while (p && at + 4 <= len) {
         const uint8_t *h = data + at;
@@ -520,7 +520,7 @@ static int mpeg_packets(const uint8_t *data, size_t len, AudioStreamPacketDescri
             break;
         if (n == cap) {
             cap *= 2;
-            AudioStreamPacketDescription *q = realloc(p, (size_t)cap * sizeof *p);
+            AudioStreamPacketDescription *q = bb_host_realloc(p, (size_t)cap * sizeof *p);
             if (!q)
                 break;
             p = q;
@@ -541,7 +541,7 @@ uint32_t hostaudio_decode(hostaudio_dec *d, const uint8_t *data, size_t len, con
     AudioStreamPacketDescription *pk = NULL;
     int n = 0;
     if (sizes) {
-        pk = malloc((size_t)(npackets > 0 ? npackets : 1) * sizeof *pk);
+        pk = bb_host_malloc((size_t)(npackets > 0 ? npackets : 1) * sizeof *pk);
         size_t at = 0;
         for (int i = 0; pk && i < npackets && at + sizes[i] <= len; i++) {
             pk[n++] = (AudioStreamPacketDescription){ (SInt64)at, 0, sizes[i] };
@@ -551,17 +551,17 @@ uint32_t hostaudio_decode(hostaudio_dec *d, const uint8_t *data, size_t len, con
                d->in.mFormatID == kAudioFormatMPEGLayer3) {
         n = mpeg_packets(data, len, &pk);
     } else {
-        pk = malloc(sizeof *pk);
+        pk = bb_host_malloc(sizeof *pk);
         if (pk)
             pk[n++] = (AudioStreamPacketDescription){ 0, 0, (UInt32)len };
     }
     if (!pk || !n) {
-        free(pk);
+        bb_host_free(pk);
         return 0;
     }
     uint32_t per = d->in.mFramesPerPacket ? d->in.mFramesPerPacket : 4096;
     size_t cap = (size_t)n * per + 4096, ch = d->out.mChannelsPerFrame;
-    int16_t *out = malloc(cap * ch * sizeof *out);
+    int16_t *out = bb_host_malloc(cap * ch * sizeof *out);
     d->data = data;
     d->pkts = pk;
     d->npkts = n;
@@ -576,9 +576,9 @@ uint32_t hostaudio_decode(hostaudio_dec *d, const uint8_t *data, size_t len, con
         if (st != noErr || !frames)
             break;
     }
-    free(pk);
+    bb_host_free(pk);
     if (!got) {
-        free(out);
+        bb_host_free(out);
         return 0;
     }
     *pcm = out;
@@ -591,6 +591,6 @@ void hostaudio_close(hostaudio_dec *d)
         return;
     if (d->conv)
         AudioConverterDispose(d->conv);
-    free(d);
+    bb_host_free(d);
 }
 #endif

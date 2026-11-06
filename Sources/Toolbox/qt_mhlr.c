@@ -119,11 +119,11 @@ static uint8_t *sample_bytes(qtm_movie *mv, qtm_media *md, uint32_t n, uint32_t 
     qt_src src;
     if (!qt_src_open(r->type, r->flags, r->data, r->len, qt_movie_path(mv), false, &src))
         return NULL;
-    uint8_t *b = malloc(bytes ? (size_t)bytes : 1);
+    uint8_t *b = bb_malloc(bytes ? (size_t)bytes : 1, BB_BYTES);
     bool ok = qt_src_read(&src, off, b, (uint32_t)bytes);
     qt_src_close(&src);
     if (!ok) {
-        free(b);
+        bb_free(b);
         return NULL;
     }
     *len = (uint32_t)bytes;
@@ -149,7 +149,7 @@ static void put_rgb(gaddr p, const uint16_t c[3])
 /* An atom of a type and contents onto a growing sample. */
 static void add_atom(uint8_t **b, uint32_t *n, const char *type, const void *data, uint32_t len)
 {
-    *b = realloc(*b, *n + 8 + len);
+    *b = bb_realloc(*b, *n + 8 + len, BB_BYTES);
     put32(*b + *n, 8 + len);
     memcpy(*b + *n + 4, type, 4);
     if (len)
@@ -183,7 +183,7 @@ static void rgb_of(gaddr p, uint16_t c[3], uint16_t dflt)
 static uint8_t *text_description(int16_t font, uint8_t face, int16_t size, const uint16_t fg[3], const uint16_t bg[3],
                                  int16_t just, const int16_t box[4], int32_t flags, uint32_t *len)
 {
-    uint8_t *d = calloc(1, 60);
+    uint8_t *d = bb_calloc(1, 60, BB_BYTES);
     put32(d, 60);
     memcpy(d + 4, "text", 4);
     put16(d + 14, 1);
@@ -231,7 +231,7 @@ static int32_t add_text_sample(mhlr *h, const uint8_t *text, uint32_t size, int1
     else
         track_box(t, box);
     uint32_t n = 2 + size;
-    uint8_t *b = malloc(n);
+    uint8_t *b = bb_malloc(n, BB_BYTES);
     put16(b, size);
     memcpy(b + 2, text, size);
     if (style_scrap && style_len >= 2) {
@@ -266,18 +266,18 @@ static int32_t add_text_sample(mhlr *h, const uint8_t *text, uint32_t size, int1
         add_atom(&b, &n, "tbox", tb, 8);
     }
     if (h->npending) { /* TextMediaSetTextSampleData's */
-        b = realloc(b, n + h->npending);
+        b = bb_realloc(b, n + h->npending, BB_BYTES);
         memcpy(b + n, h->pending, h->npending);
         n += h->npending;
-        free(h->pending);
+        bb_free(h->pending);
         h->pending = NULL;
         h->npending = 0;
     }
     uint32_t dl;
     uint8_t *desc = text_description(font, face, fsize, fg, bg, just, box, flags, &dl);
     gaddr dh = qt_dref_handle(desc, dl), sh = qt_dref_handle(b, n);
-    free(desc);
-    free(b);
+    bb_free(desc);
+    bb_free(b);
     int16_t err = tb_AddMediaSample((int32_t)h->media, (int32_t)sh, 0, (int32_t)n, duration, (int32_t)dh, 1, 0,
                                     sample_time);
     tb_DisposeHandle(sh);
@@ -308,7 +308,7 @@ static uint8_t *with_atom(const uint8_t *b, uint32_t n, const char *type, const 
     if (2 + tl > n)
         tl = n >= 2 ? n - 2 : 0;
     uint32_t m = 2 + tl;
-    uint8_t *r = malloc(m);
+    uint8_t *r = bb_malloc(m, BB_BYTES);
     memcpy(r, b, m);
     if (n < 2)
         put16(r, 0);
@@ -317,7 +317,7 @@ static uint8_t *with_atom(const uint8_t *b, uint32_t n, const char *type, const 
         if (an < 8 || p + an > n)
             break;
         if (memcmp(b + p + 4, type, 4)) {
-            r = realloc(r, m + an);
+            r = bb_realloc(r, m + an, BB_BYTES);
             memcpy(r + m, b + p, an);
             m += an;
         }
@@ -335,7 +335,7 @@ static uint8_t *with_text(const uint8_t *b, uint32_t n, const uint8_t *text, uin
     if (2 + old > n)
         old = n >= 2 ? n - 2 : 0;
     uint32_t rest = n > 2 + old ? n - 2 - old : 0;
-    uint8_t *r = malloc(2 + tl + rest);
+    uint8_t *r = bb_malloc(2 + tl + rest, BB_BYTES);
     put16(r, tl);
     memcpy(r + 2, text, tl);
     memcpy(r + 2 + tl, b + 2 + old, rest);
@@ -403,20 +403,20 @@ static int32_t set_text_property(mhlr *h, int32_t mtime, int32_t prop, gaddr dat
     case 1: { /* kTextTextHandle */
         gaddr th = data;
         uint32_t tl = th && rd32(th) ? (uint32_t)tb_GetHandleSize(th) : 0;
-        uint8_t *tx = malloc(tl ? tl : 1);
+        uint8_t *tx = bb_malloc(tl ? tl : 1, BB_BYTES);
         if (tl)
             gget(tx, rd32(th), tl);
         r = with_text(b, n, tx, tl, &rn);
-        free(tx);
+        bb_free(tx);
         break;
     }
     case 2: { /* kTextTextPtr, size bytes */
         uint32_t tl = size > 0 ? (uint32_t)size : 0;
-        uint8_t *tx = malloc(tl ? tl : 1);
+        uint8_t *tx = bb_malloc(tl ? tl : 1, BB_BYTES);
         if (tl && data)
             gget(tx, data, tl);
         r = with_text(b, n, tx, tl, &rn);
-        free(tx);
+        bb_free(tx);
         break;
     }
     case 3: /* kTextTEStyle: TextStyle (font, face and filler, size, colour) */
@@ -464,7 +464,7 @@ static int32_t set_text_property(mhlr *h, int32_t mtime, int32_t prop, gaddr dat
                 put16(c + k * 2, rd16(data + 8 + 2 * (uint32_t)k));
             uint32_t r2n;
             uint8_t *r2 = with_atom(r, rn, "hclr", c, 6, &r2n);
-            free(r);
+            bb_free(r);
             r = r2;
             rn = r2n;
         }
@@ -480,7 +480,7 @@ static int32_t set_text_property(mhlr *h, int32_t mtime, int32_t prop, gaddr dat
         uint32_t r1n;
         uint8_t *r1 = with_atom(b, n, "drpo", off, 4, &r1n);
         r = with_atom(r1, r1n, "drpt", tr, 2, &rn);
-        free(r1);
+        bb_free(r1);
         break;
     }
     case 20: { /* kTextTextBox */
@@ -511,7 +511,7 @@ static int32_t set_text_property(mhlr *h, int32_t mtime, int32_t prop, gaddr dat
         }
         qt_native_redraw(qt_movie_native(mv), track);
         qt_movie_redraw(mv);
-        free(b);
+        bb_free(b);
         return noErr;
     }
     case 14: /* kTextScroll, kTextRelativeScroll: (we don't scroll text) */
@@ -521,17 +521,17 @@ static int32_t set_text_property(mhlr *h, int32_t mtime, int32_t prop, gaddr dat
     case 18: /* kTextKeyEntry, kTextMouseDown, kTextEditState: no text editing in a movie here */
     case 19:
     case 21:
-        free(b);
+        bb_free(b);
         return featureUnsupported;
     default:
-        free(b);
+        bb_free(b);
         return paramErr;
     }
-    free(b);
+    bb_free(b);
     if (!r)
         return paramErr;
     show_text(h, mtime, r, rn);
-    free(r);
+    bb_free(r);
     return noErr;
 }
 
@@ -620,7 +620,7 @@ static int32_t get_text_property(mhlr *h, int32_t mtime, int32_t prop, gaddr dat
     default:
         err = paramErr;
     }
-    free(b);
+    bb_free(b);
     return err;
 }
 
@@ -644,7 +644,7 @@ static int32_t find_next_text(mhlr *h, gaddr text, int32_t size, int16_t flags, 
         wr32(found_time, (uint32_t)-1);
     if (!text || size <= 0)
         return paramErr;
-    uint8_t *needle = malloc((size_t)size);
+    uint8_t *needle = bb_malloc((size_t)size, BB_BYTES);
     gget(needle, text, (uint32_t)size);
     bool edge = flags & 1, cased = flags & 2, back = flags & 4, wrap = flags & 8, use_offset = flags & 16;
     uint32_t count = qtm_sample_count(md);
@@ -685,9 +685,9 @@ static int32_t find_next_text(mhlr *h, gaddr text, int32_t size, int16_t flags, 
                 err = noErr;
                 break;
             }
-        free(b);
+        bb_free(b);
     }
-    free(needle);
+    bb_free(needle);
     return err;
 }
 
@@ -698,18 +698,18 @@ static int32_t draw_raw(gaddr gw, gaddr data, int32_t size, gaddr tdh)
     if (!gw || !tdh || !rd32(tdh) || !data || size < 2)
         return paramErr;
     uint32_t dl = (uint32_t)tb_GetHandleSize(tdh);
-    uint8_t *desc = malloc(dl);
+    uint8_t *desc = bb_malloc(dl, BB_BYTES);
     gget(desc, rd32(tdh), dl);
     gaddr pm = rd32(tb_GetGWorldPixMap(gw));
     qrect bounds = qrect_get(pm + 6);
     int w = bounds.right - bounds.left, hgt = bounds.bottom - bounds.top;
     qt_text *t = qt_text_new(desc, dl, w, hgt);
-    free(desc);
+    bb_free(desc);
     if (!t)
         return paramErr;
-    uint8_t *sample = malloc((size_t)size);
+    uint8_t *sample = bb_malloc((size_t)size, BB_BYTES);
     gget(sample, data, (uint32_t)size);
-    uint8_t *rgba = malloc((size_t)w * (size_t)hgt * 4);
+    uint8_t *rgba = bb_malloc((size_t)w * (size_t)hgt * 4, BB_BYTES);
     gaddr saved = tb_NewPtr(8, false, true);
     tb_GetGWorld(saved, saved + 4);
     bool drawn = qt_text_draw(t, sample, (uint32_t)size, rgba);
@@ -720,8 +720,8 @@ static int32_t draw_raw(gaddr gw, gaddr data, int32_t size, gaddr tdh)
     }
     tb_DisposePtr(saved);
     qt_text_free(t);
-    free(sample);
-    free(rgba);
+    bb_free(sample);
+    bb_free(rgba);
     return noErr;
 }
 
@@ -750,7 +750,7 @@ static void text_proc_check(mhlr *h)
     if (2 + tl > n)
         tl = n >= 2 ? n - 2 : 0;
     gaddr text = qt_dref_handle(b + 2, tl), flag = tb_NewPtr(2, false, true);
-    free(b);
+    bb_free(b);
     cpu68k *c = g_cpu;
     cpu_push16(c, 0);
     cpu_push32(c, text);
@@ -779,13 +779,13 @@ static int32_t text_call(mhlr *h, qtc_call *k)
         return noErr;
     case 0x0102: { /* AddTextSample(text, size, font, size, face, fg, bg, just, box, flags, scroll, hlS, hlE, hlColor, dur, *time) */
         uint32_t size = a[1];
-        uint8_t *t = malloc(size ? size : 1);
+        uint8_t *t = bb_malloc(size ? size : 1, BB_BYTES);
         if (size && a[0])
             gget(t, a[0], size);
         int32_t r = add_text_sample(h, t, size, (int16_t)a[2], (int16_t)a[3], (uint8_t)a[4], a[5], a[6],
                                     (int16_t)a[7], a[8], (int32_t)a[9], (int32_t)a[10], (int16_t)a[11],
                                     (int16_t)a[12], a[13], (int32_t)a[14], a[15], NULL, 0);
-        free(t);
+        bb_free(t);
         return r;
     }
     case 0x0103: { /* AddTESample(hTE, bg, just, box, flags, scroll, hlS, hlE, hlColor, dur, *time) */
@@ -795,7 +795,7 @@ static int32_t text_call(mhlr *h, qtc_call *k)
         gaddr tp = rd32(te);
         gaddr hText = rd32(tp + 62); /* hText */
         uint32_t len = rd16(tp + 60); /* teLength */
-        uint8_t *t = malloc(len ? len : 1);
+        uint8_t *t = bb_malloc(len ? len : 1, BB_BYTES);
         if (len && hText && rd32(hText))
             gget(t, rd32(hText), len);
         int16_t font = (int16_t)rd16(tp + 74), size = (int16_t)rd16(tp + 80); /* txFont, txSize */
@@ -806,15 +806,15 @@ static int32_t text_call(mhlr *h, qtc_call *k)
         gaddr st = tb_TEGetStyleScrapHandle(te);
         if (st && rd32(st)) {
             scrap_len = (uint32_t)tb_GetHandleSize(st);
-            scrap = malloc(scrap_len);
+            scrap = bb_malloc(scrap_len, BB_BYTES);
             gget(scrap, rd32(st), scrap_len);
             tb_DisposeHandle(st);
         }
         int32_t r = add_text_sample(h, t, len, font, size, face, 0, a[1], (int16_t)a[2], a[3], (int32_t)a[4],
                                     (int32_t)a[5], (int16_t)a[6], (int16_t)a[7], a[8], (int32_t)a[9], a[10], scrap,
                                     scrap_len);
-        free(t);
-        free(scrap);
+        bb_free(t);
+        bb_free(scrap);
         return r;
     }
     case 0x0104: { /* AddHiliteSample(hlS, hlE, hlColor, dur, *time): the last sample's text, highlighted */
@@ -831,19 +831,19 @@ static int32_t text_call(mhlr *h, qtc_call *k)
         put32(hl + 4, (uint32_t)(int16_t)a[1]);
         uint32_t rn;
         uint8_t *r = with_atom(b, n, "hlit", hl, 8, &rn);
-        free(b);
+        bb_free(b);
         if (a[2]) {
             uint8_t c[6];
             for (int i = 0; i < 3; i++)
                 put16(c + i * 2, rd16(a[2] + 2 * (uint32_t)i));
             uint32_t r2n;
             uint8_t *r2 = with_atom(r, rn, "hclr", c, 6, &r2n);
-            free(r);
+            bb_free(r);
             r = r2;
             rn = r2n;
         }
         gaddr sh = qt_dref_handle(r, rn), dh = tb_NewHandle(0, false, false);
-        free(r);
+        bb_free(r);
         tb_GetMediaSampleDescription((int32_t)h->media, (int32_t)desc, (int32_t)dh);
         int16_t err = tb_AddMediaSample((int32_t)h->media, (int32_t)sh, 0, (int32_t)rn, (int32_t)a[3], (int32_t)dh,
                                         1, 0, a[4]);
@@ -856,9 +856,9 @@ static int32_t text_call(mhlr *h, qtc_call *k)
     case 0x010B: { /* RawSetup(gw, gd, data, size, tdh, duration) */
         h->raw_gw = a[0];
         h->raw_gd = a[1];
-        free(h->raw);
+        bb_free(h->raw);
         h->nraw = (uint32_t)a[3];
-        h->raw = malloc(h->nraw ? h->nraw : 1);
+        h->raw = bb_malloc(h->nraw ? h->nraw : 1, BB_BYTES);
         if (h->nraw && a[2])
             gget(h->raw, a[2], h->nraw);
         if (h->raw_desc)
@@ -866,7 +866,7 @@ static int32_t text_call(mhlr *h, qtc_call *k)
         uint32_t dl;
         uint8_t *d = qt_dref_bytes(a[4], &dl);
         h->raw_desc = qt_dref_handle(d, dl);
-        free(d);
+        bb_free(d);
         return noErr;
     }
     case 0x010C: { /* RawIdle(gw, gd, sampleTime, flagsIn, *flagsOut) */
@@ -897,19 +897,19 @@ static int32_t text_call(mhlr *h, qtc_call *k)
         put32(hl + 4, (uint32_t)(int16_t)a[2]);
         uint32_t rn;
         uint8_t *r = with_atom(b, n, "hlit", hl, 8, &rn);
-        free(b);
+        bb_free(b);
         if (a[3]) {
             uint8_t c[6];
             for (int i = 0; i < 3; i++)
                 put16(c + i * 2, rd16(a[3] + 2 * (uint32_t)i));
             uint32_t r2n;
             uint8_t *r2 = with_atom(r, rn, "hclr", c, 6, &r2n);
-            free(r);
+            bb_free(r);
             r = r2;
             rn = r2n;
         }
         show_text(h, (int32_t)a[0], r, rn);
-        free(r);
+        bb_free(r);
         return noErr;
     }
     case 0x0107: { /* SetTextSampleData(data, dataType): an atom for the next sample */
@@ -926,7 +926,7 @@ static int32_t text_call(mhlr *h, qtc_call *k)
         uint8_t v[8] = { 0 };
         if (a[0])
             gget(v, a[0], len);
-        h->pending = realloc(h->pending, h->npending + 8 + len);
+        h->pending = bb_realloc(h->pending, h->npending + 8 + len, BB_BYTES);
         put32(h->pending + h->npending, 8 + len);
         memcpy(h->pending + h->npending + 4, type, 4);
         memcpy(h->pending + h->npending + 8, v, len);
@@ -1014,7 +1014,7 @@ static int32_t tc_at(mhlr *h, int64_t mt, int32_t *frame, tcdef *def, gaddr srcr
     uint32_t n, desc;
     uint8_t *b = sample_bytes(mv, md, s, &n, &desc);
     if (!b || n < 4 || desc < 1 || (int)desc > md->ndescs || md->desc_len[desc - 1] < 34) {
-        free(b);
+        bb_free(b);
         return invalidSampleDescription;
     }
     const uint8_t *d = md->descs[desc - 1];
@@ -1026,7 +1026,7 @@ static int32_t tc_at(mhlr *h, int64_t mt, int32_t *frame, tcdef *def, gaddr srcr
                       ? (mt - start) * def->scale / md->scale / def->frame_dur
                       : 0;
     *frame = (int32_t)be32(b) + (int32_t)off;
-    free(b);
+    bb_free(b);
     if (srcref) { /* the source reference: user data after the definition */
         uint32_t dl = md->desc_len[desc - 1];
         gaddr ud = dl > 34 + 4 ? qt_udata_from(d + 34 + 4, dl - 34 - 4) : qt_udata_new();
@@ -1113,7 +1113,7 @@ static int32_t tc_call(mhlr *h, qtc_call *k)
         uint32_t dl;
         uint8_t *b = qt_dref_bytes(a[0], &dl);
         gaddr ud = dl > 38 ? qt_udata_from(b + 38, dl - 38) : qt_udata_new();
-        free(b);
+        bb_free(b);
         if (a[1])
             wr32(a[1], ud);
         return noErr;
@@ -1129,7 +1129,7 @@ static int32_t tc_call(mhlr *h, qtc_call *k)
             wr32(rd32(tcd), 38 + un);
             gput(rd32(tcd) + 38, u, un);
         }
-        free(u);
+        bb_free(u);
         return noErr;
     }
     case 0x0108: /* SetTimeCodeFlags(flags, mask) */
@@ -1193,11 +1193,11 @@ static int32_t video_call(mhlr *h, qtc_call *k)
                 at = i;
         if (at < 0)
             return memFullErr;
-        free(h->codec_params[at].data);
+        bb_free(h->codec_params[at].data);
         h->codec_params[at].codec = a[0];
         h->codec_params[at].id = a[1];
         h->codec_params[at].len = a[4];
-        h->codec_params[at].data = malloc(a[4] ? a[4] : 1);
+        h->codec_params[at].data = bb_malloc(a[4] ? a[4] : 1, BB_BYTES);
         if (a[4] && a[3])
             gget(h->codec_params[at].data, a[3], a[4]);
         return noErr;
@@ -1791,12 +1791,12 @@ static int32_t base_call(mhlr *h, qtc_call *k)
             if (!h->ptrs[i].ptr)
                 at = i;
         if (at < 0) {
-            free(b);
+            bb_free(b);
             return memFullErr;
         }
         gaddr p = tb_NewPtr((int32_t)(n ? n : 1), false, false);
         gput(p, b, n);
-        free(b);
+        bb_free(b);
         h->ptrs[at].sample = (int32_t)a[0];
         h->ptrs[at].ptr = p;
         if (a[1])
@@ -2000,14 +2000,14 @@ static int32_t mh_call(qtc_call *k)
         h->active_start = -1;
         return noErr;
     case kQTCClose:
-        free(h->pending);
-        free(h->raw);
+        bb_free(h->pending);
+        bb_free(h->raw);
         if (h->raw_desc)
             tb_DisposeHandle(h->raw_desc);
         if (h->clip)
             tb_DisposeRgn(h->clip);
         for (int i = 0; i < 8; i++)
-            free(h->codec_params[i].data);
+            bb_free(h->codec_params[i].data);
         for (int i = 0; i < MAX_PTRS; i++)
             if (h->ptrs[i].ptr)
                 tb_DisposePtr(h->ptrs[i].ptr);

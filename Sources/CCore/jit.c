@@ -106,15 +106,15 @@ static void insert(jit_cache *c, const jit_cache_rec *r, bool owned)
     for (rec_node *n = c->buckets[b]; n; n = n->next)
         if (n->r.pc == r->pc) { /* a later translation replaces it */
             if (n->owned)
-                free((void *)n->r.code);
+                bb_host_free((void *)n->r.code);
             n->r = *r;
             n->owned = owned;
             return;
         }
-    rec_node *n = malloc(sizeof *n);
+    rec_node *n = bb_host_malloc(sizeof *n);
     if (!n) {
         if (owned)
-            free((void *)r->code);
+            bb_host_free((void *)r->code);
         return;
     }
     n->r = *r;
@@ -138,7 +138,7 @@ static void mkdirs(const char *dir)
 
 jit_cache *jit_cache_open(const char *dir, const char *name, uint64_t build)
 {
-    jit_cache *c = calloc(1, sizeof *c);
+    jit_cache *c = bb_host_calloc(1, sizeof *c);
     if (!c)
         return NULL;
     mkdirs(dir);
@@ -154,7 +154,7 @@ jit_cache *jit_cache_open(const char *dir, const char *name, uint64_t build)
         if (size >= (long)sizeof hdr && fread(hdr, sizeof hdr, 1, in) == 1 && hdr[0] == HDR_MAGIC &&
             hdr[1] == CACHE_FORMAT && ((uint64_t)hdr[3] << 32 | hdr[2]) == build) {
             size_t n = (size_t)size - sizeof hdr;
-            c->data = malloc(n ? n : 1);
+            c->data = bb_host_malloc(n ? n : 1);
             if (c->data && fread(c->data, 1, n, in) == n) {
                 fresh = false;
                 size_t at = 0;
@@ -205,7 +205,7 @@ void jit_cache_add(jit_cache *c, uint32_t pc, uint32_t ninsn, uint32_t guest_len
 {
     if (!c->f)
         return;
-    uint8_t *copy = malloc(code_len ? code_len : 1);
+    uint8_t *copy = bb_host_malloc(code_len ? code_len : 1);
     if (!copy)
         return;
     memcpy(copy, code, code_len);
@@ -229,11 +229,11 @@ void jit_cache_close(jit_cache *c)
         for (rec_node *n = c->buckets[b], *next; n; n = next) {
             next = n->next;
             if (n->owned)
-                free((void *)n->r.code);
-            free(n);
+                bb_host_free((void *)n->r.code);
+            bb_host_free(n);
         }
-    free(c->data);
-    free(c);
+    bb_host_free(c->data);
+    bb_host_free(c);
 }
 
 /* ------------------------------------------------------------------ */
@@ -342,7 +342,7 @@ void jit_flush(jit_engine *e)
         jit_block *b = e->pool[i];
         if (b->live)
             mem_code_unmark(b->pc, b->pc + b->len, e->map_bit);
-        free(b);
+        bb_host_free(b);
     }
     e->npool = 0;
     memset(e->pcs, 0, sizeof e->pcs);
@@ -374,13 +374,13 @@ static jit_block *new_block(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t
 {
     if (e->npool == e->cappool) {
         size_t cap = e->cappool ? 2 * e->cappool : 4096;
-        jit_block **p = realloc(e->pool, cap * sizeof *p);
+        jit_block **p = bb_host_realloc(e->pool, cap * sizeof *p);
         if (!p)
             return NULL;
         e->pool = p;
         e->cappool = cap;
     }
-    jit_block *b = calloc(1, sizeof *b);
+    jit_block *b = bb_host_calloc(1, sizeof *b);
     if (!b)
         return NULL;
     b->pc = pc;
@@ -488,7 +488,7 @@ void jit_remember(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, uint
     if (!c)
         return;
     uint32_t total = nwords + 2 + 4 * (uint32_t)ndeps;
-    uint32_t *copy = malloc(4 * total);
+    uint32_t *copy = bb_host_malloc(4 * total);
     if (!copy)
         return;
     memcpy(copy, code, 4 * nwords);
@@ -503,7 +503,7 @@ void jit_remember(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, uint
     t[4 * ndeps] = dead_at;
     t[4 * ndeps + 1] = (uint32_t)ndeps;
     jit_cache_add(c, pc, ninsn, len, jit_hash(g_mem + pc, len, seed ^ pc), copy, 4 * total);
-    free(copy);
+    bb_host_free(copy);
 }
 
 #define CTX(f) ((uint32_t)offsetof(jit_ctx, f))

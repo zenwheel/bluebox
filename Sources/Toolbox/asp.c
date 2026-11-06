@@ -121,7 +121,7 @@ int16_t asp_status_at(uint8_t node, uint8_t sls, uint8_t *status, int cap, int *
 
 asp_session *asp_open_at(uint8_t node, uint8_t sls, int interval_ms, int tries, int16_t *err)
 {
-    asp_session *s = calloc(1, sizeof *s);
+    asp_session *s = bb_calloc(1, sizeof *s, BB_TAG(asp_session));
     if (!s) {
         *err = memFullErr;
         return NULL;
@@ -131,7 +131,7 @@ asp_session *asp_open_at(uint8_t node, uint8_t sls, int interval_ms, int tries, 
     s->wss = atp_host_open(incoming, s);
     if (!s->wss) {
         *err = -1098; /* tooManySkts */
-        free(s);
+        bb_free(s);
         return NULL;
     }
     static atp_reply r;
@@ -141,7 +141,7 @@ asp_session *asp_open_at(uint8_t node, uint8_t sls, int interval_ms, int tries, 
     if (spe != noErr) {
         *err = spe;
         atp_host_close(s->wss);
-        free(s);
+        bb_free(s);
         return NULL;
     }
     s->sss = (uint8_t)(r.user[0] >> 24);
@@ -278,5 +278,5 @@ void asp_close(asp_session *s)
         atp_host_request(s->wss, s->node, s->sss, user_bytes(CLOSE_SESS, s->sid, 0), NULL, 0, true, 1, 1000, 2, &r);
     }
     atp_host_close(s->wss);
-    free(s);
+    bb_free(s);
 }

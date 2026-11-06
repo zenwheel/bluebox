@@ -166,7 +166,7 @@ static stored *store_find(provider *p, uint32_t level, uint32_t name)
 static void store_put(provider *p, const optdef *d, const uint8_t *v, uint32_t len)
 {
     if (!p->opts) {
-        p->opts = calloc(1, sizeof *p->opts);
+        p->opts = bb_calloc(1, sizeof *p->opts, BB_TAG(struct ot_optstore));
         if (!p->opts)
             return;
     }
@@ -184,7 +184,7 @@ static void store_put(provider *p, const optdef *d, const uint8_t *v, uint32_t l
 
 void ot_options_free(provider *p)
 {
-    free(p->opts);
+    bb_free(p->opts);
     p->opts = NULL;
 }
 

@@ -177,7 +177,7 @@ static void bytes_add(bytes *b, const void *d, uint32_t n)
 {
     if (b->n + n > b->cap) {
         b->cap = (b->n + n) * 2 + 16;
-        b->v = realloc(b->v, b->cap);
+        b->v = bb_realloc(b->v, b->cap, BB_BYTES);
     }
     if (n)
         memcpy(b->v + b->n, d, n);
@@ -323,10 +323,10 @@ static void subst_data(bld *b, uint32_t type, bytes *out)
         gaddr p = next_word(b);
         uint32_t n = next_word(b);
         if (p && n && n < (16u << 20)) {
-            uint8_t *tmp = malloc(n);
+            uint8_t *tmp = bb_malloc(n, BB_BYTES);
             gget(tmp, p, n);
             bytes_add(out, tmp, n);
-            free(tmp);
+            bb_free(tmp);
         }
     }
 }
@@ -442,7 +442,7 @@ static int parse_coerced(bld *b, uint32_t type, gaddr out)
         tb_AEDisposeDesc(whole);
         tb_DisposePtr(whole);
     }
-    free(data.v);
+    bb_free(data.v);
     return rc;
 }
 
@@ -572,7 +572,7 @@ static int parse_desc(bld *b, gaddr out)
             rc = b->err;
         else if ((b->oserr = make_desc(T("TEXT"), s.v, s.n, out)))
             rc = b->oserr;
-        free(s.v);
+        bb_free(s.v);
         return rc;
     }
     if (c == MAC_LGUIL)
@@ -586,7 +586,7 @@ static int parse_desc(bld *b, gaddr out)
         bytes d = { 0 };
         number_data(is_real ? T("doub") : T("long"), is_real, real, integer, &d);
         int rc = (b->oserr = make_desc(is_real ? T("doub") : T("long"), d.v, d.n, out));
-        free(d.v);
+        bb_free(d.v);
         return rc;
     }
     if (c == '@') {
@@ -659,7 +659,7 @@ static bool load_format(bld *b, gaddr fmt, uint8_t **buf)
     size_t n = 0;
     while (fmt && rd8(fmt + (uint32_t)n) && n < (1u << 20))
         n++;
-    *buf = malloc(n + 1);
+    *buf = bb_malloc(n + 1, BB_BYTES);
     if (!*buf)
         return false;
     gget(*buf, fmt, (uint32_t)n);
@@ -683,7 +683,7 @@ static int16_t build_desc(ppc_cpu *c, gaddr dst, gaddr error, gaddr fmt, unsigne
     gaddr tmp = tb_NewPtr(8, false, true);
     int rc = 0;
     if (!tmp) {
-        free(buf);
+        bb_free(buf);
         return memFullErr;
     }
     null_desc(tmp);
@@ -700,7 +700,7 @@ static int16_t build_desc(ppc_cpu *c, gaddr dst, gaddr error, gaddr fmt, unsigne
         wr32(dst + 4, rd32(tmp + 4));
     }
     tb_DisposePtr(tmp);
-    free(buf);
+    bb_free(buf);
     return finish(&b, rc, error);
 }
 
@@ -763,7 +763,7 @@ static int16_t build_parameters(ppc_cpu *c, gaddr event, gaddr error, gaddr fmt,
     if (!load_format(&b, fmt, &buf))
         return memFullErr;
     int rc = params_into(&b, event);
-    free(buf);
+    bb_free(buf);
     return finish(&b, rc, error);
 }
 
@@ -824,7 +824,7 @@ static void tprintf(text *t, const char *fmt, ...)
         n = sizeof buf - 1;
     if (t->n + (size_t)n + 1 > t->cap) {
         t->cap = (t->n + (size_t)n) * 2 + 64;
-        t->v = realloc(t->v, t->cap);
+        t->v = bb_realloc(t->v, t->cap, BB_BYTES);
     }
     memcpy(t->v + t->n, buf, (size_t)n);
     t->n += (size_t)n;
@@ -907,7 +907,7 @@ static void print_desc(text *t, gaddr desc, int depth)
     }
     gaddr h = rd32(desc + 4);
     uint32_t n = h ? (uint32_t)tb_GetHandleSize(h) : 0;
-    uint8_t *d = malloc(n + 1);
+    uint8_t *d = bb_malloc(n + 1, BB_BYTES);
     if (n)
         gget(d, rd32(h), n);
     print_code(t, type);
@@ -952,7 +952,7 @@ static void print_desc(text *t, gaddr desc, int depth)
         tprintf(t, "%c", MAC_RGUIL);
     }
     tprintf(t, ")");
-    free(d);
+    bb_free(d);
 }
 
 static void ae_AEPrintDescToHandle(ppc_cpu *c)
@@ -967,7 +967,7 @@ static void ae_AEPrintDescToHandle(ppc_cpu *c)
     gaddr h = tb_NewHandle((int32_t)t.n, false, true);
     if (h && t.n)
         gput(rd32(h), t.v, (uint32_t)t.n);
-    free(t.v);
+    bb_free(t.v);
     wr32(result, h);
     RET(h ? noErr : memFullErr);
 }
@@ -999,7 +999,7 @@ void rest_ae_reset(void)
 {
     for (int i = 0; i < MAX_STREAMS; i++) {
         for (int k = 0; k < streams[i].depth; k++)
-            free(streams[i].f[k].data.v);
+            bb_free(streams[i].f[k].data.v);
         memset(&streams[i], 0, sizeof streams[i]);
     }
 }
@@ -1033,7 +1033,7 @@ static stream *stream_new(gaddr *ref)
 static void stream_free(stream *s)
 {
     for (int k = 0; k < s->depth; k++) {
-        free(s->f[k].data.v);
+        bb_free(s->f[k].data.v);
         if (k && s->f[k].desc) {
             tb_AEDisposeDesc(s->f[k].desc);
             tb_DisposePtr(s->f[k].desc);
@@ -1207,10 +1207,10 @@ static void st_AEStreamWriteData(ppc_cpu *c)
     int32_t n = (int32_t)A(2);
     if (n < 0 || (n && !A(1)))
         RET(paramErr);
-    uint8_t *tmp = malloc((size_t)n + 1);
+    uint8_t *tmp = bb_malloc((size_t)n + 1, BB_BYTES);
     gget(tmp, A(1), (uint32_t)n);
     bytes_add(&f->data, tmp, (uint32_t)n);
-    free(tmp);
+    bb_free(tmp);
     RET(noErr);
 }
 
@@ -1231,7 +1231,7 @@ static void st_AEStreamCloseDesc(ppc_cpu *c)
             RET(memFullErr);
         gput(data, f->data.v, n);
     }
-    free(f->data.v);
+    bb_free(f->data.v);
     s->depth--;
     int16_t e = write_desc(s, type, data, n);
     if (data)

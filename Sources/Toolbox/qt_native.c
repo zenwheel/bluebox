@@ -150,23 +150,23 @@ static const uint8_t *path(const uint8_t *p, uint32_t len, const char *const *na
 
 static void free_trak(trak *t)
 {
-    free(t->edits);
-    free(t->offset);
-    free(t->size);
-    free(t->time);
-    free(t->desc);
-    free(t->key);
-    free(t->chunk_offset);
-    free(t->chunk_first);
-    free(t->chunk_frames);
-    free(t->tune_header);
-    free(t->raw_desc);
-    free(t->cookie);
-    free(t->pkt_size);
-    free(t->chunk_pkt_first);
-    free(t->chunk_pkts);
+    bb_free(t->edits);
+    bb_free(t->offset);
+    bb_free(t->size);
+    bb_free(t->time);
+    bb_free(t->desc);
+    bb_free(t->key);
+    bb_free(t->chunk_offset);
+    bb_free(t->chunk_first);
+    bb_free(t->chunk_frames);
+    bb_free(t->tune_header);
+    bb_free(t->raw_desc);
+    bb_free(t->cookie);
+    bb_free(t->pkt_size);
+    bb_free(t->chunk_pkt_first);
+    bb_free(t->chunk_pkts);
     for (int i = 0; i < MAX_DESCS; i++)
-        free(t->vdesc[i]);
+        bb_free(t->vdesc[i]);
     memset(t, 0, sizeof *t);
 }
 
@@ -182,7 +182,7 @@ static bool video_descs(trak *t, const uint8_t *stsd, uint32_t len)
         if (sz < 86 || sz > (uint64_t)(end - p))
             return false;
         qt_video_format *f = &t->vf[i];
-        t->vdesc[i] = malloc(sz);
+        t->vdesc[i] = bb_malloc(sz, BB_BYTES);
         if (t->vdesc[i])
             memcpy(t->vdesc[i], p, sz);
         f->desc = t->vdesc[i];
@@ -225,7 +225,7 @@ static bool sound_desc(trak *t, const uint8_t *stsd, uint32_t len)
     if (sz >= 36 && sz <= len - 8) {
         qt_sound_desc_extras(p, sz, &t->sf);
         if (t->sf.cookie) { /* kept past the atom it is in */
-            t->cookie = malloc(t->sf.cookie_len);
+            t->cookie = bb_malloc(t->sf.cookie_len, BB_BYTES);
             if (t->cookie)
                 memcpy(t->cookie, t->sf.cookie, t->sf.cookie_len);
             t->sf.cookie = t->cookie;
@@ -251,7 +251,7 @@ static bool music_desc(trak *t, const uint8_t *stsd, uint32_t len)
     if (sz < 20 || sz > len - 8 || memcmp(p + 4, "musi", 4))
         return false;
     t->tune_header_len = sz - 20;
-    t->tune_header = malloc(t->tune_header_len ? t->tune_header_len : 1);
+    t->tune_header = bb_malloc(t->tune_header_len ? t->tune_header_len : 1, BB_BYTES);
     if (!t->tune_header)
         return false;
     memcpy(t->tune_header, p + 20, t->tune_header_len);
@@ -281,7 +281,7 @@ static bool raw_desc(trak *t, const uint8_t *stsd, uint32_t len)
     uint32_t sz = be32(stsd + 8);
     if (sz < 16 || sz > len - 8)
         return false;
-    t->raw_desc = malloc(sz);
+    t->raw_desc = bb_malloc(sz, BB_BYTES);
     if (!t->raw_desc)
         return false;
     memcpy(t->raw_desc, stsd + 8, sz);
@@ -303,7 +303,7 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
     if (elst && n >= 8) {
         uint32_t count = be32(elst + 4);
         if (count && count <= (n - 8) / 12) {
-            t->edits = calloc(count, sizeof *t->edits);
+            t->edits = bb_calloc(count, sizeof *t->edits, BB_TAG(edit));
             int64_t at = 0;
             for (uint32_t i = 0; i < count; i++) {
                 const uint8_t *e = elst + 8 + i * 12;
@@ -340,8 +340,8 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
     if (nchunks > (ol - 8) / (co64 ? 8 : 4) || nsc > (cl - 8) / 12 || ntts > (tl - 8) / 8 || !nchunks || !nsc)
         return false;
     /* samples (sound: frames) per chunk, and each chunk's description */
-    uint32_t *per = calloc(nchunks, sizeof *per);
-    uint8_t *cdesc = calloc(nchunks, 1);
+    uint32_t *per = bb_calloc(nchunks, sizeof *per, BB_BYTES);
+    uint8_t *cdesc = bb_calloc(nchunks, 1, BB_BYTES);
     for (uint32_t i = 0; i < nsc; i++) {
         const uint8_t *e = stsc + 8 + i * 12;
         uint32_t first = be32(e), count = be32(e + 4), d = be32(e + 8);
@@ -362,11 +362,11 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
             if (count > 10000000)
                 count = 0;
             t->nsamples = count;
-            t->offset = calloc(count + 1, sizeof *t->offset);
-            t->size = calloc(count + 1, sizeof *t->size);
-            t->time = calloc(count + 1, sizeof *t->time);
-            t->desc = calloc(count + 1, 1);
-            t->key = calloc(count + 1, sizeof *t->key);
+            t->offset = bb_calloc(count + 1, sizeof *t->offset, BB_BYTES);
+            t->size = bb_calloc(count + 1, sizeof *t->size, BB_BYTES);
+            t->time = bb_calloc(count + 1, sizeof *t->time, BB_BYTES);
+            t->desc = bb_calloc(count + 1, 1, BB_BYTES);
+            t->key = bb_calloc(count + 1, sizeof *t->key, BB_BYTES);
             uint32_t k = 0;
             for (uint32_t c = 0; c < nchunks && k < count; c++) {
                 uint64_t off = co64 ? be64(stco + 8 + c * 8) : be32(stco + 8 + c * 4);
@@ -412,12 +412,12 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
         if (count > 10000000)
             count = 0;
         t->nchunks = nchunks;
-        t->pkt_size = calloc(count + 1, sizeof *t->pkt_size);
-        t->chunk_offset = calloc(nchunks, sizeof *t->chunk_offset);
-        t->chunk_first = calloc(nchunks, sizeof *t->chunk_first);
-        t->chunk_frames = calloc(nchunks, sizeof *t->chunk_frames);
-        t->chunk_pkt_first = calloc(nchunks, sizeof *t->chunk_pkt_first);
-        t->chunk_pkts = calloc(nchunks, sizeof *t->chunk_pkts);
+        t->pkt_size = bb_calloc(count + 1, sizeof *t->pkt_size, BB_BYTES);
+        t->chunk_offset = bb_calloc(nchunks, sizeof *t->chunk_offset, BB_BYTES);
+        t->chunk_first = bb_calloc(nchunks, sizeof *t->chunk_first, BB_BYTES);
+        t->chunk_frames = bb_calloc(nchunks, sizeof *t->chunk_frames, BB_BYTES);
+        t->chunk_pkt_first = bb_calloc(nchunks, sizeof *t->chunk_pkt_first, BB_BYTES);
+        t->chunk_pkts = bb_calloc(nchunks, sizeof *t->chunk_pkts, BB_BYTES);
         for (uint32_t k = 0; k < count; k++)
             t->pkt_size[k] = fixed ? fixed : be32(stsz + 12 + k * 4);
         /* each packet's duration (media time) to frames */
@@ -446,9 +446,9 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
         ok = count > 0;
     } else {
         t->nchunks = nchunks;
-        t->chunk_offset = calloc(nchunks, sizeof *t->chunk_offset);
-        t->chunk_first = calloc(nchunks, sizeof *t->chunk_first);
-        t->chunk_frames = calloc(nchunks, sizeof *t->chunk_frames);
+        t->chunk_offset = bb_calloc(nchunks, sizeof *t->chunk_offset, BB_BYTES);
+        t->chunk_first = bb_calloc(nchunks, sizeof *t->chunk_first, BB_BYTES);
+        t->chunk_frames = bb_calloc(nchunks, sizeof *t->chunk_frames, BB_BYTES);
         uint64_t at = 0;
         for (uint32_t c = 0; c < nchunks; c++) {
             t->chunk_offset[c] = co64 ? be64(stco + 8 + c * 8) : be32(stco + 8 + c * 4);
@@ -457,8 +457,8 @@ static bool read_trak(trak *t, const uint8_t *tr, uint32_t len, int kind)
             at += per[c];
         }
     }
-    free(per);
-    free(cdesc);
+    bb_free(per);
+    bb_free(cdesc);
     t->present = ok;
     return ok;
 }
@@ -547,7 +547,7 @@ static bool set_up_composite(qt_native *p)
             return false;
         if (v->kind == SPRITE && !(v->sprite = qt_sprite_new(v->t->raw_desc, v->t->raw_desc_len, v->tw, v->th)))
             return false;
-        if (v->kind != VIDEO && !(v->rgba = calloc((size_t)v->tw * (size_t)v->th, 4)))
+        if (v->kind != VIDEO && !(v->rgba = bb_calloc((size_t)v->tw * (size_t)v->th, 4, BB_BYTES)))
             return false;
         double x0, y0, x1, y1;
         box_of(v, &x0, &y0, &x1, &y1);
@@ -558,7 +558,7 @@ static bool set_up_composite(qt_native *p)
     p->ch = (int)(bottom + 0.5);
     if (p->cw > 4096 || p->ch > 4096)
         return false;
-    p->canvas = calloc((size_t)p->cw * (size_t)p->ch, 4);
+    p->canvas = bb_calloc((size_t)p->cw * (size_t)p->ch, 4, BB_BYTES);
     return p->canvas != NULL;
 }
 
@@ -583,7 +583,7 @@ static qt_native *open_native(const uint8_t *moov, uint32_t len, const char *dat
     if (len < 8 || memcmp(moov + 4, "moov", 4))
         return NULL;
     any_reader = reader != NULL;
-    qt_native *p = calloc(1, sizeof *p);
+    qt_native *p = bb_calloc(1, sizeof *p, BB_TAG(qt_native));
     if (!p)
         return NULL;
     p->scale = movie_scale > 0 ? movie_scale : 600;
@@ -680,7 +680,7 @@ static int64_t media_to_ms(const trak *t, int32_t movie_scale, int64_t media)
 static bool read_music(qt_native *p)
 {
     trak *t = &p->music;
-    qt_music_sample *s = calloc(t->nsamples ? t->nsamples : 1, sizeof *s);
+    qt_music_sample *s = bb_calloc(t->nsamples ? t->nsamples : 1, sizeof *s, BB_TAG(qt_music_sample));
     if (!s)
         return false;
     bool ok = true;
@@ -693,8 +693,8 @@ static bool read_music(qt_native *p)
     if (ok)
         p->midi = qt_music_events(t->tune_header, t->tune_header_len, s, t->nsamples, &p->nmidi);
     for (uint32_t k = 0; k < t->nsamples; k++)
-        free((void *)s[k].data);
-    free(s);
+        bb_free((void *)s[k].data);
+    bb_free(s);
     for (size_t i = 0; i < p->nmidi; i++)
         p->midi[i].time = media_to_ms(t, p->scale, p->midi[i].time);
     return ok;
@@ -712,16 +712,16 @@ void qt_native_close(qt_native *p)
     free_trak(&p->music);
     for (int i = 0; i < p->nvis; i++) {
         qt_text_free(p->vis[i].text);
-        free(p->vis[i].alt);
+        bb_free(p->vis[i].alt);
         qt_sprite_free(p->vis[i].sprite);
-        free(p->vis[i].rgba);
+        bb_free(p->vis[i].rgba);
     }
     for (int i = 0; i < p->nextra; i++)
         free_trak(&p->extra[i]);
-    free(p->canvas);
-    free(p->midi);
-    free(p->frame);
-    free(p);
+    bb_free(p->canvas);
+    bb_free(p->midi);
+    bb_free(p->frame);
+    bb_free(p);
 }
 
 bool qt_native_has_video(const qt_native *p) { return p && (p->video.present || p->composite); }
@@ -785,16 +785,16 @@ static uint8_t *read_at(const qt_native *p, uint64_t off, uint32_t size)
 {
     if (size > 64u << 20)
         return NULL;
-    uint8_t *buf = malloc(size ? size : 1);
+    uint8_t *buf = bb_malloc(size ? size : 1, BB_BYTES);
     if (buf && p->reader) {
         if (!p->reader(p->reader_ctx, off, buf, size)) {
-            free(buf);
+            bb_free(buf);
             return NULL;
         }
         return buf;
     }
     if (!buf || !p->fp || fseeko(p->fp, (off_t)off, SEEK_SET) != 0 || fread(buf, 1, size, p->fp) != size) {
-        free(buf);
+        bb_free(buf);
         return NULL;
     }
     return buf;
@@ -812,8 +812,8 @@ static bool decode_sample(qt_native *p, int64_t k)
         if (!p->dec || w <= 0 || h <= 0)
             return false;
         if (w != p->fw || h != p->fh) {
-            free(p->frame);
-            p->frame = calloc((size_t)w * (size_t)h, 4);
+            bb_free(p->frame);
+            p->frame = bb_calloc((size_t)w * (size_t)h, 4, BB_BYTES);
             p->fw = w;
             p->fh = h;
         }
@@ -822,7 +822,7 @@ static bool decode_sample(qt_native *p, int64_t k)
     if (!data)
         return false;
     bool ok = qt_vdec_decode(p->dec, data, t->size[k], p->frame);
-    free(data);
+    bb_free(data);
     return ok;
 }
 
@@ -864,7 +864,7 @@ static void text_to(qt_native *p, visual *v, int64_t want)
     uint8_t *data = read_at(p, v->t->offset[want], v->t->size[want]);
     if (data)
         v->drawn = qt_text_draw(v->text, data, v->t->size[want], v->rgba);
-    free(data);
+    bb_free(data);
 }
 
 static void sprite_apply(qt_native *p, visual *v, int64_t k)
@@ -872,7 +872,7 @@ static void sprite_apply(qt_native *p, visual *v, int64_t k)
     uint8_t *data = read_at(p, v->t->offset[k], v->t->size[k]);
     if (data)
         qt_sprite_override(v->sprite, data, v->t->size[k]);
-    free(data);
+    bb_free(data);
 }
 
 static void sprite_to(qt_native *p, visual *v, int64_t want)
@@ -890,7 +890,7 @@ static void sprite_to(qt_native *p, visual *v, int64_t want)
         for (;;) {
             uint8_t *data = read_at(p, t->offset[k], t->size[k]);
             bool is_key = data && qt_sprite_key(v->sprite, data, t->size[k]);
-            free(data);
+            bb_free(data);
             if (is_key || k == 0)
                 break;
             for (k--; k > 0 && !t->key[k]; k--)
@@ -1025,8 +1025,8 @@ bool qt_native_frame(qt_native *p, int64_t ms, uint32_t *serial, uint8_t **rgba,
         return false;
     size_t n = (size_t)fw * (size_t)fh * 4;
     if (*w != fw || *h != fh || !*rgba) {
-        free(*rgba);
-        *rgba = malloc(n);
+        bb_free(*rgba);
+        *rgba = bb_malloc(n, BB_BYTES);
     }
     memcpy(*rgba, frame, n);
     *w = fw;
@@ -1056,7 +1056,7 @@ uint32_t qt_native_sound(qt_native *p, int64_t from_ms, int64_t to_ms, int16_t *
     if (fb - fa > (uint64_t)t->sf.rate * 10)
         fb = fa + (uint64_t)t->sf.rate * 10;
     size_t nch = (size_t)t->sf.channels;
-    int16_t *out = calloc((size_t)(fb - fa) * nch, sizeof *out);
+    int16_t *out = bb_calloc((size_t)(fb - fa) * nch, sizeof *out, BB_BYTES);
     if (!out)
         return 0;
     for (uint32_t c = 0; c < t->nchunks; c++) {
@@ -1078,10 +1078,10 @@ uint32_t qt_native_sound(qt_native *p, int64_t from_ms, int64_t to_ms, int16_t *
         int16_t *dec = NULL;
         uint32_t got = sizes ? qt_adec_decode_packets(&t->sf, data, bytes, sizes, (int)t->chunk_pkts[c], &dec)
                              : qt_adec_decode(&t->sf, data, bytes, &dec);
-        free(data);
+        bb_free(data);
         for (uint64_t f = c0 > fa ? c0 : fa; f < c1 && f < fb && f - c0 < got; f++)
             memcpy(out + (f - fa) * nch, dec + (f - c0) * nch, nch * sizeof *out);
-        free(dec);
+        bb_free(dec);
     }
     *pcm = out;
     return (uint32_t)(fb - fa);
@@ -1128,13 +1128,13 @@ void qt_native_text_override(qt_native *p, int track, int64_t sample, const uint
         visual *v = &p->vis[i];
         if (v->track != track || v->kind != TEXT)
             continue;
-        free(v->alt);
+        bb_free(v->alt);
         v->alt = NULL;
         v->alt_len = 0;
         v->alt_for = sample;
         v->alt_hidden = hidden;
         if (bytes && len) {
-            v->alt = malloc(len);
+            v->alt = bb_malloc(len, BB_BYTES);
             memcpy(v->alt, bytes, len);
             v->alt_len = len;
         }

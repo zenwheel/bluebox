@@ -88,9 +88,9 @@ static void sr_free(sr_obj *o)
 {
     for (int i = 0; i < o->nkids; i++)
         drop(o->kids[i].o);
-    free(o->kids);
-    free(o->name);
-    free(o);
+    bb_free(o->kids);
+    bb_free(o->name);
+    bb_free(o);
 }
 
 void rest_sr_reset(void)
@@ -106,13 +106,13 @@ void rest_sr_reset(void)
 
 static sr_obj *new_obj(int kind, const uint8_t *name, uint32_t len)
 {
-    sr_obj *o = calloc(1, sizeof *o);
+    sr_obj *o = bb_calloc(1, sizeof *o, BB_TAG(sr_obj));
     if (!o)
         return NULL;
     o->kind = kind;
     o->enabled = true;
     o->level = 50; /* kSRDefaultRejectionLevel */
-    o->name = malloc(len ? len : 1);
+    o->name = bb_malloc(len ? len : 1, BB_BYTES);
     memcpy(o->name, name, len);
     o->namelen = len;
     return o;
@@ -177,7 +177,7 @@ static sr_obj *system_of(int32_t ref, int16_t *err)
 
 static uint8_t *copy_guest(gaddr p, int32_t n)
 {
-    uint8_t *b = malloc(n > 0 ? (size_t)n : 1);
+    uint8_t *b = bb_malloc(n > 0 ? (size_t)n : 1, BB_BYTES);
     if (n > 0)
         gget(b, p, (uint32_t)n);
     return b;
@@ -271,7 +271,7 @@ int16_t tb_SRSetProperty(int32_t srObject, int32_t selector, gaddr property, int
     if (sel == T("spel")) {
         if (o->kind == SR_PATH)
             return kSRCantSetProperty;
-        free(o->name);
+        bb_free(o->name);
         o->name = copy_guest(property, propertyLen);
         o->namelen = (uint32_t)propertyLen;
         return noErr;
@@ -365,7 +365,7 @@ static int16_t new_language(int32_t system, gaddr out, int kind, gaddr text, int
         return kSRBadParameter;
     uint8_t *name = copy_guest(text, len);
     sr_obj *o = new_obj(kind, name, (uint32_t)len);
-    free(name);
+    bb_free(name);
     uint32_t r = o ? make_ref(o) : 0;
     if (!r) {
         if (o)
@@ -400,7 +400,7 @@ int16_t tb_SRChangeLanguageObject(int32_t languageObject, gaddr text, int32_t te
         return kSRCantSetProperty;
     if (textLength < 0 || (!text && textLength))
         return kSRBadParameter;
-    free(o->name);
+    bb_free(o->name);
     o->name = copy_guest(text, textLength);
     o->namelen = (uint32_t)textLength;
     return noErr;
@@ -431,7 +431,7 @@ static int16_t add_child(sr_obj *base, sr_obj *add, int32_t refcon)
 {
     if (!can_hold(base, add) || contains(add, base, 0) || base->nkids >= MAX_CHILDREN)
         return kSRCantAdd;
-    base->kids = realloc(base->kids, (size_t)(base->nkids + 1) * sizeof *base->kids);
+    base->kids = bb_realloc(base->kids, (size_t)(base->nkids + 1) * sizeof *base->kids, BB_TAG(child));
     base->kids[base->nkids++] = (child){ add, refcon };
     add->holds++;
     return noErr;
@@ -463,7 +463,7 @@ int16_t tb_SRAddText(int32_t base, gaddr text, int32_t textLength, int32_t refCo
     for (int32_t i = 0; i < textLength; i++)
         space = space || name[i] == ' ';
     sr_obj *o = new_obj(space ? SR_PHRASE : SR_WORD, name, (uint32_t)textLength);
-    free(name);
+    bb_free(name);
     if (!o)
         return kSROutOfMemory;
     o->refcon = refCon;
@@ -591,7 +591,7 @@ static void w_add(wbuf *b, const void *d, size_t n)
 {
     if (b->n + n > b->cap) {
         b->cap = (b->n + n) * 2 + 64;
-        b->v = realloc(b->v, b->cap);
+        b->v = bb_realloc(b->v, b->cap, BB_BYTES);
     }
     if (n)
         memcpy(b->v + b->n, d, n);
@@ -677,7 +677,7 @@ static sr_obj *get_node(rbuf *r, int depth, int32_t *refcon)
         sr_obj *k = get_node(r, depth + 1, &rc);
         if (!k)
             break;
-        o->kids = realloc(o->kids, (size_t)(o->nkids + 1) * sizeof *o->kids);
+        o->kids = bb_realloc(o->kids, (size_t)(o->nkids + 1) * sizeof *o->kids, BB_TAG(child));
         o->kids[o->nkids++] = (child){ k, rc };
         k->holds++;
     }
@@ -723,11 +723,11 @@ int16_t tb_SRPutLanguageObjectIntoHandle(int32_t languageObject, gaddr lobjHandl
     wbuf b = serialize(o);
     tb_SetHandleSize(lobjHandle, (int32_t)b.n);
     if (tb_GetHandleSize(lobjHandle) != (int32_t)b.n) {
-        free(b.v);
+        bb_free(b.v);
         return kSROutOfMemory;
     }
     gput(rd32(lobjHandle), b.v, (uint32_t)b.n);
-    free(b.v);
+    bb_free(b.v);
     return noErr;
 }
 
@@ -741,7 +741,7 @@ int16_t tb_SRNewLanguageObjectFromHandle(int32_t system, gaddr languageObject, g
     int32_t n = tb_GetHandleSize(lObjHandle);
     uint8_t *d = copy_guest(rd32(lObjHandle), n);
     int16_t e = from_bytes(system, languageObject, d, (size_t)n);
-    free(d);
+    bb_free(d);
     return e;
 }
 
@@ -754,14 +754,14 @@ int16_t tb_SRPutLanguageObjectIntoDataFile(int32_t languageObject, int16_t fRefN
     wbuf b = serialize(o);
     gaddr buf = tb_NewPtr((int32_t)b.n, false, true);
     if (!buf) {
-        free(b.v);
+        bb_free(b.v);
         return kSROutOfMemory;
     }
     gput(buf, b.v, (uint32_t)b.n);
     uint32_t actual = 0;
     e = fm_fork_io_mark(fRefNum, true, (uint32_t)b.n, buf, &actual);
     tb_DisposePtr(buf);
-    free(b.v);
+    bb_free(b.v);
     return e;
 }
 
@@ -784,7 +784,7 @@ int16_t tb_SRNewLanguageObjectFromDataFile(int32_t system, gaddr languageObject,
         if (languageObject)
             wr32(languageObject, 0);
     }
-    free(d);
+    bb_free(d);
     if (buf)
         tb_DisposePtr(buf);
     return e;

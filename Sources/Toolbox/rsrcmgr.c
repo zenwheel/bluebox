@@ -89,7 +89,7 @@ static bool guest_decompress(const uint8_t *d, uint32_t len, uint8_t **out, size
             }
             guest_call(base + entry);
             c->a[7] = sp;
-            *out = malloc(outlen ? outlen : 1);
+            *out = bb_malloc(outlen ? outlen : 1, BB_BYTES);
             gget(*out, dst, outlen);
             *out_len = outlen;
             ok = !c->halted;
@@ -349,21 +349,21 @@ static gaddr load_ref_direct(gaddr maph, uint32_t r, uint32_t type)
         if (!rd32(h)) {
             char tc[5];
             LOGF(LOG_RSRC, "rsrc: '%s' %d: no room for %u bytes in zone %08X\n", fourcc_str(type, tc), (int16_t)rd16(m + r), len, zone);
-            free(dec);
+            bb_free(dec);
             set_res_err(memFullErr);
             return 0;
         }
     } else {
         h = mm_new_handle_in(zone, len, false);
         if (!h) {
-            free(dec);
+            bb_free(dec);
             set_res_err(memFullErr);
             return 0;
         }
         wr32(mp_of(maph) + r + 8, h);
     }
     gput(rd32(h), src, len);
-    free(dec);
+    bb_free(dec);
     tb_HSetRBit(h);
     if (attrs & RES_PURGEABLE)
         tb_HPurge(h);
@@ -873,8 +873,8 @@ static int16_t open_fork(const char *path, const uint8_t *fork, uint32_t len, bo
     resfile *f = &files[slot];
     f->used = true;
     f->refnum = refnum_for_slot(slot);
-    f->path = path ? strdup(path) : NULL;
-    f->fork = malloc(len);
+    f->path = path ? bb_strdup(path) : NULL;
+    f->fork = bb_malloc(len, BB_BYTES);
     memcpy(f->fork, fork, len);
     f->len = len;
     f->maph = maph;
@@ -964,8 +964,8 @@ void tb_CloseResFile(int16_t rn)
         wr16(LM_CurMap, (uint16_t)(rd32(LM_TopMapHndl) ? map_refnum(rd32(LM_TopMapHndl)) : sys_refnum));
     tb_DisposeHandle(maph);
     fm_fcb_forget(f->refnum);
-    free(f->path);
-    free(f->fork);
+    bb_free(f->path);
+    bb_free(f->fork);
     memset(f, 0, sizeof *f);
     set_res_err(noErr);
 }
@@ -1072,8 +1072,8 @@ int16_t tb_OpenRFPerm(gaddr fn, int16_t vref, uint8_t perm)
 void rm_init(void)
 {
     for (int i = 0; i < MAX_RESFILES; i++) {
-        free(files[i].path);
-        free(files[i].fork);
+        bb_free(files[i].path);
+        bb_free(files[i].fork);
     }
     memset(files, 0, sizeof files);
     sys_refnum = 0;
@@ -1113,7 +1113,7 @@ static void refs_push(ref_list *l, const ref_rec *r)
 {
     if (l->n == l->cap) {
         l->cap = l->cap ? l->cap * 2 : 32;
-        l->v = realloc(l->v, l->cap * sizeof *l->v);
+        l->v = bb_realloc(l->v, l->cap * sizeof *l->v, BB_TAG(ref_rec));
     }
     l->v[l->n++] = *r;
 }
@@ -1160,7 +1160,7 @@ static uint8_t *build_map(const uint8_t header[16], int16_t refnum, uint16_t att
     }
     uint32_t tl = 28, rl = tl + 2 + nt * 8, nl = rl + (uint32_t)l->n * 12;
     *len = nl + (uint32_t)names;
-    uint8_t *m = calloc(1, *len);
+    uint8_t *m = bb_calloc(1, *len, BB_BYTES);
     memcpy(m, header, 16);
     m[20] = (uint8_t)(refnum >> 8), m[21] = (uint8_t)refnum;
     m[22] = (uint8_t)(attrs >> 8), m[23] = (uint8_t)attrs;
@@ -1212,7 +1212,7 @@ static bool store_refs(gaddr maph, const ref_list *l, uint16_t attrs)
         gput(mp_of(maph), m, len);
         wr32(mp_of(maph) + 16, next);
     }
-    free(m);
+    bb_free(m);
     return ok;
 }
 
@@ -1228,7 +1228,7 @@ static void put32(uint8_t *p, uint32_t v)
 static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *len_out)
 {
     size_t cap = 256 + 1024, len = 256;
-    uint8_t *out = calloc(1, cap);
+    uint8_t *out = bb_calloc(1, cap, BB_BYTES);
     uint32_t old_dstart = f && f->len >= 4 ? rd32(mp_of(f->maph)) : 0;
     for (size_t k = 0; k < l->n; k++) {
         ref_rec *e = &l->v[k];
@@ -1241,7 +1241,7 @@ static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *le
         int32_t hsize = (e->attrs & RES_CHANGED) && e->h && rd32(e->h) ? tb_GetHandleSize(e->h) : -1;
         if (hsize >= 0) {
             n = (uint32_t)hsize;
-            src = tmp = malloc(n ? n : 1);
+            src = tmp = bb_malloc(n ? n : 1, BB_BYTES);
             gget(tmp, rd32(e->h), n);
             e->attrs &= (uint8_t)~RES_COMPRESSED;
         } else if (f && f->fork && (uint64_t)old_dstart + e->doff + 4 <= f->len) {
@@ -1253,7 +1253,7 @@ static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *le
         }
         while (len + 4 + n > cap) {
             cap *= 2;
-            out = realloc(out, cap);
+            out = bb_realloc(out, cap, BB_BYTES);
         }
         e->doff = (uint32_t)len - 256;
         put32(out + len, n);
@@ -1261,7 +1261,7 @@ static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *le
             memcpy(out + len + 4, src, n);
         len += 4 + n;
         e->attrs &= (uint8_t)~RES_CHANGED;
-        free(tmp);
+        bb_free(tmp);
     }
     uint32_t dlen = (uint32_t)len - 256;
     uint8_t header[16];
@@ -1272,7 +1272,7 @@ static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *le
     uint8_t *m = build_map(header, 0, attrs, l, &mlen);
     put32(header + 12, mlen);
     memcpy(m, header, 16);
-    out = realloc(out, len + mlen);
+    out = bb_realloc(out, len + mlen, BB_BYTES);
     memcpy(out, header, 16);
     /* On disk the map's handle fields are zero. */
     uint8_t *disk = out + len;
@@ -1282,7 +1282,7 @@ static uint8_t *build_fork(resfile *f, ref_list *l, uint16_t attrs, uint32_t *le
         nt = 0;
     for (uint32_t k = 0; k < (uint32_t)l->n; k++)
         memset(disk + tl + 2 + nt * 8 + k * 12 + 8, 0, 4);
-    free(m);
+    bb_free(m);
     *len_out = (uint32_t)len + mlen;
     return out;
 }
@@ -1295,8 +1295,8 @@ static bool write_host_fork(const char *path, const uint8_t *fork, uint32_t len)
     as_ensure_file(path);
     if (!appledouble_read(path, &mf, err, sizeof err))
         memset(&mf, 0, sizeof mf);
-    free(mf.rsrc);
-    mf.rsrc = malloc(len);
+    bb_free(mf.rsrc);
+    mf.rsrc = bb_malloc(len, BB_BYTES);
     memcpy(mf.rsrc, fork, len);
     mf.rsrc_len = len;
     bool ok = appledouble_write(path, &mf, err, sizeof err);
@@ -1315,7 +1315,7 @@ static bool write_host_fork(const char *path, const uint8_t *fork, uint32_t len)
  * Mac, and is written over them only if a resource is then changed. */
 static int16_t replace_fork(resfile *f, uint32_t len, uint32_t pos, const uint8_t *src, uint32_t n)
 {
-    uint8_t *fork = malloc(len ? len : 1);
+    uint8_t *fork = bb_malloc(len ? len : 1, BB_BYTES);
     if (!fork)
         return memFullErr;
     uint32_t keep = f->len < len ? f->len : len;
@@ -1323,7 +1323,7 @@ static int16_t replace_fork(resfile *f, uint32_t len, uint32_t pos, const uint8_
     memset(fork + keep, 0, len - keep);
     if (n)
         memcpy(fork + pos, src, n);
-    free(f->fork);
+    bb_free(f->fork);
     f->fork = fork;
     f->len = len;
     fm_fcb_eof(f->refnum, len);
@@ -1365,7 +1365,7 @@ static int16_t update_file(resfile *f)
     for (size_t k = 0; k < l.n && !changed; k++)
         changed = l.v[k].attrs & RES_CHANGED;
     if (!changed) {
-        free(l.v);
+        bb_free(l.v);
         return noErr;
     }
     uint16_t attrs = map_attrs(maph) & (uint16_t)~(MAP_CHANGED | MAP_READ_ONLY);
@@ -1374,7 +1374,7 @@ static int16_t update_file(resfile *f)
     int16_t err = noErr;
     if (f->path && !f->read_only && !write_host_fork(f->path, fork, len))
         err = ioErr;
-    free(f->fork);
+    bb_free(f->fork);
     f->fork = fork;
     f->len = len;
     fm_fcb_eof(f->refnum, len);
@@ -1382,7 +1382,7 @@ static int16_t update_file(resfile *f)
     gput(mp_of(maph), fork, 16);
     if (!store_refs(maph, &l, attrs | (f->read_only ? MAP_READ_ONLY : 0)))
         err = memFullErr;
-    free(l.v);
+    bb_free(l.v);
     return err;
 }
 
@@ -1473,7 +1473,7 @@ void tb_SetResInfo(gaddr res, int16_t id, gaddr name)
                 gget(l.v[k].name, name, (uint32_t)rd8(name) + 1);
         }
     set_res_err(store_refs(maph, &l, map_attrs(maph) | MAP_CHANGED) ? noErr : memFullErr);
-    free(l.v);
+    bb_free(l.v);
 }
 
 void tb_AddResource(gaddr data, int32_t typ, int16_t id, gaddr name)
@@ -1509,7 +1509,7 @@ void tb_AddResource(gaddr data, int32_t typ, int16_t id, gaddr name)
     } else {
         set_res_err(addResFailed);
     }
-    free(l.v);
+    bb_free(l.v);
 }
 
 void tb_RemoveResource(gaddr res)
@@ -1530,7 +1530,7 @@ void tb_RemoveResource(gaddr res)
             l.v[w++] = l.v[k];
     l.n = w;
     store_refs(maph, &l, map_attrs(maph) | MAP_CHANGED);
-    free(l.v);
+    bb_free(l.v);
     tb_HClrRBit(res);
     set_res_err(noErr);
 }
@@ -1618,7 +1618,7 @@ static void create_res_file(const char *path, uint32_t type, uint32_t creator, b
     }
     if (!exists) {
         memset(&mf, 0, sizeof mf);
-        mf.data = malloc(1);
+        mf.data = bb_malloc(1, BB_BYTES);
         put32(mf.finder_info, set_info ? type : 0x3F3F3F3F);
         put32(mf.finder_info + 4, set_info ? creator : 0x3F3F3F3F);
         mf.has_finder_info = true;
@@ -1626,7 +1626,7 @@ static void create_res_file(const char *path, uint32_t type, uint32_t creator, b
     ref_list l = { 0 };
     uint32_t len;
     uint8_t *fork = build_fork(NULL, &l, 0, &len);
-    free(mf.rsrc);
+    bb_free(mf.rsrc);
     mf.rsrc = fork;
     mf.rsrc_len = len;
     bool ok = appledouble_write(path, &mf, err, sizeof err);

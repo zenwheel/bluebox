@@ -234,7 +234,7 @@ extension BlueBox {
             run(counter, control: 66)
             var len = 0
             let fork = machine_screensaver_module_fork(counter, &len)
-            defer { free(fork) }
+            defer { bb_free(fork) }
             var idx = rsrc_index()
             var err = [CChar](repeating: 0, count: 256)
             #expect(fork != nil && rsrc_parse(fork, len, &idx, &err, err.count))
@@ -268,7 +268,7 @@ extension BlueBox {
             var len2 = 0
             let fork2 = machine_screensaver_module_fork(counter, &len2)
             #expect(fork2 != nil && len2 > 0)
-            free(fork2)
+            bb_free(fork2)
             mac_file_free(&mf)
             // A module that logs its parameter block sees the kept control,
             // and a copy of it elsewhere has the same settings.

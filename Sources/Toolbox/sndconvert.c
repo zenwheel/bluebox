@@ -41,7 +41,7 @@ static converter converters[MAX_CONVERTERS];
 void sound_converters_reset(void)
 {
     for (int i = 0; i < MAX_CONVERTERS; i++)
-        free(converters[i].pending);
+        bb_free(converters[i].pending);
     memset(converters, 0, sizeof converters);
     os9svc_reset();
 }
@@ -138,13 +138,13 @@ static uint32_t convert(converter *c, const uint8_t *data, size_t len, uint8_t *
     int16_t *pcm = NULL;
     uint32_t frames = len ? qt_adec_decode(&c->in, data, len, &pcm) : 0;
     if (!frames) {
-        free(pcm);
+        bb_free(pcm);
         return 0;
     }
     /* The input at the output's channels, after the frame kept from before. */
     int nch = c->out_channels, ich = c->in.channels;
     uint32_t n = frames + (c->have_last ? 1 : 0);
-    int16_t *src = malloc(sizeof *src * n * (size_t)nch);
+    int16_t *src = bb_malloc(sizeof *src * n * (size_t)nch, BB_BYTES);
     if (c->have_last)
         for (int k = 0; k < nch; k++)
             src[k] = c->last[k];
@@ -156,7 +156,7 @@ static uint32_t convert(converter *c, const uint8_t *data, size_t len, uint8_t *
                                : (pcm[i * 2] + pcm[i * 2 + 1]) / 2;
             src[at * (uint32_t)nch + (uint32_t)k] = (int16_t)v;
         }
-    free(pcm);
+    bb_free(pcm);
     uint32_t done = 0, fb = out_frame_bytes(c), ss = (uint32_t)c->out_bits / 8;
     if (!c->resample) {
         for (uint32_t i = c->have_last ? 1 : 0; i < n; i++, done++)
@@ -178,7 +178,7 @@ static uint32_t convert(converter *c, const uint8_t *data, size_t len, uint8_t *
     for (int k = 0; k < nch; k++)
         c->last[k] = src[(n - 1) * (uint32_t)nch + (uint32_t)k];
     c->have_last = true;
-    free(src);
+    bb_free(src);
     return done;
 }
 
@@ -243,7 +243,7 @@ static void s_SoundConverterClose(ppc_cpu *c)
 {
     converter *k = conv_of(R(0));
     if (k) {
-        free(k->pending);
+        bb_free(k->pending);
         k->used = false;
     }
     RETURN(k ? noErr : paramErr);
@@ -270,7 +270,7 @@ static void s_SoundConverterBeginConversion(ppc_cpu *c)
     converter *k = conv_of(R(0));
     if (k) {
         k->pos = 0, k->have_last = false;
-        free(k->pending);
+        bb_free(k->pending);
         k->pending = NULL, k->pending_len = 0;
     }
     RETURN(k ? noErr : paramErr);
@@ -286,13 +286,13 @@ static void s_SoundConverterConvertBuffer(ppc_cpu *c)
         return;
     }
     uint32_t len = R(2) * frame_bytes(&k->in);
-    uint8_t *in = malloc(len ? len : 1);
-    uint8_t *out = malloc((size_t)out_frames_for(k, R(2)) * out_frame_bytes(k) + 4);
+    uint8_t *in = bb_malloc(len ? len : 1, BB_BYTES);
+    uint8_t *out = bb_malloc((size_t)out_frames_for(k, R(2)) * out_frame_bytes(k) + 4, BB_BYTES);
     gget(in, R(1), len);
     uint32_t n = convert(k, in, len, out);
     gput(R(3), out, n * out_frame_bytes(k));
-    free(in);
-    free(out);
+    bb_free(in);
+    bb_free(out);
     out32(R(4), n);
     out32(R(5), n * out_frame_bytes(k));
     RETURN(noErr);
@@ -347,8 +347,8 @@ int16_t tb_SoundConverterFillBuffer(int32_t sc, gaddr upp, gaddr refcon, gaddr o
                 break;
             }
             uint32_t len = count * fb_in;
-            free(k->pending);
-            k->pending = malloc(len);
+            bb_free(k->pending);
+            k->pending = bb_malloc(len, BB_BYTES);
             if (!k->pending) {
                 tb_DisposePtr(slot);
                 return memFullErr;
@@ -362,10 +362,10 @@ int16_t tb_SoundConverterFillBuffer(int32_t sc, gaddr upp, gaddr refcon, gaddr o
             frames_in--;
         if (!frames_in || out_frames_for(k, frames_in) > room - done)
             break;
-        uint8_t *out = malloc((size_t)out_frames_for(k, frames_in) * fb_out + 4);
+        uint8_t *out = bb_malloc((size_t)out_frames_for(k, frames_in) * fb_out + 4, BB_BYTES);
         uint32_t n = convert(k, k->pending, frames_in * fb_in, out);
         gput(outbuf + done * fb_out, out, n * fb_out);
-        free(out);
+        bb_free(out);
         done += n;
         k->pending_len -= frames_in * fb_in;
         memmove(k->pending, k->pending + frames_in * fb_in, k->pending_len);

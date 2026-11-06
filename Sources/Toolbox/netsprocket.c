@@ -253,8 +253,8 @@ static void link_close(int l)
         otc("OTCloseProvider", 1, k->ep);
     if (k->at)
         nat_links--;
-    free(k->in);
-    free(k->out);
+    bb_free(k->in);
+    bb_free(k->out);
     memset(k, 0, sizeof *k);
 }
 
@@ -265,7 +265,7 @@ static bool grow(uint8_t **buf, uint32_t *cap, uint32_t need)
     uint32_t n = *cap ? *cap : 1024;
     while (n < need)
         n *= 2;
-    uint8_t *b = realloc(*buf, n);
+    uint8_t *b = bb_realloc(*buf, n, BB_BYTES);
     if (!b)
         return false;
     *buf = b;
@@ -692,13 +692,13 @@ static void enqueue(game *g, const uint8_t *m, uint32_t len)
         return;
     if (g->nq == g->qcap) {
         int cap = g->qcap ? g->qcap * 2 : 32;
-        queued *q = realloc(g->q, sizeof *q * (size_t)cap);
+        queued *q = bb_realloc(g->q, sizeof *q * (size_t)cap, BB_TAG(queued));
         if (!q)
             return;
         g->q = q;
         g->qcap = cap;
     }
-    uint8_t *b = malloc(len);
+    uint8_t *b = bb_malloc(len, BB_BYTES);
     if (!b)
         return;
     memcpy(b, m, len);
@@ -718,7 +718,7 @@ static void enqueue_front(game *g, const uint8_t *m, uint32_t len)
 
 static void dequeue(game *g, int i)
 {
-    free(g->q[i].bytes);
+    bb_free(g->q[i].bytes);
     memmove(g->q + i, g->q + i + 1, sizeof g->q[0] * (size_t)(g->nq - i - 1));
     g->nq--;
 }
@@ -911,7 +911,7 @@ static void host_join(game *g, int l, const uint8_t *b, uint32_t n)
     /* NSpJoinRequestMessage: name 28, password 60, theType 92,
      * customDataLen 96, customData 100. */
     uint32_t mlen = HDR + 72 + (clen ? clen : 1);
-    uint8_t *m = calloc(1, mlen);
+    uint8_t *m = bb_calloc(1, mlen, BB_BYTES);
     if (!m)
         return;
     int32_t id = g->next_player;
@@ -925,7 +925,7 @@ static void host_join(game *g, int l, const uint8_t *b, uint32_t n)
     memcpy(m + HDR + 72, b + 72, clen);
     uint8_t reason[256] = { 0 };
     bool ok = ask_join_handler(g, m, mlen, reason);
-    free(m);
+    bb_free(m);
     if (!g->used || !links[l].used)
         return;
     if (!ok) {
@@ -947,7 +947,7 @@ static void host_join(game *g, int l, const uint8_t *b, uint32_t n)
 
     /* what the new player needs to know: the game, its players and groups */
     uint32_t cap = 52 + 4 + (uint32_t)MAX_PLAYERS * 40 + 4 + (uint32_t)MAX_GROUPS * (8 + 4 * MAX_PLAYERS);
-    uint8_t *a = malloc(cap), *q;
+    uint8_t *a = bb_malloc(cap, BB_BYTES), *q;
     if (!a)
         return;
     put32(a, (uint32_t)id);
@@ -976,7 +976,7 @@ static void host_join(game *g, int l, const uint8_t *b, uint32_t n)
                 put32(q, (uint32_t)g->groups[i].members[j]);
         }
     link_send(l, FR_APPROVED, a, (uint32_t)(q - a), NULL, 0);
-    free(a);
+    bb_free(a);
     for (int i = 0; i < MAX_PLAYERS; i++)
         if (g->players[i].used && g->players[i].link >= 0) {
             if (g->players[i].link != l)
@@ -1124,14 +1124,14 @@ static void host_frame(game *g, int l, uint32_t kind, const uint8_t *b, uint32_t
         break;
     case FR_MESSAGE:
         if (from && n >= 4 + HDR) {
-            uint8_t *m = malloc(n - 4);
+            uint8_t *m = bb_malloc(n - 4, BB_BYTES);
             if (!m)
                 break;
             memcpy(m, b + 4, n - 4);
             put32(m + 8, (uint32_t)from); /* it is from whoever sent it */
             put32(m + 24, n - 4);
             route(g, m, n - 4, from, get32(b));
-            free(m);
+            bb_free(m);
         }
         break;
     case FR_REQUEST:
@@ -1239,7 +1239,7 @@ static void take_frames(game *g, int l)
         }
         if (k->inlen < 8 + n)
             return;
-        uint8_t *b = malloc(n ? n : 1);
+        uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
         if (!b)
             return;
         memcpy(b, k->in + 8, n);
@@ -1249,7 +1249,7 @@ static void take_frames(game *g, int l)
             host_frame(g, l, kind, b, n);
         else
             client_frame(g, l, kind, b, n);
-        free(b);
+        bb_free(b);
     }
 }
 
@@ -1853,9 +1853,9 @@ static void game_free(game *g)
     for (int i = 0; i < g->nq; i++) {
         if (g->q[i].guest)
             pool_free(g->q[i].guest);
-        free(g->q[i].bytes);
+        bb_free(g->q[i].bytes);
     }
-    free(g->q);
+    bb_free(g->q);
     free_ref(&g->ref);
     memset(g, 0, sizeof *g);
 }
@@ -2188,7 +2188,7 @@ static void nsp_MessageSend(ppc_cpu *c)
         RETURN(kNSpMessageTooBigErr);
         return;
     }
-    uint8_t *m = malloc(len);
+    uint8_t *m = bb_malloc(len, BB_BYTES);
     if (!m) {
         RETURN(kNSpMemAllocationErr);
         return;
@@ -2201,7 +2201,7 @@ static void nsp_MessageSend(ppc_cpu *c)
         wr32(h + 16, get32(m + 16));
         wr32(h + 20, get32(m + 20));
     }
-    free(m);
+    bb_free(m);
     netsprocket_poll();
     RETURN((uint32_t)e);
 }
@@ -2219,7 +2219,7 @@ static void nsp_MessageSendTo(ppc_cpu *c)
         RETURN(kNSpMessageTooBigErr);
         return;
     }
-    uint8_t *m = calloc(1, HDR + dlen);
+    uint8_t *m = bb_calloc(1, HDR + dlen, BB_BYTES);
     if (!m) {
         RETURN(kNSpMemAllocationErr);
         return;
@@ -2230,7 +2230,7 @@ static void nsp_MessageSendTo(ppc_cpu *c)
     if (dlen)
         gget(m + HDR, R(3), dlen);
     int32_t e = send_bytes(g, m, HDR + dlen, R(5));
-    free(m);
+    bb_free(m);
     netsprocket_poll();
     RETURN((uint32_t)e);
 }
@@ -2894,14 +2894,14 @@ void netsprocket_reset(void)
             provider *p = ot_provider_of(links[i].ep);
             if (p)
                 ot_close_provider(p);
-            free(links[i].in);
-            free(links[i].out);
+            bb_free(links[i].in);
+            bb_free(links[i].out);
         }
     for (int i = 0; i < MAX_GAMES; i++)
         if (games[i].used) {
             for (int k = 0; k < games[i].nq; k++)
-                free(games[i].q[k].bytes);
-            free(games[i].q);
+                bb_free(games[i].q[k].bytes);
+            bb_free(games[i].q);
         }
     memset(links, 0, sizeof links);
     memset(games, 0, sizeof games);

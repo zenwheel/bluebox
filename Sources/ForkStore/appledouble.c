@@ -35,7 +35,7 @@ char *appledouble_sidecar_path(const char *path)
     const char *slash = strrchr(path, '/');
     size_t dirlen = slash ? (size_t)(slash - path + 1) : 0;
     size_t n = strlen(path) + 3;
-    char *s = malloc(n);
+    char *s = bb_malloc(n, BB_BYTES);
     if (!s)
         return NULL;
     memcpy(s, path, dirlen);
@@ -65,8 +65,8 @@ bool appledouble_decode(const uint8_t *b, size_t len, mac_file *out, char *err, 
         }
         switch (id) {
         case AD_RSRC:
-            free(out->rsrc);
-            out->rsrc = malloc(elen ? elen : 1);
+            bb_free(out->rsrc);
+            out->rsrc = bb_malloc(elen ? elen : 1, BB_BYTES);
             if (!out->rsrc) {
                 snprintf(err, errlen, "out of memory");
                 return false;
@@ -108,7 +108,7 @@ uint8_t *appledouble_encode(const mac_file *f, size_t *len_out)
     size_t namelen = strlen(f->name);
     size_t hdr = 26 + n * 12;
     size_t total = hdr + 32 + 16 + namelen + f->comment_len + f->rsrc_len;
-    uint8_t *b = calloc(1, total);
+    uint8_t *b = bb_calloc(1, total, BB_BYTES);
     if (!b)
         return NULL;
     put32(b, AD_MAGIC);
@@ -165,12 +165,12 @@ static void native_forks(const char *path, mac_file *out)
 #ifdef __APPLE__
     ssize_t n = getxattr(path, "com.apple.ResourceFork", NULL, 0, 0, 0);
     if (n > 0 && n < (64 << 20)) {
-        uint8_t *r = malloc((size_t)n);
+        uint8_t *r = bb_malloc((size_t)n, BB_BYTES);
         if (r && getxattr(path, "com.apple.ResourceFork", r, (size_t)n, 0, 0) == n) {
             out->rsrc = r;
             out->rsrc_len = (size_t)n;
         } else {
-            free(r);
+            bb_free(r);
         }
     }
 #endif
@@ -195,19 +195,19 @@ bool appledouble_read_meta(const char *path, mac_file *out)
     uint8_t *sbuf;
     size_t slen;
     bool have_side = side && read_file(side, &sbuf, &slen);
-    free(side);
+    bb_free(side);
     bool ok = true;
     if (have_side) {
         char err[64];
         ok = appledouble_decode(sbuf, slen, out, err, sizeof err);
-        free(sbuf);
+        bb_free(sbuf);
     } else {
         native_forks(path, out);
     }
-    out->data = malloc(1);
+    out->data = bb_malloc(1, BB_BYTES);
     out->data_len = 0;
     if (!out->rsrc) {
-        out->rsrc = malloc(1);
+        out->rsrc = bb_malloc(1, BB_BYTES);
         out->rsrc_len = 0;
     }
     if (!ok)
@@ -226,16 +226,16 @@ bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen)
     uint8_t *buf, *sbuf;
     size_t len, slen;
     bool have_side = read_file(side, &sbuf, &slen);
-    free(side);
+    bb_free(side);
     if (!read_file(path, &buf, &len)) {
         /* Some tools write only the sidecar when the data fork is empty. */
         if (!have_side || errno != ENOENT) {
             snprintf(err, errlen, "%s: %s", path, strerror(errno));
             if (have_side)
-                free(sbuf);
+                bb_free(sbuf);
             return false;
         }
-        buf = malloc(1);
+        buf = bb_malloc(1, BB_BYTES);
         len = 0;
     }
     out->data = buf;
@@ -243,12 +243,12 @@ bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen)
     bool ok = true;
     if (have_side) {
         ok = appledouble_decode(sbuf, slen, out, err, errlen);
-        free(sbuf);
+        bb_free(sbuf);
     } else {
         native_forks(path, out);
     }
     if (!out->rsrc) {
-        out->rsrc = malloc(1);
+        out->rsrc = bb_malloc(1, BB_BYTES);
         out->rsrc_len = 0;
     }
     if (!ok)
@@ -259,7 +259,7 @@ bool appledouble_read(const char *path, mac_file *out, char *err, size_t errlen)
 static bool write_atomic(const char *path, const uint8_t *buf, size_t len, char *err, size_t errlen)
 {
     size_t n = strlen(path) + 16;
-    char *tmp = malloc(n);
+    char *tmp = bb_malloc(n, BB_BYTES);
     if (!tmp) {
         snprintf(err, errlen, "out of memory");
         return false;
@@ -268,7 +268,7 @@ static bool write_atomic(const char *path, const uint8_t *buf, size_t len, char 
     FILE *fp = fopen(tmp, "wb");
     if (!fp) {
         snprintf(err, errlen, "%s: %s", tmp, strerror(errno));
-        free(tmp);
+        bb_free(tmp);
         return false;
     }
     bool ok = fwrite(buf, 1, len, fp) == len;
@@ -279,7 +279,7 @@ static bool write_atomic(const char *path, const uint8_t *buf, size_t len, char 
         snprintf(err, errlen, "%s: %s", path, strerror(errno));
         unlink(tmp);
     }
-    free(tmp);
+    bb_free(tmp);
     return ok;
 }
 
@@ -293,8 +293,8 @@ bool appledouble_write(const char *path, const mac_file *f, char *err, size_t er
     bool ok = side && spath && write_atomic(spath, side, slen, err, errlen);
     if ((!side || !spath) && err[0] == 0)
         snprintf(err, errlen, "out of memory");
-    free(side);
-    free(spath);
+    bb_free(side);
+    bb_free(spath);
     return ok;
 }
 
@@ -350,9 +350,9 @@ static bool fork_types(const fork_reader *r, uint64_t len, uint32_t **types, siz
     uint32_t data_start = be32(h), map_start = be32(h + 4), data_len = be32(h + 8), map_len = be32(h + 12);
     if ((uint64_t)data_start + data_len > len || (uint64_t)map_start + map_len > len || map_len < 30)
         return false;
-    uint8_t *m = malloc(map_len);
+    uint8_t *m = bb_malloc(map_len, BB_BYTES);
     if (!m || !fork_read(r, map_start, m, map_len)) {
-        free(m);
+        bb_free(m);
         return false;
     }
     bool ok = false;
@@ -360,13 +360,13 @@ static bool fork_types(const fork_reader *r, uint64_t len, uint32_t **types, siz
     if ((size_t)tlo + 2 > map_len)
         goto out;
     unsigned n = be16(m + tlo) == 0xFFFF ? 0 : (unsigned)be16(m + tlo) + 1;
-    uint32_t *t = malloc((n ? n : 1) * sizeof *t);
+    uint32_t *t = bb_malloc((n ? n : 1) * sizeof *t, BB_BYTES);
     if (!t)
         goto out;
     for (unsigned i = 0; i < n; i++) {
         size_t te = (size_t)tlo + 2 + i * 8;
         if (te + 8 > map_len) {
-            free(t);
+            bb_free(t);
             goto out;
         }
         unsigned count = (unsigned)be16(m + te + 4) + 1;
@@ -374,7 +374,7 @@ static bool fork_types(const fork_reader *r, uint64_t len, uint32_t **types, siz
         for (unsigned j = 0; j < count; j++) {
             size_t re = rl + j * 12;
             if (re + 12 > map_len || (uint64_t)(be32(m + re + 4) & 0x00FFFFFF) + 4 > data_len) {
-                free(t);
+                bb_free(t);
                 goto out;
             }
         }
@@ -384,13 +384,13 @@ static bool fork_types(const fork_reader *r, uint64_t len, uint32_t **types, siz
     *ntypes = n;
     ok = true;
 out:
-    free(m);
+    bb_free(m);
     return ok;
 }
 
 void mac_file_summary_free(mac_file_summary *s)
 {
-    free(s->types);
+    bb_free(s->types);
     s->types = NULL;
     s->ntypes = 0;
 }
@@ -430,7 +430,7 @@ bool appledouble_read_summary(const char *path, bool sidecar, mac_file_summary *
         if (!side)
             return false;
         fd = open(side, O_RDONLY);
-        free(side);
+        bb_free(side);
     }
     struct stat st;
     if (fd >= 0 && (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode))) {

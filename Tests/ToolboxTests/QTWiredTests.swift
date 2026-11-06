@@ -95,7 +95,7 @@ extension BlueBox {
             defer { qt_native_close(p); try? FileManager.default.removeItem(at: url) }
             var serial: UInt32 = 0, w: Int32 = 0, h: Int32 = 0
             var rgba: UnsafeMutablePointer<UInt8>?
-            defer { free(rgba) }
+            defer { bb_free(rgba) }
             #expect(qt_native_frame(p, 50, &serial, &rgba, &w, &h))
             let mv = try #require(moov.withUnsafeBufferPointer { qtm_parse($0.baseAddress, UInt32($0.count)) })
             defer { qtm_free(mv) }

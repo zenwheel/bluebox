@@ -265,7 +265,7 @@ static void pv_ReadWriteProcessMemory(ppc_cpu *c)
     tb_DisposePtr(cur);
     if (!same)
         RETURN(-600); /* procNotFound: no other process */
-    uint8_t *tmp = malloc(R(4) ? R(4) : 1);
+    uint8_t *tmp = bb_malloc(R(4) ? R(4) : 1, BB_BYTES);
     if (!tmp)
         RETURN(memFullErr);
     if (R(1) & 0xFF) {
@@ -275,7 +275,7 @@ static void pv_ReadWriteProcessMemory(ppc_cpu *c)
         gget(tmp, R(2), R(4));
         gput(R(3), tmp, R(4));
     }
-    free(tmp);
+    bb_free(tmp);
     RETURN(noErr);
 }
 

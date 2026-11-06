@@ -392,7 +392,7 @@ static bool open_system_file(void)
     if (!rsrc_build(specs, n, &fork, &len))
         return false;
     int16_t rn = rm_open_host_file(NULL, fork, (uint32_t)len, true);
-    free(fork);
+    bb_free(fork);
     if (rn < 0)
         return false;
     rm_set_system(rn);
@@ -464,8 +464,8 @@ bool machine_boot(bool census)
     const char *tr = getenv("BLUEBOX_68K_TRACE");
     if (tr && atoi(tr) > 0) {
         hist_len = (unsigned)atoi(tr);
-        free(hist);
-        hist = calloc(hist_len, sizeof *hist);
+        bb_free(hist);
+        hist = bb_calloc(hist_len, sizeof *hist, BB_BYTES);
         hist_pos = 0;
         cpu.trace = trace_68k;
     }
@@ -593,7 +593,7 @@ bool machine_add_resource_file(const char *path, char *err, size_t errlen)
     wr32(LM_TheZone, rd32(LM_SysZone));
     int16_t rn = rm_open_host_file(path, fonts, (uint32_t)flen, true);
     wr32(LM_TheZone, saved);
-    free(fonts);
+    bb_free(fonts);
     if (rn < 0) {
         snprintf(err, errlen, "%s: no usable resource fork", path);
         return false;
@@ -615,11 +615,11 @@ static int nlaunch_docs;
 void machine_set_launch_documents(const char *const *paths, int n)
 {
     for (int i = 0; i < nlaunch_docs; i++)
-        free(launch_docs[i]);
-    free(launch_docs);
-    launch_docs = n ? calloc((size_t)n, sizeof *launch_docs) : NULL;
+        bb_free(launch_docs[i]);
+    bb_free(launch_docs);
+    launch_docs = n ? bb_calloc((size_t)n, sizeof *launch_docs, BB_TAG(char *)) : NULL;
     for (int i = 0; i < n; i++)
-        launch_docs[i] = strdup(paths[i]);
+        launch_docs[i] = bb_strdup(paths[i]);
     nlaunch_docs = n;
 }
 
@@ -741,14 +741,14 @@ static void open_user_fonts(void)
     int n = 0;
     for (struct dirent *e; (e = readdir(d)) && n < 256;)
         if (e->d_name[0] != '.')
-            names[n++] = strdup(e->d_name);
+            names[n++] = bb_strdup(e->d_name);
     closedir(d);
     qsort(names, (size_t)n, sizeof *names, cmp_names);
     for (int i = 0; i < n; i++) {
         char path[PATH_MAX], ignored[256];
         snprintf(path, sizeof path, "%s/%s", dir, names[i]);
         machine_add_resource_file(path, ignored, sizeof ignored); /* not a font file: skipped */
-        free(names[i]);
+        bb_free(names[i]);
     }
 }
 

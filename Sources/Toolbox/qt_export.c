@@ -62,7 +62,7 @@ static void put(buf *o, const void *p, size_t n)
         size_t cap = o->cap ? o->cap : 4096;
         while (cap < o->n + n)
             cap *= 2;
-        uint8_t *nb = realloc(o->b, cap);
+        uint8_t *nb = bb_realloc(o->b, cap, BB_BYTES);
         if (!nb)
             return;
         o->b = nb;
@@ -90,7 +90,7 @@ static int16_t write_spec(gaddr spec, uint32_t type, uint32_t creator, const uin
     tb_DisposeHandle(alias);
     qt_src src;
     bool ok = qt_src_open(fourcc("alis"), 0, ab, an, NULL, true, &src);
-    free(ab);
+    bb_free(ab);
     if (!ok)
         return dataNotOpenForWrite;
     ok = qt_src_set_size(&src, 0) && qt_src_write(&src, 0, b, (uint32_t)n) && qt_src_flush(&src);
@@ -127,7 +127,7 @@ static int16_t write_dataref(gaddr dataRef, uint32_t type, uint32_t ftype, uint3
     } else {
         err = invalidDataRef;
     }
-    free(ref);
+    bb_free(ref);
     return err;
 }
 
@@ -165,7 +165,7 @@ static int16_t *decode_media(qtm_movie *mv, qtm_media *md, int *channels, double
     uint64_t total = 0;
     for (int r = 0; r < md->nruns; r++)
         total += md->runs[r].count;
-    int16_t *pcm = calloc((size_t)(total ? total : 1) * (size_t)f.channels, sizeof *pcm);
+    int16_t *pcm = bb_calloc((size_t)(total ? total : 1) * (size_t)f.channels, sizeof *pcm, BB_BYTES);
     if (!pcm)
         return NULL;
     uint64_t at = 0;
@@ -179,7 +179,7 @@ static int16_t *decode_media(qtm_movie *mv, qtm_media *md, int *channels, double
         const qtm_dref *dr = &md->drefs[di - 1];
         qt_src src;
         size_t bytes = qt_adec_bytes(&f, run->count);
-        uint8_t *data = malloc(bytes ? bytes : 1);
+        uint8_t *data = bb_malloc(bytes ? bytes : 1, BB_BYTES);
         if (data && qt_src_open(dr->type, dr->flags, dr->data, dr->len, qt_movie_path(mv), false, &src)) {
             if (qt_src_read(&src, run->offset, data, (uint32_t)bytes)) {
                 int16_t *out;
@@ -188,11 +188,11 @@ static int16_t *decode_media(qtm_movie *mv, qtm_media *md, int *channels, double
                     got = run->count;
                 if (out)
                     memcpy(pcm + at * (uint64_t)f.channels, out, (size_t)got * (size_t)f.channels * sizeof *out);
-                free(out);
+                bb_free(out);
             }
             qt_src_close(&src);
         }
-        free(data);
+        bb_free(data);
         at += run->count;
     }
     *channels = f.channels;
@@ -227,7 +227,7 @@ static int16_t *mix_sound(qtm_movie *mv, qtm_track **tracks, int nt, int32_t sta
                           int channels, uint32_t *nframes)
 {
     uint64_t n = (uint64_t)llround((double)duration * rate / mv->scale);
-    int32_t *acc = calloc((size_t)(n ? n : 1) * (size_t)channels, sizeof *acc);
+    int32_t *acc = bb_calloc((size_t)(n ? n : 1) * (size_t)channels, sizeof *acc, BB_BYTES);
     if (!acc)
         return NULL;
     for (int k = 0; k < nt; k++) {
@@ -255,12 +255,12 @@ static int16_t *mix_sound(qtm_movie *mv, qtm_track **tracks, int nt, int32_t sta
                 acc[i * (uint64_t)channels + (uint64_t)c] += v * tracks[k]->volume / 0x100;
             }
         }
-        free(src);
+        bb_free(src);
     }
-    int16_t *out = malloc((size_t)(n ? n : 1) * (size_t)channels * sizeof *out);
+    int16_t *out = bb_malloc((size_t)(n ? n : 1) * (size_t)channels * sizeof *out, BB_BYTES);
     for (uint64_t i = 0; out && i < n * (uint64_t)channels; i++)
         out[i] = (int16_t)(acc[i] > 32767 ? 32767 : acc[i] < -32768 ? -32768 : acc[i]);
-    free(acc);
+    bb_free(acc);
     *nframes = (uint32_t)n;
     return out;
 }
@@ -423,7 +423,7 @@ static int16_t export_sound(exporter *ex, uint32_t kind, qtm_movie *mv, gaddr on
     if (!pcm)
         return memFullErr;
     sound_file(o, kind, pcm, frames, channels, bits, rate);
-    free(pcm);
+    bb_free(pcm);
     return noErr;
 }
 
@@ -450,7 +450,7 @@ static int16_t export_text(qtm_movie *mv, gaddr only, int32_t start, int32_t dur
                 if (di >= 1 && di <= md->ndrefs) {
                     const qtm_dref *dr = &md->drefs[di - 1];
                     qt_src src;
-                    uint8_t *b = malloc((size_t)bytes);
+                    uint8_t *b = bb_malloc((size_t)bytes, BB_BYTES);
                     if (b && qt_src_open(dr->type, dr->flags, dr->data, dr->len, qt_movie_path(mv), false, &src)) {
                         if (qt_src_read(&src, off, b, (uint32_t)bytes)) {
                             uint32_t len = be16(b);
@@ -463,7 +463,7 @@ static int16_t export_text(qtm_movie *mv, gaddr only, int32_t start, int32_t dur
                         }
                         qt_src_close(&src);
                     }
-                    free(b);
+                    bb_free(b);
                 }
             }
             last = n;
@@ -499,8 +499,8 @@ static int16_t export_midi(qtm_movie *mv, gaddr only, int32_t start, int32_t dur
     if (!md->ndescs || md->desc_len[0] < 20)
         return invalidMedia;
     uint32_t count = qtm_sample_count(md);
-    qt_music_sample *samples = calloc(count ? count : 1, sizeof *samples);
-    uint8_t **datas = calloc(count ? count : 1, sizeof *datas);
+    qt_music_sample *samples = bb_calloc(count ? count : 1, sizeof *samples, BB_TAG(qt_music_sample));
+    uint8_t **datas = bb_calloc(count ? count : 1, sizeof *datas, BB_TAG(uint8_t *));
     size_t ns = 0;
     for (uint32_t n = 1; n <= count; n++) {
         uint64_t off, bytes;
@@ -515,7 +515,7 @@ static int16_t export_midi(qtm_movie *mv, gaddr only, int32_t start, int32_t dur
             continue;
         const qtm_dref *dr = &md->drefs[di - 1];
         qt_src src;
-        uint8_t *b = malloc((size_t)(bytes ? bytes : 1));
+        uint8_t *b = bb_malloc((size_t)(bytes ? bytes : 1), BB_BYTES);
         if (b && qt_src_open(dr->type, dr->flags, dr->data, dr->len, qt_movie_path(mv), false, &src)) {
             if (qt_src_read(&src, off, b, (uint32_t)bytes)) {
                 datas[ns] = b;
@@ -524,14 +524,14 @@ static int16_t export_midi(qtm_movie *mv, gaddr only, int32_t start, int32_t dur
             }
             qt_src_close(&src);
         }
-        free(b);
+        bb_free(b);
     }
     size_t nev;
     qt_midi_event *ev = qt_music_events(md->descs[0] + 20, md->desc_len[0] - 20, samples, ns, &nev);
     for (size_t i = 0; i < ns; i++)
-        free(datas[i]);
-    free(datas);
-    free(samples);
+        bb_free(datas[i]);
+    bb_free(datas);
+    bb_free(samples);
     /* the events between start and start + duration, in movie time */
     int32_t r;
     int64_t m0 = qtm_track_to_media(t, start, mv->scale, &r);
@@ -551,7 +551,7 @@ static int16_t export_midi(qtm_movie *mv, gaddr only, int32_t start, int32_t dur
         uint8_t m[3] = { ev[i].status, ev[i].data1, ev[i].data2 };
         put(&trk, m, (ev[i].status & 0xF0) == 0xC0 || (ev[i].status & 0xF0) == 0xD0 ? 2 : 3);
     }
-    free(ev);
+    bb_free(ev);
     uint8_t end[] = { 0, 0xFF, 0x2F, 0 };
     put(&trk, end, sizeof end);
     uint8_t h[22];
@@ -564,7 +564,7 @@ static int16_t export_midi(qtm_movie *mv, gaddr only, int32_t start, int32_t dur
     put32b(h + 18, (uint32_t)trk.n);
     put(o, h, 22);
     put(o, trk.b, trk.n);
-    free(trk.b);
+    bb_free(trk.b);
     return noErr;
 }
 
@@ -663,10 +663,10 @@ static int16_t export_pict(gaddr movie, int32_t at, bool file, buf *o)
         put(o, zero, 512);
     }
     size_t n = (size_t)tb_GetHandleSize(pic);
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     gget(b, rd32(pic), (uint32_t)n);
     put(o, b, n);
-    free(b);
+    bb_free(b);
     tb_KillPicture(pic);
     return noErr;
 }
@@ -744,7 +744,7 @@ static void apply_settings(exporter *ex, gaddr c)
     if (!c || !rd32(c))
         return;
     size_t n = (size_t)tb_GetHandleSize(c);
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     gget(b, rd32(c), (uint32_t)n);
     uint32_t root = qta_root(b, n);
     uint32_t s = qta_find(b, n, root, fourcc("soun"), 1);
@@ -762,7 +762,7 @@ static void apply_settings(exporter *ex, gaddr c)
         if (d && len >= 2)
             ex->channels = be16(d) == 1 || be16(d) == 2 ? be16(d) : 0;
     }
-    free(b);
+    bb_free(b);
 }
 
 static int32_t spit_call(qtc_call *k)
@@ -791,7 +791,7 @@ static int32_t spit_call(qtc_call *k)
             else
                 err = write_spec(a[0], kind, creator_of(kind), out.b, out.n);
         }
-        free(out.b);
+        bb_free(out.b);
         return err;
     }
     if (!strcmp(name, "Validate")) {

@@ -95,7 +95,7 @@ static int roman_byte(uint16_t u)
 
 bool cf_decode(uint32_t enc, const uint8_t *b, size_t n, uint16_t **out, uint32_t *nout)
 {
-    uint16_t *u = malloc(sizeof *u * (n * 2 + 1));
+    uint16_t *u = bb_malloc(sizeof *u * (n * 2 + 1), BB_BYTES);
     if (!u)
         return false;
     size_t k = 0;
@@ -139,7 +139,7 @@ bool cf_decode(uint32_t enc, const uint8_t *b, size_t n, uint16_t **out, uint32_
     *nout = (uint32_t)k;
     return true;
 fail:
-    free(u);
+    bb_free(u);
     return false;
 }
 
@@ -225,14 +225,14 @@ static size_t encode_chars(uint32_t enc, const uint16_t *u, uint32_t n, uint8_t 
     uint32_t i = 0;
     if (stateful(enc)) {
         size_t cap = (size_t)n * 8 + 16, made = 0, took = 0;
-        uint8_t *tmp = malloc(cap);
+        uint8_t *tmp = bb_malloc(cap, BB_BYTES);
         if (tmp && tec_encode(enc, u, n, &took, tmp, cap, &made) == HT_OK && took == n && made <= max) {
             if (out)
                 memcpy(out, tmp, made);
             i = n;
             k = made;
         }
-        free(tmp);
+        bb_free(tmp);
         *used = i;
         return k;
     }
@@ -260,7 +260,7 @@ static size_t encode_chars(uint32_t enc, const uint16_t *u, uint32_t n, uint8_t 
 bool cf_encode(uint32_t enc, const uint16_t *u, uint32_t n, uint8_t loss, uint8_t **out, size_t *nout, uint32_t *used)
 {
     size_t cap = (size_t)n * 8 + 16;
-    uint8_t *b = malloc(cap);
+    uint8_t *b = bb_malloc(cap, BB_BYTES);
     uint32_t took = 0;
     if (!b)
         return false;
@@ -523,7 +523,7 @@ static void str_set(cf_string *s, const uint16_t *u, uint32_t n)
 {
     if (n + 1 > s->cap) {
         uint32_t cap = n + 16;
-        uint16_t *p = realloc(s->u, sizeof *p * cap);
+        uint16_t *p = bb_realloc(s->u, sizeof *p * cap, BB_BYTES);
         if (!p)
             return;
         s->u = p;
@@ -565,7 +565,7 @@ static void str_replace(cf_string *s, uint32_t loc, uint32_t len, const uint16_t
     uint32_t total = s->n - len + n;
     uint16_t *copy = NULL;
     if (n && u >= s->u && u < s->u + s->cap) { /* from itself */
-        copy = malloc(sizeof *copy * n);
+        copy = bb_malloc(sizeof *copy * n, BB_BYTES);
         if (!copy)
             return;
         memcpy(copy, u, sizeof *copy * n);
@@ -573,9 +573,9 @@ static void str_replace(cf_string *s, uint32_t loc, uint32_t len, const uint16_t
     }
     if (total + 1 > s->cap) {
         uint32_t cap = total * 2 + 16;
-        uint16_t *p = realloc(s->u, sizeof *p * cap);
+        uint16_t *p = bb_realloc(s->u, sizeof *p * cap, BB_BYTES);
         if (!p) {
-            free(copy);
+            bb_free(copy);
             return;
         }
         s->u = p;
@@ -585,7 +585,7 @@ static void str_replace(cf_string *s, uint32_t loc, uint32_t len, const uint16_t
     if (n)
         memcpy(s->u + loc, u, sizeof *u * n);
     s->n = total;
-    free(copy);
+    bb_free(copy);
     str_write_back(s);
 }
 
@@ -604,7 +604,7 @@ static void str_finalize(cf_obj *o)
         tb_DisposePtr(s->uptr);
 }
 
-static void str_dispose(cf_obj *o) { free(((cf_string *)o)->u); }
+static void str_dispose(cf_obj *o) { bb_free(((cf_string *)o)->u); }
 
 static bool str_equal(cf_obj *a, cf_obj *b)
 {
@@ -659,7 +659,7 @@ gaddr cfstr_from_utf8(const char *s)
     if (!cf_decode(kCFStringEncodingUTF8, (const uint8_t *)s, strlen(s), &u, &n))
         return 0;
     gaddr r = cfstr_new(0, u, n, false);
-    free(u);
+    bb_free(u);
     return r;
 }
 
@@ -681,12 +681,12 @@ char *cfstr_utf8(gaddr ref)
     size_t n;
     uint32_t used;
     cf_encode(kCFStringEncodingUTF8, s->u, s->n, '?', &b, &n, &used);
-    char *r = malloc(n + 1);
+    char *r = bb_malloc(n + 1, BB_BYTES);
     if (r) {
         memcpy(r, b, n);
         r[n] = 0;
     }
-    free(b);
+    bb_free(b);
     return r;
 }
 
@@ -695,7 +695,7 @@ static cf_string *str_from_bytes(gaddr alloc, gaddr bytes, uint32_t n, uint32_t 
 {
     if (n > 0x1000000 || (n && !bytes))
         return NULL;
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     if (!b)
         return NULL;
     gget(b, bytes, n);
@@ -708,9 +708,9 @@ static cf_string *str_from_bytes(gaddr alloc, gaddr bytes, uint32_t n, uint32_t 
             s->enc8 = enc;
         if (s && is_unicode16(enc))
             s->wide = true;
-        free(u);
+        bb_free(u);
     }
-    free(b);
+    bb_free(b);
     return s;
 }
 
@@ -740,7 +740,7 @@ static gaddr constant_of(const char *text, size_t len, uint32_t enc, gaddr liter
     if (!cf_decode(enc, (const uint8_t *)text, len, &u, &n))
         return 0;
     cf_string *s = str_make(cf_allocator_system(), u, n, false);
-    free(u);
+    bb_free(u);
     if (!s)
         return 0;
     cf_make_constant(&s->o);
@@ -748,13 +748,13 @@ static gaddr constant_of(const char *text, size_t len, uint32_t enc, gaddr liter
     s->src8 = literal; /* the literal is its C string */
     if (nconstants == constants_cap) {
         unsigned cap = constants_cap ? constants_cap * 2 : 64;
-        constant *p = realloc(constants, sizeof *p * cap);
+        constant *p = bb_realloc(constants, sizeof *p * cap, BB_TAG(constant));
         if (!p)
             return s->o.ref;
         constants = p;
         constants_cap = cap;
     }
-    constants[nconstants].text = malloc(len + 1);
+    constants[nconstants].text = bb_malloc(len + 1, BB_BYTES);
     if (constants[nconstants].text) {
         memcpy(constants[nconstants].text, text, len);
         constants[nconstants].text[len] = 0;
@@ -768,8 +768,8 @@ gaddr cfstr_constant(const char *ascii) { return constant_of(ascii, strlen(ascii
 void cfstr_reset(void)
 {
     for (unsigned i = 0; i < nconstants; i++)
-        free(constants[i].text);
-    free(constants);
+        bb_free(constants[i].text);
+    bb_free(constants);
     constants = NULL;
     nconstants = constants_cap = 0;
     cf_register_class(CFT_STRING, &string_class);
@@ -895,14 +895,14 @@ static void cf_CFStringSetExternalCharactersNoCopy(ppc_cpu *c)
     cf_string *s = str_of(R(0));
     if (!s || R(2) > 0x800000)
         RETURN_VOID();
-    uint16_t *u = malloc(sizeof *u * (R(2) + 1));
+    uint16_t *u = bb_malloc(sizeof *u * (R(2) + 1), BB_BYTES);
     if (!u)
         RETURN_VOID();
     for (uint32_t i = 0; i < R(2); i++)
         u[i] = rd16(R(1) + 2 * i);
     s->ext = 0;
     str_set(s, u, R(2));
-    free(u);
+    bb_free(u);
     s->ext = R(1);
     s->ext_cap = R(3) > R(2) ? R(3) : R(2);
     RETURN_VOID();
@@ -1151,15 +1151,15 @@ static void format_into(cf_text *out, const uint16_t *f, uint32_t n, const fmt_a
             uint32_t len = 0;
             while (rd8(p + len) && (prec < 0 || len < (uint32_t)prec))
                 len++;
-            uint8_t *b = malloc(len + 1);
+            uint8_t *b = bb_malloc(len + 1, BB_BYTES);
             uint16_t *u;
             uint32_t k;
             gget(b, p, len);
             if (cf_decode(system_encoding(), b, len, &u, &k) || cf_decode(kCFStringEncodingMacRoman, b, len, &u, &k)) {
                 add_padded(out, u, k, &sp, width);
-                free(u);
+                bb_free(u);
             }
-            free(b);
+            bb_free(b);
             break;
         }
         case 'S': {
@@ -1167,11 +1167,11 @@ static void format_into(cf_text *out, const uint16_t *f, uint32_t n, const fmt_a
             uint32_t len = 0;
             while (p && rd16(p + 2 * len) && (prec < 0 || len < (uint32_t)prec))
                 len++;
-            uint16_t *u = malloc(sizeof *u * (len + 1));
+            uint16_t *u = bb_malloc(sizeof *u * (len + 1), BB_BYTES);
             for (uint32_t k = 0; k < len; k++)
                 u[k] = rd16(p + 2 * k);
             add_padded(out, u, len, &sp, width);
-            free(u);
+            bb_free(u);
             break;
         }
         case '@': {
@@ -1279,7 +1279,7 @@ static uint8_t *whole_bytes(cf_string *s, uint32_t enc, size_t *n)
     uint8_t *b;
     uint32_t used;
     if (!cf_encode(enc, s->u, s->n, 0, &b, n, &used)) {
-        free(b);
+        bb_free(b);
         return NULL;
     }
     return b;
@@ -1298,7 +1298,7 @@ static void cf_CFStringGetPascalString(ppc_cpu *c)
         wr8(buf, (uint8_t)n);
         gput(buf + 1, b, (uint32_t)n);
     }
-    free(b);
+    bb_free(b);
     RETURN(ok);
 }
 
@@ -1315,7 +1315,7 @@ static void cf_CFStringGetCString(ppc_cpu *c)
         gput(buf, b, (uint32_t)n);
         wr8(buf + (uint32_t)n, 0);
     }
-    free(b);
+    bb_free(b);
     RETURN(ok);
 }
 
@@ -1350,7 +1350,7 @@ static void cf_CFStringGetPascalStringPtr(ppc_cpu *c)
     size_t n;
     uint8_t *b = whole_bytes(s, R(1), &n);
     if (!b || n > 255) {
-        free(b);
+        bb_free(b);
         RETURN(0);
     }
     if (s->pptr)
@@ -1361,7 +1361,7 @@ static void cf_CFStringGetPascalStringPtr(ppc_cpu *c)
         gput(s->pptr + 1, b, (uint32_t)n);
         s->pptr_enc = R(1);
     }
-    free(b);
+    bb_free(b);
     RETURN(s->pptr);
 }
 
@@ -1380,7 +1380,7 @@ static void cf_CFStringGetCStringPtr(ppc_cpu *c)
     size_t n;
     uint8_t *b = whole_bytes(s, R(1), &n);
     if (!b || memchr(b, 0, n)) {
-        free(b);
+        bb_free(b);
         RETURN(0);
     }
     if (s->cptr)
@@ -1391,7 +1391,7 @@ static void cf_CFStringGetCStringPtr(ppc_cpu *c)
         wr8(s->cptr + (uint32_t)n, 0);
         s->cptr_enc = R(1);
     }
-    free(b);
+    bb_free(b);
     RETURN(s->cptr);
 }
 
@@ -1432,7 +1432,7 @@ static void cf_CFStringGetBytes(ppc_cpu *c)
         RETURN(0);
     }
     size_t room = buf ? max : (size_t)-1, k = 0;
-    uint8_t *out = malloc((size_t)len * 8 + 4);
+    uint8_t *out = bb_malloc((size_t)len * 8 + 4, BB_BYTES);
     if (!out)
         RETURN(0);
     if (ext && is_unicode16(enc) && room >= 2) {
@@ -1445,7 +1445,7 @@ static void cf_CFStringGetBytes(ppc_cpu *c)
         gput(buf, out, (uint32_t)k);
     if (used_p)
         wr32(used_p, (uint32_t)k);
-    free(out);
+    bb_free(out);
     RETURN(took);
 }
 
@@ -1458,11 +1458,11 @@ static void cf_CFStringCreateWithBytes(ppc_cpu *c)
     if (is_unicode16(enc) && n >= 2 && rd16(b) == 0xFEFF) {
         b += 2, n -= 2;
     } else if (is_unicode16(enc) && n >= 2 && rd16(b) == 0xFFFE) { /* little-endian */
-        uint16_t *u = malloc(sizeof *u * (n / 2 + 1));
+        uint16_t *u = bb_malloc(sizeof *u * (n / 2 + 1), BB_BYTES);
         for (uint32_t i = 0; u && i < n / 2 - 1; i++)
             u[i] = (uint16_t)(rd8(b + 2 + 2 * i) | rd8(b + 3 + 2 * i) << 8);
         gaddr r = u ? cfstr_new(R(0), u, n / 2 - 1, false) : 0;
-        free(u);
+        bb_free(u);
         RETURN(r);
     }
     cf_string *s = b || !n ? str_from_bytes(R(0), b, n, enc, false) : NULL;
@@ -1489,7 +1489,7 @@ static void cf_CFStringCreateExternalRepresentation(ppc_cpu *c)
     cf_string *s = str_of(R(1));
     if (!s || !encoding_available(R(2)))
         RETURN(0);
-    uint8_t *b = malloc((size_t)s->n * 8 + 4);
+    uint8_t *b = bb_malloc((size_t)s->n * 8 + 4, BB_BYTES);
     size_t k = 0;
     if (!b)
         RETURN(0);
@@ -1498,7 +1498,7 @@ static void cf_CFStringCreateExternalRepresentation(ppc_cpu *c)
     uint32_t took = 0;
     k += encode_chars(R(2), s->u, s->n, (uint8_t)R(3), b + k, (size_t)s->n * 8, &took);
     gaddr d = took == s->n ? cfdata_new(R(0), b, (uint32_t)k, false) : 0;
-    free(b);
+    bb_free(b);
     RETURN(d);
 }
 
@@ -1678,7 +1678,7 @@ static void cf_CFStringCreateArrayWithFindResults(ppc_cpu *c)
     gaddr block = cf_allocate(R(0), 8 * n);
     if (!block)
         RETURN(0);
-    uint32_t *vals = malloc(sizeof *vals * n);
+    uint32_t *vals = bb_malloc(sizeof *vals * n, BB_BYTES);
     for (uint32_t i = 0; i < n; i++) {
         wr32(block + 8 * i, found[i]);
         wr32(block + 8 * i + 4, f->n);
@@ -1688,7 +1688,7 @@ static void cf_CFStringCreateArrayWithFindResults(ppc_cpu *c)
     cfarray_own_block(a, block);
     for (uint32_t i = 0; i < n; i++)
         cfarray_append(a, vals[i]);
-    free(vals);
+    bb_free(vals);
     RETURN(a);
 }
 
@@ -1793,7 +1793,7 @@ static void cf_CFStringCreateArrayBySeparatingStrings(ppc_cpu *c)
 /* An ASCII copy of a string, for numbers (malloc'd). */
 static char *ascii_copy(cf_string *s)
 {
-    char *b = malloc(s->n + 1);
+    char *b = bb_malloc(s->n + 1, BB_BYTES);
     if (!b)
         return NULL;
     for (uint32_t i = 0; i < s->n; i++) {
@@ -1815,7 +1815,7 @@ static void cf_CFStringGetIntValue(ppc_cpu *c)
     while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
         p++;
     long long v = strtoll(p, NULL, 10);
-    free(b);
+    bb_free(b);
     RETURN((uint32_t)(int32_t)(v > 2147483647LL ? 2147483647LL : v < -2147483648LL ? -2147483648LL : v));
 }
 
@@ -1825,7 +1825,7 @@ static void cf_CFStringGetDoubleValue(ppc_cpu *c)
     cf_string *s = str_of(R(0));
     char *b = s ? ascii_copy(s) : NULL;
     double d = b ? strtod(b, NULL) : 0.0;
-    free(b);
+    bb_free(b);
     cf_return_double(c, d);
 }
 
@@ -1846,18 +1846,18 @@ static void cf_CFStringAppendCharacters(ppc_cpu *c)
     cf_string *s = str_of(R(0));
     if (!s || !R(1) || R(2) > 0x800000)
         RETURN_VOID();
-    uint16_t *u = malloc(sizeof *u * (R(2) + 1));
+    uint16_t *u = bb_malloc(sizeof *u * (R(2) + 1), BB_BYTES);
     for (uint32_t i = 0; u && i < R(2); i++)
         u[i] = rd16(R(1) + 2 * i);
     if (u)
         str_replace(s, s->n, 0, u, R(2));
-    free(u);
+    bb_free(u);
     RETURN_VOID();
 }
 
 static void append_bytes(cf_string *s, gaddr b, uint32_t n, uint32_t enc)
 {
-    uint8_t *bytes = malloc(n + 1);
+    uint8_t *bytes = bb_malloc(n + 1, BB_BYTES);
     uint16_t *u;
     uint32_t k;
     if (!bytes)
@@ -1865,9 +1865,9 @@ static void append_bytes(cf_string *s, gaddr b, uint32_t n, uint32_t enc)
     gget(bytes, b, n);
     if (cf_decode(enc, bytes, n, &u, &k)) {
         str_replace(s, s->n, 0, u, k);
-        free(u);
+        bb_free(u);
     }
-    free(bytes);
+    bb_free(bytes);
 }
 
 /* CFStringAppendPascalString(theString, pStr, encoding) */
@@ -1939,12 +1939,12 @@ static void cf_CFStringPad(ppc_cpu *c)
     if (!pad || !pad->n)
         RETURN_VOID();
     uint32_t add = len - s->n;
-    uint16_t *u = malloc(sizeof *u * add);
+    uint16_t *u = bb_malloc(sizeof *u * add, BB_BYTES);
     for (uint32_t i = 0; u && i < add; i++)
         u[i] = pad->u[(at + i) % pad->n];
     if (u)
         str_replace(s, s->n, 0, u, add);
-    free(u);
+    bb_free(u);
     RETURN_VOID();
 }
 
@@ -2135,7 +2135,7 @@ static void cf_CFStringConvertIANACharSetNameToEncoding(ppc_cpu *c)
     uint32_t e = kCFStringEncodingInvalidId;
     if (name && !tec_encoding_of_internet_name(name, &e))
         e = kCFStringEncodingInvalidId;
-    free(name);
+    bb_free(name);
     RETURN(e);
 }
 
@@ -2201,7 +2201,7 @@ static void cf_CFShow(ppc_cpu *c)
     gaddr s = cfstr_from_text(&t);
     char *u = cfstr_utf8(s);
     LOGF(LOG_TRAPS, "CFShow: %s\n", u ? u : "");
-    free(u);
+    bb_free(u);
     cf_release(s);
     text_free(&t);
     RETURN_VOID();
@@ -2217,7 +2217,7 @@ static void cf_CFShowStr(ppc_cpu *c)
              s->n, !s->wide, s->o.alloc, s->mut, u ? u : "");
     else
         LOGF(LOG_TRAPS, "CFShowStr: This is a NULL string\n");
-    free(u);
+    bb_free(u);
     RETURN_VOID();
 }
 
@@ -2229,13 +2229,13 @@ static void cf_MakeConstantString(ppc_cpu *c)
     if (!lit)
         RETURN(0);
     uint32_t n = cstr_len(lit);
-    char *b = malloc(n + 1);
+    char *b = bb_malloc(n + 1, BB_BYTES);
     if (!b)
         RETURN(0);
     gget(b, lit, n);
     b[n] = 0;
     gaddr s = constant_of(b, n, system_encoding(), lit);
-    free(b);
+    bb_free(b);
     RETURN(s);
 }
 
@@ -2260,7 +2260,7 @@ static void cs_set(cf_charset *s, uint16_t ch, bool on)
         s->bits[ch >> 3] &= (uint8_t)~(1 << (ch & 7));
 }
 
-static void cs_dispose(cf_obj *o) { free(((cf_charset *)o)->bits); }
+static void cs_dispose(cf_obj *o) { bb_free(((cf_charset *)o)->bits); }
 static bool cs_equal(cf_obj *a, cf_obj *b) { return !memcmp(((cf_charset *)a)->bits, ((cf_charset *)b)->bits, BITMAP); }
 static uint32_t cs_hash(cf_obj *o)
 {
@@ -2277,7 +2277,7 @@ static cf_charset *cs_new(gaddr alloc, bool mutable_)
     cf_charset *s = cf_new(CFT_CHARSET, sizeof *s, alloc, 0);
     if (!s)
         return NULL;
-    s->bits = calloc(1, BITMAP);
+    s->bits = bb_calloc(1, BITMAP, BB_BYTES);
     s->mut = mutable_;
     if (!s->bits) {
         cf_release(s->o.ref);

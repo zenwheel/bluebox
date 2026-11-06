@@ -401,7 +401,7 @@ static int16_t char_type(uint8_t c)
     uint32_t types = (uint32_t)p[12] << 8 | p[13], cls = (uint32_t)p[14] << 8 | p[15];
     uint32_t at = cls + c < n ? types + p[cls + c] : n;
     uint8_t t = at < n ? p[at] : 0;
-    free(p);
+    bb_free(p);
     return (int16_t)((t & 0x0F) | (t & 0x70) << 4 | (t & 0x80 ? smCharUpper : smCharLower));
 }
 
@@ -471,10 +471,10 @@ static int width_of(gaddr text, int len)
 {
     if (len <= 0)
         return 0;
-    uint8_t *b = malloc((size_t)len);
+    uint8_t *b = bb_malloc((size_t)len, BB_BYTES);
     gget(b, text, (uint32_t)len);
     int w = qd_text_width(qd_port(), b, len);
-    free(b);
+    bb_free(b);
     return w;
 }
 
@@ -637,12 +637,12 @@ void tb_FindWord(gaddr textbufp, int16_t length, int16_t offset, int8_t leftside
         if (breaks && !line && (rd8(breaks) & 0x80)) { /* the program's own NBreakTable */
             uint32_t tn = rd16(breaks + 14);
             if (tn >= 16 + 256) {
-                own = malloc(tn);
+                own = bb_malloc(tn, BB_BYTES);
                 gget(own, breaks, tn);
                 t = (break_table){ own, tn };
             }
         }
-        uint8_t *text = malloc((size_t)length);
+        uint8_t *text = bb_malloc((size_t)length, BB_BYTES);
         gget(text, textbufp, (uint32_t)length);
         int o = offset;
         if (!leftside && o > 0)
@@ -660,9 +660,9 @@ void tb_FindWord(gaddr textbufp, int16_t length, int16_t offset, int8_t leftside
                 a = b;
             }
         }
-        free(text);
-        free(own);
-        free(itl2);
+        bb_free(text);
+        bb_free(own);
+        bb_free(itl2);
     }
     wr16(offsets, (uint16_t)a);
     wr16(offsets + 2, (uint16_t)b);
@@ -815,12 +815,12 @@ int16_t tb_ReplaceText(gaddr base_text, gaddr subst_text, gaddr key)
         }
         if (found < 0)
             break;
-        uint8_t *rest = malloc((size_t)(n - found - kl) + 1);
+        uint8_t *rest = bb_malloc((size_t)(n - found - kl) + 1, BB_BYTES);
         gget(rest, rd32(base_text) + (uint32_t)(found + kl), (uint32_t)(n - found - kl));
         tb_SetHandleSize(base_text, n - kl + sl);
         gmemcpy(rd32(base_text) + (uint32_t)found, rd32(subst_text), (uint32_t)sl);
         gput(rd32(base_text) + (uint32_t)(found + sl), rest, (uint32_t)(n - found - kl));
-        free(rest);
+        bb_free(rest);
         pos = found + sl;
         count++;
     }

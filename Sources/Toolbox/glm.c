@@ -66,7 +66,7 @@ static gaddr alloc(uint32_t n, uint32_t align, bool clear)
 {
     if (nblocks == blocks_cap) {
         size_t cap = blocks_cap ? blocks_cap * 2 : 64;
-        glm_block *grown = realloc(blocks, cap * sizeof *grown);
+        glm_block *grown = bb_realloc(blocks, cap * sizeof *grown, BB_TAG(glm_block));
         if (!grown) {
             set_error(GLM_OUT_OF_MEMORY);
             return 0;
@@ -331,7 +331,7 @@ static void glm_GetError(ppc_cpu *c)
 /* Guest memory is gone (a new program): so are the blocks. */
 void glm_reset(void)
 {
-    free(blocks);
+    bb_free(blocks);
     blocks = NULL;
     nblocks = blocks_cap = 0;
     mode = GLM_SYSTEM_HEAP_MODE;

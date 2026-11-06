@@ -86,8 +86,8 @@ typedef struct {
 enum { SRC_CLEAR, SRC_BUFFER, SRC_TEXTURE };
 - (void)dealloc
 {
-    free(verts);
-    free(cmds);
+    bb_host_free(verts);
+    bb_host_free(cmds);
 }
 @end
 
@@ -228,7 +228,7 @@ static command *new_command(R3DFrame *o)
 {
     if (o->ncmds == o->capcmds) {
         int cap = o->capcmds ? o->capcmds * 2 : 64;
-        command *n = realloc(o->cmds, (size_t)cap * sizeof *n);
+        command *n = bb_host_realloc(o->cmds, (size_t)cap * sizeof *n);
         if (!n)
             return NULL;
         o->cmds = n;
@@ -285,7 +285,7 @@ void r3d_draw(r3d_frame *f, const r3d_state *s, int primitive, const r3d_vertex 
         int cap = o->capverts ? o->capverts : 1024;
         while (cap < o->nverts + count)
             cap *= 2;
-        r3d_vertex *n = realloc(o->verts, (size_t)cap * sizeof *n);
+        r3d_vertex *n = bb_host_realloc(o->verts, (size_t)cap * sizeof *n);
         if (!n)
             return;
         o->verts = n;

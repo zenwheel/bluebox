@@ -35,7 +35,7 @@ static uint32_t default_route(char ifname[16])
     size_t need = 0;
     if (sysctl(mib, 6, NULL, &need, NULL, 0) < 0 || !need)
         return 0;
-    char *buf = malloc(need);
+    char *buf = bb_malloc(need, BB_BYTES);
     if (!buf)
         return 0;
     uint32_t gw = 0;
@@ -67,7 +67,7 @@ static uint32_t default_route(char ifname[16])
             p += rtm->rtm_msglen;
         }
     }
-    free(buf);
+    bb_free(buf);
     return gw;
 #else
     FILE *f = fopen("/proc/net/route", "r");

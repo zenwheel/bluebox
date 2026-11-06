@@ -68,7 +68,7 @@ static void publish_windows(void)
             hrgn_free(&s);
             continue;
         }
-        uint8_t *mask = calloc((size_t)bw * (size_t)bh, 1);
+        uint8_t *mask = bb_calloc((size_t)bw * (size_t)bh, 1, BB_BYTES);
         for (int i = 0; i < s.nbands; i++) {
             const rband *band = &s.bands[i];
             for (int y = band->top; y < band->bottom; y++)
@@ -88,7 +88,7 @@ static void publish_windows(void)
     }
     pthread_mutex_lock(&lock);
     for (int i = 0; i < nwins; i++)
-        free(wins[i].mask);
+        bb_free(wins[i].mask);
     memcpy(wins, fresh, (size_t)n * sizeof *fresh);
     nwins = n;
     win_version++;
@@ -413,10 +413,10 @@ void display_desk_painted(const hrgn *area)
     uint32_t size = rb * (uint32_t)h;
     pthread_mutex_lock(&desk_lock);
     if (size != desk_size || base != desk_base || rb != desk_rb) {
-        free(desk_val);
-        free(desk_have);
-        desk_val = malloc(size);
-        desk_have = calloc(size, 1);
+        bb_free(desk_val);
+        bb_free(desk_have);
+        desk_val = bb_malloc(size, BB_BYTES);
+        desk_have = bb_calloc(size, 1, BB_BYTES);
         desk_size = desk_val && desk_have ? size : 0;
         desk_base = base;
         desk_rb = rb;
@@ -516,10 +516,10 @@ static void overlay_written(gaddr base, uint32_t off, uint32_t len)
     uint32_t size = rb * (uint32_t)h;
     pthread_mutex_lock(&ov_lock);
     if (size != ov_size || base != ov_base || rb != ov_rb) {
-        free(ov_orig);
-        free(ov_have);
-        ov_orig = malloc(size);
-        ov_have = calloc(size, 1);
+        bb_free(ov_orig);
+        bb_free(ov_have);
+        ov_orig = bb_malloc(size, BB_BYTES);
+        ov_have = bb_calloc(size, 1, BB_BYTES);
         ov_size = ov_orig && ov_have ? size : 0;
         ov_base = base;
         ov_rb = rb;

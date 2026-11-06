@@ -45,13 +45,13 @@ gaddr q3_handle_new(int kind, void *p)
         gaddr base = tb_NewPtr(CHUNK * SLOT, true, true);
         if (!base)
             base = tb_NewPtr(CHUNK * SLOT, false, true);
-        handle *slots = base ? calloc(CHUNK, sizeof *slots) : NULL;
+        handle *slots = base ? bb_calloc(CHUNK, sizeof *slots, BB_TAG(handle)) : NULL;
         if (!slots)
             return 0;
         if (capfree < CHUNK) {
-            uint32_t *n = realloc(free_list, CHUNK * sizeof *n);
+            uint32_t *n = bb_realloc(free_list, CHUNK * sizeof *n, BB_BYTES);
             if (!n) {
-                free(slots);
+                bb_free(slots);
                 return 0;
             }
             free_list = n;
@@ -320,15 +320,15 @@ q3obj *q3_new(uint32_t type, void *data)
 {
     ready_classes();
     q3class *k = q3_class(type);
-    q3obj *o = calloc(1, sizeof *o);
+    q3obj *o = bb_calloc(1, sizeof *o, BB_TAG(q3obj));
     if (!o || !k) {
-        free(o);
+        bb_free(o);
         q3_error(k ? kQ3ErrorOutOfMemory : kQ3ErrorInvalidObjectClass);
         return NULL;
     }
     o->g = q3_handle_new(Q3H_OBJECT, o);
     if (!o->g) {
-        free(o);
+        bb_free(o);
         q3_error(kQ3ErrorOutOfMemory);
         return NULL;
     }
@@ -382,7 +382,7 @@ static void destroy(q3obj *o)
     if (o->instance)
         tb_DisposePtr(o->instance);
     q3_handle_free(o->g);
-    free(o);
+    bb_free(o);
     if (set)
         q3_release(set);
 }
@@ -419,7 +419,7 @@ gaddr q3_duplicate(gaddr g)
         return 0;
     if (o->cls->duplicate && !o->cls->duplicate(n, o)) {
         q3_handle_free(n->g);
-        free(n);
+        bb_free(n);
         q3_error(kQ3ErrorOutOfMemory);
         return 0;
     }
@@ -882,7 +882,7 @@ static void elem_free(q3elem *e)
         gaddr sh = (uint32_t)e->bytes[0] << 24 | (uint32_t)e->bytes[1] << 16 | (uint32_t)e->bytes[2] << 8 | e->bytes[3];
         q3_release(sh);
     }
-    free(e->bytes);
+    bb_free(e->bytes);
     if (e->g)
         tb_DisposePtr(e->g);
     e->g = 0;
@@ -890,7 +890,7 @@ static void elem_free(q3elem *e)
 
 bool q3set_add_bytes(q3set *s, int32_t type, const uint8_t *bytes, uint32_t size)
 {
-    uint8_t *copy = malloc(size ? size : 1);
+    uint8_t *copy = bb_malloc(size ? size : 1, BB_BYTES);
     if (!copy)
         return false;
     memcpy(copy, bytes, size);
@@ -905,9 +905,9 @@ bool q3set_add_bytes(q3set *s, int32_t type, const uint8_t *bytes, uint32_t size
             s->e[i].size = size;
             return true;
         }
-    q3elem *n = realloc(s->e, (size_t)(s->n + 1) * sizeof *n);
+    q3elem *n = bb_realloc(s->e, (size_t)(s->n + 1) * sizeof *n, BB_TAG(q3elem));
     if (!n) {
-        free(copy);
+        bb_free(copy);
         return false;
     }
     s->e = n;
@@ -938,7 +938,7 @@ void q3set_empty(q3set *s)
 {
     for (int i = 0; i < s->n; i++)
         elem_free(&s->e[i]);
-    free(s->e);
+    bb_free(s->e);
     s->e = NULL;
     s->n = 0;
 }
@@ -1005,13 +1005,13 @@ static void set_dispose(q3obj *o)
     q3set *s = o->data;
     if (s) {
         q3set_empty(s);
-        free(s);
+        bb_free(s);
     }
 }
 
 static bool set_duplicate(q3obj *to, const q3obj *from)
 {
-    q3set *s = calloc(1, sizeof *s);
+    q3set *s = bb_calloc(1, sizeof *s, BB_TAG(q3set));
     if (!s)
         return false;
     q3set_copy(s, from->data);
@@ -1021,10 +1021,10 @@ static bool set_duplicate(q3obj *to, const q3obj *from)
 
 static gaddr new_set(uint32_t type)
 {
-    q3set *s = calloc(1, sizeof *s);
+    q3set *s = bb_calloc(1, sizeof *s, BB_TAG(q3set));
     q3obj *o = s ? q3_new(type, s) : NULL;
     if (!o)
-        free(s);
+        bb_free(s);
     return o ? o->g : 0;
 }
 
@@ -1253,7 +1253,7 @@ static void Q3Bitmap_GetImageSize(ppc_cpu *c) { Q3RETURN(((Q3R(0) + 7) / 8) * Q3
 
 static gaddr new_element_class(int32_t *type, const char *name, uint32_t size, gaddr meta, bool attribute)
 {
-    element_class *n = realloc(elements, (size_t)(nelements + 1) * sizeof *n);
+    element_class *n = bb_realloc(elements, (size_t)(nelements + 1) * sizeof *n, BB_TAG(element_class));
     if (!n)
         return 0;
     elements = n;
@@ -1344,10 +1344,10 @@ static void Q3XElementType_GetElementSize(ppc_cpu *c)
 /* ---------------------------------------------------------------------- */
 /* Strings */
 
-static void string_dispose(q3obj *o) { free(o->data); }
+static void string_dispose(q3obj *o) { bb_free(o->data); }
 static bool string_duplicate(q3obj *to, const q3obj *from)
 {
-    to->data = strdup(from->data ? from->data : "");
+    to->data = bb_strdup(from->data ? from->data : "");
     return to->data != NULL;
 }
 
@@ -1356,7 +1356,7 @@ static char *gstrdup(gaddr s)
     size_t n = 0;
     while (s && rd8(s + (uint32_t)n))
         n++;
-    char *out = malloc(n + 1);
+    char *out = bb_malloc(n + 1, BB_BYTES);
     if (out) {
         if (n)
             gget(out, s, (uint32_t)n);
@@ -1376,7 +1376,7 @@ static void Q3CString_New(ppc_cpu *c)
     char *s = gstrdup(Q3R(0));
     q3obj *o = s ? q3_new(Q3_CSTRING, s) : NULL;
     if (!o)
-        free(s);
+        bb_free(s);
     Q3RETURN(o ? o->g : 0);
 }
 
@@ -1393,7 +1393,7 @@ static void Q3CString_SetString(ppc_cpu *c)
     q3obj *o = q3_of(Q3R(0), Q3_CSTRING);
     char *s = o ? gstrdup(Q3R(1)) : NULL;
     if (s) {
-        free(o->data);
+        bb_free(o->data);
         o->data = s;
         q3_edited(o);
     }
@@ -1532,10 +1532,10 @@ static void register_class(ppc_cpu *c, bool by_type)
         Q3RETURN(0);
         return;
     }
-    q3class *k = calloc(1, sizeof *k);
-    q3class **n = k ? realloc(registered, (size_t)(nregistered + 1) * sizeof *n) : NULL;
+    q3class *k = bb_calloc(1, sizeof *k, BB_TAG(q3class));
+    q3class **n = k ? bb_realloc(registered, (size_t)(nregistered + 1) * sizeof *n, BB_TAG(q3class *)) : NULL;
     if (!n) {
-        free(k);
+        bb_free(k);
         q3_error(kQ3ErrorOutOfMemory);
         Q3RETURN(0);
         return;
@@ -1545,7 +1545,7 @@ static void register_class(ppc_cpu *c, bool by_type)
     static uint32_t next_type = 0xFFFFFFFFu; /* -1 down, as QuickDraw 3D numbered them */
     k->type = by_type ? Q3R(1) : next_type--;
     k->parent = parent;
-    k->own_name = strdup(name);
+    k->own_name = bb_strdup(name);
     k->name = k->own_name;
     k->registered = true;
     k->metahandler = Q3R(3);
@@ -1593,8 +1593,8 @@ static void Q3XObjectHierarchy_UnregisterClass(ppc_cpu *c)
             break;
         }
     q3_handle_free(k->guest);
-    free(k->own_name);
-    free(k);
+    bb_free(k->own_name);
+    bb_free(k);
     Q3RETURN(kQ3Success);
 }
 
@@ -1615,7 +1615,7 @@ gaddr q3_registered_new(q3class *k, gaddr param)
         if (data && s)
             q3d_free(data, s);
         else
-            free(data);
+            bb_free(data);
         return 0;
     }
     o->cls = k;
@@ -1630,7 +1630,7 @@ gaddr q3_registered_new(q3class *k, gaddr param)
             if (o->data && k->dispose)
                 k->dispose(o);
             q3_handle_free(o->g);
-            free(o);
+            bb_free(o);
             return 0;
         }
     }
@@ -1794,19 +1794,19 @@ void q3_object_reset(void)
     for (int c = 0; c < nchunks; c++) {
         for (int i = 0; i < CHUNK; i++)
             if (chunk_slots[c][i].kind == Q3H_OBJECT)
-                free(chunk_slots[c][i].p); /* the record; what it held goes unfreed */
-        free(chunk_slots[c]);
+                bb_free(chunk_slots[c][i].p); /* the record; what it held goes unfreed */
+        bb_free(chunk_slots[c]);
     }
     nchunks = 0;
     nfree = 0;
     for (int i = 0; i < nregistered; i++) {
-        free(registered[i]->own_name);
-        free(registered[i]);
+        bb_free(registered[i]->own_name);
+        bb_free(registered[i]);
     }
     nregistered = 0;
     for (int i = 0; i < NBUILTIN; i++)
         builtin[i].guest = 0;
-    free(elements);
+    bb_free(elements);
     elements = NULL;
     nelements = 0;
     next_element = 1000;

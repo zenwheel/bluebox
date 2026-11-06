@@ -36,12 +36,12 @@ enum { codecExtensionNotFound = -8971 };
 /* Guest bytes moved (the ranges may overlap). */
 static void gmemmove(gaddr dst, gaddr src, uint32_t n)
 {
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     if (!b)
         return;
     gget(b, src, n);
     gput(dst, b, n);
-    free(b);
+    bb_free(b);
 }
 
 /* A handle's size set; false if it couldn't be. */
@@ -231,7 +231,7 @@ int16_t tb_SetImageDescriptionCTable(int32_t desc, int32_t ctable)
     if (!d)
         return paramErr;
     uint32_t n = rd32(d), start = ext_start(d), extn = n > start ? n - start : 0;
-    uint8_t *ext = malloc(extn ? extn : 1);
+    uint8_t *ext = bb_malloc(extn ? extn : 1, BB_BYTES);
     gget(ext, d + start, extn);
     uint32_t ctn = 0;
     gaddr ct = ctable ? rd32((gaddr)ctable) : 0;
@@ -239,14 +239,14 @@ int16_t tb_SetImageDescriptionCTable(int32_t desc, int32_t ctable)
         ctn = 8 + ((uint32_t)rd16(ct + 6) + 1) * 8;
     uint32_t total = 86 + ctn + extn;
     if (!resize(h, total)) {
-        free(ext);
+        bb_free(ext);
         return memFullErr;
     }
     d = rd32(h);
     if (ct)
         gmemmove(d + 86, ct, ctn);
     gput(d + 86 + ctn, ext, extn);
-    free(ext);
+    bb_free(ext);
     wr32(d, total);
     wr16(d + 84, ct ? 0 : 0xFFFF);
     return noErr;
@@ -276,8 +276,8 @@ int16_t tb_GetSimilarity(int32_t src, gaddr srcRect, int32_t desc, int32_t data,
             diff += abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[2] - b[2]);
             n += 3;
         }
-    free(s);
-    free(img);
+    bb_free(s);
+    bb_free(img);
     /* Fixed: 1 the same, 0 nothing alike */
     wr32(similarity, (uint32_t)(n ? (1.0 - diff / (n * 255.0)) * 65536.0 : 0));
     return noErr;
@@ -306,19 +306,19 @@ int16_t tb_TrimImage(int32_t desc, int32_t inData, int32_t inBufferSize, int32_t
     r.bottom = (int16_t)clampi(r.bottom, r.top, h);
     int tw = r.right - r.left, th = r.bottom - r.top;
     if (tw <= 0 || th <= 0) {
-        free(img);
+        bb_free(img);
         return paramErr;
     }
-    uint8_t *part = malloc((size_t)tw * (size_t)th * 4);
+    uint8_t *part = bb_malloc((size_t)tw * (size_t)th * 4, BB_BYTES);
     for (int y = 0; y < th; y++)
         memcpy(part + (size_t)y * (size_t)tw * 4, img + ((size_t)(r.top + y) * (size_t)w + (size_t)r.left) * 4,
                (size_t)tw * 4);
-    free(img);
+    bb_free(img);
     gaddr buf = tb_NewPtr(max_size(type, tw, th, 32), false, false);
     gaddr tmp = tb_NewHandle(0, false, false);
     err = buf && tmp ? compress_rgba(part, tw, th, (int16_t)rd16(d + 82), 0, (int32_t)rd32(d + 28), type, 0, tmp, buf)
                      : memFullErr;
-    free(part);
+    bb_free(part);
     if (!err) {
         uint32_t n = rd32(rd32(tmp) + 44);
         if (outBufferSize > 0 && n > (uint32_t)outBufferSize) {
@@ -353,7 +353,7 @@ int16_t tb_ConvertImage(int32_t srcDD, int32_t srcData, int16_t colorDepth, int3
         return err;
     err = compress_rgba(img, w, h, colorDepth, (gaddr)ctable, quality, (uint32_t)cType, (uint32_t)codec,
                         (gaddr)dstDD, (gaddr)dstData);
-    free(img);
+    bb_free(img);
     return err;
 }
 
@@ -425,7 +425,7 @@ int16_t tb_ImageTranscodeFrame(int32_t its, gaddr srcData, int32_t srcDataSize, 
     gaddr buf = tb_NewPtr(max_size(transcoders[i].dst_type, w, h, 24), false, false);
     err = buf ? compress_rgba(img, w, h, 0, 0, 0x200, transcoders[i].dst_type, 0, transcoders[i].dst_desc, buf)
               : memFullErr;
-    free(img);
+    bb_free(img);
     if (err) {
         if (buf)
             tb_DisposePtr(buf);
@@ -630,7 +630,7 @@ static int16_t thumbnail_of(const uint8_t *rgba, int w, int h, int16_t depth, in
         th = clampi(80 * h / w, 1, 80);
     else
         tw = clampi(80 * w / h, 1, 80);
-    uint8_t *small = malloc((size_t)tw * (size_t)th * 4);
+    uint8_t *small = bb_malloc((size_t)tw * (size_t)th * 4, BB_BYTES);
     if (!small)
         return memFullErr;
     for (int y = 0; y < th; y++) /* averaging the pixels each covers */
@@ -651,7 +651,7 @@ static int16_t thumbnail_of(const uint8_t *rgba, int w, int h, int16_t depth, in
             o[3] = 255;
         }
     gaddr pic = qt_picture_of_rgba(small, tw, th);
-    free(small);
+    bb_free(small);
     if (!pic)
         return memFullErr;
     (void)depth; /* drawn at the depth of the port it goes to */
@@ -677,7 +677,7 @@ static int16_t thumbnail_of_picture(gaddr pic, int16_t depth, int32_t thumbnail)
     if (!rgba)
         return memFullErr;
     int16_t err = thumbnail_of(rgba, dw, dh > 0 ? dh : 1, depth, thumbnail);
-    free(rgba);
+    bb_free(rgba);
     return err;
 }
 
@@ -709,7 +709,7 @@ int16_t tb_MakeThumbnailFromPixMap(int32_t src, gaddr srcRect, int16_t colorDept
     if (!rgba)
         return paramErr;
     int16_t err = thumbnail_of(rgba, r.right - r.left, r.bottom - r.top, colorDepth, thumbnail);
-    free(rgba);
+    bb_free(rgba);
     return err;
 }
 
@@ -813,7 +813,7 @@ void tb_StdPix(int32_t src, gaddr srcRect, int32_t matrix, int16_t mode, int32_t
         tb_SetClip(saved);
         tb_DisposeRgn(saved);
     }
-    free(rgba);
+    bb_free(rgba);
 }
 
 /* A region through a matrix's scale and translation. */
@@ -1594,12 +1594,12 @@ static uint8_t *source_image(int32_t seq, uint32_t type, int *w, int *h)
             *h = ih;
             return img;
         }
-        uint8_t *s = malloc((size_t)*w * (size_t)*h * 4);
+        uint8_t *s = bb_malloc((size_t)*w * (size_t)*h * 4, BB_BYTES);
         for (int y = 0; s && y < *h; y++)
             for (int x = 0; x < *w; x++)
                 memcpy(s + ((size_t)y * (size_t)*w + (size_t)x) * 4,
                        img + ((size_t)(y * ih / *h) * (size_t)iw + (size_t)(x * iw / *w)) * 4, 4);
-        free(img);
+        bb_free(img);
         return s;
     }
     return NULL;
@@ -1651,11 +1651,11 @@ uint8_t *icm_effect_render(int32_t seq, uint32_t type, gaddr params, int32_t siz
     uint8_t *b = effects[k].sources > 1 ? source_image(seq, fourcc("srcB"), w, h) : NULL;
     int W = *w, H = *h;
     size_t n = (size_t)W * (size_t)H;
-    uint8_t *o = malloc(n * 4);
+    uint8_t *o = bb_malloc(n * 4, BB_BYTES);
     if (!o || (effects[k].sources > 1 && !b)) {
-        free(a);
-        free(b);
-        free(o);
+        bb_free(a);
+        bb_free(b);
+        bb_free(o);
         return NULL;
     }
     memcpy(o, a, n * 4);
@@ -1766,8 +1766,8 @@ uint8_t *icm_effect_render(int32_t seq, uint32_t type, gaddr params, int32_t siz
     default: /* brightness and contrast, gain, balances: at their defaults, the image as it is */
         break;
     }
-    free(a);
-    free(b);
+    bb_free(a);
+    bb_free(b);
     (void)params, (void)size;
     return o;
 }

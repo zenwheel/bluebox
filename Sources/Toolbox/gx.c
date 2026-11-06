@@ -93,11 +93,11 @@ static void free_object(uint32_t ref)
     if ((ref & 0xFFFF0000u) != OBJ_TAG || i == 0 || i >= MAX_OBJECTS)
         return;
     object *o = &objects[i];
-    free(o->pict);
-    free(o->parts);
+    bb_free(o->pict);
+    bb_free(o->parts);
     for (int k = 0; k < o->nitems; k++)
-        free(o->items[k].data);
-    free(o->items);
+        bb_free(o->items[k].data);
+    bb_free(o->items);
     memset(o, 0, sizeof *o);
 }
 
@@ -342,7 +342,7 @@ void tb_GXSetPictureParts(int32_t target, int32_t index, int32_t oldCount, int32
     if (!s || index < 1 || oldCount < 0 || newCount < 0 || index - 1 + oldCount > s->nparts || newCount > 4096)
         return;
     int keep_after = s->nparts - (index - 1 + oldCount);
-    uint32_t *p = malloc(sizeof *p * (size_t)(index - 1 + newCount + keep_after + 1));
+    uint32_t *p = bb_malloc(sizeof *p * (size_t)(index - 1 + newCount + keep_after + 1), BB_BYTES);
     if (!p)
         return;
     memcpy(p, s->parts, sizeof *p * (size_t)(index - 1));
@@ -355,7 +355,7 @@ void tb_GXSetPictureParts(int32_t target, int32_t index, int32_t oldCount, int32
     for (int i = 0; i < oldCount; i++)
         release(s->parts[index - 1 + i], 0);
     memcpy(p + index - 1 + newCount, s->parts + index - 1 + oldCount, sizeof *p * (size_t)keep_after);
-    free(s->parts);
+    bb_free(s->parts);
     s->parts = p;
     s->nparts = index - 1 + newCount + keep_after;
 }
@@ -372,10 +372,10 @@ int32_t tb_GXConvertPICTToShape(gaddr pict, int32_t options, gaddr srcRect, gadd
     object *s = obj(ref, K_SHAPE);
     if (!s)
         return 0;
-    free(s->pict);
+    bb_free(s->pict);
     s->type = gxPictureType;
     s->pict_len = (uint32_t)tb_GetHandleSize(pict);
-    s->pict = malloc(s->pict_len ? s->pict_len : 1);
+    s->pict = bb_malloc(s->pict_len ? s->pict_len : 1, BB_BYTES);
     gget(s->pict, rd32(pict), s->pict_len);
     s->pict_dst = dstRect ? qrect_get(dstRect) : qrect_get(rd32(pict) + 2);
     return (int32_t)ref;
@@ -561,12 +561,12 @@ static int16_t set_item(struct item *it, int32_t size, gaddr data)
 {
     if (size < 0 || size > (16 << 20))
         return paramErr;
-    uint8_t *d = malloc(size ? (size_t)size : 1);
+    uint8_t *d = bb_malloc(size ? (size_t)size : 1, BB_BYTES);
     if (!d)
         return memFullErr;
     if (data && size)
         gget(d, data, (uint32_t)size);
-    free(it->data);
+    bb_free(it->data);
     it->data = d;
     it->len = (uint32_t)size;
     return noErr;
@@ -579,7 +579,7 @@ int16_t tb_AddCollectionItem(gaddr c, int32_t tag, int32_t id, int32_t itemSize,
         return paramErr;
     struct item *it = find_item(o, tag, id, NULL);
     if (!it) {
-        struct item *grown = realloc(o->items, sizeof *grown * (size_t)(o->nitems + 1));
+        struct item *grown = bb_realloc(o->items, sizeof *grown * (size_t)(o->nitems + 1), BB_TAG(struct item));
         if (!grown)
             return memFullErr;
         o->items = grown;
@@ -618,7 +618,7 @@ int16_t tb_RemoveCollectionItem(gaddr c, int32_t tag, int32_t id)
     struct item *it = o ? find_item(o, tag, id, &i) : NULL;
     if (!it)
         return collectionItemNotFoundErr;
-    free(it->data);
+    bb_free(it->data);
     memmove(&o->items[i], &o->items[i + 1], sizeof *it * (size_t)(o->nitems - i - 1));
     o->nitems--;
     return noErr;

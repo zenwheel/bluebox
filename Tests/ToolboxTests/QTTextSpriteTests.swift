@@ -71,7 +71,7 @@ extension BlueBox {
 
             var serial: UInt32 = 0, w: Int32 = 0, h: Int32 = 0
             var rgba: UnsafeMutablePointer<UInt8>?
-            defer { free(rgba) }
+            defer { bb_free(rgba) }
             #expect(qt_native_frame(p, 100, &serial, &rgba, &w, &h))
             #expect(w == 100 && h == 30)
             var red = 0, white = 0, other = 0
@@ -119,7 +119,7 @@ extension BlueBox {
 
             var serial: UInt32 = 0, w: Int32 = 0, h: Int32 = 0
             var rgba: UnsafeMutablePointer<UInt8>?
-            defer { free(rgba) }
+            defer { bb_free(rgba) }
             #expect(qt_native_frame(p, 50, &serial, &rgba, &w, &h))         // the key frame
             #expect(w == 40 && h == 10)
             #expect(pixel(rgba!, w, 3, 4) == [0, 255, 0])

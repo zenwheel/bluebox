@@ -48,35 +48,35 @@ bool machine_set_floppy(const char *path, char *err, size_t errlen)
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);
-    uint8_t *buf = n > 0 ? malloc((size_t)n) : NULL;
+    uint8_t *buf = n > 0 ? bb_malloc((size_t)n, BB_BYTES) : NULL;
     if (!buf || fread(buf, 1, (size_t)n, f) != (size_t)n) {
         fclose(f);
-        free(buf);
+        bb_free(buf);
         snprintf(err, errlen, "cannot read %s", path);
         return false;
     }
     fclose(f);
-    free(disk.data);
-    free(disk.tags);
+    bb_free(disk.data);
+    bb_free(disk.tags);
     memset(&disk, 0, sizeof disk);
     /* Disk Copy 4.2: a 84-byte header (name, data size, tag size, checksums,
      * disk and format bytes, 0x0100), then the data and the tags. */
     if (n > 84 && buf[0] < 64 && buf[82] == 0x01 && buf[83] == 0x00 && be32_at(buf + 64) % SECTOR == 0 &&
         (size_t)84 + be32_at(buf + 64) + be32_at(buf + 68) <= (size_t)n) {
         uint32_t dsize = be32_at(buf + 64), tsize = be32_at(buf + 68);
-        disk.data = malloc(dsize);
+        disk.data = bb_malloc(dsize, BB_BYTES);
         memcpy(disk.data, buf + 84, dsize);
         disk.len = dsize;
         if (tsize >= (dsize / SECTOR) * TAG) {
-            disk.tags = malloc(tsize);
+            disk.tags = bb_malloc(tsize, BB_BYTES);
             memcpy(disk.tags, buf + 84 + dsize, tsize);
         }
-        free(buf);
+        bb_free(buf);
     } else if (n % SECTOR == 0 && n >= 80 * SECTOR) {
         disk.data = buf;
         disk.len = (size_t)n;
     } else {
-        free(buf);
+        bb_free(buf);
         snprintf(err, errlen, "%s is not a floppy disk image", path);
         return false;
     }
@@ -100,8 +100,8 @@ bool sony_sector_tags(uint32_t sector, uint8_t out[TAG])
 
 void sony_reset(void)
 {
-    free(disk.data);
-    free(disk.tags);
+    bb_free(disk.data);
+    bb_free(disk.tags);
     memset(&disk, 0, sizeof disk);
 }
 
@@ -186,7 +186,7 @@ static int16_t sony_rw(gaddr pb, bool write)
     if (count && disk.tag_buffer) {
         if (write) {
             if (!disk.tags)
-                disk.tags = calloc(disk.len / SECTOR, TAG);
+                disk.tags = bb_calloc(disk.len / SECTOR, TAG, BB_BYTES);
             gget(disk.tags + (size_t)last * TAG, disk.tag_buffer, TAG);
         } else if (disk.tags) {
             gput(disk.tag_buffer, disk.tags + (size_t)last * TAG, TAG);

@@ -91,7 +91,7 @@ static void grid_load(gaddr list, grid *g)
     g->rows = nrows(list);
     g->cols = ncols(list);
     int n = g->rows * g->cols;
-    g->c = calloc((size_t)(n ? n : 1), sizeof *g->c);
+    g->c = bb_calloc((size_t)(n ? n : 1), sizeof *g->c, BB_TAG(hcell));
     gaddr cells = rd32(lp(list) + ListRec_cells_off);
     for (int i = 0; i < n; i++) {
         uint32_t off, len;
@@ -99,7 +99,7 @@ static void grid_load(gaddr list, grid *g)
         g->c[i].sel = is_selected(list, i);
         g->c[i].len = (uint16_t)len;
         if (len) {
-            g->c[i].data = malloc(len);
+            g->c[i].data = bb_malloc(len, BB_BYTES);
             gget(g->c[i].data, rd32(cells) + off, len);
         }
     }
@@ -108,8 +108,8 @@ static void grid_load(gaddr list, grid *g)
 static void grid_free(grid *g)
 {
     for (int i = 0; i < g->rows * g->cols; i++)
-        free(g->c[i].data);
-    free(g->c);
+        bb_free(g->c[i].data);
+    bb_free(g->c);
 }
 
 /* Write the grid back; the data bounds' top-left corner is kept. */
@@ -506,14 +506,14 @@ static int16_t add_lines(gaddr list, int count, int at, bool rows)
      * a column to an empty list, then a row for each card it lists). */
     if (rows && n.cols == 0)
         n.cols = 1;
-    n.c = calloc((size_t)(n.rows * n.cols ? n.rows * n.cols : 1), sizeof *n.c);
+    n.c = bb_calloc((size_t)(n.rows * n.cols ? n.rows * n.cols : 1), sizeof *n.c, BB_TAG(hcell));
     int k = at - lo;
     for (int r = 0; r < g.rows; r++)
         for (int c = 0; c < g.cols; c++) {
             int nr = rows && r >= k ? r + count : r, nc = !rows && c >= k ? c + count : c;
             n.c[nr * n.cols + nc] = g.c[r * g.cols + c];
         }
-    free(g.c);
+    bb_free(g.c);
     grid_store(list, &n);
     grid_free(&n);
     qrect vis = visible_of(list);
@@ -541,20 +541,20 @@ static void del_lines(gaddr list, int count, int at, bool rows)
     grid_load(list, &g);
     n.rows = g.rows - (rows ? count : 0);
     n.cols = g.cols - (rows ? 0 : count);
-    n.c = calloc((size_t)(n.rows * n.cols ? n.rows * n.cols : 1), sizeof *n.c);
+    n.c = bb_calloc((size_t)(n.rows * n.cols ? n.rows * n.cols : 1), sizeof *n.c, BB_TAG(hcell));
     int k = at - lo;
     for (int r = 0; r < g.rows; r++)
         for (int c = 0; c < g.cols; c++) {
             hcell *src = &g.c[r * g.cols + c];
             bool gone = rows ? (r >= k && r < k + count) : (c >= k && c < k + count);
             if (gone) {
-                free(src->data);
+                bb_free(src->data);
                 continue;
             }
             int nr = rows && r >= k + count ? r - count : r, nc = !rows && c >= k + count ? c - count : c;
             n.c[nr * n.cols + nc] = *src;
         }
-    free(g.c);
+    bb_free(g.c);
     grid_store(list, &n);
     grid_free(&n);
     qrect vis = visible_of(list);
@@ -583,14 +583,14 @@ static void replace_data(gaddr list, int i, gaddr src, uint32_t n, bool append)
     int32_t delta = (int32_t)(keep + n) - (int32_t)len;
     if (total + delta > 0x7FFF)
         return; /* cell data is limited to 32K in all */
-    uint8_t *buf = malloc(total + (uint32_t)(delta > 0 ? delta : 0) + 1);
+    uint8_t *buf = bb_malloc(total + (uint32_t)(delta > 0 ? delta : 0) + 1, BB_BYTES);
     gget(buf, rd32(cells), total);
     memmove(buf + off + keep + n, buf + off + len, total - off - len);
     if (n)
         gget(buf + off + keep, src, n);
     tb_SetHandleSize(cells, (int32_t)(total + delta));
     gput(rd32(cells), buf, (uint32_t)((int32_t)total + delta));
-    free(buf);
+    bb_free(buf);
     int count = nrows(list) * ncols(list);
     for (int k = i + 1; k <= count; k++) {
         gaddr e = array_entry(list, k);
@@ -980,7 +980,7 @@ int8_t tb_LClick(uint32_t pt, int16_t mods, gaddr list)
 
     bool shift = (mods & 0x0200) && !(flags & lOnlyOne) && !(flags & lNoExtend);
     bool cmd = (mods & 0x0100) && !(flags & lOnlyOne);
-    uint8_t *before = calloc((size_t)(n ? n : 1), 1);
+    uint8_t *before = bb_calloc((size_t)(n ? n : 1), 1, BB_BYTES);
     for (int i = 0; i < n; i++)
         before[i] = is_selected(list, i);
     uint32_t anchor = prev;
@@ -1063,7 +1063,7 @@ int8_t tb_LClick(uint32_t pt, int16_t mods, gaddr list)
     tb_SetPort(rd32(saved));
     tb_DisposePtr(saved);
     tb_DisposePtr(mp);
-    free(before);
+    bb_free(before);
     /* A double click: the second click of a pair in the same cell. */
     return started && dbl && last == prev && !shift && !cmd;
 }

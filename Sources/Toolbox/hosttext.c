@@ -62,7 +62,7 @@ static const byte_table *table_for(CFStringEncoding cfe)
             return tables[i];
     if (CFStringGetMaximumSizeForEncoding(1, cfe) != 1)
         return NULL;
-    byte_table *t = calloc(1, sizeof *t);
+    byte_table *t = bb_calloc(1, sizeof *t, BB_TAG(byte_table));
     if (!t)
         return NULL;
     t->cfe = cfe;
@@ -79,7 +79,7 @@ static const byte_table *table_for(CFStringEncoding cfe)
         CFRelease(s);
     }
     if (ntables == sizeof tables / sizeof tables[0]) {
-        free(tables[0]);
+        bb_free(tables[0]);
         memmove(tables, tables + 1, sizeof tables - sizeof tables[0]);
         ntables--;
     }

@@ -760,7 +760,7 @@ void qt_wired_task(qtm_movie *mv, gaddr movie, qt_native *native, gaddr port, qr
                 run_event(&w, four("fram"));
             }
             finish(&w);
-            free(data);
+            bb_free(data);
         }
         uint32_t klen;
         const uint8_t *key = qt_sprite_key_data(s, &klen);

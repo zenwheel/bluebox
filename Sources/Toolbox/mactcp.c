@@ -327,7 +327,7 @@ static uint32_t wds_length(gaddr wds)
 static uint8_t *wds_gather(gaddr wds, uint32_t *total)
 {
     uint32_t n = wds_length(wds);
-    uint8_t *buf = malloc(n ? n : 1);
+    uint8_t *buf = bb_malloc(n ? n : 1, BB_BYTES);
     uint32_t at = 0;
     for (int i = 0; wds && i < 64; i++) {
         uint16_t len = rd16(wds + (uint32_t)i * 6);
@@ -516,14 +516,14 @@ static int16_t step_receive(op *o, mstream *m)
     if (!rds || entries < 1)
         return invalidRDS;
     uint32_t room = m->rcvlen > 65535 ? 65535 : m->rcvlen;
-    uint8_t *tmp = malloc(room ? room : 1);
+    uint8_t *tmp = bb_malloc(room ? room : 1, BB_BYTES);
     ssize_t r = recv(m->fd, tmp, room, 0);
     if (r <= 0) {
-        free(tmp);
+        bb_free(tmp);
         return r == 0 ? connectionClosing : connectionTerminated;
     }
     gput(m->rcvbuf, tmp, (uint32_t)r);
-    free(tmp);
+    bb_free(tmp);
     wr16(rds, (uint16_t)r);
     wr32(rds + 2, m->rcvbuf);
     if (entries > 1)
@@ -548,12 +548,12 @@ static int16_t step_send(op *o, mstream *m)
             o->sent += (uint32_t)r;
             continue;
         }
-        free(buf);
+        bb_free(buf);
         if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
             return timed_out(o) ? commandTimeout : ioInProgress;
         return connectionTerminated;
     }
-    free(buf);
+    bb_free(buf);
     return noErr;
 }
 
@@ -563,17 +563,17 @@ static int16_t step_udp_read(op *o, mstream *m)
     struct sockaddr_in from;
     socklen_t len = sizeof from;
     uint32_t room = m->rcvlen > 65535 ? 65535 : m->rcvlen;
-    uint8_t *tmp = malloc(room ? room : 1);
+    uint8_t *tmp = bb_malloc(room ? room : 1, BB_BYTES);
     ssize_t r = recvfrom(m->fd, tmp, room, 0, (struct sockaddr *)&from, &len);
     if (r < 0) {
-        free(tmp);
+        bb_free(tmp);
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return timed_out(o) ? commandTimeout : ioInProgress;
         return connectionTerminated;
     }
     m->told_data = false;
     gput(m->rcvbuf, tmp, (uint32_t)r);
-    free(tmp);
+    bb_free(tmp);
     wr32(p + UDPR_REMOTEHOST, ntohl(from.sin_addr.s_addr));
     wr16(p + UDPR_REMOTEPORT, ntohs(from.sin_port));
     wr32(p + UDPR_RCVBUFF, m->rcvbuf);
@@ -779,7 +779,7 @@ static int16_t ipp_control(gaddr pb, bool async)
         uint8_t *buf = wds_gather(rd32(p + UDPS_WDS), &total);
         struct sockaddr_in to = inet(rd32(p + UDPS_REMOTEHOST), rd16(p + UDPS_REMOTEPORT));
         ssize_t r = sendto(m->fd, buf, total, 0, (struct sockaddr *)&to, sizeof to);
-        free(buf);
+        bb_free(buf);
         return r < 0 ? errno_result(errno) : noErr;
     }
     default: return -17; /* controlErr */
@@ -1046,7 +1046,7 @@ void mactcp_install_resolver(void)
         return;
     mac_file mf;
     memset(&mf, 0, sizeof mf);
-    mf.data = malloc(1);
+    mf.data = bb_malloc(1, BB_BYTES);
     mf.rsrc = fork;
     mf.rsrc_len = len;
     memcpy(mf.finder_info, "cdevztcp", 8);

@@ -22,18 +22,18 @@ static int nptrs(const q3schema *s)
 
 q3node *q3d_new(const q3schema *s, uint32_t n)
 {
-    q3node *nd = calloc(1, sizeof *nd);
+    q3node *nd = bb_calloc(1, sizeof *nd, BB_TAG(q3node));
     if (!nd)
         return NULL;
     nd->n = n;
     nd->ew = s->words;
-    nd->w = calloc((size_t)n * s->words + 1, 4);
+    nd->w = bb_calloc((size_t)n * s->words + 1, 4, BB_BYTES);
     int np = nptrs(s);
-    nd->kids = np ? calloc((size_t)n * (size_t)np + 1, sizeof *nd->kids) : NULL;
+    nd->kids = np ? bb_calloc((size_t)n * (size_t)np + 1, sizeof *nd->kids, BB_TAG(q3node *)) : NULL;
     if (!nd->w || (np && !nd->kids)) {
-        free(nd->w);
-        free(nd->kids);
-        free(nd);
+        bb_free(nd->w);
+        bb_free(nd->kids);
+        bb_free(nd);
         return NULL;
     }
     return nd;
@@ -43,12 +43,12 @@ static q3node *bytes_from_guest(gaddr p, uint32_t n)
 {
     if (n > MAX_BYTES)
         return NULL;
-    q3node *nd = calloc(1, sizeof *nd);
+    q3node *nd = bb_calloc(1, sizeof *nd, BB_TAG(q3node));
     if (!nd)
         return NULL;
-    nd->bytes = malloc(n ? n : 1);
+    nd->bytes = bb_malloc(n ? n : 1, BB_BYTES);
     if (!nd->bytes) {
-        free(nd);
+        bb_free(nd);
         return NULL;
     }
     nd->nbytes = n;
@@ -109,10 +109,10 @@ void q3d_free(q3node *nd, const q3schema *s)
             q3d_free(kid, fd->kind == QF_BYTES ? NULL : fd->elem);
         }
     }
-    free(nd->w);
-    free(nd->bytes);
-    free(nd->kids);
-    free(nd);
+    bb_free(nd->w);
+    bb_free(nd->bytes);
+    bb_free(nd->kids);
+    bb_free(nd);
 }
 
 q3node *q3d_dup(const q3node *nd, const q3schema *s)
@@ -120,9 +120,9 @@ q3node *q3d_dup(const q3node *nd, const q3schema *s)
     if (!nd)
         return NULL;
     if (nd->bytes) {
-        q3node *b = calloc(1, sizeof *b);
+        q3node *b = bb_calloc(1, sizeof *b, BB_TAG(q3node));
         if (b) {
-            b->bytes = malloc(nd->nbytes ? nd->nbytes : 1);
+            b->bytes = bb_malloc(nd->nbytes ? nd->nbytes : 1, BB_BYTES);
             b->nbytes = nd->nbytes;
             if (b->bytes)
                 memcpy(b->bytes, nd->bytes, nd->nbytes);
@@ -188,7 +188,7 @@ void q3d_empty_guest(gaddr p, const q3schema *s, uint32_t n, const uint32_t *par
 {
     if (!p || n > MAX_ELEMENTS)
         return;
-    uint32_t *w = malloc(s->words * 4 + 4);
+    uint32_t *w = bb_malloc(s->words * 4 + 4, BB_BYTES);
     if (!w)
         return;
     for (uint32_t i = 0; i < n; i++) {
@@ -212,7 +212,7 @@ void q3d_empty_guest(gaddr p, const q3schema *s, uint32_t n, const uint32_t *par
             wr32(e + fd->off * 4u, 0);
         }
     }
-    free(w);
+    bb_free(w);
 }
 
 static int ptr_index(const q3schema *s, int field)

@@ -179,7 +179,7 @@ static void task_ended(uint32_t thread, uint32_t result)
     if (t->notify_queue)
         notify_queue(t->notify_queue, t->term1, t->term2, (uint32_t)status);
     ref_free(t->id);
-    free(t);
+    bb_free(t);
     progress++;
 }
 
@@ -289,7 +289,7 @@ static void mp_MPCreateTask(ppc_cpu *c)
         RETURN(paramErr);
     if (R(3) && !ref_get(R(3), REF_QUEUE))
         RETURN(kMPInvalidIDErr);
-    task *t = calloc(1, sizeof *t);
+    task *t = bb_calloc(1, sizeof *t, BB_TAG(task));
     if (!t)
         RETURN(kMPInsufficientResourcesErr);
     gaddr idp = tb_NewPtr(4, false, true);
@@ -297,7 +297,7 @@ static void mp_MPCreateTask(ppc_cpu *c)
     if (err) {
         if (idp)
             tb_DisposePtr(idp);
-        free(t);
+        bb_free(t);
         RETURN(kMPInsufficientResourcesErr);
     }
     t->thread = rd32(idp);
@@ -418,7 +418,7 @@ static void mp_MPGetTaskStorageValue(ppc_cpu *c)
 
 static void mp_MPCreateQueue(ppc_cpu *c)
 {
-    mpqueue *q = calloc(1, sizeof *q);
+    mpqueue *q = bb_calloc(1, sizeof *q, BB_TAG(mpqueue));
     if (!q)
         RETURN(kMPInsufficientResourcesErr);
     q->o.id = ref_new(REF_QUEUE, q);
@@ -429,8 +429,8 @@ static void mp_MPCreateQueue(ppc_cpu *c)
 
 static void queue_free(mpqueue *q)
 {
-    free(q->msgs);
-    free(q);
+    bb_free(q->msgs);
+    bb_free(q);
 }
 
 static void mp_MPDeleteQueue(ppc_cpu *c)
@@ -453,12 +453,12 @@ static int32_t notify_queue(gaddr id, uint32_t p1, uint32_t p2, uint32_t p3)
         uint32_t cap = q->cap ? q->cap * 2 : 16;
         if (cap > 1u << 20)
             return kMPInsufficientResourcesErr;
-        uint32_t (*m)[3] = malloc(sizeof *m * cap);
+        uint32_t (*m)[3] = bb_malloc(sizeof *m * cap, BB_BYTES);
         if (!m)
             return kMPInsufficientResourcesErr;
         for (uint32_t i = 0; i < q->count; i++)
             memcpy(m[i], q->msgs[(q->head + i) % q->cap], sizeof m[i]);
-        free(q->msgs);
+        bb_free(q->msgs);
         q->msgs = m;
         q->head = 0;
         q->cap = cap;
@@ -507,7 +507,7 @@ static void mp_MPCreateSemaphore(ppc_cpu *c)
 {
     if (R(1) > R(0))
         RETURN(paramErr);
-    semaphore *s = calloc(1, sizeof *s);
+    semaphore *s = bb_calloc(1, sizeof *s, BB_TAG(semaphore));
     if (!s)
         RETURN(kMPInsufficientResourcesErr);
     s->max = R(0);
@@ -525,7 +525,7 @@ static void mp_MPDeleteSemaphore(ppc_cpu *c)
         RETURN(kMPInvalidIDErr);
     object_delete(&s->o);
     if (object_gone(&s->o))
-        free(s);
+        bb_free(s);
     RETURN(noErr);
 }
 
@@ -554,7 +554,7 @@ static void mp_MPWaitOnSemaphore(ppc_cpu *c)
     if (!err)
         s->value--;
     else if (object_gone(&s->o))
-        free(s);
+        bb_free(s);
     RETURN_WAIT(err);
 }
 
@@ -562,7 +562,7 @@ static void mp_MPWaitOnSemaphore(ppc_cpu *c)
 
 static void mp_MPCreateCriticalRegion(ppc_cpu *c)
 {
-    region *r = calloc(1, sizeof *r);
+    region *r = bb_calloc(1, sizeof *r, BB_TAG(region));
     if (!r)
         RETURN(kMPInsufficientResourcesErr);
     r->o.id = ref_new(REF_REGION, r);
@@ -578,7 +578,7 @@ static void mp_MPDeleteCriticalRegion(ppc_cpu *c)
         RETURN(kMPInvalidIDErr);
     object_delete(&r->o);
     if (object_gone(&r->o))
-        free(r);
+        bb_free(r);
     RETURN(noErr);
 }
 
@@ -604,7 +604,7 @@ static void mp_MPEnterCriticalRegion(ppc_cpu *c)
         r->owner = w.me;
         r->depth++;
     } else if (object_gone(&r->o)) {
-        free(r);
+        bb_free(r);
     }
     RETURN_WAIT(err);
 }
@@ -627,7 +627,7 @@ static void mp_MPExitCriticalRegion(ppc_cpu *c)
 
 static void mp_MPCreateEvent(ppc_cpu *c)
 {
-    eventgroup *e = calloc(1, sizeof *e);
+    eventgroup *e = bb_calloc(1, sizeof *e, BB_TAG(eventgroup));
     if (!e)
         RETURN(kMPInsufficientResourcesErr);
     e->o.id = ref_new(REF_EVENT, e);
@@ -643,7 +643,7 @@ static void mp_MPDeleteEvent(ppc_cpu *c)
         RETURN(kMPInvalidIDErr);
     object_delete(&e->o);
     if (object_gone(&e->o))
-        free(e);
+        bb_free(e);
     RETURN(noErr);
 }
 
@@ -674,7 +674,7 @@ static void mp_MPWaitForEvent(ppc_cpu *c)
             wr32(out, e->flags);
         e->flags = 0;
     } else if (object_gone(&e->o)) {
-        free(e);
+        bb_free(e);
     }
     RETURN_WAIT(err);
 }
@@ -724,7 +724,7 @@ static int32_t set_notify(notify *n, gaddr id, uint32_t p1, uint32_t p2, uint32_
 
 static void mp_MPCreateNotification(ppc_cpu *c)
 {
-    notification *m = calloc(1, sizeof *m);
+    notification *m = bb_calloc(1, sizeof *m, BB_TAG(notification));
     if (!m)
         RETURN(kMPInsufficientResourcesErr);
     m->o.id = ref_new(REF_NOTIFICATION, m);
@@ -739,7 +739,7 @@ static void mp_MPDeleteNotification(ppc_cpu *c)
     if (!m)
         RETURN(kMPInvalidIDErr);
     ref_free(m->o.id);
-    free(m);
+    bb_free(m);
     RETURN(noErr);
 }
 
@@ -783,7 +783,7 @@ static void mp_MPCauseNotification(ppc_cpu *c)
 
 static void mp_MPCreateTimer(ppc_cpu *c)
 {
-    mptimer *t = calloc(1, sizeof *t);
+    mptimer *t = bb_calloc(1, sizeof *t, BB_TAG(mptimer));
     if (!t)
         RETURN(kMPInsufficientResourcesErr);
     t->o.id = ref_new(REF_TIMER, t);
@@ -802,7 +802,7 @@ static void timer_delete(mptimer *t)
             break;
         }
     ref_free(t->o.id);
-    free(t);
+    bb_free(t);
 }
 
 static void mp_MPDeleteTimer(ppc_cpu *c)
@@ -929,11 +929,11 @@ static void mp_MPBlockCopy(ppc_cpu *c)
     gaddr s = R(0), d = R(1);
     uint32_t n = R(2);
     if (s && d && n) {
-        uint8_t *buf = malloc(n);
+        uint8_t *buf = bb_malloc(n, BB_BYTES);
         if (buf) {
             gget(buf, s, n);
             gput(d, buf, n);
-            free(buf);
+            bb_free(buf);
         }
     }
     c->pc = c->lr;
@@ -1200,12 +1200,12 @@ void mp_reset(void)
     while (tasks) {
         task *t = tasks;
         tasks = t->next;
-        free(t);
+        bb_free(t);
     }
     while (timers) {
         mptimer *t = timers;
         timers = t->next;
-        free(t);
+        bb_free(t);
     }
     memset(&main_task, 0, sizeof main_task);
     memset(storage_used, 0, sizeof storage_used);

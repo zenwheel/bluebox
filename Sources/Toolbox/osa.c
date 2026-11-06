@@ -76,10 +76,10 @@ static int32_t load_desc(gaddr desc, uint32_t *id)
     if (!h || !rd32(h))
         return errOSABadStorageType;
     int32_t n = tb_GetHandleSize(h);
-    uint8_t *data = malloc((size_t)(n > 0 ? n : 1));
+    uint8_t *data = bb_malloc((size_t)(n > 0 ? n : 1), BB_BYTES);
     gget(data, rd32(h), (uint32_t)n);
     int32_t err = as_load_script(data, (size_t)n, id);
-    free(data);
+    bb_free(data);
     return err ? (err == asErrCorruptData ? -1702 : err) : noErr;
 }
 
@@ -237,7 +237,7 @@ static uint8_t *desc_bytes(gaddr desc, size_t *n)
     if (!h || !rd32(h))
         return NULL;
     int32_t len = tb_GetHandleSize(h);
-    uint8_t *b = malloc((size_t)(len > 0 ? len : 1));
+    uint8_t *b = bb_malloc((size_t)(len > 0 ? len : 1), BB_BYTES);
     gget(b, rd32(h), (uint32_t)len);
     *n = (size_t)len;
     return b;
@@ -274,7 +274,7 @@ static int32_t context_get(uint32_t ctx, gaddr name, bool handler, gaddr out)
     uint8_t *b = desc_bytes(name, &n);
     uint32_t id = 0;
     int32_t err = b ? as_context_get(ctx, b, n, handler, &id) : errOSAInvalidID;
-    free(b);
+    bb_free(b);
     wr32(out, id);
     return err;
 }
@@ -284,7 +284,7 @@ static int32_t context_set(uint32_t mode, uint32_t ctx, gaddr name, bool handler
     size_t n;
     uint8_t *b = desc_bytes(name, &n);
     int32_t err = b ? as_context_set(ctx, b, n, handler, value, (mode & kOSAModeDontDefine) != 0) : errOSAInvalidID;
-    free(b);
+    bb_free(b);
     return err;
 }
 
@@ -748,11 +748,11 @@ static int32_t applet_main(void)
         return resNotFound;
     }
     int32_t n = tb_GetHandleSize(h);
-    uint8_t *data = malloc((size_t)(n > 0 ? n : 1));
+    uint8_t *data = bb_malloc((size_t)(n > 0 ? n : 1), BB_BYTES);
     gget(data, rd32(h), (uint32_t)n);
     memset(&applet, 0, sizeof applet);
     int32_t err = as_load_script(data, (size_t)n, &applet.script);
-    free(data);
+    bb_free(data);
     if (err) {
         report_error(err);
         return noErr;

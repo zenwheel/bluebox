@@ -79,8 +79,8 @@ static context ctxs[MAX_CTXS];
 
 static void free_context(context *c)
 {
-    free(c->text);
-    free(c->m);
+    bb_free(c->text);
+    bb_free(c->m);
     memset(c, 0, sizeof *c);
 }
 
@@ -383,7 +383,7 @@ static void add_morpheme(scan *s, uint32_t start, uint32_t len, uint32_t pos, ui
 {
     if (s->nm == s->cap) {
         s->cap = s->cap ? s->cap * 2 : 32;
-        s->m = realloc(s->m, (size_t)s->cap * sizeof *s->m);
+        s->m = bb_realloc(s->m, (size_t)s->cap * sizeof *s->m, BB_TAG(morpheme));
     }
     s->m[s->nm++] = (morpheme){ start, len, pos, dict, uid, w };
 }
@@ -436,10 +436,10 @@ static void collect(void *ctx, uint32_t uid, const uint8_t *h, uint32_t hl, uint
     words *ws = ctx;
     if (ws->nw == ws->cap) {
         ws->cap = ws->cap ? ws->cap * 2 : 64;
-        ws->w = realloc(ws->w, (size_t)ws->cap * sizeof *ws->w);
+        ws->w = bb_realloc(ws->w, (size_t)ws->cap * sizeof *ws->w, BB_TAG(struct word));
     }
     uint32_t n = hl / 2;
-    uint16_t *u = malloc((n ? n : 1) * 2);
+    uint16_t *u = bb_malloc((n ? n : 1) * 2, BB_BYTES);
     for (uint32_t i = 0; i < n; i++)
         u[i] = (uint16_t)(h[2 * i] << 8 | h[2 * i + 1]);
     ws->w[ws->nw++] = (struct word){ u, n, pos, uid, weight, ws->dict };
@@ -455,7 +455,7 @@ static int analyze(environment *e, const uint16_t *text, uint32_t n, morpheme **
         rest_dcm_words(e->dicts[d], collect, &ws);
     }
     uint32_t at = 0, gap = 0;
-    uint32_t *st = malloc(((size_t)n + 2) * 4), *ln = malloc(((size_t)n + 2) * 4);
+    uint32_t *st = bb_malloc(((size_t)n + 2) * 4, BB_BYTES), *ln = bb_malloc(((size_t)n + 2) * 4, BB_BYTES);
     while (at < n) {
         int best = -1;
         for (int i = 0; i < ws.nw; i++)
@@ -481,10 +481,10 @@ static int analyze(environment *e, const uint16_t *text, uint32_t n, morpheme **
             add_morpheme(&s, gap + st[j], ln[j], classify(text + gap + st[j], ln[j]), 0, 0, 0);
     }
     for (int i = 0; i < ws.nw; i++)
-        free(ws.w[i].u);
-    free(ws.w);
-    free(st);
-    free(ln);
+        bb_free(ws.w[i].u);
+    bb_free(ws.w);
+    bb_free(st);
+    bb_free(ln);
     *out = s.m;
     return s.nm;
 }
@@ -581,12 +581,12 @@ static void la_LAMorphemeAnalysis(ppc_cpu *c)
     if (!hu_available())
         RET(laFailAnalysisErr);
     uint32_t n = A(2);
-    uint16_t *t = malloc(((size_t)n + 1) * 2);
+    uint16_t *t = bb_malloc(((size_t)n + 1) * 2, BB_BYTES);
     for (uint32_t i = 0; i < n; i++)
         t[i] = rd16(A(1) + 2 * i);
     morpheme *m;
     int nm = analyze(&envs[x->env], t, n, &m);
-    free(t);
+    bb_free(t);
     gaddr path = tb_NewPtr(8, false, true), paths = tb_NewPtr(8, false, true);
     int16_t e = path && paths ? tb_AECreateList(0, 0, 0, paths) : memFullErr;
     if (!e)
@@ -605,7 +605,7 @@ static void la_LAMorphemeAnalysis(ppc_cpu *c)
     }
     if (path)
         tb_DisposePtr(path);
-    free(m);
+    bb_free(m);
     RET((int32_t)e);
 }
 
@@ -620,11 +620,11 @@ static void la_LAContinuousMorphemeAnalysis(ppc_cpu *c)
     if (!hu_available())
         RET(laFailAnalysisErr);
     uint32_t add = A(2), keep = BOOL(3) ? x->n : 0;
-    uint16_t *t = malloc(((size_t)keep + add + 1) * 2);
+    uint16_t *t = bb_malloc(((size_t)keep + add + 1) * 2, BB_BYTES);
     memcpy(t, x->text, (size_t)keep * 2);
     for (uint32_t i = 0; i < add; i++)
         t[keep + i] = rd16(A(1) + 2 * i);
-    free(x->text);
+    bb_free(x->text);
     x->text = t;
     x->n = keep + add;
     morpheme *old = x->m;
@@ -633,7 +633,7 @@ static void la_LAContinuousMorphemeAnalysis(ppc_cpu *c)
     bool changed = oldn != x->nm;
     for (int i = 0; !changed && i < oldn; i++)
         changed = old[i].start != x->m[i].start || old[i].len != x->m[i].len || old[i].pos != x->m[i].pos;
-    free(old);
+    bb_free(old);
     if (A(6))
         wr8(A(6), changed);
     RET(noErr);
@@ -681,8 +681,8 @@ static void la_LAResetAnalysis(ppc_cpu *c)
     context *x = ctx_of(A(0));
     if (!x)
         RET(laInvalidPathErr);
-    free(x->text);
-    free(x->m);
+    bb_free(x->text);
+    bb_free(x->m);
     x->text = NULL;
     x->m = NULL;
     x->n = 0;
@@ -703,13 +703,13 @@ static void la_LATextToMorphemes(ppc_cpu *c)
         RET(rest_paramErr);
     if (!hu_available())
         RET(laFailAnalysisErr);
-    uint8_t *bytes = malloc((size_t)tl + 1);
+    uint8_t *bytes = bb_malloc((size_t)tl + 1, BB_BYTES);
     gget(bytes, src, tl);
-    uint16_t *u = malloc(((size_t)tl + 1) * 2);
+    uint16_t *u = bb_malloc(((size_t)tl + 1) * 2, BB_BYTES);
     size_t used, produced;
     if (host_text_decode(enc, bytes, tl, &used, u, (size_t)tl + 1, &produced) > 1 && produced == 0 && tl) {
-        free(bytes);
-        free(u);
+        bb_free(bytes);
+        bb_free(u);
         RET(laFailAnalysisErr);
     }
     morpheme *m;
@@ -718,8 +718,8 @@ static void la_LATextToMorphemes(ppc_cpu *c)
     int take = (!(flags & kLAEndOfSourceTextMask) && nm > 0) ? nm - 1 : nm;
     uint32_t room = bufsize >= 12 ? (bufsize - 12) : 0, count = 0, used_text = 0, processed = 0;
     /* Records first, their texts after them: as many as fit. */
-    uint8_t **enc_text = calloc((size_t)take + 1, sizeof *enc_text);
-    uint32_t *enc_len = calloc((size_t)take + 1, 4);
+    uint8_t **enc_text = bb_calloc((size_t)take + 1, sizeof *enc_text, BB_TAG(uint8_t *));
+    uint32_t *enc_len = bb_calloc((size_t)take + 1, 4, BB_BYTES);
     uint32_t cum_end = 0;
     for (int i = 0; i < take; i++) {
         uint8_t tmp[512];
@@ -729,7 +729,7 @@ static void la_LATextToMorphemes(ppc_cpu *c)
         if (need > room)
             break;
         room -= need;
-        enc_text[i] = malloc(p2 ? p2 : 1);
+        enc_text[i] = bb_malloc(p2 ? p2 : 1, BB_BYTES);
         memcpy(enc_text[i], tmp, p2);
         enc_len[i] = (uint32_t)p2;
         used_text += (uint32_t)p2;
@@ -761,12 +761,12 @@ static void la_LATextToMorphemes(ppc_cpu *c)
             wr32(accepted, processed);
     }
     for (int i = 0; i < take; i++)
-        free(enc_text[i]);
-    free(enc_text);
-    free(enc_len);
-    free(m);
-    free(bytes);
-    free(u);
+        bb_free(enc_text[i]);
+    bb_free(enc_text);
+    bb_free(enc_len);
+    bb_free(m);
+    bb_free(bytes);
+    bb_free(u);
     RET(err);
 }
 

@@ -135,7 +135,7 @@ void machine_set_menu_walk(bool on)
     npressed_in = 0;
     nspots = picture_waits = 0;
     button_waits = 0;
-    free(screen_then);
+    bb_free(screen_then);
     screen_then = NULL;
     screen_moved = false;
     front_then = 0;
@@ -326,9 +326,9 @@ static void screen_walk_reset(void)
     targets_clicked = keys_given = productive = 0;
     screening_since = 0;
     memset(target_hash, 0, sizeof target_hash);
-    free(thumbs);
+    bb_free(thumbs);
     thumbs = NULL;
-    free(call_sites);
+    bb_free(call_sites);
     call_sites = NULL;
     ncall_sites = calls_then = 0;
 }
@@ -371,7 +371,7 @@ void walker_note_call(uint32_t pc, uint32_t what)
     pc ^= what * 2654435761u;
     if (!walking || !pc)
         return;
-    if (!call_sites && !(call_sites = calloc(NCALLS, sizeof *call_sites)))
+    if (!call_sites && !(call_sites = bb_calloc(NCALLS, sizeof *call_sites, BB_BYTES)))
         return;
     if (ncall_sites >= NCALLS / 2)
         return;
@@ -627,7 +627,7 @@ static void thumb_now(uint8_t *t)
     int w = 0, h = 0;
     machine_screen_size(&w, &h);
     memset(t, 0, THUMB_SIZE);
-    uint8_t *px = w > 0 && h > 0 ? malloc((size_t)w * (size_t)h * 4) : NULL;
+    uint8_t *px = w > 0 && h > 0 ? bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES) : NULL;
     if (!px)
         return;
     machine_screen_rgba(0, 0, w, h, px);
@@ -641,7 +641,7 @@ static void thumb_now(uint8_t *t)
             for (int c = 0; c < 3; c++)
                 t[(cy * THUMB_W + cx) * 3 + c] = (uint8_t)(n ? sum[c] / n : 0);
         }
-    free(px);
+    bb_free(px);
 }
 
 /* How many cells differ between two pictures of the screen. */
@@ -667,7 +667,7 @@ static bool same_screen(const uint8_t *a, const uint8_t *b)
 /* Which screen a picture is, one of those seen or a new one. */
 static int screen_of(const uint8_t *t)
 {
-    if (!thumbs && !(thumbs = malloc(NSCREENS * sizeof *thumbs)))
+    if (!thumbs && !(thumbs = bb_malloc(NSCREENS * sizeof *thumbs, BB_BYTES)))
         return 0;
     int best = -1, best_diff = 0;
     for (int i = 0; i < nscreens; i++) {
@@ -910,12 +910,12 @@ static void find_patches(int s)
     int gw = (a.right - a.left) / CELL, gh = (a.bottom - a.top) / CELL;
     if (gw < 4 || gh < 4)
         return;
-    uint8_t *px = malloc((size_t)w * (size_t)h * 4);
-    uint8_t *avg = malloc((size_t)gw * (size_t)gh * 3);
-    int16_t *class = malloc((size_t)gw * (size_t)gh * sizeof *class);
-    int *queue = malloc((size_t)gw * (size_t)gh * sizeof *queue);
+    uint8_t *px = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
+    uint8_t *avg = bb_malloc((size_t)gw * (size_t)gh * 3, BB_BYTES);
+    int16_t *class = bb_malloc((size_t)gw * (size_t)gh * sizeof *class, BB_BYTES);
+    int *queue = bb_malloc((size_t)gw * (size_t)gh * sizeof *queue, BB_BYTES);
     if (!px || !avg || !class || !queue) {
-        free(px), free(avg), free(class), free(queue);
+        bb_free(px), bb_free(avg), bb_free(class), bb_free(queue);
         return;
     }
     machine_screen_rgba(0, 0, w, h, px);
@@ -947,7 +947,7 @@ static void find_patches(int s)
     patch found[PATCHES];
     int nfound = 0;
     /* Cells that stand out from the background, whatever their colour. */
-    int16_t *fg = malloc((size_t)gw * (size_t)gh * sizeof *fg);
+    int16_t *fg = bb_malloc((size_t)gw * (size_t)gh * sizeof *fg, BB_BYTES);
     if (fg) {
         for (int c = 0; c < gw * gh; c++) {
             bool out = false;
@@ -956,7 +956,7 @@ static void find_patches(int s)
             fg[c] = out ? 0 : -1;
         }
         patches_of(fg, gw, gh, queue, a, found, &nfound);
-        free(fg);
+        bb_free(fg);
     }
     add_patches(found, nfound, s);
     /* Then cells of one colour, not the background's. */
@@ -966,7 +966,7 @@ static void find_patches(int s)
             class[c] = -1;
     patches_of(class, gw, gh, queue, a, found, &nfound);
     add_patches(found, nfound, s);
-    free(px), free(avg), free(class), free(queue);
+    bb_free(px), bb_free(avg), bb_free(class), bb_free(queue);
 }
 
 /* Whether screen s has keys left to give, those avoided passed over. */
@@ -1140,7 +1140,7 @@ static bool nudge(void)
 static uint8_t *screen_now(void)
 {
     machine_screen_size(&screen_w, &screen_h);
-    uint8_t *px = malloc((size_t)screen_w * (size_t)screen_h * 4);
+    uint8_t *px = bb_malloc((size_t)screen_w * (size_t)screen_h * 4, BB_BYTES);
     if (px)
         machine_screen_rgba(0, 0, screen_w, screen_h, px);
     return px;
@@ -1168,7 +1168,7 @@ static bool screen_moved_on(void)
             }
         moved = bottom - top >= 64 && right - left >= 64;
     }
-    free(screen_then);
+    bb_free(screen_then);
     screen_then = now;
     return moved;
 }

@@ -124,11 +124,11 @@ hostgl_ctx *hostgl_create(hostgl_ctx *share, int depth_bits, int stencil_bits)
 {
     if (!hostgl_available())
         return NULL;
-    hostgl_ctx *h = calloc(1, sizeof *h);
+    hostgl_ctx *h = bb_calloc(1, sizeof *h, BB_TAG(hostgl_ctx));
     if (!h)
         return NULL;
     if (CGLCreateContext(pixel_format, share ? share->cgl : NULL, &h->cgl) != kCGLNoError) {
-        free(h);
+        bb_free(h);
         return NULL;
     }
     h->depth_bits = depth_bits;
@@ -150,13 +150,13 @@ hostgl_ctx *hostgl_create(hostgl_ctx *share, int depth_bits, int stencil_bits)
 
 static void free_arrays(arrays *a)
 {
-    free(a->vertex.host);
-    free(a->normal.host);
-    free(a->color.host);
-    free(a->index.host);
-    free(a->edge.host);
+    bb_free(a->vertex.host);
+    bb_free(a->normal.host);
+    bb_free(a->color.host);
+    bb_free(a->index.host);
+    bb_free(a->edge.host);
     for (int i = 0; i < MAX_UNITS; i++)
-        free(a->tex[i].host);
+        bb_free(a->tex[i].host);
 }
 
 void hostgl_destroy(hostgl_ctx *h)
@@ -173,9 +173,9 @@ void hostgl_destroy(hostgl_ctx *h)
     unuse();
     CGLDestroyContext(h->cgl);
     free_arrays(&h->a);
-    free(h->select);
-    free(h->feedback);
-    free(h);
+    bb_free(h->select);
+    bb_free(h->feedback);
+    bb_free(h);
 }
 
 void hostgl_set_current(hostgl_ctx *h)
@@ -234,7 +234,7 @@ void hostgl_read_frame(hostgl_ctx *h, int x, int y, int width, int height, gaddr
         return;
     size_t need = (size_t)width * (size_t)height * 4;
     if (need > frame_cap) {
-        uint8_t *n = realloc(frame, need);
+        uint8_t *n = bb_realloc(frame, need, BB_BYTES);
         if (!n)
             return;
         frame = n;
@@ -268,7 +268,7 @@ void hostgl_glyph_list(uint32_t list, int width, int height, int row_bytes, floa
 {
     if (!cur)
         return;
-    uint8_t *flipped = malloc((size_t)(row_bytes * height) + 1);
+    uint8_t *flipped = bb_malloc((size_t)(row_bytes * height) + 1, BB_BYTES);
     if (!flipped)
         return;
     for (int r = 0; r < height; r++)
@@ -283,7 +283,7 @@ void hostgl_glyph_list(uint32_t list, int width, int height, int row_bytes, floa
     glBitmap(width, height, xorig, yorig, xmove, 0, flipped);
     glEndList();
     glPopClientAttrib();
-    free(flipped);
+    bb_free(flipped);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -383,7 +383,7 @@ static void *scratch(size_t n)
     static void *buf;
     static size_t cap;
     if (n > cap) {
-        void *p = realloc(buf, n);
+        void *p = bb_realloc(buf, n, BB_BYTES);
         if (!p)
             return NULL;
         buf = p;
@@ -1293,8 +1293,8 @@ static void w_glSelectBuffer(ppc_cpu *c)
 {
     ENTER();
     GLsizei n = (GLsizei)c->gpr[3];
-    free(cur->select);
-    cur->select = n > 0 ? calloc((size_t)n, 4) : NULL;
+    bb_free(cur->select);
+    cur->select = n > 0 ? bb_calloc((size_t)n, 4, BB_BYTES) : NULL;
     cur->select_n = cur->select ? n : 0;
     cur->select_to = c->gpr[4];
     if (cur->select)
@@ -1305,8 +1305,8 @@ static void w_glFeedbackBuffer(ppc_cpu *c)
 {
     ENTER();
     GLsizei n = (GLsizei)c->gpr[3];
-    free(cur->feedback);
-    cur->feedback = n > 0 ? calloc((size_t)n, 4) : NULL;
+    bb_free(cur->feedback);
+    cur->feedback = n > 0 ? bb_calloc((size_t)n, 4, BB_BYTES) : NULL;
     cur->feedback_n = cur->feedback ? n : 0;
     cur->feedback_to = c->gpr[5];
     if (cur->feedback)
@@ -1549,7 +1549,7 @@ static const void *convert(garray *a, int first, int count)
     if (!ts || !a->ptr || count <= 0)
         return NULL;
     if (need > a->host_cap) {
-        void *n = realloc(a->host, need);
+        void *n = bb_realloc(a->host, need, BB_BYTES);
         if (!n)
             return NULL;
         a->host = n;

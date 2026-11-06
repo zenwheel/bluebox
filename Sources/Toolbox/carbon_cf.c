@@ -44,7 +44,7 @@ void text_add(cf_text *t, const uint16_t *u, uint32_t n)
 {
     if (t->n + n + 1 > t->cap) {
         uint32_t cap = (t->n + n + 1) * 2;
-        uint16_t *p = realloc(t->u, sizeof *p * cap);
+        uint16_t *p = bb_realloc(t->u, sizeof *p * cap, BB_BYTES);
         if (!p)
             return;
         t->u = p;
@@ -63,7 +63,7 @@ void text_add_utf8(cf_text *t, const char *s)
     uint32_t n;
     if (s && cf_decode(kCFStringEncodingUTF8, (const uint8_t *)s, strlen(s), &u, &n)) {
         text_add(t, u, n);
-        free(u);
+        bb_free(u);
     }
 }
 
@@ -79,7 +79,7 @@ void text_printf(cf_text *t, const char *fmt, ...)
 
 void text_free(cf_text *t)
 {
-    free(t->u);
+    bb_free(t->u);
     t->u = NULL;
     t->n = t->cap = 0;
 }
@@ -108,7 +108,7 @@ static uint32_t take_slot(cf_obj *o)
     }
     if (nslots + 1 >= slot_cap) {
         uint32_t cap = slot_cap ? slot_cap * 2 : 256;
-        cf_obj **p = realloc(slots, sizeof *p * cap);
+        cf_obj **p = bb_realloc(slots, sizeof *p * cap, BB_TAG(cf_obj *));
         if (!p)
             return 0;
         slots = p;
@@ -134,10 +134,10 @@ void *cf_new(uint32_t type, size_t size, gaddr alloc, uint32_t extra)
     gaddr ref = cf_allocate(a, CF_HEADER + extra);
     if (!ref)
         return NULL;
-    cf_obj *o = calloc(1, size);
+    cf_obj *o = bb_calloc(1, size, BB_TAG(cf_obj));
     uint32_t slot = o ? take_slot(o) : 0;
     if (!slot) {
-        free(o);
+        bb_free(o);
         cf_deallocate(a, ref);
         return NULL;
     }
@@ -214,7 +214,7 @@ void cf_release(gaddr ref)
     gaddr alloc = o->alloc;
     give_slot(o->slot);
     wr32(ref, 0);
-    free(o);
+    bb_free(o);
     cf_deallocate(alloc ? alloc : cf_allocator_system(), ref);
     if (alloc)
         cf_release(alloc);
@@ -327,10 +327,10 @@ static const cf_class allocator_class = { "CFAllocator", allocator_finalize, NUL
 static gaddr builtin_allocator(int kind)
 {
     gaddr ref = tb_NewPtr(CF_HEADER, false, true);
-    cf_allocator *a = calloc(1, sizeof *a);
+    cf_allocator *a = bb_calloc(1, sizeof *a, BB_TAG(cf_allocator));
     uint32_t slot = ref && a ? take_slot(&a->o) : 0;
     if (!slot) {
-        free(a);
+        bb_free(a);
         return 0;
     }
     wr32(ref, CF_MAGIC);
@@ -456,10 +456,10 @@ static void cf_CFAllocatorCreate(ppc_cpu *c)
     if (R(0) == 1) {
         uint32_t args[3] = { CF_HEADER, 0, words[CTX_INFO] };
         gaddr ref = cf_call(words[CTX_ALLOCATE], args, 3);
-        a = ref ? calloc(1, sizeof *a) : NULL;
+        a = ref ? bb_calloc(1, sizeof *a, BB_TAG(cf_allocator)) : NULL;
         uint32_t slot = a ? take_slot(&a->o) : 0;
         if (!slot) {
-            free(a);
+            bb_free(a);
             RETURN(0);
         }
         gmemset(ref, 0, CF_HEADER);
@@ -852,9 +852,9 @@ void carbon_cf_reset(void)
             const cf_class *cls = classes[slots[i]->type];
             if (cls && cls->dispose)
                 cls->dispose(slots[i]);
-            free(slots[i]);
+            bb_free(slots[i]);
         }
-    free(slots);
+    bb_free(slots);
     slots = NULL;
     nslots = slot_cap = free_slot = 0;
     system_allocator = malloc_allocator = null_allocator = default_allocator = 0;

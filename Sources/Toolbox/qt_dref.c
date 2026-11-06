@@ -31,7 +31,7 @@ static uint32_t four(const char *s) { return (uint32_t)(uint8_t)s[0] << 24 | (ui
 uint8_t *qt_dref_bytes(gaddr dataRef, uint32_t *len)
 {
     *len = dataRef && rd32(dataRef) ? (uint32_t)tb_GetHandleSize(dataRef) : 0;
-    uint8_t *b = malloc(*len ? *len : 1);
+    uint8_t *b = bb_malloc(*len ? *len : 1, BB_BYTES);
     if (*len)
         gget(b, rd32(dataRef), *len);
     return b;
@@ -156,7 +156,7 @@ bool qt_src_open(uint32_t type, uint32_t flags, const uint8_t *data, uint32_t le
                 if (idx.entries[i].type == rtype && idx.entries[i].id == rid) {
                     const uint8_t *d = rsrc_data(mf.rsrc, &idx, &idx.entries[i]);
                     out->nbytes = idx.entries[i].data_len;
-                    out->bytes = malloc(out->nbytes ? out->nbytes : 1);
+                    out->bytes = bb_malloc(out->nbytes ? out->nbytes : 1, BB_BYTES);
                     memcpy(out->bytes, d, out->nbytes);
                     found = true;
                 }
@@ -191,7 +191,7 @@ void qt_src_close(qt_src *s)
 {
     if (s->kind == QSRC_FILE && s->own_refnum && s->refnum)
         fm_close_fork(s->refnum);
-    free(s->bytes);
+    bb_free(s->bytes);
     memset(s, 0, sizeof *s);
 }
 
@@ -277,11 +277,11 @@ bool qt_src_read_guest(const qt_src *s, uint64_t off, gaddr buf, uint32_t n)
 {
     if (s->kind == QSRC_FILE && s->refnum)
         return fork_io(s, false, off, NULL, buf, n);
-    uint8_t *tmp = malloc(n ? n : 1);
+    uint8_t *tmp = bb_malloc(n ? n : 1, BB_BYTES);
     bool ok = qt_src_read(s, off, tmp, n);
     if (ok && n)
         gput(buf, tmp, n);
-    free(tmp);
+    bb_free(tmp);
     return ok;
 }
 

@@ -93,7 +93,7 @@ extension BlueBox {
             var n = 0
             let j = qts_jpeg_frame(1, 50, 64, 48, nil, 0, 0, scan, scan.count, &n)!
             let b = Array(UnsafeBufferPointer(start: j, count: n))
-            free(j)
+            bb_free(j)
             #expect(b[0] == 0xFF && b[1] == 0xD8 && b[n - 2] == 0xFF && b[n - 1] == 0xD9)
             let sof = (0..<n - 1).first { b[$0] == 0xFF && b[$0 + 1] == 0xC0 }!
             #expect(Int(b[sof + 5]) << 8 | Int(b[sof + 6]) == 48 && Int(b[sof + 7]) << 8 | Int(b[sof + 8]) == 64)

@@ -490,12 +490,12 @@ static void resize(term *t)
     cols = cols < 10 ? 10 : cols > MAX_COLS ? MAX_COLS : cols;
     if (t->screen && rows == t->rows && cols == t->cols)
         return;
-    cell *s = malloc(sizeof(cell) * (size_t)(rows * cols));
+    cell *s = bb_malloc(sizeof(cell) * (size_t)(rows * cols), BB_TAG(cell));
     for (int i = 0; i < rows * cols; i++)
         s[i] = (cell){ ' ', 0, COLOR_DEFAULT, COLOR_DEFAULT };
     for (int r = 0; t->screen && r < rows && r < t->rows; r++)
         memcpy(&s[r * cols], at(t, r, 0), sizeof(cell) * (size_t)(cols < t->cols ? cols : t->cols));
-    free(t->screen);
+    bb_free(t->screen);
     t->screen = s;
     t->rows = rows;
     t->cols = cols;
@@ -992,7 +992,7 @@ uint32_t tm_new(uint16_t sel, const uint32_t *a)
 
 static void free_term(term *t)
 {
-    free(t->screen);
+    bb_free(t->screen);
     t->screen = NULL;
     if (t->scratch)
         tb_DisposePtr(t->scratch);
@@ -1423,7 +1423,7 @@ uint32_t tm_get_select(uint16_t sel, const uint32_t *a)
     term *t = term_of(a[0]);
     if (!t || !t->sel || !a[1])
         return 0;
-    char *out = malloc((size_t)(t->rows * (t->cols + 1)));
+    char *out = bb_malloc((size_t)(t->rows * (t->cols + 1)), BB_BYTES);
     int n = 0;
     for (int r = t->sr0; r <= t->sr1 && r < t->rows; r++) {
         int c0 = r == t->sr0 ? t->sc0 : 0, c1 = r == t->sr1 ? t->sc1 : t->cols;
@@ -1438,7 +1438,7 @@ uint32_t tm_get_select(uint16_t sel, const uint32_t *a)
     tb_SetHandleSize(a[1], n);
     if (n)
         gput(rd32(a[1]), out, (uint32_t)n);
-    free(out);
+    bb_free(out);
     if (a[2])
         wr32(a[2], fourcc("TEXT"));
     return (uint32_t)n;
@@ -1577,7 +1577,7 @@ uint32_t tm_clear_search(uint16_t sel, const uint32_t *a)
 void tm_reset_all(void)
 {
     for (int i = 0; i < MAX_TERMS; i++) {
-        free(terms[i].screen);
+        bb_free(terms[i].screen);
         memset(&terms[i], 0, sizeof terms[i]);
     }
 }

@@ -274,7 +274,7 @@ static size_t nown_pats;
 
 void qd_port_pats_reset(void)
 {
-    free(own_pats);
+    bb_free(own_pats);
     own_pats = NULL;
     nown_pats = 0;
 }
@@ -325,7 +325,7 @@ void tb_OpenCPort(gaddr p)
     wr32(p + CGrafPort_fillPixPat_off, qd_pixpat_for(qd_pat_black));
     struct port_pats *o = port_pats_of(p);
     if (!o) {
-        struct port_pats *n = realloc(own_pats, (nown_pats + 1) * sizeof *own_pats);
+        struct port_pats *n = bb_realloc(own_pats, (nown_pats + 1) * sizeof *own_pats, BB_TAG(struct port_pats));
         if (n) {
             own_pats = n;
             o = &own_pats[nown_pats++];

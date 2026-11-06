@@ -47,7 +47,7 @@ static void emit(tune *t, int64_t at, uint8_t status, uint8_t d1, uint8_t d2, ui
 {
     if (t->n == t->cap) {
         size_t cap = t->cap ? t->cap * 2 : 256;
-        qt_midi_event *e = realloc(t->ev, cap * sizeof *e);
+        qt_midi_event *e = bb_realloc(t->ev, cap * sizeof *e, BB_TAG(qt_midi_event));
         if (!e)
             return;
         t->ev = e;

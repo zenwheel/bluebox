@@ -296,7 +296,7 @@ static size_t ngworlds;
 
 void qd_gworlds_reset(void)
 {
-    free(gworlds);
+    bb_free(gworlds);
     gworlds = NULL;
     ngworlds = 0;
 }
@@ -320,7 +320,7 @@ static void describe_offscreen_device(gaddr gdh, gaddr port)
 
 static void add_gworld(gaddr port, gaddr aGDevice, int32_t flags)
 {
-    struct gworld_dev *n = realloc(gworlds, (ngworlds + 1) * sizeof *gworlds);
+    struct gworld_dev *n = bb_realloc(gworlds, (ngworlds + 1) * sizeof *gworlds, BB_TAG(struct gworld_dev));
     if (!n)
         return;
     gworlds = n;
@@ -635,17 +635,17 @@ void tb_PlotCIcon(gaddr rect, gaddr icon)
         return;
     }
     uint32_t len = (uint32_t)size;
-    uint8_t *bytes = malloc(len);
+    uint8_t *bytes = bb_malloc(len, BB_BYTES);
     gget(bytes, rd32(icon), len);
     int w, h;
     uint8_t *rgba = qd_cicn_rgba(bytes, len, &w, &h);
-    free(bytes);
+    bb_free(bytes);
     if (!rgba)
         return;
     qd_draw_rgba(rgba, w, h, qrect_get(rect));
     qrect at = qrect_get(rect);
     walker_note_drawn(qd_port(), at.top, at.left, at.bottom, at.right);
-    free(rgba);
+    bb_free(rgba);
 }
 
 void tb_DisposeCIcon(gaddr icon)
@@ -741,7 +741,7 @@ bool qd_pixpat_image(gaddr pp, int *w, int *h, uint16_t (**rgb)[3])
         if (!x || !rd32(x) || tb_GetHandleSize(x) < 6)
             return false;
         *w = *h = 1;
-        *rgb = malloc(sizeof **rgb);
+        *rgb = bb_malloc(sizeof **rgb, BB_BYTES);
         for (int i = 0; i < 3; i++)
             (*rgb)[0][i] = rd16(rd32(x) + (uint32_t)i * 2);
         return true;
@@ -760,7 +760,7 @@ bool qd_pixpat_image(gaddr pp, int *w, int *h, uint16_t (**rgb)[3])
     gaddr ctab = PixMap_pmTable(pm);
     *w = ww;
     *h = hh;
-    *rgb = malloc(sizeof **rgb * (size_t)ww * (size_t)hh);
+    *rgb = bb_malloc(sizeof **rgb * (size_t)ww * (size_t)hh, BB_BYTES);
     for (int y = 0; y < hh; y++)
         for (int x = 0; x < ww; x++) {
             gaddr row = rd32(data) + (uint32_t)y * rb;

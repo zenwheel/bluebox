@@ -526,9 +526,9 @@ static void Q3ViewerNew(ppc_cpu *c)
 {
     gaddr port = Q3R(0), rect = Q3R(1);
     uint32_t flags = Q3R(2);
-    viewer *v = calloc(1, sizeof *v);
+    viewer *v = bb_calloc(1, sizeof *v, BB_TAG(viewer));
     if (!v || !rect) {
-        free(v);
+        bb_free(v);
         Q3RETURN(0);
         return;
     }
@@ -539,7 +539,7 @@ static void Q3ViewerNew(ppc_cpu *c)
     if (!v->scratch || !v->g) {
         if (v->scratch)
             tb_DisposePtr(v->scratch);
-        free(v);
+        bb_free(v);
         Q3RETURN(0);
         return;
     }
@@ -604,7 +604,7 @@ static void Q3ViewerDispose(ppc_cpu *c)
     release(&v->illum);
     tb_DisposePtr(v->scratch);
     q3_handle_free(v->g);
-    free(v);
+    bb_free(v);
     Q3RETURN(noErr);
 }
 
@@ -681,7 +681,7 @@ static void Q3ViewerWriteFile(ppc_cpu *c)
     uint8_t *bytes = q3_write_3dmf(v->group, &size);
     gaddr buf = bytes ? tb_NewPtr((int32_t)(size ? size : 1), false, false) : 0;
     if (!buf) {
-        free(bytes);
+        bb_free(bytes);
         Q3RETURN(bytes ? memFullErr : paramErr);
         return;
     }
@@ -691,7 +691,7 @@ static void Q3ViewerWriteFile(ppc_cpu *c)
     if (!err)
         err = fm_fork_set_eof((int16_t)Q3R(1), 1, size);
     tb_DisposePtr(buf);
-    free(bytes);
+    bb_free(bytes);
     Q3RETURN(err);
 }
 
@@ -711,12 +711,12 @@ static void Q3ViewerWriteData(ppc_cpu *c)
     }
     tb_SetHandleSize(h, (int32_t)size);
     if ((uint32_t)tb_GetHandleSize(h) < size) {
-        free(bytes);
+        bb_free(bytes);
         Q3RETURN(0);
         return;
     }
     gput(rd32(h), bytes, size);
-    free(bytes);
+    bb_free(bytes);
     Q3RETURN(size);
 }
 
@@ -1336,7 +1336,7 @@ static int copy_model(viewer *v)
             tb_PutScrap((int32_t)size, (int32_t)Q3T('3', 'D', 'M', 'F'), buf);
             tb_DisposePtr(buf);
         }
-        free(bytes);
+        bb_free(bytes);
     }
     ppc_cpu cpu;
     memset(&cpu, 0, sizeof cpu);

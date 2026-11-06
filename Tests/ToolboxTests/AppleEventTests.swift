@@ -729,7 +729,7 @@ extension BlueBox {
             }
             _ = tb_AEInstallEventHandler(code("test"), code("flat"), handler, 0, 0)
             aem_queue_flat(flat, len, nil, nil)
-            free(flat)
+            bb_free(flat)
             guard let e = takeEvent() else { Issue.record("no event"); return }
             #expect(rd32(e + 2) == fourCC("test") && rd32(e + 10) == fourCC("flat"))
             #expect(tb_AEProcessAppleEvent(e) == 0)

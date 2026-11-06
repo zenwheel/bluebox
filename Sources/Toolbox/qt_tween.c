@@ -117,7 +117,7 @@ static bytes container_bytes(gaddr h)
     if (!h || !rd32(h))
         return b;
     b.n = (size_t)tb_GetHandleSize(h);
-    b.c = malloc(b.n ? b.n : 1);
+    b.c = bb_malloc(b.n ? b.n : 1, BB_BYTES);
     if (b.c)
         gget(b.c, rd32(h), (uint32_t)b.n);
     return b;
@@ -232,12 +232,12 @@ int16_t tb_QTNewTween(gaddr tween, int32_t container, int32_t tweenAtom, int32_t
     bytes b = container_bytes((gaddr)container);
     uint32_t n;
     if (!b.c || qta_type(b.c, (uint32_t)tweenAtom) != four("twen")) {
-        free(b.c);
+        bb_free(b.c);
         return qt_set_error(invalidAtomErr);
     }
     const uint8_t *ty = qta_data(b.c, b.n, qta_index(b.c, b.n, (uint32_t)tweenAtom, four("twnt"), 1, NULL), &n);
     if (!ty || n < 4 || (!layout(be32(ty)) && !qta_count(b.c, b.n, (uint32_t)tweenAtom, four("seqe")))) {
-        free(b.c);
+        bb_free(b.c);
         return qt_set_error(ty ? featureUnsupported : invalidAtomErr);
     }
     *t = (tweener){ tb_NewPtr(4, false, true), b, (uint32_t)tweenAtom, maxTime, { 0 }, false };
@@ -250,7 +250,7 @@ int16_t tb_QTDisposeTween(int32_t tween)
     tweener *t = tween_of((gaddr)tween);
     if (!t)
         return qt_set_error(paramErr);
-    free(t->b.c);
+    bb_free(t->b.c);
     tb_DisposePtr(t->token);
     memset(t, 0, sizeof *t);
     return qt_set_error(noErr);
@@ -411,7 +411,7 @@ static int32_t twen_call(qtc_call *k)
         size_t len;
         uint32_t type;
         int16_t err = value_at(&b, atom, data, p < 0 ? 0 : p > 1 ? 1 : p, v, &len, &type);
-        free(b.c);
+        bb_free(b.c);
         if (err)
             return err;
         gaddr proc = rd32(tr + 20);
@@ -438,7 +438,7 @@ static qtc_class tweeners[] = {
 void qt_tween_register(void)
 {
     for (int i = 0; i < MAX_TWEENS; i++)
-        free(tweens[i].b.c);
+        bb_free(tweens[i].b.c);
     memset(tweens, 0, sizeof tweens);
     for (size_t i = 0; i < sizeof tweeners / sizeof tweeners[0]; i++)
         qtc_register(&tweeners[i]);

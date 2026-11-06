@@ -60,7 +60,7 @@ func buildHFS(name: String, size: Int, files: [HFSTestFile], blockSize: UInt32 =
     var out: UnsafeMutablePointer<UInt8>?
     var err = [CChar](repeating: 0, count: 256)
     guard hfs_build(&p, entries, entries.count, &out, &err, err.count), let out else { return nil }
-    defer { free(out) }
+    defer { bb_free(out) }
     return Array(UnsafeBufferPointer(start: out, count: size))
 }
 
@@ -74,7 +74,7 @@ func readHFS(_ image: [UInt8]) -> [(entry: hfs_entry, name: String, data: [UInt8
         var list: UnsafeMutablePointer<hfs_entry>?
         var n = 0
         guard hfs_list(v, &list, &n, &err, err.count), let list else { return nil }
-        defer { free(list) }
+        defer { bb_free(list) }
         var out: [(hfs_entry, String, [UInt8], [UInt8])] = []
         for i in 0..<n {
             var e = list[i]
@@ -86,7 +86,7 @@ func readHFS(_ image: [UInt8]) -> [(entry: hfs_entry, name: String, data: [UInt8
                     var len = 0
                     guard hfs_read_fork(v, &e, fork, &p, &len, &err, err.count) else { return nil }
                     let bytes = Array(UnsafeBufferPointer(start: p, count: len))
-                    free(p)
+                    bb_free(p)
                     if fork { rsrc = bytes } else { data = bytes }
                 }
             }

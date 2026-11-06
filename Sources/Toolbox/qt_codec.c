@@ -54,7 +54,7 @@ static bool jpeg_decode(void *s, const qt_video_format *f, const uint32_t *palet
     for (int y = 0; y < f->height && y < h; y++)
         memcpy(frame + (size_t)y * (size_t)f->width * 4, rgba + (size_t)y * (size_t)w * 4,
                (size_t)(w < f->width ? w : f->width) * 4);
-    free(rgba);
+    bb_free(rgba);
     return true;
 }
 
@@ -131,7 +131,7 @@ qt_vdec *qt_vdec_new(const qt_video_format *f)
     const qt_video_codec *c = codec_for(f->format, f->depth);
     if (!c || f->width <= 0 || f->height <= 0 || f->width > 4096 || f->height > 4096)
         return NULL;
-    qt_vdec *d = calloc(1, sizeof *d);
+    qt_vdec *d = bb_calloc(1, sizeof *d, BB_TAG(qt_vdec));
     if (!d)
         return NULL;
     d->codec = c;
@@ -145,7 +145,7 @@ qt_vdec *qt_vdec_new(const qt_video_format *f)
     d->format.palette = d->palette;
     d->state = c->open(&d->format);
     if (!d->state) {
-        free(d);
+        bb_free(d);
         return NULL;
     }
     return d;
@@ -161,7 +161,7 @@ void qt_vdec_free(qt_vdec *d)
     if (!d)
         return;
     d->codec->close(d->state);
-    free(d);
+    bb_free(d);
 }
 
 /* The standard colour tables (QuickDraw's clut 1, 2, 4 and 8) and grey ramps. */
@@ -394,7 +394,7 @@ uint32_t qt_adec_decode(const qt_sound_format *f, const uint8_t *data, size_t le
         frames = len / (nch * (size_t)(f->bits / 8));
     if (!frames || frames > 0x1000000)
         return 0;
-    int16_t *out = malloc(frames * nch * sizeof *out);
+    int16_t *out = bb_malloc(frames * nch * sizeof *out, BB_BYTES);
     if (!out)
         return 0;
     *pcm = out;

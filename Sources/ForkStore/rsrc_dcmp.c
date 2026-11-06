@@ -138,8 +138,8 @@ static void emit_literal(dstate *s, size_t n, bool store)
     if (store) {
         if (s->nlit == s->litcap) {
             s->litcap = s->litcap ? s->litcap * 2 : 64;
-            s->lit_off = realloc(s->lit_off, s->litcap * sizeof *s->lit_off);
-            s->lit_len = realloc(s->lit_len, s->litcap * sizeof *s->lit_len);
+            s->lit_off = bb_realloc(s->lit_off, s->litcap * sizeof *s->lit_off, BB_BYTES);
+            s->lit_len = bb_realloc(s->lit_len, s->litcap * sizeof *s->lit_len, BB_BYTES);
             if (!s->lit_off || !s->lit_len) {
                 s->err = true;
                 return;
@@ -559,7 +559,7 @@ bool rsrc_decompress(const uint8_t *d, size_t len, uint8_t **out, size_t *out_le
     uint16_t type = be16(d + 6);
     uint32_t outlen = be32(d + 8);
     int16_t id = type == 0x0801 ? (int16_t)be16(d + 14) : (int16_t)be16(d + 12);
-    dstate s = { d + 18, d + len, malloc(outlen ? outlen : 1), 0, outlen, false, NULL, NULL, 0, 0 };
+    dstate s = { d + 18, d + len, bb_malloc(outlen ? outlen : 1, BB_BYTES), 0, outlen, false, NULL, NULL, 0, 0 };
     if (!s.out) {
         snprintf(err, errlen, "out of memory");
         return false;
@@ -574,20 +574,20 @@ bool rsrc_decompress(const uint8_t *d, size_t len, uint8_t **out, size_t *out_le
         dcmp3(&s, outlen);
     else {
         snprintf(err, errlen, "unsupported decompressor 'dcmp' %d", id);
-        free(s.out);
+        bb_free(s.out);
         return false;
     }
-    free(s.lit_off);
-    free(s.lit_len);
+    bb_free(s.lit_off);
+    bb_free(s.lit_len);
     /* dcmp 0 works in 2-byte units; an odd size drops the final byte. */
     if (!s.err && !(s.pos == outlen || (s.pos == (size_t)outlen + 1 && (outlen & 1)))) {
         snprintf(err, errlen, "decompressed %zu bytes, expected %u", s.pos, outlen);
-        free(s.out);
+        bb_free(s.out);
         return false;
     }
     if (s.err) {
         snprintf(err, errlen, "corrupt compressed resource ('dcmp' %d)", id);
-        free(s.out);
+        bb_free(s.out);
         return false;
     }
     *out = s.out;

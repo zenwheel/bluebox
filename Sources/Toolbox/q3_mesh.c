@@ -84,14 +84,14 @@ struct mesh {
     bool dirty, delayed;
 };
 
-static bool grow(void **p, uint32_t *cap, uint32_t need, size_t size)
+static bool grow(void **p, uint32_t *cap, uint32_t need, size_t size, const bb_type *t)
 {
     if (need <= *cap)
         return true;
     uint32_t n = *cap ? *cap * 2 : 16;
     while (n < need)
         n *= 2;
-    void *q = realloc(*p, n * size);
+    void *q = bb_realloc(*p, n * size, t);
     if (!q)
         return false;
     *p = q;
@@ -108,9 +108,9 @@ static void free_edges(mesh *m, bool keep_sets)
         q3_handle_free(m->e[i]->h);
         if (!keep_sets && m->e[i]->set)
             q3_release(m->e[i]->set);
-        free(m->e[i]);
+        bb_free(m->e[i]);
     }
-    free(m->e);
+    bb_free(m->e);
     m->e = NULL;
     m->ne = 0;
 }
@@ -119,9 +119,9 @@ static void free_comps(mesh *m)
 {
     for (uint32_t i = 0; i < m->ncomps; i++) {
         q3_handle_free(m->comps[i]->h);
-        free(m->comps[i]);
+        bb_free(m->comps[i]);
     }
-    free(m->comps);
+    bb_free(m->comps);
     m->comps = NULL;
     m->ncomps = 0;
 }
@@ -176,7 +176,7 @@ static void rebuild(mesh *m)
                     }
                     continue;
                 }
-                if (!grow((void **)&m->e, &cap, m->ne + 1, sizeof *m->e))
+                if (!grow((void **)&m->e, &cap, m->ne + 1, sizeof *m->e, BB_TAG(medge *)))
                     continue;
                 e = NULL;
                 for (uint32_t j = 0; j < nold; j++)
@@ -186,7 +186,7 @@ static void rebuild(mesh *m)
                         break;
                     }
                 if (!e) {
-                    e = calloc(1, sizeof *e);
+                    e = bb_calloc(1, sizeof *e, BB_TAG(medge));
                     if (!e)
                         continue;
                     e->h = q3_handle_new(Q3H_MESH_EDGE, e);
@@ -207,12 +207,12 @@ static void rebuild(mesh *m)
             q3_handle_free(old[j]->h);
             if (old[j]->set)
                 q3_release(old[j]->set);
-            free(old[j]);
+            bb_free(old[j]);
         }
-    free(old);
+    bb_free(old);
     /* Components: vertices joined by edges. */
     free_comps(m);
-    int *parent = malloc((m->nv + 1) * sizeof *parent);
+    int *parent = bb_malloc((m->nv + 1) * sizeof *parent, BB_BYTES);
     if (!parent)
         return;
     for (uint32_t i = 0; i < m->nv; i++)
@@ -231,14 +231,14 @@ static void rebuild(mesh *m)
                     parent[find(parent, vi)] = find(parent, first);
             }
     }
-    int *map = malloc((m->nv + 1) * sizeof *map);
+    int *map = bb_malloc((m->nv + 1) * sizeof *map, BB_BYTES);
     for (uint32_t i = 0; map && i < m->nv; i++)
         map[i] = -1;
     uint32_t ccap = 0;
     for (uint32_t i = 0; map && i < m->nv; i++) {
         int r = find(parent, (int)i);
-        if (map[r] < 0 && grow((void **)&m->comps, &ccap, m->ncomps + 1, sizeof *m->comps)) {
-            mcomp *k = calloc(1, sizeof *k);
+        if (map[r] < 0 && grow((void **)&m->comps, &ccap, m->ncomps + 1, sizeof *m->comps, BB_TAG(mcomp *))) {
+            mcomp *k = bb_calloc(1, sizeof *k, BB_TAG(mcomp));
             if (k) {
                 k->m = m;
                 k->index = (int)m->ncomps;
@@ -249,8 +249,8 @@ static void rebuild(mesh *m)
         }
         m->v[i]->comp = map[r];
     }
-    free(map);
-    free(parent);
+    bb_free(map);
+    bb_free(parent);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -266,18 +266,18 @@ static void free_face(mface *f)
 {
     for (uint32_t ci = 0; ci < f->ncont; ci++) {
         q3_handle_free(f->c[ci]->h);
-        free(f->c[ci]->v);
-        free(f->c[ci]);
+        bb_free(f->c[ci]->v);
+        bb_free(f->c[ci]);
     }
-    free(f->c);
+    bb_free(f->c);
     for (uint32_t i = 0; i < f->ncorners; i++)
         if (f->corners[i].set)
             q3_release(f->corners[i].set);
-    free(f->corners);
+    bb_free(f->corners);
     if (f->set)
         q3_release(f->set);
     q3_handle_free(f->h);
-    free(f);
+    bb_free(f);
 }
 
 static void mesh_free(mesh *m)
@@ -288,15 +288,15 @@ static void mesh_free(mesh *m)
         if (m->v[i]->set)
             q3_release(m->v[i]->set);
         q3_handle_free(m->v[i]->h);
-        free(m->v[i]);
+        bb_free(m->v[i]);
     }
     free_edges(m, false);
     free_comps(m);
     if (m->set)
         q3_release(m->set);
-    free(m->v);
-    free(m->f);
-    free(m);
+    bb_free(m->v);
+    bb_free(m->f);
+    bb_free(m);
 }
 
 static void mesh_dispose(q3obj *o)
@@ -308,14 +308,14 @@ static void mesh_dispose(q3obj *o)
 
 static mvert *add_vertex(mesh *m, const float p[3], gaddr set)
 {
-    if (!grow((void **)&m->v, &m->capv, m->nv + 1, sizeof *m->v))
+    if (!grow((void **)&m->v, &m->capv, m->nv + 1, sizeof *m->v, BB_TAG(mvert *)))
         return NULL;
-    mvert *v = calloc(1, sizeof *v);
+    mvert *v = bb_calloc(1, sizeof *v, BB_TAG(mvert));
     if (!v)
         return NULL;
     v->h = q3_handle_new(Q3H_MESH_VERTEX, v);
     if (!v->h) {
-        free(v);
+        bb_free(v);
         return NULL;
     }
     v->m = m;
@@ -328,15 +328,15 @@ static mvert *add_vertex(mesh *m, const float p[3], gaddr set)
 
 static mcont *new_contour(mface *f, mvert *const *vs, uint32_t n)
 {
-    mcont *c = calloc(1, sizeof *c);
+    mcont *c = bb_calloc(1, sizeof *c, BB_TAG(mcont));
     if (!c)
         return NULL;
-    c->v = malloc((n ? n : 1) * sizeof *c->v);
+    c->v = bb_malloc((n ? n : 1) * sizeof *c->v, BB_TAG(mvert *));
     c->h = q3_handle_new(Q3H_MESH_CONTOUR, c);
     if (!c->v || !c->h) {
-        free(c->v);
+        bb_free(c->v);
         q3_handle_free(c->h);
-        free(c);
+        bb_free(c);
         return NULL;
     }
     memcpy(c->v, vs, n * sizeof *c->v);
@@ -347,7 +347,7 @@ static mcont *new_contour(mface *f, mvert *const *vs, uint32_t n)
 
 static bool face_add_contour(mface *f, mcont *c)
 {
-    mcont **n = realloc(f->c, (f->ncont + 1) * sizeof *n);
+    mcont **n = bb_realloc(f->c, (f->ncont + 1) * sizeof *n, BB_TAG(mcont *));
     if (!n)
         return false;
     f->c = n;
@@ -358,9 +358,9 @@ static bool face_add_contour(mface *f, mcont *c)
 
 static mface *add_face(mesh *m, mvert *const *vs, uint32_t n, gaddr set)
 {
-    if (!grow((void **)&m->f, &m->capf, m->nf + 1, sizeof *m->f))
+    if (!grow((void **)&m->f, &m->capf, m->nf + 1, sizeof *m->f, BB_TAG(mface *)))
         return NULL;
-    mface *f = calloc(1, sizeof *f);
+    mface *f = bb_calloc(1, sizeof *f, BB_TAG(mface));
     if (!f)
         return NULL;
     f->m = m;
@@ -368,7 +368,7 @@ static mface *add_face(mesh *m, mvert *const *vs, uint32_t n, gaddr set)
     mcont *c = f->h ? new_contour(f, vs, n) : NULL;
     if (!c || !face_add_contour(f, c)) {
         q3_handle_free(f->h);
-        free(f);
+        bb_free(f);
         return NULL;
     }
     f->set = set ? q3_ref(set) : 0;
@@ -391,7 +391,7 @@ static void remove_face(mesh *m, mface *f)
 
 static bool mesh_duplicate(q3obj *to, const q3obj *from)
 {
-    mesh *src = from->data, *m = calloc(1, sizeof *m);
+    mesh *src = from->data, *m = bb_calloc(1, sizeof *m, BB_TAG(mesh));
     if (!m)
         return false;
     m->g = to->g;
@@ -403,7 +403,7 @@ static bool mesh_duplicate(q3obj *to, const q3obj *from)
         mface *f = NULL;
         for (uint32_t ci = 0; ci < sf->ncont; ci++) {
             mcont *sc = sf->c[ci];
-            mvert **vs = malloc((sc->n ? sc->n : 1) * sizeof *vs);
+            mvert **vs = bb_malloc((sc->n ? sc->n : 1) * sizeof *vs, BB_TAG(mvert *));
             if (!vs)
                 continue;
             for (uint32_t k = 0; k < sc->n; k++)
@@ -413,12 +413,12 @@ static bool mesh_duplicate(q3obj *to, const q3obj *from)
             else {
                 mcont *c = new_contour(f, vs, sc->n);
                 if (c && !face_add_contour(f, c))
-                    free(c);
+                    bb_free(c);
             }
-            free(vs);
+            bb_free(vs);
         }
         for (uint32_t k = 0; f && k < sf->ncorners; k++) {
-            mcorner *n = realloc(f->corners, (f->ncorners + 1) * sizeof *n);
+            mcorner *n = bb_realloc(f->corners, (f->ncorners + 1) * sizeof *n, BB_TAG(mcorner));
             if (!n)
                 break;
             f->corners = n;
@@ -459,18 +459,18 @@ static void mesh_submit(q3obj *o, q3view *view)
     for (uint32_t fi = 0; fi < m->nf; fi++)
         for (uint32_t ci = 0; ci < m->f[fi]->ncont; ci++)
             total += m->f[fi]->c[ci]->n;
-    q3pv *pv = calloc(total + 1, sizeof *pv);
-    float (*pts)[3] = calloc(total + 1, sizeof *pts);
+    q3pv *pv = bb_calloc(total + 1, sizeof *pv, BB_TAG(q3pv));
+    float (*pts)[3] = bb_calloc(total + 1, sizeof *pts, BB_BYTES);
     q3ptri *t = NULL;
     uint32_t nt = 0, cap = 0, at = 0;
     for (uint32_t fi = 0; pv && pts && fi < m->nf; fi++) {
         mface *f = m->f[fi];
-        uint32_t **cs = calloc(f->ncont, sizeof *cs), *cn = calloc(f->ncont, sizeof *cn);
+        uint32_t **cs = bb_calloc(f->ncont, sizeof *cs, BB_TAG(uint32_t *)), *cn = bb_calloc(f->ncont, sizeof *cn, BB_BYTES);
         bool ok = cs && cn;
         for (uint32_t ci = 0; ok && ci < f->ncont; ci++) {
             mcont *c = f->c[ci];
             cn[ci] = c->n;
-            cs[ci] = calloc(c->n + 1, sizeof **cs);
+            cs[ci] = bb_calloc(c->n + 1, sizeof **cs, BB_BYTES);
             if (!cs[ci]) {
                 ok = false;
                 break;
@@ -491,18 +491,18 @@ static void mesh_submit(q3obj *o, q3view *view)
                 q3attrs_fill(&t[i].a, f->set);
         }
         for (uint32_t ci = 0; cs && ci < f->ncont; ci++)
-            free(cs[ci]);
-        free(cs);
-        free(cn);
+            bb_free(cs[ci]);
+        bb_free(cs);
+        bb_free(cn);
     }
     if (pv && pts && nt) {
         q3v_begin_object(view, o->g);
         q3v_triangles(view, pv, at, t, nt, m->set);
         q3v_end_object(view);
     }
-    free(t);
-    free(pts);
-    free(pv);
+    bb_free(t);
+    bb_free(pts);
+    bb_free(pv);
 }
 
 void q3_mesh_classes(void) { q3_class_ops(MESH, mesh_dispose, mesh_duplicate, mesh_submit, true); }
@@ -522,10 +522,10 @@ void q3_mesh_set_set(q3obj *o, gaddr set)
 
 static gaddr new_mesh(void)
 {
-    mesh *m = calloc(1, sizeof *m);
+    mesh *m = bb_calloc(1, sizeof *m, BB_TAG(mesh));
     q3obj *o = m ? q3_new(MESH, m) : NULL;
     if (!o) {
-        free(m);
+        bb_free(m);
         return 0;
     }
     m->g = o->g;
@@ -547,7 +547,7 @@ gaddr q3_mesh_build(uint32_t nverts, const float (*pts)[3], const gaddr *vsets, 
         /* The top bit: a contour (a hole) of the face before. */
         bool hole = face_nverts[f] & 0x80000000u;
         uint32_t n = face_nverts[f] & 0x7FFFFFFFu;
-        mvert **vs = malloc((n ? n : 1) * sizeof *vs);
+        mvert **vs = bb_malloc((n ? n : 1) * sizeof *vs, BB_TAG(mvert *));
         uint32_t k = 0;
         for (uint32_t i = 0; vs && i < n; i++)
             if (face_verts[at + i] < m->nv)
@@ -555,12 +555,12 @@ gaddr q3_mesh_build(uint32_t nverts, const float (*pts)[3], const gaddr *vsets, 
         if (vs && k >= 3 && hole && last) {
             mcont *c = new_contour(last, vs, k);
             if (c && !face_add_contour(last, c))
-                free(c);
+                bb_free(c);
             m->dirty = true;
         } else if (vs && k >= 3) {
             last = add_face(m, vs, k, fsets ? fsets[f] : 0);
         }
-        free(vs);
+        bb_free(vs);
         at += n;
     }
     return g;
@@ -582,7 +582,7 @@ void q3_mesh_set_corner(gaddr g, uint32_t vertex, uint32_t face, gaddr set)
             q3_assign(&f->corners[i].set, set);
             return;
         }
-    mcorner *n = realloc(f->corners, (f->ncorners + 1) * sizeof *n);
+    mcorner *n = bb_realloc(f->corners, (f->ncorners + 1) * sizeof *n, BB_TAG(mcorner));
     if (!n)
         return;
     f->corners = n;
@@ -618,7 +618,7 @@ void q3_mesh_walk(q3obj *o, const q3mesh_walker *w, void *ctx)
         uint32_t total = 0;
         for (uint32_t ci = 0; ci < f->ncont; ci++)
             total += f->c[ci]->n;
-        uint32_t *nv = calloc(f->ncont, sizeof *nv), *vs = calloc(total + 1, sizeof *vs), at = 0;
+        uint32_t *nv = bb_calloc(f->ncont, sizeof *nv, BB_BYTES), *vs = bb_calloc(total + 1, sizeof *vs, BB_BYTES), at = 0;
         for (uint32_t ci = 0; nv && vs && ci < f->ncont; ci++) {
             nv[ci] = f->c[ci]->n;
             for (uint32_t k = 0; k < f->c[ci]->n; k++)
@@ -626,8 +626,8 @@ void q3_mesh_walk(q3obj *o, const q3mesh_walker *w, void *ctx)
         }
         if (nv && vs)
             w->face(ctx, fi, f->ncont, nv, vs, f->set);
-        free(nv);
-        free(vs);
+        bb_free(nv);
+        bb_free(vs);
     }
     for (uint32_t fi = 0; w->corner && fi < m->nf; fi++)
         for (uint32_t k = 0; k < m->f[fi]->ncorners; k++)
@@ -718,11 +718,11 @@ static void Q3Mesh_FaceNew(ppc_cpu *c)
         Q3RETURN(0);
         return;
     }
-    mvert **v = malloc(n * sizeof *v);
+    mvert **v = bb_malloc(n * sizeof *v, BB_TAG(mvert *));
     for (uint32_t i = 0; v && i < n; i++) {
         mvert *x = vert_of(rd32(vs + 4 * i));
         if (!x || x->m != m) {
-            free(v);
+            bb_free(v);
             v = NULL;
             q3_error(kQ3ErrorInvalidParameter);
         } else {
@@ -730,7 +730,7 @@ static void Q3Mesh_FaceNew(ppc_cpu *c)
         }
     }
     mface *f = v ? add_face(m, v, n, q3_get(Q3R(3)) ? Q3R(3) : 0) : NULL;
-    free(v);
+    bb_free(v);
     q3_edited(q3_get(Q3R(0)));
     Q3RETURN(f ? f->h : 0);
 }
@@ -759,7 +759,7 @@ static void Q3Mesh_VertexDelete(ppc_cpu *c)
     if (v->set)
         q3_release(v->set);
     q3_handle_free(v->h);
-    free(v);
+    bb_free(v);
     m->dirty = true;
     q3_edited(q3_get(Q3R(0)));
     Q3RETURN(kQ3Success);
@@ -836,11 +836,11 @@ static void Q3Mesh_ContourToFace(ppc_cpu *c)
         Q3RETURN(old->h);
         return;
     }
-    if (!grow((void **)&m->f, &m->capf, m->nf + 1, sizeof *m->f)) {
+    if (!grow((void **)&m->f, &m->capf, m->nf + 1, sizeof *m->f, BB_TAG(mface *))) {
         Q3RETURN(0);
         return;
     }
-    mface *f = calloc(1, sizeof *f);
+    mface *f = bb_calloc(1, sizeof *f, BB_TAG(mface));
     if (!f) {
         Q3RETURN(0);
         return;
@@ -1225,7 +1225,7 @@ static void Q3Mesh_SetCornerAttributeSet(ppc_cpu *c)
             return;
         }
     if (Q3R(3)) {
-        mcorner *n = realloc(f->corners, (f->ncorners + 1) * sizeof *n);
+        mcorner *n = bb_realloc(f->corners, (f->ncorners + 1) * sizeof *n, BB_TAG(mcorner));
         if (!n) {
             Q3RETURN(kQ3Failure);
             return;
@@ -1258,7 +1258,7 @@ static void hl_add(hlist *l, gaddr h)
     for (uint32_t i = 0; i < l->n; i++)
         if (l->h[i] == h)
             return;
-    if (grow((void **)&l->h, &l->cap, l->n + 1, sizeof *l->h))
+    if (grow((void **)&l->h, &l->cap, l->n + 1, sizeof *l->h, BB_BYTES))
         l->h[l->n++] = h;
 }
 
@@ -1351,7 +1351,7 @@ static void walk_list(mesh *m, int kind, gaddr what, hlist *l)
             hlist edges = *l;
             hlist faces = { NULL, 0, 0 };
             faces_by_edges(m, &edges, f, &faces);
-            free(edges.h);
+            bb_free(edges.h);
             *l = faces;
         }
         break;
@@ -1372,7 +1372,7 @@ static void walk_list(mesh *m, int kind, gaddr what, hlist *l)
             hlist edges = *l;
             hlist faces = { NULL, 0, 0 };
             faces_by_edges(m, &edges, k->face, &faces);
-            free(edges.h);
+            bb_free(edges.h);
             *l = faces;
         }
         break;
@@ -1425,7 +1425,7 @@ static gaddr step(gaddr it)
     hlist l = { NULL, 0, 0 };
     walk_list(m, (int)kind, what, &l);
     gaddr h = i < l.n ? l.h[i] : 0;
-    free(l.h);
+    bb_free(l.h);
     wr32(it + 4, i + 1);
     return h;
 }

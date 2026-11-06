@@ -1144,11 +1144,11 @@ int16_t mm_move_handle(gaddr h, bool high)
     uint32_t sizec = b_sizec(b);
     if (!gap || (gap < MIN_BLOCK && sizec + gap > MAX_SIZEC))
         return noErr; /* already there, or nowhere to put a sliver of space */
-    uint8_t *blk = malloc(ps);
-    gaddr *list = high ? 0 : malloc((nmoving ? nmoving : 1) * sizeof *list);
+    uint8_t *blk = bb_malloc(ps, BB_BYTES);
+    gaddr *list = high ? 0 : bb_malloc((nmoving ? nmoving : 1) * sizeof *list, BB_BYTES);
     if (!blk || (!high && !list)) {
-        free(blk);
-        free(list);
+        bb_free(blk);
+        bb_free(list);
         return noErr;
     }
     memcpy(blk, g_mem + b, ps);
@@ -1184,11 +1184,11 @@ int16_t mm_move_handle(gaddr h, bool high)
         if (gap >= MIN_BLOCK)
             b_set(lo + ps, USE_FREE, 0, 0, gap, 0);
     }
-    free(list);
+    bb_free(list);
     if (g_code_map)
         mem_code_range(nb, ps);
     memcpy(g_mem + nb, blk, ps);
-    free(blk);
+    bb_free(blk);
     if (gap < MIN_BLOCK) { /* the sliver goes with the block */
         b_set_psize(nb, ps + gap);
         b_set_sizec(nb, (uint8_t)(sizec + gap));

@@ -598,7 +598,7 @@ func extractDiskImage(_ path: String, into dir: String, notes: inout [String],
         }
         owned = true
     }
-    defer { if owned { free(vol) } }
+    defer { if owned { bb_free(vol) } }
     guard let v = hfs_open(vol, vlen, &err, err.count) else { throw IngestError.diskImage(path, cError(err)) }
     defer { hfs_close(v) }
     let volName = macRoman(Array(UnsafeBufferPointer(start: hfs_volume_name(v) + 1,

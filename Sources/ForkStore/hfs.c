@@ -108,7 +108,7 @@ static bool walk_leaves(const uint8_t *tree, size_t len, leaf_fn fn, void *ctx)
 /* Read a special file (catalog/extents) from its MDB extent record. */
 static uint8_t *read_special(hfs_volume *v, uint32_t size, const uint8_t *rec, size_t *outlen)
 {
-    uint8_t *buf = calloc(1, size ? size : 1);
+    uint8_t *buf = bb_calloc(1, size ? size : 1, BB_BYTES);
     if (!buf)
         return NULL;
     *outlen = copy_extents(v, rec, buf, size, 0);
@@ -144,7 +144,7 @@ hfs_volume *hfs_open(const uint8_t *d, size_t len, char *err, size_t errlen)
         }
         return hfsplus_open(d + at, n && at + n <= len ? n : len - at, err, errlen);
     }
-    hfs_volume *v = calloc(1, sizeof *v);
+    hfs_volume *v = bb_calloc(1, sizeof *v, BB_TAG(hfs_volume));
     if (!v) {
         snprintf(err, errlen, "out of memory");
         return NULL;
@@ -158,7 +158,7 @@ hfs_volume *hfs_open(const uint8_t *d, size_t len, char *err, size_t errlen)
     v->name[0] = nl;
     if (!v->block_size || v->block_size % 512) {
         snprintf(err, errlen, "bad allocation block size %u", v->block_size);
-        free(v);
+        bb_free(v);
         return NULL;
     }
     hfs_volinfo *in = &v->info;
@@ -193,9 +193,9 @@ void hfs_close(hfs_volume *v)
 {
     if (!v)
         return;
-    free(v->catalog);
-    free(v->extents);
-    free(v);
+    bb_free(v->catalog);
+    bb_free(v->extents);
+    bb_free(v);
 }
 
 const uint8_t *hfs_volume_name(const hfs_volume *v) { return v->name; }
@@ -226,7 +226,7 @@ static bool collect(void *vctx, const uint8_t *rec, size_t reclen)
         return true; /* threads */
     if (ctx->n == ctx->cap) {
         ctx->cap = ctx->cap ? ctx->cap * 2 : 256;
-        hfs_entry *nl = realloc(ctx->list, ctx->cap * sizeof *nl);
+        hfs_entry *nl = bb_realloc(ctx->list, ctx->cap * sizeof *nl, BB_TAG(hfs_entry));
         if (!nl) {
             ctx->oom = true;
             return false;
@@ -277,7 +277,7 @@ bool hfs_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *err, size
     bool ok = walk_leaves(v->catalog, v->catalog_len, collect, &ctx);
     if (!ok || ctx.oom) {
         snprintf(err, errlen, ctx.oom ? "out of memory" : "damaged catalog B-tree");
-        free(ctx.list);
+        bb_free(ctx.list);
         return false;
     }
     *entries = ctx.list;
@@ -320,7 +320,7 @@ bool hfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, 
     if (v->mfs)
         return mfs_read_fork(v, e, rsrc, buf, len, err, errlen);
     size_t want = rsrc ? e->rsrc_len : e->data_len;
-    uint8_t *out = malloc(want ? want : 1);
+    uint8_t *out = bb_malloc(want ? want : 1, BB_BYTES);
     if (!out) {
         snprintf(err, errlen, "out of memory");
         return false;
@@ -333,7 +333,7 @@ bool hfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, 
         ext_ctx ctx = { rsrc ? 0xFF : 0x00, e->cnid, blocks, NULL };
         if (!v->extents || !walk_leaves(v->extents, v->extents_len, find_ext, &ctx) || !ctx.found) {
             snprintf(err, errlen, "missing extents for file %u", e->cnid);
-            free(out);
+            bb_free(out);
             return false;
         }
         size_t before = done;
@@ -341,7 +341,7 @@ bool hfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t **buf, 
         blocks += extent_blocks(ctx.found);
         if (done == before) {
             snprintf(err, errlen, "extents for file %u point outside the volume", e->cnid);
-            free(out);
+            bb_free(out);
             return false;
         }
     }
@@ -416,7 +416,7 @@ static uint8_t *read_plus_fork(hfs_volume *v, const uint8_t *fork, uint8_t type,
         return NULL;
     }
     size_t want = (size_t)size64;
-    uint8_t *out = malloc(want ? want : 1);
+    uint8_t *out = bb_malloc(want ? want : 1, BB_BYTES);
     if (!out) {
         snprintf(err, errlen, "out of memory");
         return NULL;
@@ -427,7 +427,7 @@ static uint8_t *read_plus_fork(hfs_volume *v, const uint8_t *fork, uint8_t type,
         plus_ext_ctx ctx = { type, cnid, blocks, NULL };
         if (!v->extents || !walk_leaves(v->extents, v->extents_len, find_plus_ext, &ctx) || !ctx.found) {
             snprintf(err, errlen, "missing extents for file %u", cnid);
-            free(out);
+            bb_free(out);
             return NULL;
         }
         size_t before = done;
@@ -435,7 +435,7 @@ static uint8_t *read_plus_fork(hfs_volume *v, const uint8_t *fork, uint8_t type,
         blocks += plus_extent_blocks(ctx.found);
         if (done == before) {
             snprintf(err, errlen, "extents for file %u point outside the volume", cnid);
-            free(out);
+            bb_free(out);
             return NULL;
         }
     }
@@ -450,7 +450,7 @@ static hfs_volume *hfsplus_open(const uint8_t *d, size_t len, char *err, size_t 
         return NULL;
     }
     const uint8_t *vh = d + 1024;
-    hfs_volume *v = calloc(1, sizeof *v);
+    hfs_volume *v = bb_calloc(1, sizeof *v, BB_TAG(hfs_volume));
     if (!v) {
         snprintf(err, errlen, "out of memory");
         return NULL;
@@ -461,7 +461,7 @@ static hfs_volume *hfsplus_open(const uint8_t *d, size_t len, char *err, size_t 
     v->block_size = be32(vh + 40);
     if (!v->block_size || v->block_size % 512) {
         snprintf(err, errlen, "bad allocation block size %u", v->block_size);
-        free(v);
+        bb_free(v);
         return NULL;
     }
     hfs_volinfo *in = &v->info;
@@ -593,7 +593,7 @@ static bool collect_plus(void *vctx, const uint8_t *rec, size_t reclen)
         return true;
     if (ctx->n == ctx->cap) {
         ctx->cap = ctx->cap ? ctx->cap * 2 : 256;
-        hfs_entry *nl = realloc(ctx->list, ctx->cap * sizeof *nl);
+        hfs_entry *nl = bb_realloc(ctx->list, ctx->cap * sizeof *nl, BB_TAG(hfs_entry));
         if (!nl) {
             ctx->oom = true;
             return false;
@@ -641,7 +641,7 @@ static bool hfsplus_list(hfs_volume *v, hfs_entry **entries, size_t *count, char
     bool ok = walk_leaves(v->catalog, v->catalog_len, collect_plus, &ctx);
     if (!ok || ctx.oom) {
         snprintf(err, errlen, ctx.oom ? "out of memory" : "damaged catalog B-tree");
-        free(ctx.list);
+        bb_free(ctx.list);
         return false;
     }
     /* Hard links take their file's forks; the private folder's own
@@ -708,7 +708,7 @@ static uint16_t mfs_link(const hfs_volume *v, uint32_t block)
 static hfs_volume *mfs_open(const uint8_t *d, size_t len, char *err, size_t errlen)
 {
     const uint8_t *mdb = d + 1024;
-    hfs_volume *v = calloc(1, sizeof *v);
+    hfs_volume *v = bb_calloc(1, sizeof *v, BB_TAG(hfs_volume));
     if (!v) {
         snprintf(err, errlen, "out of memory");
         return NULL;
@@ -723,7 +723,7 @@ static hfs_volume *mfs_open(const uint8_t *d, size_t len, char *err, size_t errl
     v->name[0] = nl;
     if (!v->block_size || v->block_size % 512) {
         snprintf(err, errlen, "bad allocation block size %u", v->block_size);
-        free(v);
+        bb_free(v);
         return NULL;
     }
     hfs_volinfo *in = &v->info;
@@ -742,12 +742,12 @@ static hfs_volume *mfs_open(const uint8_t *d, size_t len, char *err, size_t errl
     size_t dir = (size_t)be16(mdb + 14) * 512, dlen = (size_t)be16(mdb + 16) * 512;
     if (dir >= len || dir + dlen > len) {
         snprintf(err, errlen, "file directory beyond the volume");
-        free(v);
+        bb_free(v);
         return NULL;
     }
-    v->catalog = malloc(dlen ? dlen : 1);
+    v->catalog = bb_malloc(dlen ? dlen : 1, BB_BYTES);
     if (!v->catalog) {
-        free(v);
+        bb_free(v);
         snprintf(err, errlen, "out of memory");
         return NULL;
     }
@@ -763,7 +763,7 @@ static hfs_volume *mfs_open(const uint8_t *d, size_t len, char *err, size_t errl
 static bool mfs_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *err, size_t errlen)
 {
     size_t n = 0, cap = 64;
-    hfs_entry *list = calloc(cap, sizeof *list);
+    hfs_entry *list = bb_calloc(cap, sizeof *list, BB_TAG(hfs_entry));
     if (!list) {
         snprintf(err, errlen, "out of memory");
         return false;
@@ -784,9 +784,9 @@ static bool mfs_list(hfs_volume *v, hfs_entry **entries, size_t *count, char *er
             if (at + elen > 512)
                 break;
             if (n == cap) {
-                hfs_entry *nl = realloc(list, cap * 2 * sizeof *nl);
+                hfs_entry *nl = bb_realloc(list, cap * 2 * sizeof *nl, BB_TAG(hfs_entry));
                 if (!nl) {
-                    free(list);
+                    bb_free(list);
                     snprintf(err, errlen, "out of memory");
                     return false;
                 }
@@ -820,7 +820,7 @@ static bool mfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t 
                           size_t errlen)
 {
     size_t want = rsrc ? e->rsrc_len : e->data_len;
-    uint8_t *out = malloc(want ? want : 1);
+    uint8_t *out = bb_malloc(want ? want : 1, BB_BYTES);
     if (!out) {
         snprintf(err, errlen, "out of memory");
         return false;
@@ -832,7 +832,7 @@ static bool mfs_read_fork(hfs_volume *v, const hfs_entry *e, bool rsrc, uint8_t 
         size_t off = (size_t)v->first_block * 512 + (size_t)(block - 2) * v->block_size;
         if (block < 2 || off >= v->len || ++guard > 65536) {
             snprintf(err, errlen, "file %u's blocks run outside the volume", e->cnid);
-            free(out);
+            bb_free(out);
             return false;
         }
         size_t n = v->block_size;
@@ -928,7 +928,7 @@ bool hfs_extract(hfs_volume *v, const char *root, hfs_keep_fn keep, hfs_note_fn 
         size_t dlen = 0, rlen = 0;
         if (!hfs_read_fork(v, e, false, &f.data, &dlen, ferr, sizeof ferr) ||
             !hfs_read_fork(v, e, true, &f.rsrc, &rlen, ferr, sizeof ferr)) {
-            free(f.data);
+            bb_free(f.data);
             if (note) {
                 char msg[512];
                 snprintf(msg, sizeof msg, "%s: skipped (%s; image truncated or damaged?)", name, ferr);
@@ -947,10 +947,10 @@ bool hfs_extract(hfs_volume *v, const char *root, hfs_keep_fn keep, hfs_note_fn 
         mac_file_free(&f);
         if (!ok) {
             snprintf(err, errlen, "%s", ferr);
-            free(list);
+            bb_free(list);
             return false;
         }
     }
-    free(list);
+    bb_free(list);
     return true;
 }

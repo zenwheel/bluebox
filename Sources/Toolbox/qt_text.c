@@ -54,7 +54,7 @@ qt_text *qt_text_new(const uint8_t *desc, uint32_t len, int w, int h)
 {
     if (len < 58 || w <= 0 || h <= 0 || w > 4096 || h > 4096)
         return NULL;
-    qt_text *t = calloc(1, sizeof *t);
+    qt_text *t = bb_calloc(1, sizeof *t, BB_TAG(qt_text));
     if (!t)
         return NULL;
     t->w = w;
@@ -79,7 +79,7 @@ qt_text *qt_text_new(const uint8_t *desc, uint32_t len, int w, int h)
     return t;
 }
 
-void qt_text_free(qt_text *t) { free(t); }
+void qt_text_free(qt_text *t) { bb_free(t); }
 
 /* What the description says, changed at run time (TextMediaSetTextProperty). */
 uint32_t qt_text_flags(const qt_text *t) { return t->flags; }
@@ -287,10 +287,10 @@ bool qt_text_draw(qt_text *t, const uint8_t *data, uint32_t len, uint8_t *rgba)
         t->font_resolved = true;
     }
     size_t n = (size_t)t->w * (size_t)t->h;
-    uint32_t *main = malloc(n * 4), *shade = (t->flags & dfDropShadow) ? malloc(n * 4) : NULL;
+    uint32_t *main = bb_malloc(n * 4, BB_BYTES), *shade = (t->flags & dfDropShadow) ? bb_malloc(n * 4, BB_BYTES) : NULL;
     if (!main || ((t->flags & dfDropShadow) && !shade)) {
-        free(main);
-        free(shade);
+        bb_free(main);
+        bb_free(shade);
         return false;
     }
     gaddr saved = tb_NewPtr(8, false, true), gwp = tb_NewPtr(4, false, true), r = tb_NewPtr(8, false, true);
@@ -301,8 +301,8 @@ bool qt_text_draw(qt_text *t, const uint8_t *data, uint32_t len, uint8_t *rgba)
         tb_DisposePtr(saved);
         tb_DisposePtr(gwp);
         tb_DisposePtr(r);
-        free(main);
-        free(shade);
+        bb_free(main);
+        bb_free(shade);
         return false;
     }
     gaddr gw = rd32(gwp);
@@ -368,7 +368,7 @@ bool qt_text_draw(qt_text *t, const uint8_t *data, uint32_t len, uint8_t *rgba)
             o[3] = 255;
         }
     }
-    free(main);
-    free(shade);
+    bb_free(main);
+    bb_free(shade);
     return true;
 }

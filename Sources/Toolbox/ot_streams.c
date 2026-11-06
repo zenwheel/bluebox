@@ -178,8 +178,8 @@ static bool driver_known(const char *name, drv_kind *kind)
 
 static void free_msg(smsg *m)
 {
-    free(m->ctl);
-    free(m->data);
+    bb_free(m->ctl);
+    bb_free(m->data);
     m->ctl = m->data = NULL;
 }
 
@@ -196,7 +196,7 @@ static void stream_free(provider *p)
         o->hangup = true; /* the other end of the pipe is gone */
         ot_post(&ot_providers[s->peer], kSIGNALEVENT + kSIGHUP, 0, 0);
     }
-    free(s);
+    bb_free(s);
     p->st = NULL;
 }
 
@@ -371,7 +371,7 @@ static int open_stream(const char *name, int32_t *err)
         *err = kENOSRErr;
         return -1;
     }
-    struct ot_stream *s = calloc(1, sizeof *s);
+    struct ot_stream *s = bb_calloc(1, sizeof *s, BB_TAG(struct ot_stream));
     if (!s) {
         ot_close_provider(&ot_providers[i]);
         *err = kENOSRErr;
@@ -425,9 +425,9 @@ static void deliver(provider *p, const uint8_t *ctl, int32_t clen, const uint8_t
     if (!s || s->nq >= MAX_QUEUE)
         return;
     smsg m = { NULL, NULL, clen, dlen, band, hipri };
-    if (clen > 0 && (m.ctl = malloc((size_t)clen)) != NULL)
+    if (clen > 0 && (m.ctl = bb_malloc((size_t)clen, BB_BYTES)) != NULL)
         memcpy(m.ctl, ctl, (size_t)clen);
-    if (dlen > 0 && (m.data = malloc((size_t)dlen)) != NULL)
+    if (dlen > 0 && (m.data = bb_malloc((size_t)dlen, BB_BYTES)) != NULL)
         memcpy(m.data, data, (size_t)dlen);
     int at = s->nq;
     if (hipri) {
@@ -524,7 +524,7 @@ static bool take_msg(provider *p, gaddr ctl, gaddr data, gaddr flagsp, gaddr ban
         memmove(m->ctl, m->ctl + cn, (size_t)(m->clen - (int32_t)cn));
         m->clen -= (int32_t)cn;
     } else if (m->clen >= 0) {
-        free(m->ctl);
+        bb_free(m->ctl);
         m->ctl = NULL;
         m->clen = -1;
     }
@@ -532,7 +532,7 @@ static bool take_msg(provider *p, gaddr ctl, gaddr data, gaddr flagsp, gaddr ban
         memmove(m->data, m->data + dn, (size_t)(m->dlen - (int32_t)dn));
         m->dlen -= (int32_t)dn;
     } else if (m->dlen >= 0) {
-        free(m->data);
+        bb_free(m->data);
         m->data = NULL;
         m->dlen = -1;
     }
@@ -810,7 +810,7 @@ static int32_t get_part(gaddr sb, uint8_t **out)
     if (len > 0x100000)
         return -2;
     if (len > 0) {
-        *out = malloc((size_t)len);
+        *out = bb_malloc((size_t)len, BB_BYTES);
         if (*out)
             gget(*out, rd32(sb + 8), (uint32_t)len);
     }
@@ -830,8 +830,8 @@ static int32_t put_message(provider *p, gaddr ctlbuf, gaddr databuf, uint8_t ban
         r = kOTNoError; /* nothing to send */
     else
         r = send_down(p, ctl, clen, data, dlen, band, hipri);
-    free(ctl);
-    free(data);
+    bb_free(ctl);
+    bb_free(data);
     return r;
 }
 
@@ -907,13 +907,13 @@ static void s_StreamRead(ppc_cpu *c)
         smsg *m = &s->q[0];
         if (m->clen >= 0) {
             if (s->rdopt & RPROTDIS) {
-                free(m->ctl);
+                bb_free(m->ctl);
                 m->ctl = NULL;
                 m->clen = -1;
             } else if (s->rdopt & RPROTDAT) {
                 /* the control part read as data, before the data part */
                 int32_t n = m->clen + bytes_of(m);
-                uint8_t *both = malloc(n > 0 ? (size_t)n : 1);
+                uint8_t *both = bb_malloc(n > 0 ? (size_t)n : 1, BB_BYTES);
                 if (!both)
                     break;
                 if (m->clen > 0)
@@ -963,7 +963,7 @@ static void s_StreamWrite(ppc_cpu *c)
         ot_complete(c, p, kStreamWriteEvent, 0, 0);
         return;
     }
-    uint8_t *data = malloc(len ? len : 1);
+    uint8_t *data = bb_malloc(len ? len : 1, BB_BYTES);
     if (!data) {
         ot_complete(c, p, kStreamWriteEvent, kENOSRErr, 0);
         return;
@@ -971,7 +971,7 @@ static void s_StreamWrite(ppc_cpu *c)
     if (len)
         gget(data, R(1), len);
     int32_t r = send_down(p, NULL, -1, data, (int32_t)len, 0, false);
-    free(data);
+    bb_free(data);
     ot_complete(c, p, kStreamWriteEvent, r < 0 ? r : (int32_t)len, 0);
 }
 
@@ -1041,7 +1041,7 @@ static uint8_t *chain_bytes(gaddr b, uint32_t skip, int32_t *len)
     for (gaddr x = b; x; x = rd32(x + 8))
         total += rd32(x + 16);
     total = skip < total ? total - skip : 0;
-    uint8_t *out = malloc(total ? total : 1);
+    uint8_t *out = bb_malloc(total ? total : 1, BB_BYTES);
     uint32_t at = 0;
     for (gaddr x = b; x && out; x = rd32(x + 8)) {
         uint32_t n = rd32(x + 16);
@@ -1084,7 +1084,7 @@ static void put_back(provider *p, gaddr buf, uint32_t skip)
         s->q[0] = m;
         s->nq++;
     } else {
-        free(bytes);
+        bb_free(bytes);
     }
     release_chain(buf);
 }

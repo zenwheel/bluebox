@@ -70,18 +70,18 @@ static fnsprofile profiles[MAX_PROFILES];
 static void ref_clear(fnsref *r)
 {
     for (int i = 0; i < r->nnames; i++)
-        free(r->names[i].text);
-    free(r->names);
+        bb_free(r->names[i].text);
+    bb_free(r->names);
     memset(r, 0, sizeof *r);
 }
 
 static void ref_copy(fnsref *to, const fnsref *from)
 {
     *to = *from;
-    to->names = calloc(from->nnames ? (size_t)from->nnames : 1, sizeof *to->names);
+    to->names = bb_calloc(from->nnames ? (size_t)from->nnames : 1, sizeof *to->names, BB_TAG(fname));
     for (int i = 0; i < from->nnames; i++) {
         to->names[i] = from->names[i];
-        to->names[i].text = malloc(from->names[i].len ? from->names[i].len : 1);
+        to->names[i].text = bb_malloc(from->names[i].len ? from->names[i].len : 1, BB_BYTES);
         memcpy(to->names[i].text, from->names[i].text, from->names[i].len);
     }
 }
@@ -93,7 +93,7 @@ void rest_fns_reset(void)
     for (int i = 0; i < MAX_PROFILES; i++) {
         for (int k = 0; k < profiles[i].nrefs; k++)
             ref_clear(&profiles[i].refs[k]);
-        free(profiles[i].refs);
+        bb_free(profiles[i].refs);
         memset(&profiles[i], 0, sizeof profiles[i]);
     }
 }
@@ -139,7 +139,7 @@ static uint8_t *font_table(uint32_t font, uint32_t tag, uint32_t *len)
         if (buf) {
             uint32_t b[6] = { font, tag, 0, n, buf, scratch };
             if (svc_call_export("FMGetFontTable", b, 6) == 0) {
-                out = malloc(n ? n : 1);
+                out = bb_malloc(n ? n : 1, BB_BYTES);
                 gget(out, buf, n);
                 *len = n;
             }
@@ -163,7 +163,7 @@ static bool section(uint32_t font, const char *const *tags, int n, uint32_t *has
         uint8_t *t = font_table(font, fourcc(tags[i]), &len);
         if (t) {
             h = fnv(t, len, h ^ fourcc(tags[i]));
-            free(t);
+            bb_free(t);
             any = true;
         }
     }
@@ -184,18 +184,18 @@ static void read_names(uint32_t font, fnsref *r)
             uint32_t n = be16(e + 8), off = base + be16(e + 10);
             if (off + n > len)
                 continue;
-            r->names = realloc(r->names, (size_t)(r->nnames + 1) * sizeof *r->names);
+            r->names = bb_realloc(r->names, (size_t)(r->nnames + 1) * sizeof *r->names, BB_TAG(fname));
             fname *f = &r->names[r->nnames++];
             f->platform = be16(e);
             f->script = be16(e + 2);
             f->language = be16(e + 4);
             f->code = be16(e + 6);
             f->len = n;
-            f->text = malloc(n ? n : 1);
+            f->text = bb_malloc(n ? n : 1, BB_BYTES);
             memcpy(f->text, t + off, n);
         }
     }
-    free(t);
+    bb_free(t);
 }
 
 static int16_t make_reference(uint32_t font, uint32_t version, fnsref *r)
@@ -384,7 +384,7 @@ static uint8_t *flatten(const fnsref *r, uint32_t *len)
     size_t n = 4 + 4 + 256 + 2 + 2 + 4 + 2 + SECTIONS * 4 + 4;
     for (int i = 0; i < r->nnames; i++)
         n += 8 + 2 + r->names[i].len;
-    uint8_t *b = calloc(1, n);
+    uint8_t *b = bb_calloc(1, n, BB_BYTES);
     size_t at = 0;
     put_be32(b + at, T("FNSr")), at += 4;
     put_be32(b + at, r->version), at += 4;
@@ -432,7 +432,7 @@ static int16_t unflatten(const uint8_t *b, size_t n, fnsref *r)
     at += 4;
     if (nn > MAX_NAMES)
         return kFNSInvalidReferenceErr;
-    r->names = calloc(nn ? nn : 1, sizeof *r->names);
+    r->names = bb_calloc(nn ? nn : 1, sizeof *r->names, BB_TAG(fname));
     for (uint32_t i = 0; i < nn; i++) {
         if (at + 10 > n) {
             ref_clear(r);
@@ -446,7 +446,7 @@ static int16_t unflatten(const uint8_t *b, size_t n, fnsref *r)
             ref_clear(r);
             return kFNSBadFlattenedSizeErr;
         }
-        f->text = malloc(f->len ? f->len : 1);
+        f->text = bb_malloc(f->len ? f->len : 1, BB_BYTES);
         memcpy(f->text, b + at, f->len);
         at += f->len;
     }
@@ -459,7 +459,7 @@ static void fns_FNSReferenceFlattenedSize(ppc_cpu *c)
     if (!r || !A(1))
         RET(kFNSInvalidReferenceErr);
     uint32_t n;
-    free(flatten(r, &n));
+    bb_free(flatten(r, &n));
     wr32(A(1), n);
     RET(noErr);
 }
@@ -475,11 +475,11 @@ static void fns_FNSReferenceFlatten(ppc_cpu *c)
     uint32_t room = rd32(A(2));
     wr32(A(2), n);
     if (!A(1) || room < n) {
-        free(b);
+        bb_free(b);
         RET(kFNSBadFlattenedSizeErr);
     }
     gput(A(1), b, n);
-    free(b);
+    bb_free(b);
     RET(noErr);
 }
 
@@ -489,11 +489,11 @@ static void fns_FNSReferenceUnflatten(ppc_cpu *c)
     if (!A(0) || !A(2))
         RET(kFNSInvalidReferenceErr);
     wr32(A(2), 0);
-    uint8_t *b = malloc(A(1) ? A(1) : 1);
+    uint8_t *b = bb_malloc(A(1) ? A(1) : 1, BB_BYTES);
     gget(b, A(0), A(1));
     fnsref r;
     int16_t e = unflatten(b, A(1), &r);
-    free(b);
+    bb_free(b);
     if (e)
         RET((int32_t)e);
     uint32_t id = store_ref(&r);
@@ -646,24 +646,24 @@ static fnsprofile *profile_of(uint32_t id)
 static bool save_profile(fnsprofile *p)
 {
     size_t cap = 16;
-    uint8_t *out = malloc(cap);
+    uint8_t *out = bb_malloc(cap, BB_BYTES);
     size_t n = 0;
     put_be32(out, T("fnsp")), put_be32(out + 4, p->version), put_be32(out + 8, (uint32_t)p->nrefs);
     n = 12;
     for (int i = 0; i < p->nrefs; i++) {
         uint32_t len;
         uint8_t *f = flatten(&p->refs[i], &len);
-        out = realloc(out, n + 4 + len);
+        out = bb_realloc(out, n + 4 + len, BB_BYTES);
         put_be32(out + n, len);
         memcpy(out + n + 4, f, len);
         n += 4 + len;
-        free(f);
+        bb_free(f);
     }
     FILE *fp = fopen(p->path, "wb");
     bool ok = fp && fwrite(out, 1, n, fp) == n;
     if (fp)
         ok = fclose(fp) == 0 && ok;
-    free(out);
+    bb_free(out);
     p->dirty = !ok;
     return ok;
 }
@@ -676,37 +676,37 @@ static int16_t load_profile(fnsprofile *p)
     fseek(fp, 0, SEEK_END);
     long size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    uint8_t *b = malloc(size > 0 ? (size_t)size : 1);
+    uint8_t *b = bb_malloc(size > 0 ? (size_t)size : 1, BB_BYTES);
     size_t got = size > 0 ? fread(b, 1, (size_t)size, fp) : 0;
     fclose(fp);
     if (got < 12 || be32(b) != T("fnsp")) {
-        free(b);
+        bb_free(b);
         return kFNSInvalidProfileErr;
     }
     p->version = be32(b + 4);
     if (p->version != 1) {
-        free(b);
+        bb_free(b);
         return kFNSBadProfileVersionErr;
     }
     uint32_t n = be32(b + 8);
     size_t at = 12;
-    p->refs = calloc(n ? n : 1, sizeof *p->refs);
+    p->refs = bb_calloc(n ? n : 1, sizeof *p->refs, BB_TAG(fnsref));
     for (uint32_t i = 0; i < n; i++) {
         if (at + 4 > got) {
-            free(b);
+            bb_free(b);
             return kFNSInvalidProfileErr;
         }
         uint32_t len = be32(b + at);
         at += 4;
         if (at + len > got || unflatten(b + at, len, &p->refs[p->nrefs]) != noErr) {
-            free(b);
+            bb_free(b);
             return kFNSInvalidProfileErr;
         }
         p->refs[p->nrefs].used = true;
         p->nrefs++;
         at += len;
     }
-    free(b);
+    bb_free(b);
     return noErr;
 }
 
@@ -726,7 +726,7 @@ static void profile_free(fnsprofile *p)
 {
     for (int i = 0; i < p->nrefs; i++)
         ref_clear(&p->refs[i]);
-    free(p->refs);
+    bb_free(p->refs);
     memset(p, 0, sizeof *p);
 }
 
@@ -851,7 +851,7 @@ static void fns_FNSProfileAddReference(ppc_cpu *c)
     for (int i = 0; i < p->nrefs; i++)
         if (failed_options(&p->refs[i], r, 0x3FF) == 0 && p->refs[i].have == r->have)
             RET(kFNSDuplicateReferenceErr);
-    p->refs = realloc(p->refs, (size_t)(p->nrefs + 1) * sizeof *p->refs);
+    p->refs = bb_realloc(p->refs, (size_t)(p->nrefs + 1) * sizeof *p->refs, BB_TAG(fnsref));
     ref_copy(&p->refs[p->nrefs], r);
     p->nrefs++;
     RET((int32_t)changed(p));

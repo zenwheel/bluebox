@@ -259,7 +259,7 @@ static void draw_mode(rctx *x, bool texture, int mode, const r3d_vertex *v, int 
     int count = lines ? 2 * (n - 1) : 3 * (n - 2);
     if (count <= 0)
         return;
-    r3d_vertex *o = malloc((size_t)count * sizeof *o);
+    r3d_vertex *o = bb_malloc((size_t)count * sizeof *o, BB_TAG(r3d_vertex));
     if (!o)
         return;
     int k = 0;
@@ -273,7 +273,7 @@ static void draw_mode(rctx *x, bool texture, int mode, const r3d_vertex *v, int 
         o[k++] = v[i + 2];
     }
     draw(x, texture, lines ? R3D_LINES : R3D_TRIANGLES, o, k);
-    free(o);
+    bb_free(o);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -474,7 +474,7 @@ static void draw_v(ppc_cpu *c, bool texture)
         Q3RETURN(0);
         return;
     }
-    r3d_vertex *v = malloc(n * sizeof *v);
+    r3d_vertex *v = bb_malloc(n * sizeof *v, BB_TAG(r3d_vertex));
     if (v) {
         for (uint32_t i = 0; i < n; i++) {
             if (texture)
@@ -483,7 +483,7 @@ static void draw_v(ppc_cpu *c, bool texture)
                 gouraud(x, verts + i * 32, &v[i]);
         }
         draw_mode(x, texture, (int)mode, v, (int)n);
-        free(v);
+        bb_free(v);
     }
     Q3RETURN(0);
 }
@@ -582,7 +582,7 @@ static void submit(ppc_cpu *c, bool texture)
         Q3RETURN(0);
         return;
     }
-    r3d_vertex *v = realloc(x->submitted, (n ? n : 1) * sizeof *v);
+    r3d_vertex *v = bb_realloc(x->submitted, (n ? n : 1) * sizeof *v, BB_TAG(r3d_vertex));
     if (!v) {
         Q3RETURN(0);
         return;
@@ -609,7 +609,7 @@ static void trimesh(ppc_cpu *c, bool texture)
         Q3RETURN(0);
         return;
     }
-    r3d_vertex *v = malloc(n * 3 * sizeof *v);
+    r3d_vertex *v = bb_malloc(n * 3 * sizeof *v, BB_TAG(r3d_vertex));
     int k = 0;
     for (uint32_t i = 0; v && i < n; i++) {
         uint32_t a = rd32(tris + i * 16 + 4), b = rd32(tris + i * 16 + 8), d = rd32(tris + i * 16 + 12);
@@ -621,7 +621,7 @@ static void trimesh(ppc_cpu *c, bool texture)
     }
     if (v)
         draw(x, texture, R3D_TRIANGLES, v, k);
-    free(v);
+    bb_free(v);
     Q3RETURN(0);
 }
 static void m_drawTriMeshGouraud(ppc_cpu *c) { trimesh(c, false); }
@@ -709,9 +709,9 @@ static bool access_ready(rctx *x)
     if (!x->frame || !n)
         return false;
     if (!x->access_px)
-        x->access_px = malloc(n * 4);
+        x->access_px = bb_malloc(n * 4, BB_BYTES);
     if (!x->access_z)
-        x->access_z = malloc(n * 4);
+        x->access_z = bb_malloc(n * 4, BB_BYTES);
     return x->access_px && x->access_z;
 }
 
@@ -951,7 +951,7 @@ static void QADrawContextNew(ppc_cpu *c)
         Q3RETURN(slot < 0 ? kQAOutOfMemory : kQAParamErr);
         return;
     }
-    rctx *x = calloc(1, sizeof *x);
+    rctx *x = bb_calloc(1, sizeof *x, BB_TAG(rctx));
     if (!x) {
         Q3RETURN(kQAOutOfMemory);
         return;
@@ -973,12 +973,12 @@ static void QADrawContextNew(ppc_cpu *c)
     x->clip = clip ? rd32(clip + 4) : 0;
     x->flags = flags;
     x->frame = r3d_frame_new(x->width, x->height);
-    x->pixels = calloc((size_t)x->width * (size_t)x->height, 4);
+    x->pixels = bb_calloc((size_t)x->width * (size_t)x->height, 4, BB_BYTES);
     gaddr g = x->frame && x->pixels ? publish(x, slot) : 0;
     if (!g) {
         r3d_frame_free(x->frame);
-        free(x->pixels);
-        free(x);
+        bb_free(x->pixels);
+        bb_free(x);
         Q3RETURN(kQAOutOfMemory);
         return;
     }
@@ -998,7 +998,7 @@ gaddr rave_frame_context(r3d_frame *f, int width, int height, gaddr *engine)
             slot = i;
             break;
         }
-    rctx *x = slot >= 0 && f ? calloc(1, sizeof *x) : NULL;
+    rctx *x = slot >= 0 && f ? bb_calloc(1, sizeof *x, BB_TAG(rctx)) : NULL;
     if (!x)
         return 0;
     x->external = true;
@@ -1008,7 +1008,7 @@ gaddr rave_frame_context(r3d_frame *f, int width, int height, gaddr *engine)
     x->height = height;
     gaddr g = publish(x, slot);
     if (!g) {
-        free(x);
+        bb_free(x);
         return 0;
     }
     if (engine)
@@ -1022,10 +1022,10 @@ void rave_frame_context_free(gaddr dc)
     if (!x || !x->external)
         return;
     ctxs[rd32(x->guest) & 0xFFFF] = NULL;
-    free(x->submitted);
+    bb_free(x->submitted);
     wr32(x->guest, 0);
     tb_DisposePtr(x->guest);
-    free(x);
+    bb_free(x);
 }
 
 static void QADrawContextDelete(ppc_cpu *c)
@@ -1034,17 +1034,17 @@ static void QADrawContextDelete(ppc_cpu *c)
     if (x && !x->external) {
         ctxs[rd32(x->guest) & 0xFFFF] = NULL;
         r3d_frame_free(x->frame);
-        free(x->pixels);
-        free(x->submitted);
-        free(x->access_px);
-        free(x->access_z);
+        bb_free(x->pixels);
+        bb_free(x->submitted);
+        bb_free(x->access_px);
+        bb_free(x->access_z);
         if (x->draw_buffer)
             tb_DisposePtr(x->draw_buffer);
         if (x->z_buffer)
             tb_DisposePtr(x->z_buffer);
         wr32(x->guest, 0);
         tb_DisposePtr(x->guest);
-        free(x);
+        bb_free(x);
     }
     Q3RETURN(0);
 }
@@ -1083,7 +1083,7 @@ static int new_tex_slot(void)
 
 static uint32_t *cl_pixels(const rtex *t)
 {
-    uint32_t *px = malloc((size_t)t->width * (size_t)t->height * 4);
+    uint32_t *px = bb_malloc((size_t)t->width * (size_t)t->height * 4, BB_BYTES);
     uint32_t entries = t->ctab ? rd32(t->ctab + 4) : 0;
     bool clear0 = t->ctab && rd32(t->ctab + 8);
     for (int y = 0; px && y < t->height; y++) {
@@ -1109,7 +1109,7 @@ static int upload(rtex *t)
     if (t->cl_bits) {
         px = cl_pixels(t);
     } else if (t->alpha1) {
-        px = malloc((size_t)t->width * (size_t)t->height * 4);
+        px = bb_malloc((size_t)t->width * (size_t)t->height * 4, BB_BYTES);
         for (int y = 0; px && y < t->height; y++)
             for (int x = 0; x < t->width; x++) {
                 bool on = rd8(t->image + (uint32_t)y * t->row_bytes + (uint32_t)(x >> 3)) & (0x80 >> (x & 7));
@@ -1122,7 +1122,7 @@ static int upload(rtex *t)
     if (!px)
         return 0;
     int id = r3d_texture_new(t->width, t->height, px, !t->bitmap && (t->flags & kQATexture_Mipmap));
-    free(px);
+    bb_free(px);
     return id;
 }
 
@@ -1139,10 +1139,10 @@ static void new_image(ppc_cpu *c, bool bitmap)
         return;
     }
     int slot = new_tex_slot();
-    rtex *t = slot > 0 ? calloc(1, sizeof *t) : NULL;
+    rtex *t = slot > 0 ? bb_calloc(1, sizeof *t, BB_TAG(rtex)) : NULL;
     gaddr g = t ? tb_NewPtr(8, false, true) : 0;
     if (!g) {
-        free(t);
+        bb_free(t);
         Q3RETURN(kQAOutOfMemory);
         return;
     }
@@ -1157,7 +1157,7 @@ static void new_image(ppc_cpu *c, bool bitmap)
     t->image = rd32(images + 12);
     t->cl_bits = cl_bits;
     if (cl_bits) { /* the indices, one a byte (CL4's high nibble first) */
-        t->indices = t->width > 0 && t->height > 0 ? malloc((size_t)t->width * (size_t)t->height) : NULL;
+        t->indices = t->width > 0 && t->height > 0 ? bb_malloc((size_t)t->width * (size_t)t->height, BB_BYTES) : NULL;
         for (int y = 0; t->indices && y < t->height; y++)
             for (int x = 0; x < t->width; x++) {
                 uint8_t b = rd8(t->image + (uint32_t)y * t->row_bytes + (uint32_t)(cl_bits == 4 ? x >> 1 : x));
@@ -1168,7 +1168,7 @@ static void new_image(ppc_cpu *c, bool bitmap)
     t->texture = upload(t);
     if (!t->texture) {
         tb_DisposePtr(g);
-        free(t);
+        bb_free(t);
         Q3RETURN(kQAOutOfMemory);
         return;
     }
@@ -1197,13 +1197,13 @@ static void new_rtex_from(ppc_cpu *c, bool bitmap)
     else if (x->pixels)
         memcpy(x->access_px, x->pixels, (size_t)x->width * (size_t)x->height * 4);
     int slot = new_tex_slot();
-    rtex *t = slot > 0 ? calloc(1, sizeof *t) : NULL;
+    rtex *t = slot > 0 ? bb_calloc(1, sizeof *t, BB_TAG(rtex)) : NULL;
     gaddr g = t ? tb_NewPtr(8, false, true) : 0;
     gaddr image = g ? tb_NewPtr(x->width * x->height * 4, false, false) : 0;
     if (!image) {
         if (g)
             tb_DisposePtr(g);
-        free(t);
+        bb_free(t);
         Q3RETURN(kQAOutOfMemory);
         return;
     }
@@ -1250,8 +1250,8 @@ static void QATextureDelete(ppc_cpu *c)
         tb_DisposePtr(t->guest);
         if (t->owns_image && t->image)
             tb_DisposePtr(t->image);
-        free(t->indices);
-        free(t);
+        bb_free(t->indices);
+        bb_free(t);
     }
     Q3RETURN(0);
 }
@@ -1361,15 +1361,15 @@ void rave_reset(void)
         if (ctxs[i]) {
             if (!ctxs[i]->external)
                 r3d_frame_free(ctxs[i]->frame);
-            free(ctxs[i]->pixels);
-            free(ctxs[i]->submitted);
-            free(ctxs[i]);
+            bb_free(ctxs[i]->pixels);
+            bb_free(ctxs[i]->submitted);
+            bb_free(ctxs[i]);
             ctxs[i] = NULL;
         }
     for (int i = 0; i < MAX_TEX; i++)
         if (texs[i]) {
             r3d_texture_free(texs[i]->texture);
-            free(texs[i]);
+            bb_free(texs[i]);
             texs[i] = NULL;
         }
     engines[0] = engines[1] = 0;

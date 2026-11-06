@@ -419,7 +419,7 @@ static void heard_fn(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_
 
 int32_t ots_open(provider *p)
 {
-    p->ss = calloc(1, sizeof *p->ss);
+    p->ss = bb_calloc(1, sizeof *p->ss, BB_TAG(struct ot_session));
     if (!p->ss)
         return kOTOutOfMemoryErr;
     p->ss->pap = p->kind == P_PAP;
@@ -434,7 +434,7 @@ void ots_close(provider *p)
     end(p);
     atp_host_cancel(&p->ss->scratch);
     atp_host_cancel(&p->ss->status);
-    free(p->ss);
+    bb_free(p->ss);
     p->ss = NULL;
 }
 
@@ -686,7 +686,7 @@ void ots_Snd(ppc_cpu *c, provider *p)
         return;
     }
     uint32_t want = ot_data_len(buf, n), done = 0;
-    uint8_t *data = malloc(want ? want : 1);
+    uint8_t *data = bb_malloc(want ? want : 1, BB_BYTES);
     if (!data) {
         RETURN((uint32_t)kOTOutOfMemoryErr);
         return;
@@ -700,7 +700,7 @@ void ots_Snd(ppc_cpu *c, provider *p)
                 continue;
             if (!done) {
                 p->flow = true;
-                free(data);
+                bb_free(data);
                 RETURN((uint32_t)kOTFlowErr);
                 return;
             }
@@ -712,7 +712,7 @@ void ots_Snd(ppc_cpu *c, provider *p)
         done += k;
         pap_write(p);
     }
-    free(data);
+    bb_free(data);
     appletalk_poll();
     RETURN(done);
 }

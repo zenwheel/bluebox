@@ -136,7 +136,7 @@ static int nscript, script_next;
 
 void machine_script_add(uint64_t at, int kind, int a, int b, int c)
 {
-    script = realloc(script, (size_t)(nscript + 1) * sizeof *script);
+    script = bb_realloc(script, (size_t)(nscript + 1) * sizeof *script, BB_TAG(script_step));
     script[nscript++] = (script_step){ at, kind, a, b, c };
 }
 
@@ -145,8 +145,8 @@ static int nsnap_paths;
 
 void machine_script_add_snap(uint64_t at, const char *path)
 {
-    snap_paths = realloc(snap_paths, (size_t)(nsnap_paths + 1) * sizeof *snap_paths);
-    snap_paths[nsnap_paths] = strdup(path);
+    snap_paths = bb_realloc(snap_paths, (size_t)(nsnap_paths + 1) * sizeof *snap_paths, BB_TAG(char *));
+    snap_paths[nsnap_paths] = bb_strdup(path);
     machine_script_add(at, 5, nsnap_paths++, 0, 0);
 }
 

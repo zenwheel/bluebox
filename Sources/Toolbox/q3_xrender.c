@@ -126,9 +126,9 @@ static gaddr geom_method(struct q3xr *x, uint32_t type)
 static struct q3xr *xr_new(q3view *v)
 {
     q3class *k = plugin_class(v->renderer);
-    struct q3xr *x = calloc(1, sizeof *x);
+    struct q3xr *x = bb_calloc(1, sizeof *x, BB_TAG(struct q3xr));
     if (!k || !x) {
-        free(x);
+        bb_free(x);
         return NULL;
     }
     x->renderer = v->renderer;
@@ -168,8 +168,8 @@ void q3xr_free(q3view *v)
         return;
     if (x->scratch)
         tb_DisposePtr(x->scratch);
-    free(x->stack);
-    free(x);
+    bb_free(x->stack);
+    bb_free(x);
     v->xr = NULL;
 }
 
@@ -252,10 +252,10 @@ static gaddr attrs_set(const q3attrs *a)
 {
     if (!a->has)
         return 0;
-    q3set *s = calloc(1, sizeof *s);
+    q3set *s = bb_calloc(1, sizeof *s, BB_TAG(q3set));
     q3obj *o = s ? q3_new(Q3_ATTRIBUTE_SET, s) : NULL;
     if (!o) {
-        free(s);
+        bb_free(s);
         return 0;
     }
     uint8_t b[24];
@@ -397,7 +397,7 @@ void q3xr_push(q3view *v)
     update(v);
     if (x->depth == x->cap) {
         int cap = x->cap ? x->cap * 2 : 16;
-        told *n = realloc(x->stack, (size_t)cap * sizeof *n);
+        told *n = bb_realloc(x->stack, (size_t)cap * sizeof *n, BB_TAG(told));
         if (!n)
             return;
         x->stack = n;
@@ -626,10 +626,10 @@ void q3xr_triangles(q3view *v, const q3pv *pv, uint32_t npv, const q3ptri *t, ui
     q3attrs ga;
     memset(&ga, 0, sizeof ga);
     q3attrs_fill(&ga, geom_set);
-    gaddr *sets = calloc(npv, sizeof *sets);
+    gaddr *sets = bb_calloc(npv, sizeof *sets, BB_BYTES);
     gaddr data = q3_galloc(52); /* TQ3TriangleData */
     if (!sets || !data) {
-        free(sets);
+        bb_free(sets);
         q3_gfree(data);
         return;
     }
@@ -650,7 +650,7 @@ void q3xr_triangles(q3view *v, const q3pv *pv, uint32_t npv, const q3ptri *t, ui
     q3_release(whole);
     for (uint32_t i = 0; i < npv; i++)
         q3_release(sets[i]);
-    free(sets);
+    bb_free(sets);
     q3_gfree(data);
 }
 
@@ -705,13 +705,13 @@ void q3xr_image(q3view *v, const float p[3], int dx, int dy, int w, int h, const
     if (!fn || v->cancelled || w <= 0 || h <= 0)
         return;
     update(v);
-    uint8_t *px = malloc((size_t)w * (size_t)h * 4);
+    uint8_t *px = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
     if (!px)
         return;
     for (int i = 0; i < w * h; i++)
         put_be(px + 4 * i, argb[i]);
     gaddr storage = q3_memory_storage_new(px, (uint32_t)(w * h * 4));
-    free(px);
+    bb_free(px);
     gaddr data = q3_galloc(56); /* TQ3PixmapMarkerData */
     if (storage && data) {
         for (int k = 0; k < 3; k++)
@@ -774,7 +774,7 @@ static void region_free(region *r)
         tb_DisposePtr(r->image);
     if (r->clip)
         tb_DisposeRgn(r->clip);
-    free(r);
+    bb_free(r);
 }
 
 static bool is_dctx(gaddr g)
@@ -798,7 +798,7 @@ static region *region_of(gaddr dctx, bool make)
         return NULL;
     for (int i = 0; i < MAX_REGIONS; i++)
         if (!regions[i]) {
-            region *r = calloc(1, sizeof *r);
+            region *r = bb_calloc(1, sizeof *r, BB_TAG(region));
             if (!r)
                 return NULL;
             r->dctx = dctx;

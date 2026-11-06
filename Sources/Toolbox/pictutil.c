@@ -52,7 +52,7 @@ pict_survey *qd_survey;
 
 static pict_survey *survey_new(int16_t verb, int16_t colors, int16_t method)
 {
-    pict_survey *s = calloc(1, sizeof *s);
+    pict_survey *s = bb_calloc(1, sizeof *s, BB_TAG(pict_survey));
     if (!s)
         return NULL;
     s->verb = verb;
@@ -61,9 +61,9 @@ static pict_survey *survey_new(int16_t verb, int16_t colors, int16_t method)
     s->depth = 0;
     s->hres = s->vres = 72u << 16;
     if (verb & (returnColorTable | returnPalette)) {
-        s->seen = calloc(1, 1u << 21);
-        s->count = calloc(HIST, sizeof *s->count);
-        s->sum = calloc(HIST, sizeof *s->sum);
+        s->seen = bb_calloc(1, 1u << 21, BB_BYTES);
+        s->count = bb_calloc(HIST, sizeof *s->count, BB_BYTES);
+        s->sum = bb_calloc(HIST, sizeof *s->sum, BB_BYTES);
     }
     return s;
 }
@@ -72,12 +72,12 @@ static void survey_free(pict_survey *s)
 {
     if (!s)
         return;
-    free(s->seen);
-    free(s->count);
-    free(s->sum);
-    free(s->comments);
-    free(s->fonts);
-    free(s);
+    bb_free(s->seen);
+    bb_free(s->count);
+    bb_free(s->sum);
+    bb_free(s->comments);
+    bb_free(s->fonts);
+    bb_free(s);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -145,7 +145,7 @@ void survey_comment(pict_survey *s, int kind)
             s->comments[i].count++;
             return;
         }
-    void *n = realloc(s->comments, (size_t)(s->ncomments + 1) * sizeof *s->comments);
+    void *n = bb_realloc(s->comments, (size_t)(s->ncomments + 1) * sizeof *s->comments, BB_BYTES);
     if (!n)
         return;
     s->comments = n;
@@ -158,7 +158,7 @@ static font_rec *font_for(pict_survey *s, int pict_id)
     for (int i = 0; i < s->nfonts; i++)
         if (s->fonts[i].pict_id == pict_id)
             return &s->fonts[i];
-    void *n = realloc(s->fonts, (size_t)(s->nfonts + 1) * sizeof *s->fonts);
+    void *n = bb_realloc(s->fonts, (size_t)(s->nfonts + 1) * sizeof *s->fonts, BB_TAG(font_rec));
     if (!n)
         return NULL;
     s->fonts = n;
@@ -259,7 +259,7 @@ static void box_color(const pict_survey *s, const box *b, bool skip_bw, uint16_t
  * longest side, until there are as many boxes as colours wanted. */
 static int pick_median(const pict_survey *s, int want, bool skip_bw, uint16_t (*out)[3])
 {
-    box *boxes = malloc((size_t)want * sizeof *boxes);
+    box *boxes = bb_malloc((size_t)want * sizeof *boxes, BB_TAG(box));
     if (!boxes)
         return 0;
     int n = 1;
@@ -307,7 +307,7 @@ static int pick_median(const pict_survey *s, int want, bool skip_bw, uint16_t (*
     }
     for (int i = 0; i < n; i++)
         box_color(s, &boxes[i], skip_bw, out[i]);
-    free(boxes);
+    bb_free(boxes);
     return n;
 }
 
@@ -315,7 +315,7 @@ static int pick_median(const pict_survey *s, int want, bool skip_bw, uint16_t (*
 static int pick_popular(const pict_survey *s, int want, bool skip_bw, uint16_t (*out)[3])
 {
     int n = 0;
-    int *best = malloc((size_t)want * sizeof *best);
+    int *best = bb_malloc((size_t)want * sizeof *best, BB_BYTES);
     if (!best)
         return 0;
     for (int cell = 0; cell < HIST; cell++) {
@@ -333,7 +333,7 @@ static int pick_popular(const pict_survey *s, int want, bool skip_bw, uint16_t (
     for (int i = 0; i < n; i++)
         for (int k = 0; k < 3; k++)
             out[i][k] = (uint16_t)(s->sum[best[i]][k] / s->count[best[i]] * 0x101);
-    free(best);
+    bb_free(best);
     return n;
 }
 
@@ -404,7 +404,7 @@ static void put_info(const pict_survey *s, gaddr info, int16_t colors)
     wr32(info + PictInfo_uniqueColors_off, s->unique);
     bool skip_bw = s->verb & suppressBlackAndWhite;
     int want = colors > 0 ? colors : 0;
-    uint16_t(*picked)[3] = calloc((size_t)(want ? want : 1), sizeof *picked);
+    uint16_t(*picked)[3] = bb_calloc((size_t)(want ? want : 1), sizeof *picked, BB_BYTES);
     if (!picked)
         return;
     int n = want ? (s->method == medianMethod ? pick_median : pick_popular)(s, want, skip_bw, picked) : 0;
@@ -421,7 +421,7 @@ static void put_info(const pict_survey *s, gaddr info, int16_t colors)
                 wr16(e + 2 + (uint32_t)k * 2, picked[i][k]);
         }
     }
-    free(picked);
+    bb_free(picked);
     if (s->verb & returnPalette)
         wr32(info + PictInfo_thePalette_off, ct ? tb_NewPalette((int16_t)n, ct, 2 /* pmTolerant */, 0) : 0);
     if (s->verb & returnColorTable)
@@ -548,7 +548,7 @@ static int16_t survey_pixmap(pict_survey *s, gaddr pmh)
         gaddr ct = depth <= 8 && (rd16(pm + 4) & 0x8000) ? PixMap_pmTable(pm) : 0;
         gaddr t = ct ? rd32(ct) : 0;
         int nct = t ? (int16_t)rd16(t + 6) + 1 : 0;
-        rgba = base ? malloc((size_t)w * (size_t)h * 4) : NULL;
+        rgba = base ? bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES) : NULL;
         for (int y = 0; rgba && y < h; y++)
             for (int x = 0; x < w; x++) {
                 uint8_t *o = rgba + ((size_t)y * (size_t)w + (size_t)x) * 4;
@@ -582,7 +582,7 @@ static int16_t survey_pixmap(pict_survey *s, gaddr pmh)
             }
     }
     survey_image(s, depth > 1 || (rd16(pm + 4) & 0x8000), depth, rgba, w, h);
-    free(rgba);
+    bb_free(rgba);
     return noErr;
 }
 

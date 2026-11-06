@@ -292,12 +292,12 @@ static int16_t rsrc_view_write(int16_t rn, fcb *f, uint32_t pos, gaddr buf, uint
     if (eof) {
         err = rm_fork_set_eof(rn, pos);
     } else {
-        uint8_t *tmp = malloc(n ? n : 1);
+        uint8_t *tmp = bb_malloc(n ? n : 1, BB_BYTES);
         if (!tmp)
             return memFullErr;
         gget(tmp, buf, n);
         err = rm_fork_write(rn, pos, tmp, n);
-        free(tmp);
+        bb_free(tmp);
     }
     const uint8_t *data;
     uint32_t len;
@@ -401,7 +401,7 @@ static void host_component(const char *dir, const uint8_t *mac, int n, char *out
         return;
     char *side = appledouble_sidecar_path(full);
     bool have_side = side && stat(side, &st) == 0;
-    free(side);
+    bb_free(side);
     if (have_side)
         return;
     DIR *d = opendir(dir[0] ? dir : "/");
@@ -449,8 +449,8 @@ static void hash_rebuild(void)
     uint32_t size = 1024;
     while (size < (uint32_t)dirs_cap * 2)
         size *= 2;
-    free(dir_hash);
-    dir_hash = calloc(size, sizeof *dir_hash);
+    bb_free(dir_hash);
+    dir_hash = bb_calloc(size, sizeof *dir_hash, BB_BYTES);
     dir_hash_size = size;
     for (int i = ROOT_ID; i < ndirs; i++)
         if (dirs[i])
@@ -462,7 +462,7 @@ static bool dirs_room(int32_t id)
 {
     while (id >= dirs_cap) {
         int cap = dirs_cap ? dirs_cap * 2 : 1024;
-        char **nd = realloc(dirs, (size_t)cap * sizeof *nd);
+        char **nd = bb_realloc(dirs, (size_t)cap * sizeof *nd, BB_TAG(char *));
         if (!nd)
             return false;
         memset(nd + dirs_cap, 0, (size_t)(cap - dirs_cap) * sizeof *nd);
@@ -477,8 +477,8 @@ static int32_t place_dir(int32_t id, const char *rel)
 {
     if (id >= MAX_DIRS || !dirs_room(id))
         return 0;
-    free(dirs[id]);
-    dirs[id] = strdup(rel);
+    bb_free(dirs[id]);
+    dirs[id] = bb_strdup(rel);
     if (id >= ndirs)
         ndirs = id + 1;
     if (!dir_hash || (uint32_t)ndirs * 2 > dir_hash_size)
@@ -586,7 +586,7 @@ void fm_grant(const char *path, bool tree)
         if (!strcmp(grants[i].path, full) && grants[i].kind == (tree ? GRANT_TREE : GRANT_FILE))
             return;
     if (ngrants < MAX_GRANTS) {
-        grants[ngrants].path = strdup(full);
+        grants[ngrants].path = bb_strdup(full);
         grants[ngrants].kind = tree ? GRANT_TREE : GRANT_FILE;
         ngrants++;
     }
@@ -781,7 +781,7 @@ bool fm_host_exists(const char *p)
         return true;
     char *side = appledouble_sidecar_path(p);
     bool ok = side && stat(side, &st) == 0;
-    free(side);
+    bb_free(side);
     return ok;
 }
 
@@ -854,16 +854,16 @@ static int list_entries(const char *dir, bool files_only, char ***out)
             continue; /* the Host folder's name is taken */
         if (count == cap) {
             cap = cap ? cap * 2 : 32;
-            names = realloc(names, (size_t)cap * sizeof *names);
+            names = bb_realloc(names, (size_t)cap * sizeof *names, BB_TAG(char *));
         }
-        names[count++] = strdup(name);
+        names[count++] = bb_strdup(name);
     }
     if (d)
         closedir(d);
     if (root && !files_only && ngrants) {
         if (count == cap)
-            names = realloc(names, (size_t)(cap = cap ? cap * 2 : 32) * sizeof *names);
-        names[count++] = strdup(host_folder);
+            names = bb_realloc(names, (size_t)(cap = cap ? cap * 2 : 32) * sizeof *names, BB_TAG(char *));
+        names[count++] = bb_strdup(host_folder);
     }
     if (count)
         qsort(names, (size_t)count, sizeof *names, cmp_names);
@@ -883,8 +883,8 @@ static bool nth_entry(const char *dir, int n, bool files_only, char *out, size_t
             snprintf(out, outsize, "%s/%s", strcmp(dir, "/") ? dir : "", names[n - 1]);
     }
     for (int i = 0; i < count; i++)
-        free(names[i]);
-    free(names);
+        bb_free(names[i]);
+    bb_free(names);
     return ok;
 }
 
@@ -893,8 +893,8 @@ static int count_entries(const char *dir)
     char **names;
     int count = list_entries(dir, false, &names);
     for (int i = 0; i < count; i++)
-        free(names[i]);
-    free(names);
+        bb_free(names[i]);
+    bb_free(names);
     return count;
 }
 
@@ -1091,14 +1091,14 @@ void fm_init(const char *app_dir)
         snprintf(disk, sizeof disk, "%s", disk_path());
     snprintf(root_path, sizeof root_path, "%s", disk);
     for (int i = 0; i < ngrants; i++)
-        free(grants[i].path);
+        bb_free(grants[i].path);
     ngrants = 0;
     for (int i = 0; i < ndirs; i++) {
-        free(dirs[i]);
+        bb_free(dirs[i]);
         dirs[i] = NULL;
     }
     ndirs = ROOT_ID;
-    free(dir_hash);
+    bb_free(dir_hash);
     dir_hash = NULL;
     /* The catalog beside the Macintosh HD folder, with the IDs it keeps. */
     char cat[PATH_MAX + 32];
@@ -1111,7 +1111,7 @@ void fm_init(const char *app_dir)
     catalog_nodes(load_kept_id, NULL);
     memset(wds, 0, sizeof wds);
     for (int i = 0; i < MAX_FCBS; i++)
-        free(fcbs[i].buf);
+        bb_free(fcbs[i].buf);
     memset(fcbs, 0, sizeof fcbs);
     dt_reset();
     block_maps_reset();
@@ -1260,7 +1260,7 @@ static bool host_file_type(const char *path, uint8_t finfo[16])
     int kind = implied_type(path, implied);
     char *side = appledouble_sidecar_path(path);
     bool has_side = (side && exists(side)) || appledouble_has_native(path);
-    free(side);
+    bb_free(side);
     if (!has_side) {
         if (kind)
             memcpy(finfo, implied, 16);
@@ -1286,7 +1286,7 @@ static bool host_file_type(const char *path, uint8_t finfo[16])
 /* Host text (UTF-8, LF or CRLF) to classic text (MacRoman, CR). */
 static uint8_t *text_in(const uint8_t *b, size_t n, size_t *out_n)
 {
-    char *z = malloc(n + 1);
+    char *z = bb_malloc(n + 1, BB_BYTES);
     size_t k = 0;
     for (size_t i = 0; i < n; i++) {
         if (b[i] == '\r' && i + 1 < n && b[i + 1] == '\n')
@@ -1294,16 +1294,16 @@ static uint8_t *text_in(const uint8_t *b, size_t n, size_t *out_n)
         z[k++] = b[i] == '\n' ? '\r' : (char)b[i];
     }
     z[k] = 0;
-    uint8_t *out = malloc(k + 1);
+    uint8_t *out = bb_malloc(k + 1, BB_BYTES);
     *out_n = utf8_to_macroman(z, out, k);
-    free(z);
+    bb_free(z);
     return out;
 }
 
 /* Classic text back to host text. */
 static uint8_t *text_out(const uint8_t *b, size_t n, size_t *out_n)
 {
-    char *out = malloc(n * 3 + 1);
+    char *out = bb_malloc(n * 3 + 1, BB_BYTES);
     size_t k = macroman_to_utf8(b, n, out, n * 3 + 1);
     for (size_t i = 0; i < k; i++)
         if (out[i] == '\r')
@@ -1332,10 +1332,10 @@ static int16_t load_fork(fcb *f)
         src = conv;
     }
     f->cap = (uint32_t)n + 1024;
-    f->buf = malloc(f->cap);
+    f->buf = bb_malloc(f->cap, BB_BYTES);
     memcpy(f->buf, src, n);
     f->len = (uint32_t)n;
-    free(conv);
+    bb_free(conv);
     mac_file_free(&mf);
     return noErr;
 }
@@ -1349,8 +1349,8 @@ static int16_t save_fork(fcb *f)
     if (!appledouble_read(f->path, &mf, err, sizeof err))
         memset(&mf, 0, sizeof mf);
     if (f->rsrc) {
-        free(mf.rsrc);
-        mf.rsrc = malloc(f->len ? f->len : 1);
+        bb_free(mf.rsrc);
+        mf.rsrc = bb_malloc(f->len ? f->len : 1, BB_BYTES);
         memcpy(mf.rsrc, f->buf, f->len);
         mf.rsrc_len = f->len;
     } else if (f->host_text) {
@@ -1362,12 +1362,12 @@ static int16_t save_fork(fcb *f)
         bool ok = fp && fwrite(out, 1, n, fp) == n;
         if (fp)
             ok = (fclose(fp) == 0) && ok;
-        free(out);
+        bb_free(out);
         f->dirty = false;
         return ok ? noErr : ioErrF;
     } else {
-        free(mf.data);
-        mf.data = malloc(f->len ? f->len : 1);
+        bb_free(mf.data);
+        mf.data = bb_malloc(f->len ? f->len : 1, BB_BYTES);
         memcpy(mf.data, f->buf, f->len);
         mf.data_len = f->len;
     }
@@ -1499,7 +1499,7 @@ int16_t fm_close_fork(int16_t rn)
     if (!f)
         return rfNumErr;
     int16_t err = save_fork(f);
-    free(f->buf);
+    bb_free(f->buf);
     memset(f, 0, sizeof *f);
     fm_fcb_forget(rn);
     return err;
@@ -1569,7 +1569,7 @@ static bool reserve(fcb *f, uint64_t need)
     uint32_t cap = f->cap ? f->cap : 1024;
     while (cap < need)
         cap *= 2;
-    uint8_t *nb = realloc(f->buf, cap);
+    uint8_t *nb = bb_realloc(f->buf, cap, BB_BYTES);
     if (!nb)
         return false;
     f->buf = nb;
@@ -1774,7 +1774,7 @@ int16_t fm_block_io(gaddr pb, bool write)
     int16_t err = noErr;
     if (f == &tmp) {
         err = save_fork(&tmp);
-        free(tmp.buf);
+        bb_free(tmp.buf);
     }
     block_mark = off + count;
     wr32(pb + IOParam_ioActCount_off, count);
@@ -1888,7 +1888,7 @@ static void forget_nodes(const char *path)
         return; /* the root stays */
     for (int i = ROOT_ID + 1; i < ndirs; i++)
         if (dirs[i] && rel_under(dirs[i], r, n)) {
-            free(dirs[i]);
+            bb_free(dirs[i]);
             dirs[i] = NULL;
         }
     hash_rebuild();
@@ -1913,8 +1913,8 @@ static void retarget(const char *from, const char *to)
             continue;
         char nr[PATH_MAX + 2];
         snprintf(nr, sizeof nr, "%s%s", t, dirs[i] + fl);
-        free(dirs[i]);
-        dirs[i] = strdup(nr);
+        bb_free(dirs[i]);
+        dirs[i] = bb_strdup(nr);
     }
     hash_rebuild();
     catalog_nodes_moved(f, t);
@@ -1998,7 +1998,7 @@ static int16_t delete_path(const char *path)
     }
     char *side = appledouble_sidecar_path(path);
     unlink(side);
-    free(side);
+    bb_free(side);
     if (unlink(path) != 0 && errno != ENOENT) /* ENOENT: only its sidecar was there */
         return ioErrF;
     as_deleted(path);
@@ -2038,8 +2038,8 @@ static int16_t rename_host(const char *from, const char *to)
         return ioErrF;
     char *s1 = appledouble_sidecar_path(from), *s2 = appledouble_sidecar_path(to);
     rename(s1, s2);
-    free(s1);
-    free(s2);
+    bb_free(s1);
+    bb_free(s2);
     as_moved(from, to);
     retarget(from, to);
     catalog_moved(from, to);
@@ -2129,7 +2129,7 @@ bool fm_info_of(const char *path, fm_info *o)
             memcpy(o->finder_info, finfo, 16);
             if (host_text) {
                 size_t n;
-                free(text_in(mf.data, mf.data_len, &n));
+                bb_free(text_in(mf.data, mf.data_len, &n));
                 o->data_len = (uint32_t)n;
             }
         } else {
@@ -2247,7 +2247,7 @@ static int16_t set_file_info(const char *path, const uint8_t *finfo, const uint8
         char *side = appledouble_sidecar_path(path);
         if (side)
             unlink(side);
-        free(side);
+        bb_free(side);
         return noErr;
     }
     bool ok = appledouble_write(path, &mf, e, sizeof e);
@@ -2352,9 +2352,9 @@ static void count_tree(const char *dir, bool root, uint32_t *files, uint32_t *di
                 (*files)++;
             }
         }
-        free(names[i]);
+        bb_free(names[i]);
     }
-    free(names);
+    bb_free(names);
 }
 
 static void volume_counts(const char *root, uint32_t *files, uint32_t *dirs)
@@ -3701,7 +3701,7 @@ static bool sidecar_finfo(const char *path, uint8_t out[16])
 {
     char *side = appledouble_sidecar_path(path);
     FILE *fp = side ? fopen(side, "rb") : NULL;
-    free(side);
+    bb_free(side);
     if (!fp) { /* none: the file's own (macOS) */
         uint8_t fi[32];
         if (!appledouble_native_finder_info(path, fi) || !memcmp(fi, "\0\0\0\0", 4))
@@ -3726,7 +3726,7 @@ static bool sidecar_finfo(const char *path, uint8_t out[16])
     return ok;
 }
 
-static struct {
+static struct appl_path {
     uint32_t creator;
     char *path;
 } *appls;
@@ -3752,9 +3752,9 @@ static void scan_appls(const char *dir, int depth)
         uint8_t fi[16];
         if (!sidecar_finfo(full, fi) || memcmp(fi, "APPL", 4))
             continue;
-        appls = realloc(appls, (size_t)(nappls + 1) * sizeof *appls);
+        appls = bb_realloc(appls, (size_t)(nappls + 1) * sizeof *appls, BB_TAG(struct appl_path));
         appls[nappls].creator = (uint32_t)fi[4] << 24 | (uint32_t)fi[5] << 16 | (uint32_t)fi[6] << 8 | fi[7];
-        appls[nappls].path = strdup(full);
+        appls[nappls].path = bb_strdup(full);
         nappls++;
     }
     closedir(d);
@@ -3870,7 +3870,7 @@ static void forget_appls(void)
 {
     appls_scanned = false;
     for (int i = 0; i < nappls; i++)
-        free(appls[i].path);
+        bb_free(appls[i].path);
     nappls = 0;
     ndt_read = 0;
 }
@@ -4170,10 +4170,10 @@ static void dt_put_icon(int16_t vref, uint32_t creator, uint32_t type, int kind,
     if (e && !replace)
         return;
     if (!e) {
-        dt_icons = realloc(dt_icons, (size_t)(ndt_icons + 1) * sizeof *dt_icons);
+        dt_icons = bb_realloc(dt_icons, (size_t)(ndt_icons + 1) * sizeof *dt_icons, BB_TAG(dt_icon));
         e = &dt_icons[ndt_icons++];
         *e = (dt_icon){ .vref = vref, .creator = creator, .type = type, .kind = (uint8_t)kind,
-                        .data = malloc(dt_kinds[kind].size) };
+                        .data = bb_malloc(dt_kinds[kind].size, BB_BYTES) };
     }
     e->tag = tag;
     memcpy(e->data, d, dt_kinds[kind].size);
@@ -4201,7 +4201,7 @@ static uint8_t *fork_resource(const uint8_t *fork, const rsrc_index *idx, uint32
             *len = (uint32_t)n;
             return out;
         }
-        out = malloc(e->data_len ? e->data_len : 1);
+        out = bb_malloc(e->data_len ? e->data_len : 1, BB_BYTES);
         memcpy(out, d, e->data_len);
         *len = e->data_len;
         return out;
@@ -4231,10 +4231,10 @@ static void dt_read_bundle(const char *path, int16_t vref, uint32_t creator)
         uint32_t n;
         uint8_t *d = fork_resource(mf.rsrc, &idx, fourcc("BNDL"), idx.entries[i].id, &n);
         if (!d || n < 8 || (bndl && be32_at(bndl) == creator)) {
-            free(d);
+            bb_free(d);
             continue;
         }
-        free(bndl);
+        bb_free(bndl);
         bndl = d;
         blen = n;
     }
@@ -4262,12 +4262,12 @@ static void dt_read_bundle(const char *path, int16_t vref, uint32_t creator)
             uint32_t n;
             uint8_t *fref = fork_resource(mf.rsrc, &idx, fourcc("FREF"), be16_at(bndl + fref_off + 4 * f + 2), &n);
             if (!fref || n < 6) {
-                free(fref);
+                bb_free(fref);
                 continue;
             }
             uint32_t ftype = be32_at(fref);
             int16_t local = be16_at(fref + 4);
-            free(fref);
+            bb_free(fref);
             for (int k = 0; k < icn_n && icn_off + 4 * (uint32_t)k + 4 <= blen; k++) {
                 if (be16_at(bndl + icn_off + 4 * k) != local)
                     continue;
@@ -4276,12 +4276,12 @@ static void dt_read_bundle(const char *path, int16_t vref, uint32_t creator)
                     uint8_t *d = fork_resource(mf.rsrc, &idx, fourcc(dt_kinds[kind].type), id, &n);
                     if (d && n >= dt_kinds[kind].size)
                         dt_put_icon(vref, creator, ftype, kind, 0, d, false);
-                    free(d);
+                    bb_free(d);
                 }
                 break;
             }
         }
-        free(bndl);
+        bb_free(bndl);
     }
     rsrc_index_free(&idx);
     mac_file_free(&mf);
@@ -4293,7 +4293,7 @@ static void dt_read_creator(int16_t vref, uint32_t creator)
     for (int i = 0; i < ndt_read; i++)
         if (dt_read[i].vref == vref && dt_read[i].creator == creator)
             return;
-    dt_read = realloc(dt_read, (size_t)(ndt_read + 1) * sizeof *dt_read);
+    dt_read = bb_realloc(dt_read, (size_t)(ndt_read + 1) * sizeof *dt_read, BB_BYTES);
     dt_read[ndt_read].vref = vref;
     dt_read[ndt_read].creator = creator;
     ndt_read++;
@@ -4430,7 +4430,7 @@ static int16_t set_file_comment(const char *path, const uint8_t *text, uint8_t l
         char *side = appledouble_sidecar_path(path);
         if (side)
             unlink(side);
-        free(side);
+        bb_free(side);
         return noErr;
     }
     bool ok = appledouble_write(path, &mf, e, sizeof e);
@@ -4508,11 +4508,11 @@ static void dt_reset(void)
 {
     forget_appls();
     for (int i = 0; i < ndt_icons; i++)
-        free(dt_icons[i].data);
-    free(dt_icons);
+        bb_free(dt_icons[i].data);
+    bb_free(dt_icons);
     dt_icons = NULL;
     ndt_icons = 0;
-    free(dt_read);
+    bb_free(dt_read);
     dt_read = NULL;
     ndt_read = 0;
     ndt_loaded = 0;
@@ -4528,7 +4528,7 @@ static int16_t dt_clear(gaddr dtp, bool all)
     catalog_dt_reset(dt_root(vref), all);
     for (int i = 0; i < ndt_icons;)
         if (dt_icons[i].vref == vref) {
-            free(dt_icons[i].data);
+            bb_free(dt_icons[i].data);
             dt_icons[i] = dt_icons[--ndt_icons];
         } else {
             i++;
@@ -4587,9 +4587,9 @@ int fm_apple_menu_items(char (*names)[256], int max)
             names[count][len] = 0;
             count++;
         }
-        free(entries[i]);
+        bb_free(entries[i]);
     }
-    free(entries);
+    bb_free(entries);
     return count;
 }
 
@@ -4677,8 +4677,8 @@ int fm_list_dir(const char *dir, char ***paths)
             snprintf(full, sizeof full, "/");
         else
             snprintf(full, sizeof full, "%s/%s", strcmp(dir, "/") ? dir : "", names[i]);
-        free(names[i]);
-        names[i] = strdup(full);
+        bb_free(names[i]);
+        names[i] = bb_strdup(full);
     }
     *paths = names;
     return count;

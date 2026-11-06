@@ -9,6 +9,7 @@
 #if canImport(AppKit)
 import AppKit
 import UniformTypeIdentifiers
+import CCore
 import Toolbox
 
 /// A view showing the Mac screen, or part of it, in host coordinates.
@@ -236,7 +237,7 @@ struct PromiseInfo {
         switch type {
         case .png, .tiff:
             guard let d = Self.fetch(index, Int32(MACHINE_FLAVOR_IMAGE)), let base = d.data else { return }
-            defer { free(base) }
+            defer { bb_free(base) }
             let w = Int(d.width), h = Int(d.height)
             guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8,
                                              samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -248,7 +249,7 @@ struct PromiseInfo {
         default:
             let kind = type == .fileURL ? MACHINE_FLAVOR_FILE : type == .rtf ? MACHINE_FLAVOR_RTF : MACHINE_FLAVOR_TEXT
             guard let d = Self.fetch(index, Int32(kind)), let base = d.data else { return }
-            defer { free(base) }
+            defer { bb_free(base) }
             let data = Data(bytes: base, count: d.size)
             if type == .fileURL, let path = String(data: data, encoding: .utf8) {
                 item.setString(URL(fileURLWithPath: path).absoluteString, forType: .fileURL)
@@ -310,7 +311,7 @@ struct PromiseInfo {
             completionHandler(CocoaError(.fileWriteUnknown))
             return
         }
-        free(base)
+        bb_free(base)
         Self.promiseLock.withLock { Self.droppedFolder = folder.path }
         completionHandler(nil)
     }

@@ -192,12 +192,12 @@ static int backdrop_w, backdrop_h;
 
 void machine_screensaver_set_backdrop(const uint8_t *rgba, int w, int h)
 {
-    free(backdrop);
+    bb_free(backdrop);
     backdrop = NULL;
     if (!rgba || w <= 0 || h <= 0)
         return;
     size_t n = (size_t)w * (size_t)h * 4;
-    backdrop = malloc(n);
+    backdrop = bb_malloc(n, BB_BYTES);
     if (!backdrop)
         return;
     memcpy(backdrop, rgba, n);
@@ -293,7 +293,7 @@ static bool merge_forks(const uint8_t *base, size_t blen, const uint8_t *over, s
         rsrc_index_free(&bi);
         return false;
     }
-    rsrc_spec *specs = calloc(bi.count + oi.count + 1, sizeof *specs);
+    rsrc_spec *specs = bb_calloc(bi.count + oi.count + 1, sizeof *specs, BB_TAG(rsrc_spec));
     size_t n = 0;
     for (size_t i = 0; i < bi.count; i++) {
         const rsrc_entry *e = &bi.entries[i];
@@ -306,7 +306,7 @@ static bool merge_forks(const uint8_t *base, size_t blen, const uint8_t *over, s
         specs[n++] = (rsrc_spec){ e->type, e->id, e->name, e->attrs, rsrc_data(over, &oi, e), e->data_len };
     }
     bool ok = rsrc_build(specs, n, out, outlen);
-    free(specs);
+    bb_free(specs);
     rsrc_index_free(&bi);
     rsrc_index_free(&oi);
     return ok;
@@ -327,11 +327,11 @@ uint8_t *machine_screensaver_module_fork(const char *module, size_t *len)
         read_file(path, &over, &olen) && !merge_forks(mf.rsrc, mf.rsrc_len, over, olen, &out, len))
         out = NULL;
     if (!out && mf.rsrc_len) {
-        out = malloc(mf.rsrc_len);
+        out = bb_malloc(mf.rsrc_len, BB_BYTES);
         memcpy(out, mf.rsrc, mf.rsrc_len);
         *len = mf.rsrc_len;
     }
-    free(over);
+    bb_free(over);
     mac_file_free(&mf);
     return out;
 }
@@ -364,11 +364,11 @@ void afterdark_apply_settings(const char *path, uint32_t type, uint8_t **rsrc, s
         return;
     if (merge_forks(*rsrc, *len, over, olen, &out, &outlen)) {
         LOGF(LOG_RSRC, "After Dark: settings from %s\n", sp);
-        free(*rsrc);
+        bb_free(*rsrc);
         *rsrc = out;
         *len = outlen;
     }
-    free(over);
+    bb_free(over);
 }
 
 static void mkdirs(const char *dir)
@@ -402,7 +402,7 @@ static void save_settings_of(int16_t rn, const char *path)
     rsrc_index bi, ci;
     if (rm_fork_of(rn, &cur, &clen) && rsrc_parse(mf.rsrc, mf.rsrc_len, &bi, err, sizeof err)) {
         if (rsrc_parse(cur, clen, &ci, err, sizeof err)) {
-            rsrc_spec *specs = calloc(ci.count + 1, sizeof *specs);
+            rsrc_spec *specs = bb_calloc(ci.count + 1, sizeof *specs, BB_TAG(rsrc_spec));
             size_t n = 0;
             for (size_t i = 0; i < ci.count; i++) {
                 const rsrc_entry *e = &ci.entries[i], *b = find_entry(&bi, e->type, e->id);
@@ -424,9 +424,9 @@ static void save_settings_of(int16_t rn, const char *path)
                     fclose(fp);
                     LOGF(LOG_RSRC, "After Dark: %zu changed resources kept in %s\n", n, sp);
                 }
-                free(out);
+                bb_free(out);
             }
-            free(specs);
+            bb_free(specs);
             rsrc_index_free(&ci);
         }
         rsrc_index_free(&bi);
@@ -456,7 +456,7 @@ bool machine_screensaver_store_resource(const char *module, uint32_t type, int16
         memset(&oi, 0, sizeof oi);
     const rsrc_entry *b = find_entry(&bi, type, id);
     bool same = b && b->data_len == len && !memcmp(rsrc_data(mf.rsrc, &bi, b), data, len);
-    rsrc_spec *specs = calloc(oi.count + 2, sizeof *specs);
+    rsrc_spec *specs = bb_calloc(oi.count + 2, sizeof *specs, BB_TAG(rsrc_spec));
     size_t n = 0;
     for (size_t i = 0; i < oi.count; i++) {
         const rsrc_entry *e = &oi.entries[i];
@@ -476,13 +476,13 @@ bool machine_screensaver_store_resource(const char *module, uint32_t type, int16
         ok = fp && fwrite(out, 1, outlen, fp) == outlen;
         if (fp)
             fclose(fp);
-        free(out);
+        bb_free(out);
     }
-    free(specs);
+    bb_free(specs);
     if (oi.entries)
         rsrc_index_free(&oi);
     rsrc_index_free(&bi);
-    free(over);
+    bb_free(over);
     mac_file_free(&mf);
     return ok;
 }
@@ -1417,7 +1417,7 @@ bool machine_screensaver_add_module(const char *path)
 {
     if (!path || rot.n == MAX_ROTATION)
         return false;
-    rot.paths[rot.n++] = strdup(path);
+    rot.paths[rot.n++] = bb_strdup(path);
     return true;
 }
 
@@ -1430,7 +1430,7 @@ void machine_screensaver_set_rotation(double seconds, bool random)
 static void rotation_reset(void)
 {
     for (int i = 0; i < rot.n; i++)
-        free(rot.paths[i]);
+        bb_free(rot.paths[i]);
     memset(&rot, 0, sizeof rot);
 }
 
@@ -1628,7 +1628,7 @@ void afterdark_idle(void)
     /* What goes back: the screen's pixels and colours. */
     uint32_t base = rd32(LM_ScrnBase);
     uint32_t len = qd_screen_row_bytes() * (uint32_t)g_screen_height;
-    uint8_t *saved = malloc(len);
+    uint8_t *saved = bb_malloc(len, BB_BYTES);
     if (saved)
         memcpy(saved, gptr(base), len);
     gaddr colors = copy_screen_colors();
@@ -1662,7 +1662,7 @@ void afterdark_idle(void)
     restore_screen_colors(colors);
     if (saved) {
         memcpy(gptr(base), saved, len);
-        free(saved);
+        bb_free(saved);
     }
     if (crsr)
         tb_ShowCursor();

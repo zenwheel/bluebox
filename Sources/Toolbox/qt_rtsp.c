@@ -272,13 +272,13 @@ static void enqueue(qts_net *n, int media, const uint8_t *d, size_t len)
 {
     if (n->nqueue == n->capqueue) {
         int cap = n->capqueue ? n->capqueue * 2 : 64;
-        packet *q = realloc(n->queue, (size_t)cap * sizeof *q);
+        packet *q = bb_realloc(n->queue, (size_t)cap * sizeof *q, BB_TAG(packet));
         if (!q)
             return;
         n->queue = q;
         n->capqueue = cap;
     }
-    uint8_t *b = malloc(len ? len : 1);
+    uint8_t *b = bb_malloc(len ? len : 1, BB_BYTES);
     if (!b)
         return;
     memcpy(b, d, len);
@@ -302,7 +302,7 @@ static bool fill(qts_net *n, int wait_ms)
     for (;;) {
         if (n->incap - n->inlen < 4096) {
             size_t cap = n->incap ? n->incap * 2 : 65536;
-            uint8_t *b = realloc(n->in, cap);
+            uint8_t *b = bb_realloc(n->in, cap, BB_BYTES);
             if (!b)
                 return false;
             n->in = b;
@@ -364,7 +364,7 @@ static char *next_message(qts_net *n)
                 body = (size_t)atol((char *)n->in + i + 15);
         if (n->inlen < head + body)
             return NULL;
-        char *msg = malloc(head + body + 1);
+        char *msg = bb_malloc(head + body + 1, BB_BYTES);
         if (!msg)
             return NULL;
         memcpy(msg, n->in, head + body);
@@ -425,7 +425,7 @@ static char *request(qts_net *n, const char *method, const char *url, const char
         if (msg) {
             char cs[16];
             if (header(msg, "CSeq", cs, sizeof cs) && atoi(cs) != n->cseq) { /* an old one */
-                free(msg);
+                bb_free(msg);
                 continue;
             }
             sscanf(msg, "RTSP/%*d.%*d %d", status);
@@ -439,7 +439,7 @@ static char *request(qts_net *n, const char *method, const char *url, const char
 
 static qts_net *net_new(void)
 {
-    qts_net *n = calloc(1, sizeof *n);
+    qts_net *n = bb_calloc(1, sizeof *n, BB_TAG(qts_net));
     if (!n)
         return NULL;
     n->fd = -1;
@@ -468,14 +468,14 @@ qts_net *qts_net_rtsp(const char *url, char **sdp, int16_t *err)
     snprintf(n->url, sizeof n->url, "%s", url);
     n->fd = connect_to(host, port);
     if (n->fd < 0) {
-        free(n);
+        bb_free(n);
         *err = qtsConnectionFailedErr;
         return NULL;
     }
     int status;
     char *msg = request(n, "DESCRIBE", url, "Accept: application/sdp\r\n", &status);
     if (!msg || status != 200) {
-        free(msg);
+        bb_free(msg);
         *err = !msg ? qtsTimeoutErr : status == 404 ? -43 /* fnfErr */ : qtsConnectionFailedErr;
         qts_net_close(n);
         return NULL;
@@ -484,8 +484,8 @@ qts_net *qts_net_rtsp(const char *url, char **sdp, int16_t *err)
         !header(msg, "Content-Location", n->base, sizeof n->base))
         snprintf(n->base, sizeof n->base, "%s", url);
     const char *body = strstr(msg, "\r\n\r\n");
-    *sdp = strdup(body ? body + 4 : "");
-    free(msg);
+    *sdp = bb_strdup(body ? body + 4 : "");
+    bb_free(msg);
     *err = 0;
     return n;
 }
@@ -503,7 +503,7 @@ int16_t qts_net_setup(qts_net *n, const qts_sdp *sdp)
         int status;
         char *msg = request(n, "SETUP", sdp->m[i].control[0] ? sdp->m[i].control : n->url, extra, &status);
         if (!msg || status != 200) {
-            free(msg);
+            bb_free(msg);
             return msg ? (status == 461 ? qtsUnsupportedFeatureErr : qtsConnectionFailedErr) : qtsTimeoutErr;
         }
         char v[256];
@@ -521,7 +521,7 @@ int16_t qts_net_setup(qts_net *n, const qts_sdp *sdp)
         }
         if (a >= 0 && a < 64)
             n->channel_media[a] = i;
-        free(msg);
+        bb_free(msg);
     }
     return 0;
 }
@@ -535,7 +535,7 @@ int16_t qts_net_play(qts_net *n, double from)
         snprintf(extra, sizeof extra, "Range: npt=%.3f-\r\n", from);
     int status;
     char *msg = request(n, "PLAY", n->aggregate, extra, &status);
-    free(msg);
+    bb_free(msg);
     return !msg ? qtsTimeoutErr : status == 200 ? 0 : status == 457 ? qtsBadDataErr : qtsConnectionFailedErr;
 }
 
@@ -545,7 +545,7 @@ int16_t qts_net_pause(qts_net *n)
         return 0;
     int status;
     char *msg = request(n, "PAUSE", n->aggregate, NULL, &status);
-    free(msg);
+    bb_free(msg);
     return !msg ? qtsTimeoutErr : status == 200 ? 0 : qtsConnectionFailedErr;
 }
 
@@ -567,10 +567,10 @@ void qts_net_close(qts_net *n)
         if (n->udp[i] >= 0)
             close(n->udp[i]);
     for (int i = 0; i < n->nqueue; i++)
-        free(n->queue[i].data);
-    free(n->queue);
-    free(n->in);
-    free(n);
+        bb_free(n->queue[i].data);
+    bb_free(n->queue);
+    bb_free(n->in);
+    bb_free(n);
 }
 
 qts_net *qts_net_udp(const qts_sdp *sdp, int16_t *err)
@@ -620,7 +620,7 @@ int qts_net_poll(qts_net *n, qts_packet_fn fn, void *ctx)
         fill(n, 0);
         char *msg;
         while ((msg = next_message(n))) /* answers nobody waits for (keep-alives) */
-            free(msg);
+            bb_free(msg);
     }
     uint8_t buf[65536];
     for (int i = 0; i < QTS_MAX_MEDIA; i++)
@@ -635,7 +635,7 @@ int qts_net_poll(qts_net *n, qts_packet_fn fn, void *ctx)
     for (int i = 0; i < n->nqueue; i++) {
         if (fn)
             fn(ctx, n->queue[i].media, n->queue[i].data, n->queue[i].len);
-        free(n->queue[i].data);
+        bb_free(n->queue[i].data);
     }
     n->nqueue = 0;
     return count;
@@ -703,7 +703,7 @@ qts_depay *qts_depay_new(const qts_sdp_media *m)
     int k = kind_of(m);
     if (k == P_NONE)
         return NULL;
-    qts_depay *d = calloc(1, sizeof *d);
+    qts_depay *d = bb_calloc(1, sizeof *d, BB_TAG(qts_depay));
     if (!d)
         return NULL;
     d->kind = k;
@@ -719,10 +719,10 @@ void qts_depay_free(qts_depay *d)
         return;
     if (d->vdec)
         qt_vdec_free(d->vdec);
-    free(d->frame);
-    free(d->desc);
-    free(d->buf);
-    free(d);
+    bb_free(d->frame);
+    bb_free(d->desc);
+    bb_free(d->buf);
+    bb_free(d);
 }
 
 uint32_t qts_depay_media(const qts_depay *d) { return d->media; }
@@ -766,7 +766,7 @@ static uint32_t dvi4(const uint8_t *p, size_t n, int16_t **pcm)
         return 0;
     int pred = (int16_t)(p[0] << 8 | p[1]), index = p[2] > 88 ? 88 : p[2];
     size_t frames = (n - 4) * 2;
-    int16_t *out = malloc(frames * sizeof *out);
+    int16_t *out = bb_malloc(frames * sizeof *out, BB_BYTES);
     if (!out)
         return 0;
     for (size_t i = 0; i < frames; i++) {
@@ -796,7 +796,7 @@ static bool append(qts_depay *d, const uint8_t *p, size_t n, size_t at)
             cap *= 2;
         if (cap > 64 * 1024 * 1024)
             return false;
-        uint8_t *b = realloc(d->buf, cap);
+        uint8_t *b = bb_realloc(d->buf, cap, BB_BYTES);
         if (!b)
             return false;
         d->buf = b;
@@ -878,7 +878,7 @@ uint8_t *qts_jpeg_frame(int type, int q, int w, int h, const uint8_t *qtables, i
             cq[i] = (uint8_t)(b < 1 ? 1 : b > 255 ? 255 : b);
         }
     }
-    uint8_t *out = malloc(1024 + scan_len);
+    uint8_t *out = bb_malloc(1024 + scan_len, BB_BYTES);
     if (!out)
         return NULL;
     uint8_t *p = out;
@@ -951,7 +951,7 @@ static int jpeg_packet(qts_depay *d, const uint8_t *p, size_t n, bool marker, ui
     if (!j)
         return 0;
     bool ok = qt_decode_image(j, jl, &out->rgba, &out->w, &out->h);
-    free(j);
+    bb_free(j);
     out->time = ts;
     return ok ? 1 : 0;
 }
@@ -962,8 +962,8 @@ static void xqt_description(qts_depay *d, const uint8_t *desc, uint32_t len)
 {
     if (d->desc && d->desc_len == len && !memcmp(d->desc, desc, len))
         return;
-    free(d->desc);
-    d->desc = malloc(len);
+    bb_free(d->desc);
+    d->desc = bb_malloc(len, BB_BYTES);
     if (!d->desc)
         return;
     memcpy(d->desc, desc, len);
@@ -972,7 +972,7 @@ static void xqt_description(qts_depay *d, const uint8_t *desc, uint32_t len)
         qt_vdec_free(d->vdec);
         d->vdec = NULL;
     }
-    free(d->frame);
+    bb_free(d->frame);
     d->frame = NULL;
     if (len < 16)
         return;
@@ -983,7 +983,7 @@ static void xqt_description(qts_depay *d, const uint8_t *desc, uint32_t len)
         if (format != fourcc("jpeg") && qt_vdec_supported(format, d->vf.depth) && d->vf.width > 0 &&
             d->vf.height > 0 && d->vf.width <= 4096 && d->vf.height <= 4096) {
             d->vdec = qt_vdec_new(&d->vf);
-            d->frame = calloc((size_t)d->vf.width * (size_t)d->vf.height, 4);
+            d->frame = bb_calloc((size_t)d->vf.width * (size_t)d->vf.height, 4, BB_BYTES);
         }
     } else if (d->desc_media == fourcc("soun") && len >= 36) {
         d->sf = (qt_sound_format){ format, desc[24] << 8 | desc[25], desc[26] << 8 | desc[27],
@@ -1004,7 +1004,7 @@ static int xqt_sample(qts_depay *d, const uint8_t *s, size_t n, uint32_t ts, qts
         if (!d->vdec || !qt_vdec_decode(d->vdec, s, n, d->frame))
             return 0;
         size_t bytes = (size_t)d->vf.width * (size_t)d->vf.height * 4;
-        out->rgba = malloc(bytes);
+        out->rgba = bb_malloc(bytes, BB_BYTES);
         if (!out->rgba)
             return 0;
         memcpy(out->rgba, d->frame, bytes);
@@ -1105,7 +1105,7 @@ int qts_depay_packet(qts_depay *d, const uint8_t *pkt, size_t len, qts_unit *out
         size_t frames = n / bytes / (size_t)d->channels;
         if (!frames)
             return 0;
-        int16_t *pcm = malloc(frames * (size_t)d->channels * sizeof *pcm);
+        int16_t *pcm = bb_malloc(frames * (size_t)d->channels * sizeof *pcm, BB_BYTES);
         if (!pcm)
             return 0;
         for (size_t i = 0; i < frames * (size_t)d->channels; i++)

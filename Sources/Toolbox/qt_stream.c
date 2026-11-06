@@ -200,7 +200,7 @@ static void stream_free(stream *s)
     if (s->token)
         tb_DisposePtr(s->token);
     qts_depay_free(s->depay);
-    free(s->frame);
+    bb_free(s->frame);
     sound_host_stop(sound_id(s));
 }
 
@@ -212,12 +212,12 @@ static pres *pres_new(int32_t scale, int32_t flags, gaddr proc, gaddr refcon)
             slot = i;
     if (slot < 0)
         return NULL;
-    pres *p = calloc(1, sizeof *p);
+    pres *p = bb_calloc(1, sizeof *p, BB_TAG(pres));
     if (!p)
         return NULL;
     p->token = tb_NewPtr(4, false, true);
     if (!p->token) {
-        free(p);
+        bb_free(p);
         return NULL;
     }
     wr32(p->token, fourcc("qtsp"));
@@ -245,7 +245,7 @@ static void pres_free(pres *p)
     if (p->settings)
         tb_DisposeHandle(p->settings);
     tb_DisposePtr(p->token);
-    free(p);
+    bb_free(p);
 }
 
 /* The presentation's streams from its description (the program told of each). */
@@ -279,7 +279,7 @@ static int16_t pres_from_url(pres *p, const char *url)
         return err;
     snprintf(p->url, sizeof p->url, "%s", url);
     err = qts_sdp_parse(sdp, strlen(sdp), url, &p->sdp) ? 0 : qtsBadDataErr;
-    free(sdp);
+    bb_free(sdp);
     return err;
 }
 
@@ -315,7 +315,7 @@ static uint8_t *file_bytes(const char *path, size_t *n)
     FILE *f = fopen(path, "rb");
     if (!f)
         return NULL;
-    uint8_t *b = malloc(65537);
+    uint8_t *b = bb_malloc(65537, BB_BYTES);
     *n = b ? fread(b, 1, 65536, f) : 0;
     fclose(f);
     return b;
@@ -345,18 +345,18 @@ static int16_t pres_from_dref(pres *p, uint32_t type, gaddr h)
         size_t fl;
         uint8_t *fb = file_bytes(path, &fl);
         err = fb ? pres_from_bytes(p, fb, fl, NULL) : fnfErrQ;
-        free(fb);
+        bb_free(fb);
     } else if (type == fourcc("hndl") && n >= 4 && rd32((uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3])) {
         gaddr hh = (uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3];
         uint32_t hl = (uint32_t)tb_GetHandleSize(hh);
-        uint8_t *hb = malloc(hl + 1);
+        uint8_t *hb = bb_malloc(hl + 1, BB_BYTES);
         gget(hb, rd32(hh), hl);
         err = pres_from_bytes(p, hb, hl, NULL);
-        free(hb);
+        bb_free(hb);
     } else {
         err = qtsUnsupportedDataTypeErr;
     }
-    free(b);
+    bb_free(b);
     return err;
 }
 
@@ -543,7 +543,7 @@ static void take_packet(void *ctx, int media, const uint8_t *pkt, size_t len)
         return;
     s->units++;
     if (u.rgba) {
-        free(s->frame);
+        bb_free(s->frame);
         s->frame = u.rgba;
         s->fw = u.w;
         s->fh = u.h;
@@ -558,7 +558,7 @@ static void take_packet(void *ctx, int media, const uint8_t *pkt, size_t len)
             vol = vol * tb_GetMovieVolume((int32_t)pp->movie) / 0x100;
         if (s->enabled && s->presenting && vol > 0 && pp->playing)
             sound_host_pcm(sound_id(s), u.pcm, (int)u.frames, u.channels, u.rate, (float)vol / 256.0f);
-        free(u.pcm);
+        bb_free(u.pcm);
         if (s->type != fourcc("soun"))
             s->type = fourcc("soun");
     }
@@ -591,24 +591,24 @@ static int16_t new_presentation(pres **out, uint32_t type, gaddr data, uint32_t 
         return memFullErrQ;
     int16_t err;
     if (type == fourcc("sdp ")) {
-        uint8_t *b = malloc(len + 1);
+        uint8_t *b = bb_malloc(len + 1, BB_BYTES);
         gget(b, data, len);
         err = data ? pres_from_bytes(p, b, len, NULL) : paramErrQ;
-        free(b);
+        bb_free(b);
     } else if (type == fourcc("fspc")) {
         char path[1024];
         size_t n;
         uint8_t *b = spec_path(data, path, sizeof path) ? file_bytes(path, &n) : NULL;
         err = b ? pres_from_bytes(p, b, n, NULL) : fnfErrQ;
-        free(b);
+        bb_free(b);
     } else if (type == fourcc("hndl")) {
         gaddr h = data ? rd32(data) : 0;
         if (h && rd32(h)) {
             uint32_t hl = (uint32_t)tb_GetHandleSize(h);
-            uint8_t *b = malloc(hl + 1);
+            uint8_t *b = bb_malloc(hl + 1, BB_BYTES);
             gget(b, rd32(h), hl);
             err = pres_from_bytes(p, b, hl, NULL);
-            free(b);
+            bb_free(b);
         } else {
             err = paramErrQ;
         }
@@ -809,11 +809,11 @@ static void QTS_QTSPresNewStream(ppc_cpu *c)
         RET(qtsUnsupportedDataTypeErr);
         return;
     }
-    char *b = malloc(len + 1);
+    char *b = bb_malloc(len + 1, BB_BYTES);
     gget(b, data, len);
     qts_sdp more;
     bool ok = qts_sdp_parse(b, len, p->url, &more);
-    free(b);
+    bb_free(b);
     if (!ok || !more.nmedia || p->sdp.nmedia >= QTS_MAX_MEDIA) {
         RET(ok ? qtsTooMuchDataErr : qtsBadDataErr);
         return;
@@ -1961,13 +1961,13 @@ static void QTS_QTSInsertStatistic(ppc_cpu *c)
         RET(err ? err : memFullErrQ);
         return;
     }
-    uint8_t *v = malloc(len ? len : 1);
+    uint8_t *v = bb_malloc(len ? len : 1, BB_BYTES);
     if (len)
         gget(v, data, len);
     uint8_t fb[4] = { (uint8_t)(fmt >> 24), (uint8_t)(fmt >> 16), (uint8_t)(fmt >> 8), (uint8_t)fmt };
     qt_atoms_insert(cont, a, fourcc("frmt"), 1, 0, fb, 4, &err);
     qt_atoms_insert(cont, a, fourcc("data"), 1, 0, v, len, &err);
-    free(v);
+    bb_free(v);
     RET(err);
 }
 
@@ -1988,11 +1988,11 @@ static int16_t stat_child(gaddr cont, uint32_t parent, uint32_t type, uint32_t c
 static void QTS_QTSInsertStatisticName(ppc_cpu *c)
 {
     uint32_t n = ARG(4);
-    char *b = malloc(n ? n : 1);
+    char *b = bb_malloc(n ? n : 1, BB_BYTES);
     if (n)
         gget(b, ARG(3), n);
     int16_t err = stat_child(ARG(0), ARG(1), ARG(2), fourcc("name"), b, n);
-    free(b);
+    bb_free(b);
     RET(err);
 }
 
@@ -2002,10 +2002,10 @@ static void QTS_QTSInsertStatisticUnits(ppc_cpu *c)
     uint8_t ub[4] = { (uint8_t)(units >> 24), (uint8_t)(units >> 16), (uint8_t)(units >> 8), (uint8_t)units };
     int16_t err = stat_child(ARG(0), ARG(1), ARG(2), fourcc("unit"), ub, 4);
     if (!err && n && ARG(4)) {
-        char *b = malloc(n);
+        char *b = bb_malloc(n, BB_BYTES);
         gget(b, ARG(4), n);
         err = stat_child(ARG(0), ARG(1), ARG(2), fourcc("unin"), b, n);
-        free(b);
+        bb_free(b);
     }
     RET(err);
 }
@@ -2144,7 +2144,7 @@ static void default_prefs(void)
     conns[nconns++] = (conn_pref){ fourcc("udp "), 6970, 0, 1 };
     conns[nconns++] = (conn_pref){ fourcc("http"), 80, 0, 1 };
     nproxies = 0;
-    free(no_proxy);
+    bb_free(no_proxy);
     no_proxy = NULL;
 }
 
@@ -2281,8 +2281,8 @@ static void QTS_QTSPrefsGetNoProxyURLs(ppc_cpu *c)
 
 static void QTS_QTSPrefsSetNoProxyURLs(ppc_cpu *c)
 {
-    free(no_proxy);
-    no_proxy = ARG(0) ? strdup(guest_cstr(ARG(0))) : NULL;
+    bb_free(no_proxy);
+    no_proxy = ARG(0) ? bb_strdup(guest_cstr(ARG(0))) : NULL;
     no_proxy_flags = ARG(1);
     no_proxy_seed = ARG(2);
     RET(0);
@@ -2407,14 +2407,14 @@ int16_t qt_stream_import_file(const char *path, gaddr moviep, int16_t flags)
     bool sdp = n >= 4 && !memcmp(b, "v=0", 3) && (b[3] == '\r' || b[3] == '\n');
     bool text = n >= 8 && !memcmp(b, "RTSPtext", 8);
     if (!sdp && !text) {
-        free(b);
+        bb_free(b);
         return noMovieFound;
     }
     if (moviep)
         wr32(moviep, 0);
     pres *p = pres_new(kPresTimeScale, 0, 0, 0);
     int16_t err = p ? pres_from_bytes(p, b, n, NULL) : memFullErrQ;
-    free(b);
+    bb_free(b);
     if (!err)
         err = movie_for(p, moviep, flags, p->url[0] ? p->url : path);
     if (err && p)
@@ -2447,10 +2447,10 @@ void qt_stream_adopt(gaddr movie)
         pres *p = err ? NULL : pres_new(kPresTimeScale, 0, 0, 0);
         if (p) {
             uint32_t len = (uint32_t)tb_GetHandleSize(h);
-            uint8_t *b = malloc(len + 1);
+            uint8_t *b = bb_malloc(len + 1, BB_BYTES);
             gget(b, rd32(h), len);
             err = len >= 20 && !memcmp(b + 16, "sean", 4) ? pres_from_atoms(p, h, 0) : pres_from_bytes(p, b, len, NULL);
-            free(b);
+            bb_free(b);
             if (err) {
                 pres_free(p);
             } else {
@@ -2497,7 +2497,7 @@ void qt_stream_reset(void)
     for (int i = 0; i < MAX_PRES; i++)
         if (press[i]) {
             qts_net_close(press[i]->net);
-            free(press[i]);
+            bb_free(press[i]);
             press[i] = NULL;
         }
     memset(helpers, 0, sizeof helpers);

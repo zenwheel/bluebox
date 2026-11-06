@@ -78,10 +78,10 @@ static void free_hits(session *s)
 {
     for (int i = 0; i < s->nhits; i++) {
         for (int k = 0; k < s->hits[i].nmatched; k++)
-            free(s->hits[i].matched[k]);
-        free(s->hits[i].matched);
+            bb_free(s->hits[i].matched[k]);
+        bb_free(s->hits[i].matched);
     }
-    free(s->hits);
+    bb_free(s->hits);
     s->hits = NULL;
     s->nhits = 0;
 }
@@ -90,10 +90,10 @@ void rest_fbc_reset(void)
 {
     for (int i = 0; i < ndocs; i++) {
         for (int k = 0; k < docs[i].nterms; k++)
-            free(docs[i].terms[k].word);
-        free(docs[i].terms);
+            bb_free(docs[i].terms[k].word);
+        bb_free(docs[i].terms);
     }
-    free(docs);
+    bb_free(docs);
     docs = NULL;
     ndocs = capdocs = nindexed = 0;
     for (int i = 0; i < MAX_SESSIONS; i++) {
@@ -177,9 +177,9 @@ static void words_of(const uint8_t *text, size_t n, wordlist *out)
             if (k >= 2 && !is_stop(cur)) {
                 if (out->n == out->cap) {
                     out->cap = out->cap ? out->cap * 2 : 64;
-                    out->w = realloc(out->w, (size_t)out->cap * sizeof *out->w);
+                    out->w = bb_realloc(out->w, (size_t)out->cap * sizeof *out->w, BB_TAG(char *));
                 }
-                out->w[out->n++] = strdup(cur);
+                out->w[out->n++] = bb_strdup(cur);
             }
             k = 0;
         }
@@ -191,8 +191,8 @@ static int cmp_words(const void *a, const void *b) { return strcmp(*(char *const
 static void free_words(wordlist *l)
 {
     for (int i = 0; i < l->n; i++)
-        free(l->w[i]);
-    free(l->w);
+        bb_free(l->w[i]);
+    bb_free(l->w);
     memset(l, 0, sizeof *l);
 }
 
@@ -208,7 +208,7 @@ static void add_document(const char *path, int16_t vref, const uint8_t spec[70],
     qsort(wl.w, (size_t)wl.n, sizeof *wl.w, cmp_words);
     if (ndocs == capdocs) {
         capdocs = capdocs ? capdocs * 2 : 32;
-        docs = realloc(docs, (size_t)capdocs * sizeof *docs);
+        docs = bb_realloc(docs, (size_t)capdocs * sizeof *docs, BB_TAG(document));
     }
     int at = -1;
     for (int i = 0; i < ndocs; i++)
@@ -218,26 +218,26 @@ static void add_document(const char *path, int16_t vref, const uint8_t spec[70],
         at = ndocs++;
     else {
         for (int k = 0; k < docs[at].nterms; k++)
-            free(docs[at].terms[k].word);
-        free(docs[at].terms);
+            bb_free(docs[at].terms[k].word);
+        bb_free(docs[at].terms);
     }
     document *d = &docs[at];
     memset(d, 0, sizeof *d);
     snprintf(d->path, sizeof d->path, "%s", path);
     memcpy(d->spec, spec, 70);
     d->vref = vref;
-    d->terms = calloc((size_t)wl.n, sizeof *d->terms);
+    d->terms = bb_calloc((size_t)wl.n, sizeof *d->terms, BB_TAG(term));
     for (int i = 0; i < wl.n; i++) {
         if (d->nterms && !strcmp(d->terms[d->nterms - 1].word, wl.w[i])) {
             d->terms[d->nterms - 1].count++;
-            free(wl.w[i]);
+            bb_free(wl.w[i]);
         } else {
             d->terms[d->nterms].word = wl.w[i];
             d->terms[d->nterms++].count = 1;
         }
         d->total++;
     }
-    free(wl.w);
+    bb_free(wl.w);
 }
 
 static term *find_term(const document *d, const char *w)
@@ -293,9 +293,9 @@ static int index_path(const char *path, int depth, bool *cancel, int total, int 
         for (int i = 0; i < k; i++) {
             if (depth < 16)
                 n += index_path(kids[i], depth + 1, cancel, total, done);
-            free(kids[i]);
+            bb_free(kids[i]);
         }
-        free(kids);
+        bb_free(kids);
         return n;
     }
     FILE *f = fopen(path, "rb");
@@ -304,7 +304,7 @@ static int index_path(const char *path, int depth, bool *cancel, int total, int 
         long size = ftell(f);
         fseek(f, 0, SEEK_SET);
         if (size > 0 && size < (32L << 20)) {
-            uint8_t *buf = malloc((size_t)size);
+            uint8_t *buf = bb_malloc((size_t)size, BB_BYTES);
             size_t got = fread(buf, 1, (size_t)size, f);
             if (looks_like_text(buf, got)) {
                 uint8_t spec[70] = { 0 };
@@ -319,7 +319,7 @@ static int index_path(const char *path, int depth, bool *cancel, int total, int 
                 note_indexed(vref, (uint32_t)(got / 2 + 64));
                 n++;
             }
-            free(buf);
+            bb_free(buf);
         }
         fclose(f);
     }
@@ -371,8 +371,8 @@ static void fbc_FBCDeleteIndexFileForFolder(ppc_cpu *c)
     for (int i = 0; i < ndocs;) {
         if (!strncmp(docs[i].path, path, pl) && (docs[i].path[pl] == '/' || !docs[i].path[pl])) {
             for (int k = 0; k < docs[i].nterms; k++)
-                free(docs[i].terms[k].word);
-            free(docs[i].terms);
+                bb_free(docs[i].terms[k].word);
+            bb_free(docs[i].terms);
             memmove(&docs[i], &docs[i + 1], (size_t)(ndocs - i - 1) * sizeof *docs);
             ndocs--;
             removed++;
@@ -614,11 +614,11 @@ static int16_t run_search(session *s, wordlist *q, gaddr targets, uint32_t ntarg
     s->maxWords = maxWords;
     qsort(q->w, (size_t)q->n, sizeof *q->w, cmp_words);
     int uq = 0; /* distinct query words, in a list of their own */
-    char **uw = malloc((size_t)(q->n ? q->n : 1) * sizeof *uw);
+    char **uw = bb_malloc((size_t)(q->n ? q->n : 1) * sizeof *uw, BB_TAG(char *));
     for (int i = 0; i < q->n; i++)
         if (!uq || strcmp(uw[uq - 1], q->w[i]))
             uw[uq++] = q->w[i];
-    scored *sc = calloc(ndocs ? (size_t)ndocs : 1, sizeof *sc);
+    scored *sc = bb_calloc(ndocs ? (size_t)ndocs : 1, sizeof *sc, BB_TAG(scored));
     int ns = 0;
     double best = 0;
     for (int d = 0; d < ndocs; d++) {
@@ -645,27 +645,27 @@ static int16_t run_search(session *s, wordlist *q, gaddr targets, uint32_t ntarg
             best = score > best ? score : best;
         }
         if (progress(kFBCphSearching, 100.0 * (d + 1) / ndocs)) {
-            free(sc);
-            free(uw);
+            bb_free(sc);
+            bb_free(uw);
             return kFBCaccessCanceled;
         }
     }
     qsort(sc, (size_t)ns, sizeof *sc, cmp_scored);
     if (maxHits && (uint32_t)ns > maxHits)
         ns = (int)maxHits;
-    s->hits = calloc(ns ? (size_t)ns : 1, sizeof *s->hits);
+    s->hits = bb_calloc(ns ? (size_t)ns : 1, sizeof *s->hits, BB_TAG(hit));
     for (int i = 0; i < ns; i++) {
         hit *h = &s->hits[i];
         h->doc = sc[i].doc;
         h->score = (float)(sc[i].score / best);
-        h->matched = calloc(uq ? (size_t)uq : 1, sizeof *h->matched);
+        h->matched = bb_calloc(uq ? (size_t)uq : 1, sizeof *h->matched, BB_TAG(char *));
         for (int w = 0; w < uq; w++)
             if (find_term(&docs[h->doc], uw[w]) && (!maxWords || (uint32_t)h->nmatched < maxWords))
-                h->matched[h->nmatched++] = strdup(uw[w]);
+                h->matched[h->nmatched++] = bb_strdup(uw[w]);
     }
     s->nhits = ns;
-    free(sc);
-    free(uw);
+    bb_free(sc);
+    bb_free(uw);
     return noErr;
 }
 
@@ -693,7 +693,7 @@ static int topic_words(int doc, int max, char **out)
         int t;
         double w;
     } tw;
-    tw *all = calloc(d->nterms ? (size_t)d->nterms : 1, sizeof *all);
+    tw *all = bb_calloc(d->nterms ? (size_t)d->nterms : 1, sizeof *all, BB_TAG(tw));
     for (int i = 0; i < d->nterms; i++) {
         int df = 0;
         for (int o = 0; o < ndocs; o++)
@@ -706,10 +706,10 @@ static int topic_words(int doc, int max, char **out)
         for (int i = 0; i < d->nterms; i++)
             if (all[i].w >= 0 && (best < 0 || all[i].w > all[best].w))
                 best = i;
-        out[k++] = strdup(d->terms[all[best].t].word);
+        out[k++] = bb_strdup(d->terms[all[best].t].word);
         all[best].w = -1;
     }
-    free(all);
+    bb_free(all);
     return k;
 }
 
@@ -722,12 +722,12 @@ static void fbc_FBCDoExampleSearch(ppc_cpu *c)
     if ((!A(1) && A(2)) || !A(2))
         RET(kFBCbadParam);
     wordlist q = { 0 };
-    int *ex = calloc(A(2), sizeof *ex);
+    int *ex = bb_calloc(A(2), sizeof *ex, BB_BYTES);
     int nex = 0;
     for (uint32_t i = 0; i < A(2); i++) {
         uint32_t h = rd32(A(1) + 4 * i);
         if (h >= (uint32_t)s->nhits) {
-            free(ex);
+            bb_free(ex);
             RET(kFBCbadParam);
         }
         ex[nex++] = s->hits[h].doc;
@@ -736,13 +736,13 @@ static void fbc_FBCDoExampleSearch(ppc_cpu *c)
         for (int j = 0; j < k; j++) {
             if (q.n == q.cap) {
                 q.cap = q.cap ? q.cap * 2 : 32;
-                q.w = realloc(q.w, (size_t)q.cap * sizeof *q.w);
+                q.w = bb_realloc(q.w, (size_t)q.cap * sizeof *q.w, BB_TAG(char *));
             }
             q.w[q.n++] = words[j];
         }
     }
     int16_t e = run_search(s, &q, A(3), A(4), A(5), A(6), ex, nex);
-    free(ex);
+    bb_free(ex);
     free_words(&q);
     RET((int32_t)e);
 }
@@ -763,12 +763,12 @@ static void fbc_FBCBlindExampleSearch(ppc_cpu *c)
         FILE *f = fopen(path, "rb");
         if (!f)
             continue;
-        uint8_t *buf = malloc(1 << 20);
+        uint8_t *buf = bb_malloc(1 << 20, BB_BYTES);
         size_t got = fread(buf, 1, 1 << 20, f);
         fclose(f);
         wordlist w = { 0 };
         words_of(buf, got, &w);
-        free(buf);
+        bb_free(buf);
         /* the most frequent distinct words of the example */
         qsort(w.w, (size_t)w.n, sizeof *w.w, cmp_words);
         for (int k = 0; k < w.n && q.n < 64; k++) {
@@ -776,9 +776,9 @@ static void fbc_FBCBlindExampleSearch(ppc_cpu *c)
                 continue;
             if (q.n == q.cap) {
                 q.cap = q.cap ? q.cap * 2 : 32;
-                q.w = realloc(q.w, (size_t)q.cap * sizeof *q.w);
+                q.w = bb_realloc(q.w, (size_t)q.cap * sizeof *q.w, BB_TAG(char *));
             }
-            q.w[q.n++] = strdup(w.w[k]);
+            q.w[q.n++] = bb_strdup(w.w[k]);
         }
         free_words(&w);
     }
@@ -908,7 +908,7 @@ static void fbc_FBCGetTopicWords(ppc_cpu *c)
     int k = topic_words(h->doc, s->maxWords && s->maxWords < 32 ? (int)s->maxWords : 8, words);
     int16_t r = give_words(words, k, A(2), A(3));
     for (int i = 0; i < k; i++)
-        free(words[i]);
+        bb_free(words[i]);
     RET((int32_t)r);
 }
 
@@ -936,7 +936,7 @@ static void fbc_FBCSummarize(ppc_cpu *c)
     uint32_t len = A(1);
     if ((!in && len) || !out || !outlen || !nsent)
         RET(kFBCbadParam);
-    uint8_t *text = malloc((size_t)len + 1);
+    uint8_t *text = bb_malloc((size_t)len + 1, BB_BYTES);
     gget(text, in, len);
     /* Sentences end at . ! ? or a paragraph; words are counted over all of it */
     typedef struct {
@@ -957,7 +957,7 @@ static void fbc_FBCSummarize(ppc_cpu *c)
         if (real) {
             if (n == cap) {
                 cap = cap ? cap * 2 : 16;
-                ss = realloc(ss, (size_t)cap * sizeof *ss);
+                ss = bb_realloc(ss, (size_t)cap * sizeof *ss, BB_TAG(sentence));
             }
             ss[n++] = (sentence){ st, e, 0 };
         }
@@ -992,7 +992,7 @@ static void fbc_FBCSummarize(ppc_cpu *c)
     if (!want || want > (uint32_t)n)
         want = (uint32_t)n;
     /* the best by score, kept in text order */
-    bool *take = calloc(n ? (size_t)n : 1, 1);
+    bool *take = bb_calloc(n ? (size_t)n : 1, 1, BB_BYTES);
     for (uint32_t r = 0; r < want; r++) {
         int best = -1;
         for (int s = 0; s < n; s++)
@@ -1014,9 +1014,9 @@ static void fbc_FBCSummarize(ppc_cpu *c)
         }
     wr32(outlen, used);
     wr32(nsent, got);
-    free(take);
-    free(ss);
-    free(text);
+    bb_free(take);
+    bb_free(ss);
+    bb_free(text);
     RET(progress(kFBCphSummarizing, 100) ? kFBCsummarizationCanceled : noErr);
 }
 

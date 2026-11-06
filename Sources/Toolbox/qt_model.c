@@ -36,7 +36,7 @@ static void need(wbuf *w, size_t more)
     if (w->n + more <= w->cap)
         return;
     w->cap = (w->n + more) * 2 + 256;
-    w->b = realloc(w->b, w->cap);
+    w->b = bb_realloc(w->b, w->cap, BB_BYTES);
 }
 
 static void w8(wbuf *w, uint32_t v)
@@ -122,14 +122,14 @@ static bool next_atom(walk *w, uint32_t *type, const uint8_t **body, uint32_t *n
 
 static void keep(uint8_t **extra, uint32_t *len, const uint8_t *whole, uint32_t n)
 {
-    *extra = realloc(*extra, *len + n);
+    *extra = bb_realloc(*extra, *len + n, BB_BYTES);
     memcpy(*extra + *len, whole, n);
     *len += n;
 }
 
 static uint8_t *dup_bytes(const uint8_t *p, uint32_t n)
 {
-    uint8_t *d = malloc(n ? n : 1);
+    uint8_t *d = bb_malloc(n ? n : 1, BB_BYTES);
     if (n)
         memcpy(d, p, n);
     return d;
@@ -205,7 +205,7 @@ static qtm_run *push_run(qtm_media *md)
 {
     if (md->nruns == md->cap) {
         md->cap = md->cap ? md->cap * 2 : 64;
-        md->runs = realloc(md->runs, (size_t)md->cap * sizeof *md->runs);
+        md->runs = bb_realloc(md->runs, (size_t)md->cap * sizeof *md->runs, BB_TAG(qtm_run));
     }
     qtm_run *r = &md->runs[md->nruns++];
     memset(r, 0, sizeof *r);
@@ -266,7 +266,7 @@ static void read_stbl(qtm_media *md, const uint8_t *p, uint32_t len)
         }
     }
     if (stsh && nsh) {
-        md->shadow = malloc((size_t)nsh * 2 * sizeof *md->shadow);
+        md->shadow = bb_malloc((size_t)nsh * 2 * sizeof *md->shadow, BB_BYTES);
         for (uint32_t i = 0; i < nsh * 2; i++)
             md->shadow[i] = be32(stsh + 4 * i);
         md->nshadow = (int)nsh;
@@ -341,7 +341,7 @@ static void read_minf(qtm_media *md, const uint8_t *p, uint32_t len)
         uint32_t wn = (uint32_t)(w.p - whole);
         if (type == four("vmhd") || type == four("smhd") || type == four("gmhd") || type == four("nmhd") ||
             type == four("hmhd")) {
-            free(md->header);
+            bb_free(md->header);
             md->header = dup_bytes(whole, wn);
             md->header_len = wn;
         } else if (type == four("hdlr")) {
@@ -363,7 +363,7 @@ static void read_minf(qtm_media *md, const uint8_t *p, uint32_t len)
 
 static qtm_media *read_mdia(qtm_track *t, const uint8_t *p, uint32_t len)
 {
-    qtm_media *md = calloc(1, sizeof *md);
+    qtm_media *md = bb_calloc(1, sizeof *md, BB_TAG(qtm_media));
     md->scale = 600;
     md->default_dref = 1;
     md->quality = 0;
@@ -425,7 +425,7 @@ static qtm_media *read_mdia(qtm_track *t, const uint8_t *p, uint32_t len)
 
 static void read_trak(qtm_movie *m, const uint8_t *p, uint32_t len)
 {
-    qtm_track *t = calloc(1, sizeof *t);
+    qtm_track *t = bb_calloc(1, sizeof *t, BB_TAG(qtm_track));
     qtm_identity(t->matrix);
     t->flags = 0xF;
     int64_t header_duration = -1;
@@ -469,11 +469,11 @@ static void read_trak(qtm_movie *m, const uint8_t *p, uint32_t len)
             uint32_t rt, rn;
             const uint8_t *rb;
             while (next_atom(&r, &rt, &rb, &rn, NULL)) {
-                t->trefs = realloc(t->trefs, (size_t)(t->ntrefs + 1) * sizeof *t->trefs);
+                t->trefs = bb_realloc(t->trefs, (size_t)(t->ntrefs + 1) * sizeof *t->trefs, BB_TAG(qtm_tref));
                 qtm_tref *f = &t->trefs[t->ntrefs++];
                 f->type = rt;
                 f->n = (int)(rn / 4);
-                f->ids = malloc((size_t)(f->n ? f->n : 1) * sizeof *f->ids);
+                f->ids = bb_malloc((size_t)(f->n ? f->n : 1) * sizeof *f->ids, BB_BYTES);
                 for (int i = 0; i < f->n; i++)
                     f->ids[i] = be32(rb + 4 * i);
             }
@@ -495,7 +495,7 @@ static void read_trak(qtm_movie *m, const uint8_t *p, uint32_t len)
                         gput(rd32(t->clip), cb, cn);
                 }
         } else if (type == four("matt")) {
-            free(t->matte_atom);
+            bb_free(t->matte_atom);
             t->matte_atom = dup_bytes(whole, wn);
             t->matte_len = wn;
         } else {
@@ -512,7 +512,7 @@ static void read_trak(qtm_movie *m, const uint8_t *p, uint32_t len)
                              : (qtm_edit){ be32(e), (int32_t)be32(e + 4), (int32_t)be32(e + 8) };
             if (ed.duration <= 0)
                 continue;
-            t->edits = realloc(t->edits, (size_t)(t->nedits + 1) * sizeof *t->edits);
+            t->edits = bb_realloc(t->edits, (size_t)(t->nedits + 1) * sizeof *t->edits, BB_TAG(qtm_edit));
             t->edits[t->nedits++] = ed;
         }
     } else {
@@ -521,7 +521,7 @@ static void read_trak(qtm_movie *m, const uint8_t *p, uint32_t len)
         if (d <= 0 && t->media && t->media->scale > 0)
             d = t->media->duration * m->scale / t->media->scale;
         if (d > 0) {
-            t->edits = malloc(sizeof *t->edits);
+            t->edits = bb_malloc(sizeof *t->edits, BB_TAG(qtm_edit));
             t->edits[0] = (qtm_edit){ d, 0, 0x10000 };
             t->nedits = 1;
         }
@@ -529,7 +529,7 @@ static void read_trak(qtm_movie *m, const uint8_t *p, uint32_t len)
     if (t->id >= m->next_track_id)
         m->next_track_id = t->id + 1;
     t->token = token(four("trak"));
-    m->tracks = realloc(m->tracks, (size_t)(m->ntracks + 1) * sizeof *m->tracks);
+    m->tracks = bb_realloc(m->tracks, (size_t)(m->ntracks + 1) * sizeof *m->tracks, BB_TAG(qtm_track *));
     m->tracks[m->ntracks++] = t;
 }
 
@@ -605,7 +605,7 @@ qtm_movie *qtm_parse(const uint8_t *moov, uint32_t len)
 
 qtm_movie *qtm_new(int32_t scale, uint32_t now)
 {
-    qtm_movie *m = calloc(1, sizeof *m);
+    qtm_movie *m = bb_calloc(1, sizeof *m, BB_TAG(qtm_movie));
     m->scale = scale > 0 ? scale : 600;
     m->created = m->modified = now;
     m->pref_rate = 0x10000;
@@ -622,17 +622,17 @@ void qtm_free_media(qtm_media *md)
     if (!md)
         return;
     for (int i = 0; i < md->ndrefs; i++)
-        free(md->drefs[i].data);
-    free(md->drefs);
+        bb_free(md->drefs[i].data);
+    bb_free(md->drefs);
     for (int i = 0; i < md->ndescs; i++)
-        free(md->descs[i]);
-    free(md->descs);
-    free(md->desc_len);
-    free(md->runs);
-    free(md->header);
-    free(md->extra);
-    free(md->stbl_extra);
-    free(md->shadow);
+        bb_free(md->descs[i]);
+    bb_free(md->descs);
+    bb_free(md->desc_len);
+    bb_free(md->runs);
+    bb_free(md->header);
+    bb_free(md->extra);
+    bb_free(md->stbl_extra);
+    bb_free(md->shadow);
     if (md->udata)
         qt_udata_dispose(md->udata);
     if (md->property_atom)
@@ -641,18 +641,18 @@ void qtm_free_media(qtm_media *md)
         tb_DisposeHandle(md->input_map);
     if (md->token)
         tb_DisposeHandle(md->token);
-    free(md);
+    bb_free(md);
 }
 
 static void free_track(qtm_track *t)
 {
     qtm_free_media(t->media);
-    free(t->edits);
+    bb_free(t->edits);
     for (int i = 0; i < t->ntrefs; i++)
-        free(t->trefs[i].ids);
-    free(t->trefs);
-    free(t->matte_atom);
-    free(t->extra);
+        bb_free(t->trefs[i].ids);
+    bb_free(t->trefs);
+    bb_free(t->matte_atom);
+    bb_free(t->extra);
     if (t->udata)
         qt_udata_dispose(t->udata);
     if (t->clip)
@@ -661,7 +661,7 @@ static void free_track(qtm_track *t)
         tb_DisposeHandle(t->sound_localization);
     if (t->token)
         tb_DisposeHandle(t->token);
-    free(t);
+    bb_free(t);
 }
 
 void qtm_free(qtm_movie *m)
@@ -670,25 +670,25 @@ void qtm_free(qtm_movie *m)
         return;
     for (int i = 0; i < m->ntracks; i++)
         free_track(m->tracks[i]);
-    free(m->tracks);
+    bb_free(m->tracks);
     if (m->udata)
         qt_udata_dispose(m->udata);
     if (m->ctab)
         tb_DisposeHandle(m->ctab);
     if (m->property_atom)
         tb_DisposeHandle(m->property_atom);
-    free(m->extra);
-    free(m->self_alias);
-    free(m->default_dref);
-    free(m->anchor_dref);
-    free(m);
+    bb_free(m->extra);
+    bb_free(m->self_alias);
+    bb_free(m->default_dref);
+    bb_free(m->anchor_dref);
+    bb_free(m);
 }
 
 /* ---- Tracks and media ---- */
 
 qtm_track *qtm_add_track(qtm_movie *m, int32_t width, int32_t height, int16_t volume, uint32_t now)
 {
-    qtm_track *t = calloc(1, sizeof *t);
+    qtm_track *t = bb_calloc(1, sizeof *t, BB_TAG(qtm_track));
     t->id = m->next_track_id++;
     t->flags = 0xF; /* enabled, in the movie, preview and poster */
     t->created = t->modified = now;
@@ -698,7 +698,7 @@ qtm_track *qtm_add_track(qtm_movie *m, int32_t width, int32_t height, int16_t vo
     qtm_identity(t->matrix);
     t->udata = qt_udata_new();
     t->token = token(four("trak"));
-    m->tracks = realloc(m->tracks, (size_t)(m->ntracks + 1) * sizeof *m->tracks);
+    m->tracks = bb_realloc(m->tracks, (size_t)(m->ntracks + 1) * sizeof *m->tracks, BB_TAG(qtm_track *));
     m->tracks[m->ntracks++] = t;
     return t;
 }
@@ -757,7 +757,7 @@ static void default_header(qtm_media *md)
 
 qtm_media *qtm_new_media(qtm_track *t, uint32_t type, int32_t scale, uint32_t now)
 {
-    qtm_media *md = calloc(1, sizeof *md);
+    qtm_media *md = bb_calloc(1, sizeof *md, BB_TAG(qtm_media));
     md->type = type;
     md->handler_type = four("mhlr");
     md->manufacturer = four("appl");
@@ -933,8 +933,8 @@ int qtm_find_desc(const qtm_media *md, const uint8_t *d, uint32_t len)
 
 int qtm_add_desc(qtm_media *md, const uint8_t *d, uint32_t len)
 {
-    md->descs = realloc(md->descs, (size_t)(md->ndescs + 1) * sizeof *md->descs);
-    md->desc_len = realloc(md->desc_len, (size_t)(md->ndescs + 1) * sizeof *md->desc_len);
+    md->descs = bb_realloc(md->descs, (size_t)(md->ndescs + 1) * sizeof *md->descs, BB_TAG(uint8_t *));
+    md->desc_len = bb_realloc(md->desc_len, (size_t)(md->ndescs + 1) * sizeof *md->desc_len, BB_BYTES);
     md->descs[md->ndescs] = dup_bytes(d, len);
     md->desc_len[md->ndescs] = len;
     return ++md->ndescs;
@@ -950,7 +950,7 @@ int16_t qtm_desc_dref(const qtm_media *md, uint32_t desc)
 
 int qtm_add_dref(qtm_media *md, uint32_t type, uint32_t flags, const uint8_t *data, uint32_t len)
 {
-    md->drefs = realloc(md->drefs, (size_t)(md->ndrefs + 1) * sizeof *md->drefs);
+    md->drefs = bb_realloc(md->drefs, (size_t)(md->ndrefs + 1) * sizeof *md->drefs, BB_TAG(qtm_dref));
     md->drefs[md->ndrefs] = (qtm_dref){ type, flags, dup_bytes(data, len), len, 0 };
     return ++md->ndrefs;
 }
@@ -980,8 +980,8 @@ int64_t qtm_track_to_media(const qtm_track *t, int64_t movie_time, int32_t movie
 
 void qtm_set_edits(qtm_track *t, const qtm_edit *e, int n)
 {
-    free(t->edits);
-    t->edits = n ? malloc((size_t)n * sizeof *e) : NULL;
+    bb_free(t->edits);
+    t->edits = n ? bb_malloc((size_t)n * sizeof *e, BB_TAG(qtm_edit)) : NULL;
     if (n)
         memcpy(t->edits, e, (size_t)n * sizeof *e);
     t->nedits = n;
@@ -1020,7 +1020,7 @@ static void write_udta(wbuf *w, gaddr udata)
         wbytes(w, b, n);
         end(w, a);
     }
-    free(b);
+    bb_free(b);
 }
 
 static void write_stbl(wbuf *w, const qtm_media *md, int virtual_track)
@@ -1271,11 +1271,11 @@ static void write_trak(wbuf *w, const qtm_movie *m, const qtm_track *t, int virt
         uint32_t n = (uint32_t)tb_GetHandleSize(t->clip);
         size_t c = begin(w, "clip");
         size_t r = begin(w, "crgn");
-        uint8_t *rb = malloc(n ? n : 1);
+        uint8_t *rb = bb_malloc(n ? n : 1, BB_BYTES);
         if (n)
             gget(rb, rd32(t->clip), n);
         wbytes(w, rb, n);
-        free(rb);
+        bb_free(rb);
         end(w, r);
         end(w, c);
     }
@@ -1365,11 +1365,11 @@ uint8_t *qtm_serialize(const qtm_movie *m, bool virtual_offsets, uint32_t *len)
     if (m->ctab && rd32(m->ctab)) {
         uint32_t n = (uint32_t)tb_GetHandleSize(m->ctab);
         a = begin(&w, "ctab");
-        uint8_t *cb = malloc(n ? n : 1);
+        uint8_t *cb = bb_malloc(n ? n : 1, BB_BYTES);
         if (n)
             gget(cb, rd32(m->ctab), n);
         wbytes(&w, cb, n);
-        free(cb);
+        bb_free(cb);
         end(&w, a);
     }
     for (int i = 0; i < m->ntracks; i++)

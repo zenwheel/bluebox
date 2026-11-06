@@ -62,8 +62,8 @@ bool macbinary_parse(const uint8_t *b, size_t len, mac_file *out, char *err, siz
     out->has_finder_info = true;
     out->create_date = be32(b + 91);
     out->modify_date = be32(b + 95);
-    out->data = malloc(dl ? dl : 1);
-    out->rsrc = malloc(rl ? rl : 1);
+    out->data = bb_malloc(dl ? dl : 1, BB_BYTES);
+    out->rsrc = bb_malloc(rl ? rl : 1, BB_BYTES);
     if (!out->data || !out->rsrc) {
         mac_file_free(out);
         snprintf(err, errlen, "out of memory");
@@ -78,8 +78,8 @@ bool macbinary_parse(const uint8_t *b, size_t len, mac_file *out, char *err, siz
 
 void mac_file_free(mac_file *f)
 {
-    free(f->data);
-    free(f->rsrc);
+    bb_free(f->data);
+    bb_free(f->rsrc);
     f->data = f->rsrc = NULL;
     f->data_len = f->rsrc_len = 0;
 }
@@ -99,13 +99,13 @@ bool read_file(const char *path, uint8_t **buf, size_t *len)
         fclose(fp);
         return false;
     }
-    uint8_t *p = malloc((size_t)n + 1);
+    uint8_t *p = bb_malloc((size_t)n + 1, BB_BYTES);
     if (!p) {
         fclose(fp);
         return false;
     }
     if (fread(p, 1, (size_t)n, fp) != (size_t)n) {
-        free(p);
+        bb_free(p);
         fclose(fp);
         return false;
     }

@@ -93,7 +93,7 @@ static void free_thread(thread *t)
     /* A host thread still waiting (its guest thread never finished) keeps
      * its record: it is never told to go on. */
     if (t->ctx)
-        free(t->ctx);
+        bb_free(t->ctx);
     t->ctx = NULL;
 }
 
@@ -280,7 +280,7 @@ static void switch_to(int to, bool leaving)
     if (!leaving) {
         call_proc(f->switch_out, f->id, f->switch_out_param);
         if (!f->ctx)
-            f->ctx = calloc(1, sizeof *f->ctx);
+            f->ctx = bb_calloc(1, sizeof *f->ctx, BB_TAG(exec_ctx));
         save_ctx(f->ctx);
         if (f->state == kRunningThreadState)
             f->state = kReadyThreadState;
@@ -462,13 +462,13 @@ int16_t tb_NewThread(int32_t style, gaddr entry, gaddr param, int32_t stack_size
     if (g_ppc_mode)
         size += STACK_68K;
     gaddr stack = tb_NewPtr((int32_t)size, false, false);
-    exec_ctx *x = calloc(1, sizeof *x);
-    host_thread *h = calloc(1, sizeof *h);
+    exec_ctx *x = bb_calloc(1, sizeof *x, BB_TAG(exec_ctx));
+    host_thread *h = bb_calloc(1, sizeof *h, BB_TAG(host_thread));
     if (!stack || !x || !h) {
         if (stack)
             tb_DisposePtr(stack);
-        free(x);
-        free(h);
+        bb_free(x);
+        bb_free(h);
         return memFullErr;
     }
     pthread_cond_init(&h->cv, NULL);

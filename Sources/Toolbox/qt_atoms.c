@@ -169,15 +169,15 @@ static int16_t load(gaddr h, buf *out)
     int32_t n = tb_GetHandleSize(h);
     if (n == 0) {
         out->len = QTA_HEADER + QTA_ATOM;
-        out->b = malloc(out->len);
+        out->b = bb_malloc(out->len, BB_BYTES);
         fresh(out->b);
         return noErr;
     }
     out->len = (size_t)n;
-    out->b = malloc(out->len);
+    out->b = bb_malloc(out->len, BB_BYTES);
     gget(out->b, rd32(h), (uint32_t)n);
     if (!valid_root(out->b, out->len)) {
-        free(out->b);
+        bb_free(out->b);
         out->b = NULL;
         return invalidAtomContainerErr;
     }
@@ -193,14 +193,14 @@ static int16_t store(buf *b)
     }
     if (!err && rd32(b->h))
         gput(rd32(b->h), b->b, (uint32_t)b->len);
-    free(b->b);
+    bb_free(b->b);
     b->b = NULL;
     return err;
 }
 
 static void drop(buf *b)
 {
-    free(b->b);
+    bb_free(b->b);
     b->b = NULL;
 }
 
@@ -209,7 +209,7 @@ static void drop(buf *b)
 static void resize_at(buf *b, uint32_t off, int64_t n, const uint32_t *chain, int depth)
 {
     if (n > 0) {
-        b->b = realloc(b->b, b->len + (size_t)n);
+        b->b = bb_realloc(b->b, b->len + (size_t)n, BB_BYTES);
         memmove(b->b + off + n, b->b + off, b->len - off);
         memset(b->b + off, 0, (size_t)n);
     } else if (n < 0) {
@@ -324,13 +324,13 @@ int16_t tb_QTInsertChild(int32_t container, int32_t parentAtom, int32_t atomType
     int16_t err = load((gaddr)container, &b);
     uint8_t *bytes = NULL;
     if (!err && dataSize > 0 && data) {
-        bytes = malloc((size_t)dataSize);
+        bytes = bb_malloc((size_t)dataSize, BB_BYTES);
         gget(bytes, data, (uint32_t)dataSize);
     }
     if (!err)
         err = insert_child(&b, (uint32_t)parentAtom, (uint32_t)atomType, (uint32_t)id, index, bytes,
                            dataSize > 0 ? (uint32_t)dataSize : 0, NULL, &at);
-    free(bytes);
+    bb_free(bytes);
     err = err ? (drop(&b), err) : store(&b);
     if (newAtom)
         wr32(newAtom, err ? 0 : at);
@@ -427,11 +427,11 @@ int16_t tb_QTReplaceAtom(int32_t targetContainer, int32_t targetAtom, int32_t re
         err = invalidAtomErr;
     uint8_t *copy = NULL;
     if (!err) {
-        copy = malloc(atom_size(src.b, r));
+        copy = bb_malloc(atom_size(src.b, r), BB_BYTES);
         memcpy(copy, src.b + r, atom_size(src.b, r));
         err = put_contents(&b, parent_atom((uint32_t)targetAtom), copy);
     }
-    free(copy);
+    bb_free(copy);
     drop(&src);
     return err ? (drop(&b), err) : store(&b);
 }
@@ -459,15 +459,15 @@ int16_t tb_QTSwapAtoms(int32_t container, int32_t atom1, int32_t atom2)
         drop(&b);
         return invalidAtomErr;
     }
-    uint8_t *x = malloc(atom_size(b.b, lo)), *y = malloc(atom_size(b.b, hi));
+    uint8_t *x = bb_malloc(atom_size(b.b, lo), BB_BYTES), *y = bb_malloc(atom_size(b.b, hi), BB_BYTES);
     memcpy(x, b.b + lo, atom_size(b.b, lo));
     memcpy(y, b.b + hi, atom_size(b.b, hi));
     /* the later one first, so the earlier keeps its place */
     err = put_contents(&b, hi, x);
     if (!err)
         err = put_contents(&b, lo, y);
-    free(x);
-    free(y);
+    bb_free(x);
+    bb_free(y);
     return err ? (drop(&b), err) : store(&b);
 }
 
@@ -823,8 +823,8 @@ gaddr qt_udata_new(void)
 static void clear_items(qt_udata *u)
 {
     for (int i = 0; i < u->n; i++)
-        free(u->items[i].data);
-    free(u->items);
+        bb_free(u->items[i].data);
+    bb_free(u->items);
     u->items = NULL;
     u->n = 0;
 }
@@ -859,8 +859,8 @@ static int item_at(const qt_udata *u, uint32_t type, int32_t index)
 
 static void add_item(qt_udata *u, uint32_t type, const uint8_t *data, uint32_t len)
 {
-    u->items = realloc(u->items, (size_t)(u->n + 1) * sizeof *u->items);
-    uint8_t *copy = malloc(len ? len : 1);
+    u->items = bb_realloc(u->items, (size_t)(u->n + 1) * sizeof *u->items, BB_TAG(ud_item));
+    uint8_t *copy = bb_malloc(len ? len : 1, BB_BYTES);
     if (len)
         memcpy(copy, data, len);
     u->items[u->n++] = (ud_item){ type, copy, len };
@@ -868,7 +868,7 @@ static void add_item(qt_udata *u, uint32_t type, const uint8_t *data, uint32_t l
 
 static void remove_item(qt_udata *u, int i)
 {
-    free(u->items[i].data);
+    bb_free(u->items[i].data);
     memmove(&u->items[i], &u->items[i + 1], (size_t)(u->n - i - 1) * sizeof *u->items);
     u->n--;
 }
@@ -879,7 +879,7 @@ uint8_t *qt_udata_flatten(gaddr token, uint32_t *len)
     uint32_t n = 0;
     for (int i = 0; u && i < u->n; i++)
         n += 8 + u->items[i].len;
-    uint8_t *out = malloc(n ? n : 1), *p = out;
+    uint8_t *out = bb_malloc(n ? n : 1, BB_BYTES), *p = out;
     for (int i = 0; u && i < u->n; i++) {
         put32(p, 8 + u->items[i].len);
         put32(p + 4, u->items[i].type);
@@ -955,7 +955,7 @@ int16_t tb_CountUserDataType(int32_t theUserData, int32_t udType)
 static uint8_t *handle_bytes(gaddr h, uint32_t *len)
 {
     *len = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
-    uint8_t *b = malloc(*len ? *len : 1);
+    uint8_t *b = bb_malloc(*len ? *len : 1, BB_BYTES);
     if (*len)
         gget(b, rd32(h), *len);
     return b;
@@ -980,7 +980,7 @@ int16_t tb_AddUserData(int32_t theUserData, int32_t data, int32_t udType)
     uint32_t n;
     uint8_t *b = handle_bytes((gaddr)data, &n);
     add_item(u, (uint32_t)udType, b, n);
-    free(b);
+    bb_free(b);
     return noErr;
 }
 
@@ -1021,23 +1021,23 @@ int16_t tb_SetUserDataItem(int32_t theUserData, gaddr data, int32_t size, int32_
     qt_udata *u = qt_udata_of((gaddr)theUserData);
     if (!u || size < 0)
         return paramErr;
-    uint8_t *b = malloc(size ? (size_t)size : 1);
+    uint8_t *b = bb_malloc(size ? (size_t)size : 1, BB_BYTES);
     if (size && data)
         gget(b, data, (uint32_t)size);
     int i = index > 0 ? item_at(u, (uint32_t)udType, index) : -1;
     if (i >= 0) {
-        free(u->items[i].data);
+        bb_free(u->items[i].data);
         u->items[i].data = b;
         u->items[i].len = (uint32_t)size;
         return noErr;
     }
     /* a new item: past the last of its type (index 0 or count + 1) */
     if (index > tb_CountUserDataType(theUserData, udType) + 1) {
-        free(b);
+        bb_free(b);
         return userDataItemNotFound;
     }
     add_item(u, (uint32_t)udType, b, (uint32_t)size);
-    free(b);
+    bb_free(b);
     return noErr;
 }
 
@@ -1072,7 +1072,7 @@ int16_t tb_AddUserDataText(int32_t theUserData, int32_t data, int32_t udType, in
     int i = item_at(u, (uint32_t)udType, index);
     if (i < 0) {
         if (index > tb_CountUserDataType(theUserData, udType) + 1) {
-            free(text);
+            bb_free(text);
             return userDataItemNotFound;
         }
         add_item(u, (uint32_t)udType, NULL, 0);
@@ -1084,12 +1084,12 @@ int16_t tb_AddUserDataText(int32_t theUserData, int32_t data, int32_t udType, in
         memmove(it->data + off, it->data + off + 4 + len, it->len - off - 4 - len);
         it->len -= 4 + len;
     }
-    it->data = realloc(it->data, it->len + 4 + n);
+    it->data = bb_realloc(it->data, it->len + 4 + n, BB_BYTES);
     put16(it->data + it->len, (uint16_t)n);
     put16(it->data + it->len + 2, (uint16_t)itlRegionTag);
     memcpy(it->data + it->len + 4, text, n);
     it->len += 4 + n;
-    free(text);
+    bb_free(text);
     return noErr;
 }
 
@@ -1127,7 +1127,7 @@ int16_t tb_NewUserDataFromHandle(int32_t h, gaddr theUserData)
     uint32_t n;
     uint8_t *b = handle_bytes((gaddr)h, &n);
     gaddr token = qt_udata_from(b, n);
-    free(b);
+    bb_free(b);
     if (theUserData)
         wr32(theUserData, token);
     return token ? noErr : memFullErr;
@@ -1140,7 +1140,7 @@ int16_t tb_PutUserDataIntoHandle(int32_t theUserData, int32_t h)
     uint32_t n;
     uint8_t *b = qt_udata_flatten((gaddr)theUserData, &n);
     int16_t err = to_handle((gaddr)h, b, n);
-    free(b);
+    bb_free(b);
     return err;
 }
 

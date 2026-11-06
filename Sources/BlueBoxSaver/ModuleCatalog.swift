@@ -3,6 +3,7 @@
 // its resources (afterdark.c has the resource formats).
 
 #if canImport(ScreenSaver)
+import CCore
 import Foundation
 import ForkStore
 import Toolbox
@@ -130,7 +131,7 @@ enum ModuleCatalog {
         // Its resources with the settings kept for it over them.
         var forkLen = 0
         guard let fork = machine_screensaver_module_fork(path, &forkLen), forkLen > 0 else { return info }
-        defer { free(fork) }
+        defer { bb_free(fork) }
         var idx = rsrc_index()
         guard rsrc_parse(fork, forkLen, &idx, &err, err.count) else { return info }
         defer { rsrc_index_free(&idx) }

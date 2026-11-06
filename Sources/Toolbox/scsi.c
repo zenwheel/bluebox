@@ -65,7 +65,7 @@ static gaddr io_pb, io_buf; /* a parameter block and a block for reading the dri
 
 static void xfer_clear(void)
 {
-    free(xfer.in);
+    bb_free(xfer.in);
     memset(&xfer, 0, sizeof xfer);
 }
 
@@ -162,7 +162,7 @@ static uint8_t mode_sense(const uint8_t *cdb, bool ten)
         buf[3] = dbd ? 0 : 8;
     }
     xfer.len = n < alloc ? n : alloc;
-    xfer.in = malloc(xfer.len ? xfer.len : 1);
+    xfer.in = bb_malloc(xfer.len ? xfer.len : 1, BB_BYTES);
     memcpy(xfer.in, buf, xfer.len);
     return GOOD;
 }
@@ -186,7 +186,7 @@ static uint8_t disk_command(const uint8_t *cdb, uint32_t cdblen, uint8_t lun)
         }
         uint32_t alloc = cdb[4];
         xfer.len = alloc < sizeof inq ? alloc : sizeof inq;
-        xfer.in = malloc(sizeof inq);
+        xfer.in = bb_malloc(sizeof inq, BB_BYTES);
         memcpy(xfer.in, inq, sizeof inq);
         sense.key = NO_SENSE, sense.asc = 0;
         return GOOD;
@@ -199,7 +199,7 @@ static uint8_t disk_command(const uint8_t *cdb, uint32_t cdblen, uint8_t lun)
             sd[12] = sense.asc;
         uint32_t alloc = cdb[4] ? cdb[4] : 4;
         xfer.len = alloc < sizeof sd ? alloc : sizeof sd;
-        xfer.in = malloc(sizeof sd);
+        xfer.in = bb_malloc(sizeof sd, BB_BYTES);
         memcpy(xfer.in, sd, sizeof sd);
         sense.key = NO_SENSE, sense.asc = 0;
         return GOOD;
@@ -224,7 +224,7 @@ static uint8_t disk_command(const uint8_t *cdb, uint32_t cdblen, uint8_t lun)
     case 0x5A: return mode_sense(cdb, true);
     case 0x25: /* READ CAPACITY: the last block and the block length */
         xfer.len = 8;
-        xfer.in = malloc(8);
+        xfer.in = bb_malloc(8, BB_BYTES);
         put32(xfer.in, DISK_BLOCKS - 1);
         put32(xfer.in + 4, BLOCK);
         return GOOD;
@@ -241,7 +241,7 @@ static uint8_t disk_command(const uint8_t *cdb, uint32_t cdblen, uint8_t lun)
         if ((uint64_t)lba + n > DISK_BLOCKS)
             return check(ILLEGAL_REQUEST, 0x21); /* logical block address out of range */
         xfer.len = n * BLOCK;
-        xfer.in = malloc(xfer.len ? xfer.len : 1);
+        xfer.in = bb_malloc(xfer.len ? xfer.len : 1, BB_BYTES);
         read_blocks(lba, n, xfer.in);
         return GOOD;
     }

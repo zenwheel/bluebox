@@ -92,7 +92,7 @@ static entry *find_in(entry *e, uint32_t serial)
 
 static entry *new_entry(entry *parent, const char *name)
 {
-    entry *e = calloc(1, sizeof *e);
+    entry *e = bb_calloc(1, sizeof *e, BB_TAG(entry));
     if (!e)
         return NULL;
     e->serial = next_serial++;
@@ -128,7 +128,7 @@ static int prop_set(entry *e, const char *name, const uint8_t *value, uint32_t s
     if (!p) {
         if (!create)
             return nrNotFoundErr;
-        p = calloc(1, sizeof *p);
+        p = bb_calloc(1, sizeof *p, BB_TAG(prop));
         if (!p)
             return nrNotEnoughMemoryErr;
         snprintf(p->name, sizeof p->name, "%s", name);
@@ -139,12 +139,12 @@ static int prop_set(entry *e, const char *name, const uint8_t *value, uint32_t s
     } else if (create) {
         return nrPropertyAlreadyExists;
     }
-    uint8_t *copy = size ? malloc(size) : NULL;
+    uint8_t *copy = size ? bb_malloc(size, BB_BYTES) : NULL;
     if (size && !copy)
         return nrNotEnoughMemoryErr;
     if (size)
         memcpy(copy, value, size);
-    free(p->value);
+    bb_free(p->value);
     drop_copy(p);
     p->value = copy;
     p->size = size;
@@ -157,8 +157,8 @@ static void free_props(entry *e)
         prop *p = e->props;
         e->props = p->next;
         drop_copy(p);
-        free(p->value);
-        free(p);
+        bb_free(p->value);
+        bb_free(p);
     }
 }
 
@@ -172,7 +172,7 @@ static void free_tree(entry *e)
     free_props(e);
     if (e->node && !resetting)
         tb_DisposePtr(e->node);
-    free(e);
+    bb_free(e);
 }
 
 static void registry_init(void)
@@ -199,8 +199,8 @@ void os9svc_registry_reset(void)
     root = NULL;
     next_serial = 1;
     for (int i = 0; i < MAX_ITERS; i++) {
-        free(eiters[i].list);
-        free(piters[i].names);
+        bb_free(eiters[i].list);
+        bb_free(piters[i].names);
     }
     memset(eiters, 0, sizeof eiters);
     memset(piters, 0, sizeof piters);
@@ -547,13 +547,13 @@ static void ds_PropertyCreate(ppc_cpu *c)
     uint32_t size = R(3);
     if (size && !R(2))
         RETURN(paramErr);
-    uint8_t *buf = size ? malloc(size) : NULL;
+    uint8_t *buf = size ? bb_malloc(size, BB_BYTES) : NULL;
     if (size && !buf)
         RETURN(nrNotEnoughMemoryErr);
     for (uint32_t i = 0; i < size; i++)
         buf[i] = rd8(R(2) + i);
     err = prop_set(e, n, buf, size, true);
-    free(buf);
+    bb_free(buf);
     RETURN(err);
 }
 
@@ -569,8 +569,8 @@ static void ds_PropertyDelete(ppc_cpu *c)
             *q = p->next;
             break;
         }
-    free(p->value);
-    free(p);
+    bb_free(p->value);
+    bb_free(p);
     RETURN(noErr);
 }
 
@@ -633,13 +633,13 @@ static void ds_PropertySet(ppc_cpu *c)
     uint32_t size = R(3);
     if (size && !R(2))
         RETURN(paramErr);
-    uint8_t *buf = size ? malloc(size) : NULL;
+    uint8_t *buf = size ? bb_malloc(size, BB_BYTES) : NULL;
     if (size && !buf)
         RETURN(nrNotEnoughMemoryErr);
     for (uint32_t i = 0; i < size; i++)
         buf[i] = rd8(R(2) + i);
     err = prop_set(e, p->name, buf, size, false);
-    free(buf);
+    bb_free(buf);
     RETURN(err);
 }
 
@@ -711,7 +711,7 @@ static void ds_PropertyIterateCreate(ppc_cpu *c)
             uint32_t n = 0;
             for (prop *p = e->props; p; p = p->next)
                 n++;
-            char(*names)[MAX_PROP_NAME + 1] = n ? malloc(n * sizeof *names) : NULL;
+            char(*names)[MAX_PROP_NAME + 1] = n ? bb_malloc(n * sizeof *names, BB_BYTES) : NULL;
             if (n && !names)
                 RETURN(nrNotEnoughMemoryErr);
             n = 0;
@@ -729,7 +729,7 @@ static void ds_PropertyIterateDispose(ppc_cpu *c)
     piter *it = piter_of(R(0));
     if (!it)
         RETURN(paramErr);
-    free(it->names);
+    bb_free(it->names);
     memset(it, 0, sizeof *it);
     wr32(R(0), 0);
     RETURN(noErr);
@@ -785,7 +785,7 @@ static void ds_EntryIterateDispose(ppc_cpu *c)
     eiter *it = eiter_of(R(0));
     if (!it)
         RETURN(paramErr);
-    free(it->list);
+    bb_free(it->list);
     memset(it, 0, sizeof *it);
     wr32(R(0), 0);
     RETURN(noErr);
@@ -838,7 +838,7 @@ static bool list_add(eiter *it, uint32_t *cap, const entry *e, const filter *f)
         return true;
     if (it->n == *cap) {
         uint32_t ncap = *cap ? *cap * 2 : 16;
-        uint32_t *grown = realloc(it->list, ncap * sizeof *grown);
+        uint32_t *grown = bb_realloc(it->list, ncap * sizeof *grown, BB_BYTES);
         if (!grown)
             return false;
         it->list = grown;
@@ -869,7 +869,7 @@ static int iterate(gaddr cookie, uint32_t op, gaddr found, gaddr done, const fil
         entry *from = root ? find_in(root, it->start) : NULL;
         if (!from)
             return nrInvalidNodeErr;
-        free(it->list);
+        bb_free(it->list);
         it->list = NULL;
         it->n = it->at = 0;
         uint32_t cap = 0;
@@ -931,12 +931,12 @@ static void ds_EntrySearch(ppc_cpu *c)
     if (err)
         RETURN(err);
     uint32_t size = R(6);
-    uint8_t *value = size && R(5) ? malloc(size) : NULL;
+    uint8_t *value = size && R(5) ? bb_malloc(size, BB_BYTES) : NULL;
     for (uint32_t i = 0; value && i < size; i++)
         value[i] = rd8(R(5) + i);
     filter f = { name, value, size, R(5) != 0, false, false, 0 };
     int r = iterate(R(0), R(1), R(2), R(3), &f);
-    free(value);
+    bb_free(value);
     RETURN(r);
 }
 

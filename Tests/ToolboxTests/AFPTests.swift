@@ -505,7 +505,7 @@ extension BlueBox {
                 for i in 0..<Int(count) {
                     withUnsafeBytes(of: p![i]) { out.append(String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self)) }
                 }
-                free(p)
+                bb_free(p)
             }
             var names: UnsafeMutablePointer<VolName>? = nil
             #expect(afp_volumes(s, &names, &count) == 0)
@@ -517,7 +517,7 @@ extension BlueBox {
             var p: UnsafeMutablePointer<afp_entry>? = nil
             var n: Int32 = 0
             #expect(afp_list(s, 1, dir, &p, &n) == 0)
-            defer { free(p) }
+            defer { bb_free(p) }
             return (0..<Int(n)).map { p![$0] }
         }
 
@@ -525,7 +525,7 @@ extension BlueBox {
             var p: UnsafeMutablePointer<UInt8>? = nil
             var n = 0
             guard afp_read_fork(s, 1, dir, cstr(name), rsrc, &p, &n) == 0 else { return nil }
-            defer { free(p) }
+            defer { bb_free(p) }
             return Array(UnsafeBufferPointer(start: p, count: n))
         }
 

@@ -86,7 +86,7 @@ static item_extra *item_extras(gaddr mh, int item, bool create)
     if (item > m->n) {
         if (!create)
             return NULL;
-        m->items = realloc(m->items, (size_t)item * sizeof *m->items);
+        m->items = bb_realloc(m->items, (size_t)item * sizeof *m->items, BB_TAG(item_extra));
         memset(m->items + m->n, 0, (size_t)(item - m->n) * sizeof *m->items);
         m->n = item;
     }
@@ -99,7 +99,7 @@ static void extras_inserted(gaddr mh, int index)
     menu_extra *m = menu_extras(mh, false);
     if (!m || index > m->n)
         return;
-    m->items = realloc(m->items, (size_t)(m->n + 1) * sizeof *m->items);
+    m->items = bb_realloc(m->items, (size_t)(m->n + 1) * sizeof *m->items, BB_TAG(item_extra));
     memmove(m->items + index, m->items + index - 1, (size_t)(m->n - index + 1) * sizeof *m->items);
     memset(&m->items[index - 1], 0, sizeof *m->items);
     m->n++;
@@ -122,7 +122,7 @@ static void extras_forget(gaddr mh)
         for (int i = 0; i < m->n; i++)
             hi_item_free(&m->items[i].hi);
         hi_menu_free(&m->hi);
-        free(m->items);
+        bb_free(m->items);
         memset(m, 0, sizeof *m);
     }
 }
@@ -136,7 +136,7 @@ void menu_reset(void)
         for (int k = 0; k < mextras[i].n; k++)
             hi_item_free(&mextras[i].items[k].hi);
         hi_menu_free(&mextras[i].hi);
-        free(mextras[i].items);
+        bb_free(mextras[i].items);
     }
     memset(mextras, 0, sizeof mextras);
     nhier = 0;
@@ -1536,7 +1536,7 @@ static void restore_bits(qrect r, uint32_t *buf);
 static void mbdf_reset(void)
 {
     for (int i = 0; i < nmbdf_saved; i++)
-        free(mbdf_saved[i].bits);
+        bb_free(mbdf_saved[i].bits);
     nmbdf_saved = 0;
     mbdf_rect = 0;
     skip_draws = 0;
@@ -1641,7 +1641,7 @@ static int32_t last_choice;
 static uint32_t *save_bits(qrect r)
 {
     int w = r.right - r.left, h = r.bottom - r.top;
-    uint32_t *buf = malloc((size_t)w * (size_t)h * sizeof *buf);
+    uint32_t *buf = bb_malloc((size_t)w * (size_t)h * sizeof *buf, BB_BYTES);
     pixdst d = qd_port_pixels(rd32(LM_WMgrPort));
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
@@ -1656,7 +1656,7 @@ static void restore_bits(qrect r, uint32_t *buf)
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
             put_px(&d, r.left + x, r.top + y, buf[(size_t)y * (size_t)w + (size_t)x]);
-    free(buf);
+    bb_free(buf);
 }
 
 /* A choice made in the host's menu bar: valid only if still there and

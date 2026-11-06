@@ -438,8 +438,8 @@ int16_t tb_LaunchApplication(gaddr pb)
     int ndocs = aem_launch_documents(LaunchParamBlockRec_launchAppParameters(pb), &docs);
     bool ok = process_launch(path, (const char *const *)docs, ndocs);
     for (int i = 0; i < ndocs; i++)
-        free(docs[i]);
-    free(docs);
+        bb_free(docs[i]);
+    bb_free(docs);
     if (!ok)
         return -600; /* procNotFound: nothing could be started */
     /* The new run's serial number, as the other runs are listed ({1, its

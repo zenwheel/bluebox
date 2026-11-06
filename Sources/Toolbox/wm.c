@@ -2116,7 +2116,7 @@ static void copy_screen(const hrgn *rgn, int dh, int dv)
     int bw = box.right - box.left, bh = box.bottom - box.top;
     if (bw <= 0 || bh <= 0)
         return;
-    uint32_t *buf = malloc((size_t)bw * (size_t)bh * sizeof *buf);
+    uint32_t *buf = bb_malloc((size_t)bw * (size_t)bh * sizeof *buf, BB_BYTES);
     if (!buf)
         return;
     /* Read everything first: source and destination overlap. */
@@ -2139,7 +2139,7 @@ static void copy_screen(const hrgn *rgn, int dh, int dv)
                         put_px(&d, x - d.bounds.left, y - d.bounds.top, *p);
                 }
         }
-    free(buf);
+    bb_free(buf);
 }
 
 void tb_MoveWindow(gaddr w, int16_t h, int16_t v, int8_t front)
@@ -3121,7 +3121,7 @@ int16_t tb_SetWindowProperty(gaddr w, uint32_t creator, uint32_t tag, uint32_t s
     if (!p) {
         if (nprops == maxprops) {
             int n = maxprops ? maxprops * 2 : 16;
-            window_property *more = realloc(props, sizeof *props * (size_t)n);
+            window_property *more = bb_realloc(props, sizeof *props * (size_t)n, BB_TAG(window_property));
             if (!more)
                 return memFullErr;
             props = more;
@@ -3130,12 +3130,12 @@ int16_t tb_SetWindowProperty(gaddr w, uint32_t creator, uint32_t tag, uint32_t s
         p = &props[nprops++];
         *p = (window_property){ w, creator, tag, 0, NULL };
     }
-    uint8_t *d = malloc(size ? size : 1);
+    uint8_t *d = bb_malloc(size ? size : 1, BB_BYTES);
     if (!d)
         return memFullErr;
     if (size && buffer)
         gget(d, buffer, size);
-    free(p->data);
+    bb_free(p->data);
     p->data = d;
     p->size = size;
     return noErr;
@@ -3170,7 +3170,7 @@ int16_t tb_RemoveWindowProperty(gaddr w, uint32_t creator, uint32_t tag)
     window_property *p = find_property(w, creator, tag);
     if (!p)
         return errWindowPropertyNotFound;
-    free(p->data);
+    bb_free(p->data);
     *p = props[--nprops];
     return noErr;
 }
@@ -3180,7 +3180,7 @@ static void forget_properties(gaddr w)
 {
     for (int i = 0; i < nprops;)
         if (props[i].w == w) {
-            free(props[i].data);
+            bb_free(props[i].data);
             props[i] = props[--nprops];
         } else {
             i++;

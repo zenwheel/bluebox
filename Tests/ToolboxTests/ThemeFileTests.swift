@@ -112,7 +112,7 @@ extension BlueBox {
             var len = 0
             #expect(rsrc_build(specs, specs.count, &out, &len))
             let fork = Array(UnsafeBufferPointer(start: out, count: len))
-            free(out)
+            bb_free(out)
             datas.forEach { $0.deallocate() }
             return fork
         }
@@ -286,7 +286,7 @@ extension BlueBox {
             datas.forEach { $0.deallocate() }
             var err = [CChar](repeating: 0, count: 256)
             #expect(thme_load_sounds("Synthetic Sounds", out, len, &err, err.count))
-            free(out)
+            bb_free(out)
             defer { thme_unload_sounds() }
             #expect(String(cString: thme_sound_set()) == "Synthetic Sounds")
             var cls: Int32 = 0

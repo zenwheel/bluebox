@@ -1,3 +1,4 @@
+import CCore
 import Foundation
 import Testing
 import Toolbox
@@ -50,14 +51,14 @@ import Toolbox
         qt_edits_free(&e)
         qt_edits_free(&part)
         moov = Array(UnsafeBufferPointer(start: written, count: Int(n)))
-        free(written)
+        bb_free(written)
         let p = try #require(moov.withUnsafeBufferPointer {
             qt_native_open($0.baseAddress, UInt32($0.count), url.path, 600, nil, 0)
         })
         defer { qt_native_close(p) }
         var serial: UInt32 = 0, w: Int32 = 0, h: Int32 = 0
         var rgba: UnsafeMutablePointer<UInt8>?
-        defer { free(rgba) }
+        defer { bb_free(rgba) }
         #expect(qt_native_frame(p, 500, &serial, &rgba, &w, &h) && rgba![2] == 255)    // blue first
         #expect(qt_native_frame(p, 1500, &serial, &rgba, &w, &h) && rgba![0] == 255)   // then red
         var again = qt_edits()
@@ -97,7 +98,7 @@ import Toolbox
 
         var serial: UInt32 = 0, w: Int32 = 0, h: Int32 = 0
         var rgba: UnsafeMutablePointer<UInt8>?
-        defer { free(rgba) }
+        defer { bb_free(rgba) }
         #expect(qt_native_frame(p, 500, &serial, &rgba, &w, &h))
         #expect(w == 2 && h == 2 && rgba![0] == 255 && rgba![2] == 0)            // red
         #expect(!qt_native_frame(p, 900, &serial, &rgba, &w, &h))                 // the same picture
@@ -110,9 +111,9 @@ import Toolbox
         let a = qt_native_sound(p, 0, 400, &pcm, &channels, &rate)
         #expect(a == 1600 && channels == 1 && rate == 4000)
         #expect(pcm![0] == 0 && pcm![1599] == 1599)
-        free(pcm)
+        bb_free(pcm)
         let b = qt_native_sound(p, 400, 700, &pcm, &channels, &rate)
         #expect(b == 1200 && pcm![0] == 1600 && pcm![1199] == 2799)               // into the second chunk
-        free(pcm)
+        bb_free(pcm)
     }
 }

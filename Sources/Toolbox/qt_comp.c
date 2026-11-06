@@ -89,7 +89,7 @@ static int32_t dispatch(uint32_t ci, gaddr params, void *cookie)
         if (s)
             return noErr;
         s = &slots[ci & (MAX_SLOTS - 1)];
-        *s = (slot){ ci, cls, calloc(1, cls->size ? cls->size : 1), ci };
+        *s = (slot){ ci, cls, bb_calloc(1, cls->size ? cls->size : 1, BB_UNTYPED), ci };
         if (!s->self) {
             s->ci = 0;
             return memFullErr;
@@ -100,7 +100,7 @@ static int32_t dispatch(uint32_t ci, gaddr params, void *cookie)
         if (r == qtcBadSelector)
             r = noErr;
         if (r) {
-            free(s->self);
+            bb_free(s->self);
             *s = (slot){ 0 };
         }
         return r;
@@ -111,7 +111,7 @@ static int32_t dispatch(uint32_t ci, gaddr params, void *cookie)
     k.target = s->target;
     if (k.what == kQTCClose) {
         cls->fn(&k);
-        free(s->self);
+        bb_free(s->self);
         *s = (slot){ 0 };
         return noErr;
     }
@@ -219,7 +219,7 @@ int32_t qtc_call_named(uint32_t ci, const char *name, const uint32_t *args)
 void qt_components_reset(void)
 {
     for (int i = 0; i < MAX_SLOTS; i++)
-        free(slots[i].self);
+        bb_free(slots[i].self);
     memset(slots, 0, sizeof slots);
     qt_udata_reset();
     qt_dhlr_register();

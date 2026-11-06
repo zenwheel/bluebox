@@ -61,7 +61,7 @@ static int32_t new_node(int ph)
 {
     if (nnodes == nalloc) {
         nalloc = nalloc ? nalloc * 2 : 1 << 17;
-        node *n = realloc(nodes, sizeof *nodes * (size_t)nalloc);
+        node *n = bb_realloc(nodes, sizeof *nodes * (size_t)nalloc, BB_TAG(node));
         if (!n)
             return -1;
         nodes = n;
@@ -82,16 +82,16 @@ static bool load(void)
     size_t nwords = strlen(phw_words), nsounds = strlen(phw_pron);
     int n = phw_count;
     /* Front coding only shortens: the words and sounds fit in this. */
-    pool = malloc(nwords * 8 + 64);
-    sounds = malloc(nsounds * 8 + 64);
-    word_of = malloc(sizeof *word_of * (size_t)n);
-    level_of = malloc((size_t)n);
-    sound_of = malloc(sizeof *sound_of * (size_t)n);
-    sound_len = malloc((size_t)n);
+    pool = bb_malloc(nwords * 8 + 64, BB_BYTES);
+    sounds = bb_malloc(nsounds * 8 + 64, BB_BYTES);
+    word_of = bb_malloc(sizeof *word_of * (size_t)n, BB_BYTES);
+    level_of = bb_malloc((size_t)n, BB_BYTES);
+    sound_of = bb_malloc(sizeof *sound_of * (size_t)n, BB_BYTES);
+    sound_len = bb_malloc((size_t)n, BB_BYTES);
     hash_size = 1;
     while (hash_size < (uint32_t)n * 2)
         hash_size <<= 1;
-    by_word = malloc(sizeof *by_word * hash_size);
+    by_word = bb_malloc(sizeof *by_word * hash_size, BB_BYTES);
     if (!pool || !sounds || !word_of || !level_of || !sound_of || !sound_len || !by_word || new_node(0) < 0)
         return false;
     for (uint32_t i = 0; i < hash_size; i++)

@@ -41,7 +41,7 @@ static void free_hits(q3pick *p)
     for (uint32_t i = 0; i < p->nhits; i++) {
         q3_release(p->hits[i].object);
         q3_release(p->hits[i].root);
-        free(p->hits[i].positions);
+        bb_free(p->hits[i].positions);
     }
     p->nhits = 0;
 }
@@ -51,14 +51,14 @@ static void pick_dispose(q3obj *o)
     q3pick *p = o->data;
     if (p) {
         free_hits(p);
-        free(p->hits);
-        free(p);
+        bb_free(p->hits);
+        bb_free(p);
     }
 }
 
 static bool pick_duplicate(q3obj *to, const q3obj *from)
 {
-    q3pick *p = calloc(1, sizeof *p);
+    q3pick *p = bb_calloc(1, sizeof *p, BB_TAG(q3pick));
     if (!p)
         return false;
     memcpy(p->w, ((q3pick *)from->data)->w, sizeof p->w);
@@ -126,7 +126,7 @@ void q3_pick_hit(gaddr g, const q3hit *h)
         }
     if (p->nhits == p->cap) {
         uint32_t cap = p->cap ? p->cap * 2 : 16;
-        q3hit *n = realloc(p->hits, cap * sizeof *n);
+        q3hit *n = bb_realloc(p->hits, cap * sizeof *n, BB_TAG(q3hit));
         if (!n)
             return;
         p->hits = n;
@@ -138,7 +138,7 @@ void q3_pick_hit(gaddr g, const q3hit *h)
     x->root = h->root ? q3_ref(h->root) : 0;
     x->positions = NULL;
     if (h->depth) {
-        x->positions = malloc(h->depth * sizeof *x->positions);
+        x->positions = bb_malloc(h->depth * sizeof *x->positions, BB_BYTES);
         if (x->positions)
             memcpy(x->positions, h->positions, h->depth * sizeof *x->positions);
         else
@@ -160,16 +160,16 @@ void q3_pick_hit(gaddr g, const q3hit *h)
         q3hit *drop = &p->hits[--p->nhits];
         q3_release(drop->object);
         q3_release(drop->root);
-        free(drop->positions);
+        bb_free(drop->positions);
     }
 }
 
 static gaddr new_pick(uint32_t type, gaddr data, uint32_t words)
 {
-    q3pick *p = calloc(1, sizeof *p);
+    q3pick *p = bb_calloc(1, sizeof *p, BB_TAG(q3pick));
     q3obj *o = p ? q3_new(type, p) : NULL;
     if (!o) {
-        free(p);
+        bb_free(p);
         return 0;
     }
     for (uint32_t i = 0; data && i < words; i++)

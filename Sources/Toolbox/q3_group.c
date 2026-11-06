@@ -61,7 +61,7 @@ static void group_empty(q3group *gr, uint32_t type)
         unlink_pos(gr, p);
         q3_release(p->obj);
         q3_handle_free(p->g);
-        free(p);
+        bb_free(p);
     }
 }
 
@@ -70,18 +70,18 @@ static void group_dispose(q3obj *o)
     q3group *gr = o->data;
     if (gr) {
         group_empty(gr, 0);
-        free(gr);
+        bb_free(gr);
     }
 }
 
 static gaddr insert(q3group *gr, q3pos *before, q3pos *after, gaddr obj)
 {
-    q3pos *p = calloc(1, sizeof *p);
+    q3pos *p = bb_calloc(1, sizeof *p, BB_TAG(q3pos));
     if (!p)
         return 0;
     p->g = q3_handle_new(Q3H_POSITION, p);
     if (!p->g) {
-        free(p);
+        bb_free(p);
         return 0;
     }
     p->obj = q3_ref(obj);
@@ -163,7 +163,7 @@ gaddr q3_group_add(gaddr group, gaddr obj)
 
 static bool group_duplicate(q3obj *to, const q3obj *from)
 {
-    q3group *src = from->data, *gr = calloc(1, sizeof *gr);
+    q3group *src = from->data, *gr = bb_calloc(1, sizeof *gr, BB_TAG(q3group));
     if (!gr)
         return false;
     if (!src) {
@@ -206,7 +206,7 @@ static void group_submit(q3obj *o, q3view *v)
 
 q3group *q3_group_data_new(void)
 {
-    q3group *gr = calloc(1, sizeof *gr);
+    q3group *gr = bb_calloc(1, sizeof *gr, BB_TAG(q3group));
     if (gr)
         gr->state = kQ3DisplayGroupStateMaskIsDrawn | kQ3DisplayGroupStateMaskIsPicked | kQ3DisplayGroupStateMaskIsWritten |
                     kQ3DisplayGroupStateMaskUseBoundingBox | kQ3DisplayGroupStateMaskUseBoundingSphere;
@@ -218,7 +218,7 @@ static gaddr new_group(uint32_t type)
     q3group *gr = q3_group_data_new();
     q3obj *o = gr ? q3_new(type, gr) : NULL;
     if (!o) {
-        free(gr);
+        bb_free(gr);
         return 0;
     }
     return o->g;
@@ -310,7 +310,7 @@ static void Q3Group_RemovePosition(ppc_cpu *c)
     unlink_pos(gr, p);
     gaddr obj = p->obj;
     q3_handle_free(p->g);
-    free(p);
+    bb_free(p);
     q3_edited(g);
     Q3RETURN(obj);
 }

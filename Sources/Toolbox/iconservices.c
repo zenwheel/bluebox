@@ -44,7 +44,7 @@ typedef struct {
 static void fb_init(fbuf *f)
 {
     f->n = 8;
-    f->b = malloc(8);
+    f->b = bb_malloc(8, BB_BYTES);
     memcpy(f->b, "icns\0\0\0\x08", 8);
 }
 
@@ -93,7 +93,7 @@ static void fb_remove(fbuf *f, uint32_t type)
 static void fb_put(fbuf *f, uint32_t type, const uint8_t *d, uint32_t len)
 {
     fb_remove(f, type);
-    f->b = realloc(f->b, f->n + 8 + len);
+    f->b = bb_realloc(f->b, f->n + 8 + len, BB_BYTES);
     put_be32(f->b + f->n, type);
     put_be32(f->b + f->n + 4, len + 8);
     memcpy(f->b + f->n + 8, d, len);
@@ -113,7 +113,7 @@ static bool fb_load(gaddr fam, fbuf *f)
     uint32_t total = rd32(rd32(fam) + 4);
     if (total >= 8 && total < n)
         n = total;
-    f->b = realloc(f->b, n);
+    f->b = bb_realloc(f->b, n, BB_BYTES);
     gget(f->b, rd32(fam), n);
     f->n = n;
     put_be32(f->b + 4, n);
@@ -196,7 +196,7 @@ static bool handle_data(gaddr h, uint8_t **d, uint32_t *n)
     if (!rd32(h))
         return false;
     *n = (uint32_t)tb_GetHandleSize(h);
-    *d = malloc(*n ? *n : 1);
+    *d = bb_malloc(*n ? *n : 1, BB_BYTES);
     gget(*d, rd32(h), *n);
     return true;
 }
@@ -235,14 +235,14 @@ static bool fb_from_resources(int16_t id, bool one, fbuf *f)
         gaddr h = one ? tb_Get1Resource((int32_t)t, id) : tb_GetResource((int32_t)t, id);
         if (handle_data(h, &d, &n)) {
             fb_put(f, t, d, n);
-            free(d);
+            bb_free(d);
             any = true;
         }
     }
     gaddr h = one ? tb_Get1Resource((int32_t)fourcc("icns"), id) : tb_GetResource((int32_t)fourcc("icns"), id);
     if (handle_data(h, &d, &n)) {
         any |= fb_merge_icns(f, d, n);
-        free(d);
+        bb_free(d);
     }
     return any;
 }
@@ -269,7 +269,7 @@ static bool fb_from_theme(uint32_t type, fbuf *f)
     if ((d = thme_resource(fourcc("icns"), id, &n)))
         any |= fb_merge_icns(f, d, n);
     if (!any) {
-        free(f->b);
+        bb_free(f->b);
         f->b = NULL;
     }
     return any;
@@ -291,7 +291,7 @@ static bool bundle_icon_id(uint32_t ftype, int16_t *id)
             local = (int16_t)u16(d + 4);
             found = true;
         }
-        free(d);
+        bb_free(d);
     }
     if (!found)
         return false;
@@ -315,7 +315,7 @@ static bool bundle_icon_id(uint32_t ftype, int16_t *id)
                 }
         }
     }
-    free(d);
+    bb_free(d);
     return found;
 }
 
@@ -415,7 +415,7 @@ static bool custom_icons = true;
 
 void iconservices_reset(void)
 {
-    free(refs);
+    bb_free(refs);
     refs = NULL;
     nrefs = 0;
     custom_icons = true;
@@ -446,7 +446,7 @@ static isref *new_ref(const fbuf *f)
     while (i < nrefs && refs[i].ref)
         i++;
     if (i == nrefs) {
-        refs = realloc(refs, (size_t)(nrefs + 1) * sizeof *refs);
+        refs = bb_realloc(refs, (size_t)(nrefs + 1) * sizeof *refs, BB_TAG(isref));
         nrefs++;
     }
     isref *e = &refs[i];
@@ -539,10 +539,10 @@ static isref *icon_for(uint32_t creator, uint32_t type)
     }
     if (ok) {
         e = keyed_ref(creator, type, &f);
-        free(f.b);
+        bb_free(f.b);
         return e;
     }
-    free(f.b);
+    bb_free(f.b);
     /* The generic icon for the type: the system's. */
     if (creator == SYSTEM_CREATOR) {
         if (type == fourcc("docu"))
@@ -596,7 +596,7 @@ static isref *folder_icon(int16_t vref, int32_t dirid, uint16_t flags)
         bool ok = fb_from_file(vref, dirid, name, kCustomIconResource, 0, &f);
         tb_DisposePtr(name);
         isref *e = ok ? new_ref(&f) : NULL;
-        free(f.b);
+        bb_free(f.b);
         if (e)
             return e;
     }
@@ -634,7 +634,7 @@ int16_t tb_GetIconRefFromFile(gaddr theFile, gaddr theIconRef, gaddr theLabel)
         if (custom_icons && (flags & kHasCustomIcon)) {
             if (fb_from_spec(theFile, kCustomIconResource, 0, &f))
                 e = new_ref(&f);
-            free(f.b);
+            bb_free(f.b);
         }
         /* An application's own icon, from its bundle: kept for its creator. */
         if (!e && type == fourcc("APPL")) {
@@ -643,7 +643,7 @@ int16_t tb_GetIconRefFromFile(gaddr theFile, gaddr theIconRef, gaddr theLabel)
             } else {
                 if (fb_from_spec(theFile, 0, type, &f))
                     e = creator ? keyed_ref(creator, type, &f) : new_ref(&f);
-                free(f.b);
+                bb_free(f.b);
             }
         }
         if (!e)
@@ -698,11 +698,11 @@ int16_t tb_RegisterIconRefFromIconFamily(int32_t creator, int32_t iconType, gadd
 {
     fbuf f = { NULL, 0 };
     if (!fb_load(iconFamily, &f)) {
-        free(f.b);
+        bb_free(f.b);
         return paramErr;
     }
     int16_t err = register_family((uint32_t)creator, (uint32_t)iconType, &f, theIconRef);
-    free(f.b);
+    bb_free(f.b);
     return err;
 }
 
@@ -712,7 +712,7 @@ int16_t tb_RegisterIconRefFromResource(int32_t creator, int32_t iconType, gaddr 
     fbuf f = { NULL, 0 };
     bool ok = resourceFile ? fb_from_spec(resourceFile, resourceID, 0, &f) : fb_from_resources(resourceID, false, &f);
     int16_t err = ok ? register_family((uint32_t)creator, (uint32_t)iconType, &f, theIconRef) : resNotFound;
-    free(f.b);
+    bb_free(f.b);
     return err;
 }
 
@@ -732,7 +732,7 @@ static int16_t read_icon_file(gaddr spec, fbuf *f)
     if (fread(hdr, 1, 8, fp) == 8 && be32(hdr) == fourcc("icns") && be32(hdr + 4) >= 8 &&
         be32(hdr + 4) < 64u << 20) {
         uint32_t n = be32(hdr + 4);
-        f->b = realloc(f->b, n);
+        f->b = bb_realloc(f->b, n, BB_BYTES);
         memcpy(f->b, hdr, 8);
         if (fread(f->b + 8, 1, n - 8, fp) == n - 8) {
             f->n = n;
@@ -741,7 +741,7 @@ static int16_t read_icon_file(gaddr spec, fbuf *f)
     }
     fclose(fp);
     if (err) {
-        free(f->b);
+        bb_free(f->b);
         fb_init(f);
     }
     return err;
@@ -753,7 +753,7 @@ int16_t tb_RegisterIconRefFromIconFile(int32_t creator, int32_t iconType, gaddr 
     int16_t err = read_icon_file(iconFile, &f);
     if (!err)
         err = register_family((uint32_t)creator, (uint32_t)iconType, &f, theIconRef);
-    free(f.b);
+    bb_free(f.b);
     return err;
 }
 
@@ -762,7 +762,7 @@ int16_t tb_ReadIconFile(gaddr iconFile, gaddr iconFamily)
     fbuf f = { NULL, 0 };
     int16_t err = read_icon_file(iconFile, &f);
     gaddr h = err ? 0 : fb_handle(&f, false);
-    free(f.b);
+    bb_free(f.b);
     if (!err && !h)
         err = memFullErr;
     if (iconFamily)
@@ -774,7 +774,7 @@ int16_t tb_WriteIconFile(gaddr iconFamily, gaddr iconFile)
 {
     fbuf f = { NULL, 0 };
     if (!iconFile || !fb_load(iconFamily, &f)) {
-        free(f.b);
+        bb_free(f.b);
         return paramErr;
     }
     tb_FSpCreate(iconFile, (int32_t)fourcc("????"), (int32_t)fourcc("icns"), 0);
@@ -792,7 +792,7 @@ int16_t tb_WriteIconFile(gaddr iconFamily, gaddr iconFile)
     } else {
         err = fnfErr;
     }
-    free(f.b);
+    bb_free(f.b);
     return err;
 }
 
@@ -827,7 +827,7 @@ int16_t tb_OverrideIconRefFromResource(gaddr theIconRef, gaddr resourceFile, int
     fbuf f = { NULL, 0 };
     bool ok = resourceFile ? fb_from_spec(resourceFile, resourceID, 0, &f) : fb_from_resources(resourceID, false, &f);
     isref *o = ok ? new_ref(&f) : NULL;
-    free(f.b);
+    bb_free(f.b);
     if (!o)
         return ok ? memFullErr : resNotFound;
     e = lookup(theIconRef); /* the table may have moved */
@@ -867,7 +867,7 @@ int16_t tb_CompositeIconRef(gaddr backgroundIconRef, gaddr foregroundIconRef, ga
     fbuf f = { NULL, 0 };
     fb_load(lookup(backgroundIconRef)->family, &f);
     isref *e = new_ref(&f);
-    free(f.b);
+    bb_free(f.b);
     if (!e)
         return memFullErr;
     e->bg = backgroundIconRef;
@@ -962,8 +962,8 @@ int16_t tb_IconRefToIconFamily(gaddr theIconRef, uint32_t whichIcons, gaddr icon
     fb_load(e->family, &f);
     fb_select(&f, whichIcons, &sel);
     gaddr h = fb_handle(&sel, false);
-    free(f.b);
-    free(sel.b);
+    bb_free(f.b);
+    bb_free(sel.b);
     if (!h)
         return memFullErr;
     if (iconFamily)
@@ -977,7 +977,7 @@ int16_t tb_IconFamilyToIconSuite(gaddr iconFamily, uint32_t whichIcons, gaddr ic
         wr32(iconSuite, 0);
     fbuf f = { NULL, 0 };
     if (!fb_load(iconFamily, &f)) {
-        free(f.b);
+        bb_free(f.b);
         return paramErr;
     }
     gaddr sp = tb_NewPtr(4, false, true);
@@ -985,7 +985,7 @@ int16_t tb_IconFamilyToIconSuite(gaddr iconFamily, uint32_t whichIcons, gaddr ic
     gaddr suite = rd32(sp);
     tb_DisposePtr(sp);
     if (!suite) {
-        free(f.b);
+        bb_free(f.b);
         return memFullErr;
     }
     for (uint32_t off = 8; off + 8 <= f.n;) {
@@ -1001,7 +1001,7 @@ int16_t tb_IconFamilyToIconSuite(gaddr iconFamily, uint32_t whichIcons, gaddr ic
         }
         off += n;
     }
-    free(f.b);
+    bb_free(f.b);
     if (iconSuite)
         wr32(iconSuite, suite);
     return noErr;
@@ -1025,11 +1025,11 @@ int16_t tb_IconSuiteToIconFamily(gaddr iconSuite, uint32_t whichIcons, gaddr ico
         uint32_t n;
         if (selected(type, whichIcons) && handle_data(h, &d, &n)) {
             fb_put(&f, type, d, n);
-            free(d);
+            bb_free(d);
         }
     }
     gaddr h = fb_handle(&f, false);
-    free(f.b);
+    bb_free(f.b);
     if (!h)
         return memFullErr;
     if (iconFamily)
@@ -1041,16 +1041,16 @@ int16_t tb_SetIconFamilyData(gaddr iconFamily, int32_t iconType, gaddr h)
 {
     fbuf f = { NULL, 0 };
     if (!h || !rd32(h) || !fb_load(iconFamily, &f)) {
-        free(f.b);
+        bb_free(f.b);
         return paramErr;
     }
     uint32_t n = (uint32_t)tb_GetHandleSize(h);
-    uint8_t *d = malloc(n ? n : 1);
+    uint8_t *d = bb_malloc(n ? n : 1, BB_BYTES);
     gget(d, rd32(h), n);
     fb_put(&f, (uint32_t)iconType, d, n);
-    free(d);
+    bb_free(d);
     fb_store(&f, iconFamily);
-    free(f.b);
+    bb_free(f.b);
     return (uint32_t)tb_GetHandleSize(iconFamily) == f.n ? noErr : memFullErr;
 }
 
@@ -1058,7 +1058,7 @@ int16_t tb_GetIconFamilyData(gaddr iconFamily, int32_t iconType, gaddr h)
 {
     fbuf f = { NULL, 0 };
     if (!h || !fb_load(iconFamily, &f)) {
-        free(f.b);
+        bb_free(f.b);
         return paramErr;
     }
     uint32_t n = 0;
@@ -1070,7 +1070,7 @@ int16_t tb_GetIconFamilyData(gaddr iconFamily, int32_t iconType, gaddr h)
         gput(rd32(h), d, n);
     else if (d)
         err = memFullErr;
-    free(f.b);
+    bb_free(f.b);
     return err;
 }
 
@@ -1083,7 +1083,7 @@ int16_t tb_GetIconSizesFromIconRef(uint32_t iconSelectorInput, gaddr iconSelecto
     fbuf f = { NULL, 0 };
     fb_load(e->family, &f);
     uint32_t bits = kind_bits(&f);
-    free(f.b);
+    bb_free(f.b);
     if (iconSelectorOutputPtr)
         wr32(iconSelectorOutputPtr, bits & iconSelectorInput);
     return noErr;
@@ -1098,7 +1098,7 @@ int8_t tb_IsDataAvailableInIconRef(int32_t inIconKind, gaddr inIconRef)
     fb_load(e->family, &f);
     uint32_t n;
     bool there = fb_find(&f, (uint32_t)inIconKind, &n) != NULL;
-    free(f.b);
+    bb_free(f.b);
     return there;
 }
 
@@ -1247,7 +1247,7 @@ static bool family_image(gaddr fam, int size, icon_img *img)
     for (int s = 0; s < NSIZES && !ok; s++)
         if (sizes[s].h < size)
             ok = family_size_image(&f, s, img);
-    free(f.b);
+    bb_free(f.b);
     return ok;
 }
 
@@ -1271,10 +1271,10 @@ static bool ref_image(isref *e, int size, icon_img *img, int depth)
     if (bg && fg) {
         if (!ref_image(bg, size, img, depth + 1))
             return false;
-        icon_img *top = malloc(sizeof *top);
+        icon_img *top = bb_malloc(sizeof *top, BB_TAG(icon_img));
         if (ref_image(fg, size, top, depth + 1))
             overlay(img, top);
-        free(top);
+        bb_free(top);
         return true;
     }
     return family_image(e->family, size, img);
@@ -1313,11 +1313,11 @@ int16_t tb_PlotIconRef(gaddr theRect, int16_t align, int16_t transform, uint32_t
         return paramErr;
     qrect r = qrect_get(theRect);
     int rw = r.right - r.left, rh = r.bottom - r.top;
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     bool ok = ref_image(e, rw < rh ? rw : rh, img, 0);
     if (ok)
         icon_plot(img, r, align, transform);
-    free(img);
+    bb_free(img);
     return ok ? noErr : noIconDataAvailableErr;
 }
 
@@ -1333,11 +1333,11 @@ int8_t tb_PtInIconRef(gaddr testPt, gaddr iconRect, int16_t align, uint32_t theI
 {
     if (!testPt)
         return false;
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     qrect dst;
     bool in = placed(theIconRef, iconRect, align, img, &dst) &&
               opaque_at(img, dst, (int16_t)rd16(testPt + 2), (int16_t)rd16(testPt));
-    free(img);
+    bb_free(img);
     return in;
 }
 
@@ -1346,7 +1346,7 @@ int8_t tb_RectInIconRef(gaddr testRect, gaddr iconRect, int16_t align, uint32_t 
 {
     if (!testRect)
         return false;
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     qrect dst, t = qrect_get(testRect);
     bool in = false;
     if (placed(theIconRef, iconRect, align, img, &dst)) {
@@ -1356,7 +1356,7 @@ int8_t tb_RectInIconRef(gaddr testRect, gaddr iconRect, int16_t align, uint32_t 
             for (int h = left; h < right && !in; h++)
                 in = opaque_at(img, dst, h, v);
     }
-    free(img);
+    bb_free(img);
     return in;
 }
 
@@ -1367,13 +1367,13 @@ int16_t tb_IconRefToRgn(gaddr theRgn, gaddr iconRect, int16_t align, uint32_t ic
         return invalidIconRefErr;
     if (!theRgn || !iconRect)
         return paramErr;
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     qrect dst;
     hrgn rgn;
     hrgn_init(&rgn);
     if (placed(theIconRef, iconRect, align, img, &dst)) {
         int dw = dst.right - dst.left;
-        int16_t *xs = malloc(sizeof *xs * (size_t)(dw + 2));
+        int16_t *xs = bb_malloc(sizeof *xs * (size_t)(dw + 2), BB_BYTES);
         for (int v = dst.top; v < dst.bottom; v++) {
             int n = 0;
             bool on = false;
@@ -1387,11 +1387,11 @@ int16_t tb_IconRefToRgn(gaddr theRgn, gaddr iconRect, int16_t align, uint32_t ic
             if (n)
                 hrgn_add_runs(&rgn, v, xs, n);
         }
-        free(xs);
+        bb_free(xs);
     }
     rgn_write(theRgn, &rgn);
     hrgn_free(&rgn);
-    free(img);
+    bb_free(img);
     return noErr;
 }
 
@@ -1400,11 +1400,11 @@ int8_t tb_IsIconRefMaskEmpty(gaddr iconRef)
     isref *e = lookup(iconRef);
     if (!e)
         return true;
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     bool empty = true;
     if (ref_image(e, 32, img, 0))
         for (int i = 0; i < img->w * img->h && empty; i++)
             empty = img->px[i * 4 + 3] == 0;
-    free(img);
+    bb_free(img);
     return empty;
 }

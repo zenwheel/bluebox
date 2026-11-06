@@ -614,7 +614,7 @@ static void word_started(channel *c, double now, int32_t pos, int32_t len)
     c->word_from = from;
     if (end > c->word_end)
         c->word_end = end;
-    uint8_t *w = malloc(end - from);
+    uint8_t *w = bb_malloc(end - from, BB_BYTES);
     bool phon;
     uint32_t n = word_text(c, from, end - from, w, end - from, &phon);
     if (phon) {
@@ -626,7 +626,7 @@ static void word_started(channel *c, double now, int32_t pos, int32_t len)
             prev[np++] = rd8(c->text + i);
         c->nph = speech_spoken_phonemes(w, (int)n, prev, (int)np, c->ph, MAX_WORD_PHONEMES);
     }
-    free(w);
+    bb_free(w);
     c->iph = 0;
     if (!c->nph) { /* nothing said ("--", "..."): a pause */
         c->close_at = now;
@@ -832,8 +832,8 @@ void speech_interrupt(void)
 
 static void forget_said(channel *c)
 {
-    free(c->said_from);
-    free(c->said_to);
+    bb_free(c->said_from);
+    bb_free(c->said_to);
     c->said_from = c->said_to = NULL;
     c->said_len = 0;
 }
@@ -846,8 +846,8 @@ void speech_reset(void)
         forget_said(&channels[i]);
     memset(channels, 0, sizeof channels);
     for (int i = 0; i < MAX_MADE; i++) {
-        free(made[i].text);
-        free(made[i].phonemes);
+        bb_free(made[i].text);
+        bb_free(made[i].phonemes);
     }
     memset(made, 0, sizeof made);
     default_channel = NULL;
@@ -864,11 +864,11 @@ void speech_reset(void)
 
 static void remember_made(const uint8_t *text, uint32_t tlen, const uint8_t *ph, uint32_t plen)
 {
-    free(made[MAX_MADE - 1].text);
-    free(made[MAX_MADE - 1].phonemes);
+    bb_free(made[MAX_MADE - 1].text);
+    bb_free(made[MAX_MADE - 1].phonemes);
     memmove(&made[1], &made[0], sizeof made[0] * (MAX_MADE - 1));
-    made[0].text = malloc(tlen ? tlen : 1);
-    made[0].phonemes = malloc(plen ? plen : 1);
+    made[0].text = bb_malloc(tlen ? tlen : 1, BB_BYTES);
+    made[0].phonemes = bb_malloc(plen ? plen : 1, BB_BYTES);
     if (made[0].text && made[0].phonemes) {
         memcpy(made[0].text, text, tlen);
         memcpy(made[0].phonemes, ph, plen);
@@ -889,9 +889,9 @@ static bool said_room(said *o, uint32_t more)
     if (o->k + more <= o->size)
         return true;
     uint32_t size = (o->k + more) * 2 + 64;
-    uint8_t *s = realloc(o->s, size);
-    uint32_t *from = realloc(o->from, sizeof *from * size);
-    uint32_t *to = realloc(o->to, sizeof *to * size);
+    uint8_t *s = bb_realloc(o->s, size, BB_BYTES);
+    uint32_t *from = bb_realloc(o->from, sizeof *from * size, BB_BYTES);
+    uint32_t *to = bb_realloc(o->to, sizeof *to * size, BB_BYTES);
     if (s)
         o->s = s;
     if (from)
@@ -952,16 +952,16 @@ static void say_phonemes(said *o, const uint8_t *text, uint32_t at, uint32_t n)
         return;
     }
     size_t room = (size_t)n * 6 + 64;
-    char *out = malloc(room);
-    uint32_t *from = malloc(sizeof *from * room), *to = malloc(sizeof *to * room);
+    char *out = bb_malloc(room, BB_BYTES);
+    uint32_t *from = bb_malloc(sizeof *from * room, BB_BYTES), *to = bb_malloc(sizeof *to * room, BB_BYTES);
     if (out && from && to) {
         size_t k = phonemes_to_text(ph, n, out, room, from, to);
         for (size_t i = 0; i < k; i++)
             said_put(o, out + i, 1, at + from[i], at + to[i]);
     }
-    free(out);
-    free(from);
-    free(to);
+    bb_free(out);
+    bb_free(from);
+    bb_free(to);
 }
 
 /* The text with its phonemes turned into words and the [[inpt]] commands
@@ -1048,7 +1048,7 @@ static int16_t speak(channel *c, gaddr text, uint32_t len)
     forget_said(c);
     if (!len)
         return noErr;
-    uint8_t *mac = malloc(len);
+    uint8_t *mac = bb_malloc(len, BB_BYTES);
     gget(mac, text, len);
     said o = { 0 };
     bool words = phonemes_said(c, mac, len, &o);
@@ -1056,21 +1056,21 @@ static int16_t speak(channel *c, gaddr text, uint32_t len)
         c->said_from = o.from;
         c->said_to = o.to;
         c->said_len = o.k;
-        free(mac);
+        bb_free(mac);
         mac = o.s;
         len = o.k;
     } else {
-        free(o.s);
-        free(o.from);
-        free(o.to);
+        bb_free(o.s);
+        bb_free(o.from);
+        bb_free(o.to);
     }
-    char *utf8 = malloc((size_t)len * 3 + 1);
+    char *utf8 = bb_malloc((size_t)len * 3 + 1, BB_BYTES);
     macroman_to_utf8(mac, len, utf8, (size_t)len * 3 + 1);
-    free(mac);
+    bb_free(mac);
     if (words)
         LOGF(LOG_SPEECH, "speech: channel %d says the phonemes as \"%s\"\n", chan_id(c), utf8);
     host_request(c, MACHINE_SPEECH_SPEAK, utf8);
-    free(utf8);
+    bb_free(utf8);
     return noErr;
 }
 
@@ -1472,7 +1472,7 @@ int16_t tb_TextToPhonemes(gaddr chan, gaddr textBuf, uint32_t textBytes, gaddr p
         return paramErr;
     char out[4096] = "";
     if (speech_fn && textBytes < 1024) {
-        char *utf8 = malloc((size_t)textBytes * 3 + 1);
+        char *utf8 = bb_malloc((size_t)textBytes * 3 + 1, BB_BYTES);
         uint8_t mac[1024];
         gget(mac, textBuf, textBytes);
         macroman_to_utf8(mac, textBytes, utf8, (size_t)textBytes * 3 + 1);
@@ -1485,17 +1485,17 @@ int16_t tb_TextToPhonemes(gaddr chan, gaddr textBuf, uint32_t textBytes, gaddr p
         rq.result = out;
         rq.result_size = sizeof out;
         speech_fn(&rq, speech_ctx);
-        free(utf8);
+        bb_free(utf8);
     }
     uint8_t mac[4096];
     size_t n = out[0] ? utf8_to_macroman(out, mac, sizeof mac) : 0;
     if (!n) /* the host has none (macOS's say -50 now): ours, from the dictionary and the letters */
         n = text_symbols(textBuf, textBytes, mac, sizeof mac);
     if (textBytes <= 4096) { /* said as this text if they come back as input */
-        uint8_t *t = malloc(textBytes ? textBytes : 1);
+        uint8_t *t = bb_malloc(textBytes ? textBytes : 1, BB_BYTES);
         gget(t, textBuf, textBytes);
         remember_made(t, textBytes, mac, (uint32_t)n);
-        free(t);
+        bb_free(t);
     }
     tb_SetHandleSize(phonemeBuf, (int32_t)n);
     if (rd32(phonemeBuf))

@@ -115,19 +115,19 @@ static diter iters[MAX_ITERS];
 
 /* ---- Memory ---- */
 
-static void free_value(dvalue *v) { free(v->data); }
+static void free_value(dvalue *v) { bb_free(v->data); }
 static void free_record(drecord *r)
 {
     for (int i = 0; i < r->nv; i++)
         free_value(&r->v[i]);
-    free(r->v);
+    bb_free(r->v);
 }
 static drecord copy_record(const drecord *s)
 {
-    drecord c = { s->uid, calloc(s->nv ? (size_t)s->nv : 1, sizeof(dvalue)), s->nv };
+    drecord c = { s->uid, bb_calloc(s->nv ? (size_t)s->nv : 1, sizeof(dvalue), BB_TAG(dvalue)), s->nv };
     for (int i = 0; i < s->nv; i++) {
         c.v[i] = s->v[i];
-        c.v[i].data = malloc(s->v[i].len ? s->v[i].len : 1);
+        c.v[i].data = bb_malloc(s->v[i].len ? s->v[i].len : 1, BB_BYTES);
         memcpy(c.v[i].data, s->v[i].data, s->v[i].len);
     }
     return c;
@@ -136,31 +136,31 @@ static void free_records(drecord *r, int n)
 {
     for (int i = 0; i < n; i++)
         free_record(&r[i]);
-    free(r);
+    bb_free(r);
 }
 
 static void free_dict(dict *d)
 {
     for (int i = 0; i < d->nf; i++)
-        free(d->f[i].def);
-    free(d->f);
+        bb_free(d->f[i].def);
+    bb_free(d->f);
     free_records(d->r, d->nr);
     for (int i = 0; i < d->np; i++)
-        free(d->p[i].data);
-    free(d->p);
+        bb_free(d->p[i].data);
+    bb_free(d->p);
     free_records(d->snap, d->nsnap);
     memset(d, 0, sizeof *d);
 }
 
 static void iter_free(diter *it)
 {
-    free(it->ids);
+    bb_free(it->ids);
     if (it->found)
         free_records(it->found, it->n);
     for (int i = 0; i < it->n && it->keys; i++)
-        free(it->keys[i]);
-    free(it->keys);
-    free(it->keylen);
+        bb_free(it->keys[i]);
+    bb_free(it->keys);
+    bb_free(it->keylen);
     memset(it, 0, sizeof *it);
 }
 
@@ -217,13 +217,13 @@ static void set_prop(dict *d, uint32_t tag, const void *data, uint32_t len)
 {
     dprop *p = prop_of(d, tag);
     if (!p) {
-        d->p = realloc(d->p, (size_t)(d->np + 1) * sizeof *d->p);
+        d->p = bb_realloc(d->p, (size_t)(d->np + 1) * sizeof *d->p, BB_TAG(dprop));
         p = &d->p[d->np++];
         p->tag = tag;
         p->data = NULL;
     }
-    free(p->data);
-    p->data = malloc(len ? len : 1);
+    bb_free(p->data);
+    p->data = bb_malloc(len ? len : 1, BB_BYTES);
     memcpy(p->data, data, len);
     p->len = len;
 }
@@ -244,7 +244,7 @@ static void w_add(wbuf *b, const void *d, size_t n)
 {
     if (b->n + n > b->cap) {
         b->cap = (b->n + n) * 2 + 64;
-        b->v = realloc(b->v, b->cap);
+        b->v = bb_realloc(b->v, b->cap, BB_BYTES);
     }
     if (n)
         memcpy(b->v + b->n, d, n);
@@ -298,7 +298,7 @@ static bool save_dict(dict *d)
     bool ok = f && fwrite(b.v, 1, b.n, f) == b.n;
     if (f)
         ok = fclose(f) == 0 && ok;
-    free(b.v);
+    bb_free(b.v);
     return ok;
 }
 
@@ -321,9 +321,9 @@ static uint8_t *rbytes(rbuf *r, uint32_t n)
 {
     if (r->at + n > r->n || n > (64u << 20)) {
         r->bad = true;
-        return calloc(1, 1);
+        return bb_calloc(1, 1, BB_BYTES);
     }
-    uint8_t *c = malloc(n ? n : 1);
+    uint8_t *c = bb_malloc(n ? n : 1, BB_BYTES);
     memcpy(c, r->p + r->at, n);
     r->at += n;
     return c;
@@ -338,18 +338,18 @@ static int16_t load_dict(dict *d)
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
-    uint8_t *buf = malloc(size > 0 ? (size_t)size : 1);
+    uint8_t *buf = bb_malloc(size > 0 ? (size_t)size : 1, BB_BYTES);
     size_t got = size > 0 ? fread(buf, 1, (size_t)size, f) : 0;
     fclose(f);
     rbuf r = { buf, got, 0, false };
     if (got < 12 || r32(&r) != HEADER_MAGIC) {
-        free(buf);
+        bb_free(buf);
         return dcmNotDictionaryErr;
     }
     uint32_t version = r32(&r);
     uint32_t hsize = r32(&r);
     if (version != 2 || hsize < 12 || hsize > got) {
-        free(buf);
+        bb_free(buf);
         return dcmBadDictionaryErr;
     }
     r.at = hsize;
@@ -358,10 +358,10 @@ static int16_t load_dict(dict *d)
     d->next_uid = r32(&r);
     uint32_t nf = r32(&r);
     if (nf > 1024) {
-        free(buf);
+        bb_free(buf);
         return dcmBadDictionaryErr;
     }
-    d->f = calloc(nf ? nf : 1, sizeof *d->f);
+    d->f = bb_calloc(nf ? nf : 1, sizeof *d->f, BB_TAG(dfield));
     for (uint32_t i = 0; i < nf && !r.bad; i++) {
         dfield *fl = &d->f[d->nf++];
         fl->tag = r32(&r), fl->type = r32(&r), fl->maxsize = r32(&r), fl->attrs = r32(&r);
@@ -381,12 +381,12 @@ static int16_t load_dict(dict *d)
         uint8_t *data = rbytes(&r, len);
         if (!r.bad)
             set_prop(d, tag, data, len);
-        free(data);
+        bb_free(data);
     }
     uint32_t nr = r32(&r);
     if (nr > (1u << 22))
         r.bad = true;
-    d->r = calloc(nr && !r.bad ? nr : 1, sizeof *d->r);
+    d->r = bb_calloc(nr && !r.bad ? nr : 1, sizeof *d->r, BB_TAG(drecord));
     for (uint32_t i = 0; i < nr && !r.bad; i++) {
         drecord *rec = &d->r[d->nr++];
         rec->uid = r32(&r);
@@ -395,14 +395,14 @@ static int16_t load_dict(dict *d)
             r.bad = true;
             break;
         }
-        rec->v = calloc(nv ? nv : 1, sizeof *rec->v);
+        rec->v = bb_calloc(nv ? nv : 1, sizeof *rec->v, BB_TAG(dvalue));
         for (uint32_t k = 0; k < nv && !r.bad; k++) {
             dvalue *v = &rec->v[rec->nv++];
             v->tag = r32(&r), v->type = r32(&r), v->len = r32(&r);
             v->data = rbytes(&r, v->len);
         }
     }
-    free(buf);
+    bb_free(buf);
     return r.bad ? dcmBadDictionaryErr : noErr;
 }
 
@@ -471,7 +471,7 @@ static uint8_t *get_param(gaddr rec, uint32_t key, uint32_t *type, uint32_t *len
     if (tb_AEGetParamDesc(rec, (int32_t)key, (int32_t)T("****"), d) == noErr) {
         gaddr h = rd32(d + 4);
         uint32_t n = h ? (uint32_t)tb_GetHandleSize(h) : 0;
-        out = malloc(n ? n : 1);
+        out = bb_malloc(n ? n : 1, BB_BYTES);
         if (n)
             gget(out, rd32(h), n);
         *len = n;
@@ -492,26 +492,26 @@ static int16_t field_from_record(gaddr rec, dfield *f)
     uint8_t *tg = get_param(rec, T("ftag"), &type, &tl);
     uint8_t *ty = get_param(rec, T("ftyp"), &type, &ftl);
     if (!tg || tl != 4 || !ty || ftl != 4) {
-        free(tg);
-        free(ty);
+        bb_free(tg);
+        bb_free(ty);
         return dcmBadFieldInfoErr;
     }
     f->tag = be32get(tg);
     f->type = be32get(ty);
-    free(tg);
-    free(ty);
+    bb_free(tg);
+    bb_free(ty);
     uint8_t *mx = get_param(rec, T("mrsz"), &type, &len);
     if (mx && len == 4)
         f->maxsize = be32get(mx);
-    free(mx);
+    bb_free(mx);
     uint8_t *at = get_param(rec, T("fatr"), &type, &len);
     if (at && len == 4)
         f->attrs = be32get(at);
-    free(at);
+    bb_free(at);
     f->def = get_param(rec, T("fdef"), &f->deftype, &f->deflen);
     f->has_default = f->def != NULL;
     if (!f->def)
-        f->def = calloc(1, 1);
+        f->def = bb_calloc(1, 1, BB_BYTES);
     gaddr list = tb_NewPtr(8, false, true), item = tb_NewPtr(8, false, true);
     if (list && item && tb_AEGetParamDesc(rec, (int32_t)T("ffnd"), (int32_t)T("list"), list) == noErr) {
         gaddr cnt = tb_NewPtr(4, false, true);
@@ -598,8 +598,8 @@ static int cmp_records(const void *a, const void *b)
 /* The records' indices in the order of a key field. */
 static int *sorted_order(dict *d, uint32_t tag)
 {
-    drecord *tmp = malloc((size_t)(d->nr ? d->nr : 1) * sizeof *tmp);
-    int *order = malloc((size_t)(d->nr ? d->nr : 1) * sizeof *order);
+    drecord *tmp = bb_malloc((size_t)(d->nr ? d->nr : 1) * sizeof *tmp, BB_TAG(drecord));
+    int *order = bb_malloc((size_t)(d->nr ? d->nr : 1) * sizeof *order, BB_BYTES);
     /* sort copies of the headers with their index in uid-less form: use a parallel array */
     for (int i = 0; i < d->nr; i++)
         tmp[i] = d->r[i];
@@ -611,7 +611,7 @@ static int *sorted_order(dict *d, uint32_t tag)
                 order[i] = k;
                 break;
             }
-    free(tmp);
+    bb_free(tmp);
     return order;
 }
 
@@ -637,7 +637,7 @@ static int find_record(dict *d, uint32_t tag, uint32_t keylen, const uint8_t *ke
 
 static uint8_t *host_key(gaddr key, uint32_t size)
 {
-    uint8_t *k = malloc(size ? size : 1);
+    uint8_t *k = bb_malloc(size ? size : 1, BB_BYTES);
     if (size)
         gget(k, key, size);
     return k;
@@ -665,10 +665,10 @@ static int16_t values_from_list(dict *d, gaddr list, drecord *rec)
             } else if ((f->attrs & kDCMFixedSizeFieldMask) && f->maxsize && n != f->maxsize) {
                 e = dcmBadDataSizeErr;
             } else {
-                dvalue v = { tag, type, n, malloc(n ? n : 1) };
+                dvalue v = { tag, type, n, bb_malloc(n ? n : 1, BB_BYTES) };
                 if (n)
                     gget(v.data, rd32(h), n);
-                rec->v = realloc(rec->v, (size_t)(rec->nv + 1) * sizeof *rec->v);
+                rec->v = bb_realloc(rec->v, (size_t)(rec->nv + 1) * sizeof *rec->v, BB_TAG(dvalue));
                 rec->v[rec->nv++] = v;
             }
             tb_AEDisposeDesc(item);
@@ -761,10 +761,10 @@ static void dcm_DCMNewDictionary(ppc_cpu *c)
         if (!e && field_of(d, f.tag))
             e = dcmBadFieldInfoErr;
         if (!e) {
-            d->f = realloc(d->f, (size_t)(d->nf + 1) * sizeof *d->f);
+            d->f = bb_realloc(d->f, (size_t)(d->nf + 1) * sizeof *d->f, BB_TAG(dfield));
             d->f[d->nf++] = f;
         } else
-            free(f.def);
+            bb_free(f.def);
         tb_AEDisposeDesc(item);
     }
     if (cnt)
@@ -810,10 +810,10 @@ static void dcm_DCMDeriveNewDictionary(ppc_cpu *c)
     gget(d->spec, file, 70);
     d->script = S16(2);
     d->invisible = BOOL(3);
-    d->f = calloc((size_t)(s->nf ? s->nf : 1), sizeof *d->f);
+    d->f = bb_calloc((size_t)(s->nf ? s->nf : 1), sizeof *d->f, BB_TAG(dfield));
     for (int i = 0; i < s->nf; i++) {
         d->f[i] = s->f[i];
-        d->f[i].def = malloc(s->f[i].deflen ? s->f[i].deflen : 1);
+        d->f[i].def = bb_malloc(s->f[i].deflen ? s->f[i].deflen : 1, BB_BYTES);
         memcpy(d->f[i].def, s->f[i].def, s->f[i].deflen);
     }
     d->nf = s->nf;
@@ -942,7 +942,7 @@ static void dcm_DCMGetDictionaryWriteAccess(ppc_cpu *c)
     if (d->write_ref >= 0)
         RET(dcmDictionaryBusyErr);
     d->write_ref = ri;
-    d->snap = calloc(d->nr ? (size_t)d->nr : 1, sizeof *d->snap);
+    d->snap = bb_calloc(d->nr ? (size_t)d->nr : 1, sizeof *d->snap, BB_TAG(drecord));
     d->nsnap = d->nr;
     for (int i = 0; i < d->nr; i++)
         d->snap[i] = copy_record(&d->r[i]);
@@ -1021,14 +1021,14 @@ static void dcm_DCMFindRecords(ppc_cpu *c)
     uint32_t id;
     diter *it = new_iter(&id);
     if (!it) {
-        free(key);
-        free(order);
+        bb_free(key);
+        bb_free(order);
         RET(memFullErr);
     }
     it->kind = 2;
-    it->found = calloc(d->nr ? (size_t)d->nr : 1, sizeof *it->found);
-    it->keys = calloc(d->nr ? (size_t)d->nr : 1, sizeof *it->keys);
-    it->keylen = calloc(d->nr ? (size_t)d->nr : 1, sizeof *it->keylen);
+    it->found = bb_calloc(d->nr ? (size_t)d->nr : 1, sizeof *it->found, BB_TAG(drecord));
+    it->keys = bb_calloc(d->nr ? (size_t)d->nr : 1, sizeof *it->keys, BB_TAG(uint8_t *));
+    it->keylen = bb_calloc(d->nr ? (size_t)d->nr : 1, sizeof *it->keylen, BB_BYTES);
     uint32_t skipped = 0;
     for (int i = 0; i < d->nr; i++) {
         drecord *r = &d->r[order[i]];
@@ -1048,20 +1048,20 @@ static void dcm_DCMFindRecords(ppc_cpu *c)
                 want = want || fetch[m] == r->v[k].tag;
             if (!want)
                 continue;
-            keep.v = realloc(keep.v, (size_t)(keep.nv + 1) * sizeof *keep.v);
+            keep.v = bb_realloc(keep.v, (size_t)(keep.nv + 1) * sizeof *keep.v, BB_TAG(dvalue));
             keep.v[keep.nv] = r->v[k];
-            keep.v[keep.nv].data = malloc(r->v[k].len ? r->v[k].len : 1);
+            keep.v[keep.nv].data = bb_malloc(r->v[k].len ? r->v[k].len : 1, BB_BYTES);
             memcpy(keep.v[keep.nv].data, r->v[k].data, r->v[k].len);
             keep.nv++;
         }
         it->found[it->n] = keep;
-        it->keys[it->n] = malloc(v->len ? v->len : 1);
+        it->keys[it->n] = bb_malloc(v->len ? v->len : 1, BB_BYTES);
         memcpy(it->keys[it->n], v->data, v->len);
         it->keylen[it->n] = v->len;
         it->n++;
     }
-    free(key);
-    free(order);
+    bb_free(key);
+    bb_free(order);
     wr32(A(9), id);
     RET(noErr);
 }
@@ -1124,7 +1124,7 @@ static int locate(dict *d, uint32_t tag, gaddr key, uint32_t ksize, uint32_t uid
         return -1;
     uint8_t *k = host_key(key, ksize);
     int i = find_record(d, tag, ksize, k, uid);
-    free(k);
+    bb_free(k);
     if (i < 0)
         *err = dcmNoRecordErr;
     return i;
@@ -1144,7 +1144,7 @@ static void dcm_DCMGetRecordSequenceNumber(ppc_cpu *c)
     for (int i = 0; i < d->nr; i++)
         if (order[i] == at)
             wr32(A(5), (uint32_t)i + 1);
-    free(order);
+    bb_free(order);
     RET(noErr);
 }
 
@@ -1176,7 +1176,7 @@ static void dcm_DCMGetNthRecord(ppc_cpu *c)
         RET(dcmNoRecordErr);
     int *order = sorted_order(d, A(1));
     e = give_key(d, A(1), order[A(2) - 1], A(3), A(4), A(5), A(6));
-    free(order);
+    bb_free(order);
     RET((int32_t)e);
 }
 
@@ -1198,11 +1198,11 @@ static void neighbor(ppc_cpu *c, int dir)
             pos = i;
     pos += dir;
     if (pos < 0 || pos >= d->nr) {
-        free(order);
+        bb_free(order);
         RET(dcmIterationCompleteErr);
     }
     e = give_key(d, A(1), order[pos], A(5), A(6), A(7), A(8));
-    free(order);
+    bb_free(order);
     RET((int32_t)e);
 }
 static void dcm_DCMGetNextRecord(ppc_cpu *c) { neighbor(c, 1); }
@@ -1261,14 +1261,14 @@ static void dcm_DCMSetFieldData(ppc_cpu *c)
     for (int i = 0; i < upd.nv; i++) {
         dvalue *old = value_of(r, upd.v[i].tag);
         if (old) {
-            free(old->data);
+            bb_free(old->data);
             *old = upd.v[i];
         } else {
-            r->v = realloc(r->v, (size_t)(r->nv + 1) * sizeof *r->v);
+            r->v = bb_realloc(r->v, (size_t)(r->nv + 1) * sizeof *r->v, BB_TAG(dvalue));
             r->v[r->nv++] = upd.v[i];
         }
     }
-    free(upd.v);
+    bb_free(upd.v);
     RET(noErr);
 }
 
@@ -1293,7 +1293,7 @@ static void dcm_DCMAddRecord(ppc_cpu *c)
             e = dcmBadDataSizeErr;
         else {
             dvalue v = { tag, kf->type, ks, host_key(A(3), ks) };
-            rec.v = realloc(rec.v, (size_t)(rec.nv + 1) * sizeof *rec.v);
+            rec.v = bb_realloc(rec.v, (size_t)(rec.nv + 1) * sizeof *rec.v, BB_TAG(dvalue));
             rec.v[rec.nv++] = v;
         }
     }
@@ -1303,9 +1303,9 @@ static void dcm_DCMAddRecord(ppc_cpu *c)
         if (value_of(&rec, f->tag))
             continue;
         if (f->has_default) {
-            dvalue v = { f->tag, f->deftype, f->deflen, malloc(f->deflen ? f->deflen : 1) };
+            dvalue v = { f->tag, f->deftype, f->deflen, bb_malloc(f->deflen ? f->deflen : 1, BB_BYTES) };
             memcpy(v.data, f->def, f->deflen);
-            rec.v = realloc(rec.v, (size_t)(rec.nv + 1) * sizeof *rec.v);
+            rec.v = bb_realloc(rec.v, (size_t)(rec.nv + 1) * sizeof *rec.v, BB_TAG(dvalue));
             rec.v[rec.nv++] = v;
         } else if (f->attrs & (kDCMRequiredFieldMask | kDCMIdentifyFieldMask)) {
             e = dcmNecessaryFieldErr;
@@ -1331,7 +1331,7 @@ static void dcm_DCMAddRecord(ppc_cpu *c)
     }
     if (!e && !A(4)) {
         rec.uid = d->next_uid++;
-        d->r = realloc(d->r, (size_t)(d->nr + 1) * sizeof *d->r);
+        d->r = bb_realloc(d->r, (size_t)(d->nr + 1) * sizeof *d->r, BB_TAG(drecord));
         d->r[d->nr++] = rec;
         if (A(6))
             wr32(A(6), rec.uid);
@@ -1454,7 +1454,7 @@ static void dcm_DCMSetDictionaryProperty(ppc_cpu *c)
         RET(dcmParamErr);
     uint8_t *v = host_key(A(3), A(2));
     set_prop(d, A(1), v, A(2));
-    free(v);
+    bb_free(v);
     save_dict(d);
     RET(noErr);
 }
@@ -1482,7 +1482,7 @@ static void create_object_iterator(ppc_cpu *c, int kind)
     if (!it)
         RET(memFullErr);
     it->kind = kind;
-    it->ids = calloc(MAX_DICTS + 1, sizeof *it->ids);
+    it->ids = bb_calloc(MAX_DICTS + 1, sizeof *it->ids, BB_BYTES);
     if (kind == 1) {
         it->ids[it->n++] = METHOD_ID;
     } else {
@@ -1563,7 +1563,7 @@ static void dcm_DCMCreateFieldInfoRecord(ppc_cpu *c)
     if (A(4) && rd32(A(4)) != T("null")) {
         gaddr h = rd32(A(4) + 4);
         uint32_t n = h ? (uint32_t)tb_GetHandleSize(h) : 0;
-        def = malloc(n ? n : 1);
+        def = bb_malloc(n ? n : 1, BB_BYTES);
         if (n)
             gget(def, rd32(h), n);
         f.def = def;
@@ -1572,7 +1572,7 @@ static void dcm_DCMCreateFieldInfoRecord(ppc_cpu *c)
         f.has_default = true;
     }
     int16_t e = record_from_field(&f, A(7));
-    free(def);
+    bb_free(def);
     RET((int32_t)e);
 }
 
@@ -1585,7 +1585,7 @@ static void dcm_DCMGetFieldTagAndType(ppc_cpu *c)
     if (!e) {
         wr32(A(1), f.tag);
         wr32(A(2), f.type);
-        free(f.def);
+        bb_free(f.def);
     }
     RET((int32_t)e);
 }
@@ -1598,7 +1598,7 @@ static void dcm_DCMGetFieldMaxRecordSize(ppc_cpu *c)
     int16_t e = field_from_record(A(0), &f);
     if (!e) {
         wr32(A(1), f.maxsize);
-        free(f.def);
+        bb_free(f.def);
     }
     RET((int32_t)e);
 }
@@ -1611,7 +1611,7 @@ static void dcm_DCMGetFieldAttributes(ppc_cpu *c)
     int16_t e = field_from_record(A(0), &f);
     if (!e) {
         wr32(A(1), f.attrs);
-        free(f.def);
+        bb_free(f.def);
     }
     RET((int32_t)e);
 }
@@ -1626,7 +1626,7 @@ static void dcm_DCMGetFieldDefaultData(ppc_cpu *c)
     if (e)
         RET((int32_t)e);
     if (!f.has_default) {
-        free(f.def);
+        bb_free(f.def);
         RET(dcmBadFieldInfoErr);
     }
     gaddr tmp = tb_NewPtr(f.deflen ? (int32_t)f.deflen : 1, false, true);
@@ -1644,7 +1644,7 @@ static void dcm_DCMGetFieldDefaultData(ppc_cpu *c)
             tb_AEDisposeDesc(A(2));
         tb_DisposePtr(coerced);
     }
-    free(f.def);
+    bb_free(f.def);
     RET((int32_t)e);
 }
 
@@ -1661,7 +1661,7 @@ static void dcm_DCMGetFieldFindMethods(ppc_cpu *c)
         wr32(A(3), f.nfind);
     for (uint32_t i = 0; A(2) && i < f.nfind && i < A(1); i++)
         wr32(A(2) + 4 * i, f.find[i]);
-    free(f.def);
+    bb_free(f.def);
     RET(A(2) && f.nfind > A(1) ? dcmBufferOverflowErr : noErr);
 }
 

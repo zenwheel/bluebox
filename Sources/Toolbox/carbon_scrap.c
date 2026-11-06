@@ -149,20 +149,20 @@ static gaddr flavor_data(uint32_t type, int32_t *len, bool *translated)
         return 0;
     gaddr p;
     if (type == TYPE_UTXT) {
-        uint8_t *b = malloc((size_t)n + 1);
-        uint16_t *u = malloc(sizeof *u * ((size_t)n + 1));
+        uint8_t *b = bb_malloc((size_t)n + 1, BB_BYTES);
+        uint16_t *u = bb_malloc(sizeof *u * ((size_t)n + 1), BB_BYTES);
         gget(b, d, (uint32_t)n);
         size_t k = svc_macroman_to_utf16(b, (size_t)n, u);
         p = tb_NewPtr((int32_t)(2 * k + 1), false, false);
         for (size_t i = 0; p && i < k; i++)
             wr16(p + 2 * (uint32_t)i, u[i]);
         *len = (int32_t)(2 * k);
-        free(b);
-        free(u);
+        bb_free(b);
+        bb_free(u);
     } else {
         size_t units = (size_t)n / 2;
-        uint16_t *u = malloc(sizeof *u * (units + 1));
-        uint8_t *b = malloc(units + 1);
+        uint16_t *u = bb_malloc(sizeof *u * (units + 1), BB_BYTES);
+        uint8_t *b = bb_malloc(units + 1, BB_BYTES);
         for (size_t i = 0; i < units; i++)
             u[i] = rd16(d + 2 * (uint32_t)i);
         size_t k = svc_utf16_to_macroman(u, units, b);
@@ -170,8 +170,8 @@ static gaddr flavor_data(uint32_t type, int32_t *len, bool *translated)
         if (p)
             gput(p, b, (uint32_t)k);
         *len = (int32_t)k;
-        free(b);
-        free(u);
+        bb_free(b);
+        bb_free(u);
     }
     *translated = true;
     return p;

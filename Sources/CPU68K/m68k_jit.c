@@ -1546,7 +1546,7 @@ static bool setup(void)
 {
     if (E.ready)
         return true;
-    scratch = malloc(16384 * 4);
+    scratch = bb_malloc(16384 * 4, BB_BYTES);
     if (!scratch || !jit_engine_init(&E, CODE_68K, 1, CODE_SIZE))
         return false;
     E.build = build_id();
@@ -1990,10 +1990,10 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
     int bad = 0;
     why[0] = 0;
     enum { AREA = 0x80000 };
-    uint8_t *before = malloc(AREA), *after_i = malloc(AREA);
+    uint8_t *before = bb_malloc(AREA, BB_BYTES), *after_i = bb_malloc(AREA, BB_BYTES);
     if (!before || !after_i) {
-        free(before);
-        free(after_i);
+        bb_free(before);
+        bb_free(after_i);
         return -1;
     }
     bool was = cpu_jit_enabled, was_lookahead = lookahead;
@@ -2076,8 +2076,8 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
         }
     }
     cpu_jit_enabled = was;
-    free(before);
-    free(after_i);
+    bb_free(before);
+    bb_free(after_i);
     return bad;
 }
 

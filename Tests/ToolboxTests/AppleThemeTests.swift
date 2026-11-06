@@ -38,7 +38,7 @@ extension BlueBox {
             var len = 0
             #expect(rsrc_build(specs, specs.count, &out, &len))
             let fork = Array(UnsafeBufferPointer(start: out, count: len))
-            free(out)
+            bb_free(out)
             datas.forEach { $0.deallocate() }
             names.forEach { free($0) }
             return fork

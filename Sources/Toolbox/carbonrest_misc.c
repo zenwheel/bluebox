@@ -425,7 +425,7 @@ static void pm_CopyProcessName(ppc_cpu *c)
     if (!cf_decode(0 /* Mac Roman */, name + 1, name[0], &u, &n))
         RETERR(paramErr);
     wr32(A(1), cfstr_new(0, u, n, false));
-    free(u);
+    bb_free(u);
     RETERR(noErr);
 }
 

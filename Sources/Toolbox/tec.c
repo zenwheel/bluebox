@@ -388,7 +388,7 @@ static int convert(conversion *j, const uint8_t *in, size_t n, uint8_t *out, siz
         size_t trouble = 0; /* UTF-16 units to go a character at a time */
         if (!slow) {
             size_t ucap = (n - pos) * 4 + 8, u, k, eu, ep;
-            uint16_t *nb = realloc(ubuf, ucap * sizeof *ubuf);
+            uint16_t *nb = bb_realloc(ubuf, ucap * sizeof *ubuf, BB_BYTES);
             if (!nb) {
                 result = CV_FULL;
                 break;
@@ -422,7 +422,7 @@ static int convert(conversion *j, const uint8_t *in, size_t n, uint8_t *out, siz
         if (result != CV_OK)
             break;
     }
-    free(ubuf);
+    bb_free(ubuf);
     if (result == CV_OK)
         note_offsets(j, pos, opos);
     j->used = pos;
@@ -434,10 +434,10 @@ static int convert(conversion *j, const uint8_t *in, size_t n, uint8_t *out, siz
 static int convert_guest(conversion *j, gaddr in, uint32_t n, gaddr out, uint32_t cap, const uint8_t *prefix,
                          size_t nprefix)
 {
-    uint8_t *src = malloc(nprefix + n + 1), *dst = malloc((size_t)cap + 1);
+    uint8_t *src = bb_malloc(nprefix + n + 1, BB_BYTES), *dst = bb_malloc((size_t)cap + 1, BB_BYTES);
     if (!src || !dst) {
-        free(src);
-        free(dst);
+        bb_free(src);
+        bb_free(dst);
         j->used = j->produced = 0;
         return CV_FULL;
     }
@@ -447,8 +447,8 @@ static int convert_guest(conversion *j, gaddr in, uint32_t n, gaddr out, uint32_
     int r = convert(j, src, nprefix + n, dst, cap);
     if (j->produced)
         gput(out, dst, (uint32_t)j->produced);
-    free(src);
-    free(dst);
+    bb_free(src);
+    bb_free(dst);
     return r;
 }
 
@@ -895,7 +895,7 @@ static uint32_t *read_offsets(gaddr a, uint32_t n)
 {
     if (!a || !n)
         return NULL;
-    uint32_t *v = malloc(n * sizeof *v);
+    uint32_t *v = bb_malloc(n * sizeof *v, BB_BYTES);
     for (uint32_t i = 0; v && i < n; i++)
         v[i] = rd32(a + 4 * i);
     return v;
@@ -926,7 +926,7 @@ static void uc_convert(ppc_cpu *c, uint32_t tag)
     conversion j = { .src = rd32(o + OBJ_SRC), .dst = rd32(o + OBJ_DST),
                      .fallbacks = (flags & kUnicodeUseFallbacksMask) != 0, .final = false };
     uint32_t *want = out_off && n_out_off ? read_offsets(in_off, n_in_off) : NULL;
-    uint32_t *found = want ? calloc(n_in_off, sizeof *found) : NULL;
+    uint32_t *found = want ? bb_calloc(n_in_off, sizeof *found, BB_BYTES) : NULL;
     if (want && found) {
         j.in_offsets = want;
         j.n_in_offsets = n_in_off;
@@ -941,8 +941,8 @@ static void uc_convert(ppc_cpu *c, uint32_t tag)
         wr32(n_out_off, (uint32_t)j.n_out_offsets);
     for (size_t i = 0; found && i < j.n_out_offsets; i++)
         wr32(out_off + 4 * (gaddr)i, found[i]);
-    free(want);
-    free(found);
+    bb_free(want);
+    bb_free(found);
     RETURN(uc_status(r, &j));
 }
 
@@ -1061,7 +1061,7 @@ static void uc_convert_runs(ppc_cpu *c, bool scripts)
     run_conversion rc = { .j = { .src = rd32(o + OBJ_SRC), .fallbacks = (flags & kUnicodeUseFallbacksMask) != 0 },
                           .encs = encs, .nencs = n, .keep_same = (flags & kUnicodeKeepSameEncodingMask) != 0,
                           .current = ~0u, .runs = runs, .max_runs = arg(c, 12), .scripts = scripts };
-    uint8_t *s = malloc((size_t)len + 1), *d = malloc((size_t)cap + 1);
+    uint8_t *s = bb_malloc((size_t)len + 1, BB_BYTES), *d = bb_malloc((size_t)cap + 1, BB_BYTES);
     int r = CV_FULL;
     if (s && d) {
         if (len)
@@ -1070,8 +1070,8 @@ static void uc_convert_runs(ppc_cpu *c, bool scripts)
         if (rc.j.produced)
             gput(out, d, (uint32_t)rc.j.produced);
     }
-    free(s);
-    free(d);
+    bb_free(s);
+    bb_free(d);
     if (read)
         wr32(read, (uint32_t)rc.j.used);
     if (outlen)
@@ -1110,7 +1110,7 @@ static void uc_TruncateForTextToUnicode(ppc_cpu *c)
     if (!obj_is(o, TAG_T2U) || !R(4))
         RETURN(paramErr);
     uint32_t n = len < max ? len : max;
-    uint8_t *b = malloc((size_t)n + 1);
+    uint8_t *b = bb_malloc((size_t)n + 1, BB_BYTES);
     size_t pos = 0;
     if (b) {
         gget(b, src, n);
@@ -1120,7 +1120,7 @@ static void uc_TruncateForTextToUnicode(ppc_cpu *c)
             pos += bytes;
         if (pos < n && n == len)
             pos = n; /* the end of the text itself */
-        free(b);
+        bb_free(b);
     }
     wr32(R(4), (uint32_t)pos);
     RETURN(noErr);
@@ -1598,7 +1598,7 @@ static void multiple(ppc_cpu *c, bool flush)
     gget(pend, o + OBJ_PEND, (uint32_t)npend);
     run_conversion rc = { .j = converter_job(o, flush), .encs = encs, .nencs = n, .keep_same = true,
                           .current = ~0u, .runs = runs, .max_runs = max_runs };
-    uint8_t *s = malloc(npend + len + 1), *d = malloc((size_t)cap + 1);
+    uint8_t *s = bb_malloc(npend + len + 1, BB_BYTES), *d = bb_malloc((size_t)cap + 1, BB_BYTES);
     int r = CV_FULL;
     if (s && d) {
         memcpy(s, pend, npend);
@@ -1608,8 +1608,8 @@ static void multiple(ppc_cpu *c, bool flush)
         if (rc.j.produced)
             gput(out, d, (uint32_t)rc.j.produced);
     }
-    free(s);
-    free(d);
+    bb_free(s);
+    bb_free(d);
     uint32_t took = settle_pending(o, pend, npend, in, len, rc.j.used, r);
     if (actual_in)
         wr32(actual_in, took);
@@ -1668,7 +1668,7 @@ static void sniff(uint32_t e, const uint8_t *b, size_t n, uint32_t max_errs, uin
                   uint32_t *features)
 {
     size_t cap = n + 8, pos = 0;
-    uint16_t *u = malloc(cap * sizeof *u);
+    uint16_t *u = bb_malloc(cap * sizeof *u, BB_BYTES);
     *errs = *features = 0;
     while (u && pos < n && *errs < max_errs) {
         size_t used, k;
@@ -1685,7 +1685,7 @@ static void sniff(uint32_t e, const uint8_t *b, size_t n, uint32_t max_errs, uin
             break;
         }
     }
-    free(u);
+    bb_free(u);
     if (*features > max_features)
         *features = max_features;
 }
@@ -1701,7 +1701,7 @@ static void tec_TECSniffTextEncoding(ppc_cpu *c)
         RETURN(paramErr);
     if (n > MAX_ENC)
         n = MAX_ENC;
-    uint8_t *b = malloc((size_t)len + 1);
+    uint8_t *b = bb_malloc((size_t)len + 1, BB_BYTES);
     if (!b)
         RETURN(memFullErr);
     if (len)
@@ -1711,7 +1711,7 @@ static void tec_TECSniffTextEncoding(ppc_cpu *c)
         e[i] = rd32(encs + 4 * i);
         sniff(e[i], b, len, max_errs ? max_errs : 1, max_feats, &ne[i], &nf[i]);
     }
-    free(b);
+    bb_free(b);
     /* A stable insertion sort. */
     for (uint32_t i = 1; i < n; i++)
         for (uint32_t k = i; k > 0 && (ne[k] < ne[k - 1] || (ne[k] == ne[k - 1] && nf[k] > nf[k - 1])); k--) {

@@ -136,7 +136,7 @@ static void add_phrases(const char *path)
                     continue;
                 if (nmore == more_room) {
                     int room = more_room ? more_room * 2 : 256;
-                    void *grown = realloc(more, (size_t)room * sizeof *more);
+                    void *grown = bb_realloc(more, (size_t)room * sizeof *more, BB_BYTES);
                     if (!grown)
                         break;
                     more = grown;
@@ -192,7 +192,7 @@ static int next_joke(int total)
     static int *order;
     static int count, next, last;
     if (count != total || next >= count) {
-        int *o = realloc(order, (size_t)total * sizeof *o);
+        int *o = bb_realloc(order, (size_t)total * sizeof *o, BB_BYTES);
         if (!o)
             return 1;
         order = o;
@@ -278,14 +278,14 @@ static bool swap_remark(const uint8_t *ph, size_t n, uint8_t **out, size_t *out_
         if (at >= size)
             return false;
         *out_len = rd8(p + at);
-        *out = malloc(*out_len ? *out_len : 1);
+        *out = bb_malloc(*out_len ? *out_len : 1, BB_BYTES);
         gget(*out, p + at + 1, (uint32_t)*out_len);
         *english = false;
         return true;
     }
     s = more[j - max - 1];
     *out_len = s[0];
-    *out = malloc(s[0] ? s[0] : 1);
+    *out = bb_malloc(s[0] ? s[0] : 1, BB_BYTES);
     memcpy(*out, s + 1, s[0]);
     *english = true;
     return true;

@@ -63,13 +63,13 @@ uint32_t carbon_call_export(const char *name, const uint32_t *args, int n)
     void (*fn)(ppc_cpu *) = cfm_export_fn(name);
     if (!fn)
         return 0;
-    ppc_cpu *c = calloc(1, sizeof *c);
+    ppc_cpu *c = bb_calloc(1, sizeof *c, BB_TAG(ppc_cpu));
     c->gpr[1] = (g_ppc.gpr[1] - 2048) & ~15u;
     for (int i = 0; i < n && i < 8; i++)
         c->gpr[3 + i] = args[i];
     fn(c);
     uint32_t r = c->gpr[3];
-    free(c);
+    bb_free(c);
     return r;
 }
 
@@ -167,7 +167,7 @@ static carbon_ctl *state(gaddr ch, bool create)
     if (!c)
         return NULL;
     if (!c->carbon && create)
-        c->carbon = calloc(1, sizeof(carbon_ctl));
+        c->carbon = bb_calloc(1, sizeof(carbon_ctl), BB_TAG(carbon_ctl));
     return c->carbon;
 }
 
@@ -177,9 +177,9 @@ void carbon_ctl_free(ctl_info *c)
     if (!s)
         return;
     for (int i = 0; i < s->nprops; i++)
-        free(s->props[i].data);
-    free(s->props);
-    free(s);
+        bb_free(s->props[i].data);
+    bb_free(s->props);
+    bb_free(s);
     c->carbon = NULL;
 }
 
@@ -366,7 +366,7 @@ int32_t tb_SetControlProperty(gaddr ch, int32_t creator, int32_t tag, uint32_t s
         return memFullErr;
     property *p = find_property(ch, creator, tag);
     if (!p) {
-        property *grown = realloc(s->props, (size_t)(s->nprops + 1) * sizeof *grown);
+        property *grown = bb_realloc(s->props, (size_t)(s->nprops + 1) * sizeof *grown, BB_TAG(property));
         if (!grown)
             return memFullErr;
         s->props = grown;
@@ -375,11 +375,11 @@ int32_t tb_SetControlProperty(gaddr ch, int32_t creator, int32_t tag, uint32_t s
         p->creator = (uint32_t)creator;
         p->tag = (uint32_t)tag;
     }
-    uint8_t *bytes = malloc(size ? size : 1);
+    uint8_t *bytes = bb_malloc(size ? size : 1, BB_BYTES);
     if (!bytes)
         return memFullErr;
     gget(bytes, data, size);
-    free(p->data);
+    bb_free(p->data);
     p->data = bytes;
     p->size = size;
     return noErr;
@@ -421,7 +421,7 @@ int32_t tb_RemoveControlProperty(gaddr ch, int32_t creator, int32_t tag)
     property *p = find_property(ch, creator, tag);
     if (!p)
         return controlPropertyNotFoundErr;
-    free(p->data);
+    bb_free(p->data);
     int i = (int)(p - s->props);
     memmove(&s->props[i], &s->props[i + 1], (size_t)(s->nprops - i - 1) * sizeof *p);
     s->nprops--;

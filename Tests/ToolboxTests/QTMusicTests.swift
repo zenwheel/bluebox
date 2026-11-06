@@ -1,3 +1,4 @@
+import CCore
 import Foundation
 import Testing
 import Toolbox
@@ -35,7 +36,7 @@ import Toolbox
                 return qt_music_events(h.baseAddress, h.count, &sample, 1, &count)
             }
         }
-        defer { free(events) }
+        defer { bb_free(events) }
         let list = (0..<count).map { events![$0] }
         let piano = list.first { $0.status & 0xF0 == 0xC0 }
         #expect(piano?.data1 == 0 && piano?.time == 0)            // GM 1, program 0, at the start

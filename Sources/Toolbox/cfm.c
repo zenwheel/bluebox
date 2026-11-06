@@ -440,20 +440,20 @@ static void note_absent_slot(gaddr slot, const char *name)
 {
     if (absent_count == absent_cap) {
         size_t cap = absent_cap ? absent_cap * 2 : 64;
-        absent_slot *grown = realloc(absent_slots, cap * sizeof *grown);
+        absent_slot *grown = bb_realloc(absent_slots, cap * sizeof *grown, BB_TAG(absent_slot));
         if (!grown)
             return;
         absent_slots = grown;
         absent_cap = cap;
     }
-    absent_slots[absent_count++] = (absent_slot){ slot, strdup(name) };
+    absent_slots[absent_count++] = (absent_slot){ slot, bb_strdup(name) };
 }
 
 static void free_absent(char **absent, uint32_t n)
 {
     for (uint32_t i = 0; absent && i < n; i++)
-        free(absent[i]);
-    free(absent);
+        bb_free(absent[i]);
+    bb_free(absent);
 }
 
 /* The missing weak import a call to 0 came through: the cross-TOC glue
@@ -600,7 +600,7 @@ static size_t missing_len, missing_count;
 static void note_missing(const char *lib, const char *sym, bool data)
 {
     size_t n = strlen(lib) + strlen(sym) + 3;
-    char *grown = realloc(missing_imports, missing_len + n + 1);
+    char *grown = bb_realloc(missing_imports, missing_len + n + 1, BB_BYTES);
     if (!grown)
         return;
     missing_imports = grown;
@@ -755,7 +755,7 @@ static void add_export(fragment *f, const uint8_t *loader, uint32_t strings, con
     uint32_t namelen = be32(keys + i * 4) >> 16;
     uint32_t cn = be32(esyms + i * 10);
     frag_export *x = &f->exports[f->nexports++];
-    x->name = strndup((const char *)loader + strings + (cn & 0xFFFFFF), namelen);
+    x->name = bb_strndup((const char *)loader + strings + (cn & 0xFFFFFF), namelen);
     x->addr = addr;
     x->cls = (uint8_t)(cn >> 24) & 0x0F;
 }
@@ -905,17 +905,17 @@ static bool xcoff_load(const uint8_t *x, size_t len, fragment *f, char *err, siz
         libfrag[i] = -2; /* not looked up yet */
 
     /* Symbols: imports bound, defined ones at their sections' places. */
-    gaddr *sym = calloc(nsyms ? nsyms : 1, sizeof *sym);
-    char **names = calloc(nsyms ? nsyms : 1, sizeof *names);
-    f->exports = calloc(nsyms ? nsyms : 1, sizeof *f->exports);
+    gaddr *sym = bb_calloc(nsyms ? nsyms : 1, sizeof *sym, BB_BYTES);
+    char **names = bb_calloc(nsyms ? nsyms : 1, sizeof *names, BB_TAG(char *));
+    f->exports = bb_calloc(nsyms ? nsyms : 1, sizeof *f->exports, BB_TAG(frag_export));
     f->nexports = 0;
     for (uint32_t i = 0; i < nsyms; i++) {
         const uint8_t *e = loader + 32 + i * 24;
         if (be32(e) == 0) {
             uint32_t o = stoff + be32(e + 4);
-            names[i] = o < loader_len ? strndup((const char *)loader + o, loader_len - o) : strdup("");
+            names[i] = o < loader_len ? bb_strndup((const char *)loader + o, loader_len - o) : bb_strdup("");
         } else {
-            names[i] = strndup((const char *)e, 8);
+            names[i] = bb_strndup((const char *)e, 8);
         }
         uint32_t value = be32(e + 8);
         int16_t scn = (int16_t)be16(e + 12);
@@ -935,7 +935,7 @@ static bool xcoff_load(const uint8_t *x, size_t len, fragment *f, char *err, siz
             sym[i] = base[scn] + (value - vaddr[scn]);
             if (type & kL_EXPORT) {
                 frag_export *xp = &f->exports[f->nexports++];
-                xp->name = strdup(names[i]);
+                xp->name = bb_strdup(names[i]);
                 xp->addr = sym[i];
                 xp->cls = (uint8_t)cls;
             }
@@ -986,9 +986,9 @@ static bool xcoff_load(const uint8_t *x, size_t len, fragment *f, char *err, siz
             f->main_tv = base[snentry] + (entry - vaddr[snentry]);
     }
     for (uint32_t i = 0; i < nsyms; i++)
-        free(names[i]);
-    free(names);
-    free(sym);
+        bb_free(names[i]);
+    bb_free(names);
+    bb_free(sym);
     return ok;
 }
 
@@ -1015,7 +1015,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
         snprintf(err, errlen, "truncated PEF");
         return false;
     }
-    section *sections = calloc((size_t)(ninst > 0 ? ninst : 1), sizeof *sections);
+    section *sections = bb_calloc((size_t)(ninst > 0 ? ninst : 1), sizeof *sections, BB_TAG(section));
     const uint8_t *loader = NULL;
     uint32_t loader_len = 0;
     for (int s = 0; s < nsect; s++) {
@@ -1024,7 +1024,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
         int kind = h[24];
         if (off + (size_t)packed > len) {
             snprintf(err, errlen, "section %d beyond the container", s);
-            free(sections);
+            bb_free(sections);
             return false;
         }
         if (kind == kLoader) {
@@ -1042,7 +1042,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
         gaddr base = tb_NewPtr((int32_t)(total + 16), false, true);
         if (!base) {
             snprintf(err, errlen, "no memory for section %d (%u bytes)", s, total);
-            free(sections);
+            bb_free(sections);
             return false;
         }
         base = (base + 15) & ~15u;
@@ -1056,7 +1056,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
         if (kind == kPatternData) {
             if (!unpack_pattern(pef + off, pef + off + packed, base, unpacked)) {
                 snprintf(err, errlen, "the fragment is damaged: section %d's pattern data does not decode", s);
-                free(sections);
+                bb_free(sections);
                 return false;
             }
         } else
@@ -1064,7 +1064,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
     }
     if (!loader || loader_len < 56) {
         snprintf(err, errlen, "no loader section");
-        free(sections);
+        bb_free(sections);
         return false;
     }
     int32_t main_sect = (int32_t)be32(loader), init_sect = (int32_t)be32(loader + 8);
@@ -1081,7 +1081,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
      * place. */
     const uint8_t *keys = loader + hash_off + (4u << hash_power);
     const uint8_t *esyms = keys + nexports * 4;
-    f->exports = calloc(nexports ? nexports : 1, sizeof *f->exports);
+    f->exports = bb_calloc(nexports ? nexports : 1, sizeof *f->exports, BB_TAG(frag_export));
     f->nexports = 0;
     for (uint32_t i = 0; i < nexports; i++) {
         const uint8_t *e = esyms + i * 10;
@@ -1095,8 +1095,8 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
 
     /* Imports: an address each (a transition vector or data), or 0 for
      * missing weak ones. */
-    gaddr *imports = calloc(nsyms ? 2 * (size_t)nsyms : 1, sizeof *imports);
-    char **absent = calloc(nsyms ? nsyms : 1, sizeof *absent);
+    gaddr *imports = bb_calloc(nsyms ? 2 * (size_t)nsyms : 1, sizeof *imports, BB_BYTES);
+    char **absent = bb_calloc(nsyms ? nsyms : 1, sizeof *absent, BB_TAG(char *));
     const uint8_t *libs = loader + 56, *syms = libs + nlibs * 24;
     uint32_t next = 0; /* where the libraries so far end */
     for (uint32_t l = 0; l < nlibs; l++) {
@@ -1124,7 +1124,7 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
             if (!imports[k] && absent) { /* a weak import not there: named if it's called */
                 char both[256];
                 snprintf(both, sizeof both, "%s from %s", sname, lname);
-                absent[k] = strdup(both);
+                absent[k] = bb_strdup(both);
             }
         }
     }
@@ -1152,9 +1152,9 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
             .errlen = errlen,
         };
         if (!reloc_run(&st, 0, count)) {
-            free(imports);
+            bb_free(imports);
             free_absent(absent, nsyms);
-            free(sections);
+            bb_free(sections);
             return false;
         }
     }
@@ -1185,9 +1185,9 @@ static bool pef_load(const uint8_t *pef, size_t len, gaddr at, fragment *f, char
     f->main_tv = main_sect >= 0 && main_sect < ninst ? sections[main_sect].base + main_off : 0;
     f->init_tv = init_sect >= 0 && init_sect < ninst ? sections[init_sect].base + init_off : 0;
     f->term_tv = term_sect >= 0 && term_sect < ninst ? sections[term_sect].base + term_off : 0;
-    free(imports);
+    bb_free(imports);
     free_absent(absent, nsyms);
-    free(sections);
+    bb_free(sections);
     return true;
 }
 
@@ -1259,7 +1259,7 @@ static uint8_t *member_bytes(const mac_file *mf, const cfrg_member *m, size_t *l
         return NULL;
     }
     size_t take = m->where == kDataForkCFragLocator && m->length && m->length < avail ? m->length : avail;
-    uint8_t *bytes = malloc(take ? take : 1);
+    uint8_t *bytes = bb_malloc(take ? take : 1, BB_BYTES);
     memcpy(bytes, src, take);
     *len = take;
     return bytes;
@@ -1299,7 +1299,7 @@ static uint8_t *file_cfrg(const mac_file *mf, size_t *len)
             if (rsrc_is_compressed(data, n) && rsrc_decompress(data, n, &out, len, err, sizeof err))
                 continue;
             *len = n;
-            out = malloc(n ? n : 1);
+            out = bb_malloc(n ? n : 1, BB_BYTES);
             memcpy(out, data, n);
         }
     rsrc_index_free(&idx);
@@ -1318,7 +1318,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     member_search s = { .want = want };
     if (cfrg)
         cfrg_each(cfrg, clen, match_member, &s);
-    free(cfrg);
+    bb_free(cfrg);
     if (!s.ok) {
         mac_file_free(&mf);
         snprintf(err, errlen, "no fragment %s in %s", want ? want : "(application)", path);
@@ -1332,7 +1332,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
         gaddr h = tb_GetResource((int32_t)s.found.rtype, s.found.rid);
         if (h && rd32(h)) {
             len = (size_t)tb_GetHandleSize(h);
-            pef = malloc(len ? len : 1);
+            pef = bb_malloc(len ? len : 1, BB_BYTES);
             gget(pef, rd32(h), (uint32_t)len);
         }
     }
@@ -1340,7 +1340,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
         pef = member_bytes(&mf, &s.found, &len);
     mac_file_free(&mf);
     if (!pef || nfrags >= MAX_FRAGMENTS) {
-        free(pef);
+        bb_free(pef);
         snprintf(err, errlen, "can't read fragment %s", s.found.name);
         return -1;
     }
@@ -1364,7 +1364,7 @@ static int load_from_file(const char *path, const char *want, char *err, size_t 
     f->length = (uint32_t)len;
     f->loading = true;
     bool ok = pef_load(pef, len, 0, f, err, errlen);
-    free(pef);
+    bb_free(pef);
     f->loading = false;
     if (!ok) {
         nfrags--;
@@ -1391,12 +1391,12 @@ bool cfm_app_fragment_loadable(const char *path)
     member_search s = { .want = NULL };
     if (cfrg)
         cfrg_each(cfrg, clen, match_member, &s);
-    free(cfrg);
+    bb_free(cfrg);
     bool ok = s.ok;
     if (ok && s.found.where == kDataForkCFragLocator) {
         uint8_t *bytes = member_bytes(&mf, &s.found, &len);
         ok = bytes && ((len >= 40 && !memcmp(bytes, "Joy!peff", 8)) || (len >= 20 && be16(bytes) == kXCOFFMagic));
-        free(bytes);
+        bb_free(bytes);
     }
     mac_file_free(&mf);
     return ok;
@@ -1415,7 +1415,7 @@ static bool file_has_library(const char *path, const char *name)
     member_search s = { .want = name };
     if (cfrg)
         cfrg_each(cfrg, clen, match_member, &s);
-    free(cfrg);
+    bb_free(cfrg);
     return s.ok;
 }
 
@@ -1612,7 +1612,7 @@ void cfm_reset(void)
     missing_len = missing_count = 0;
     nfrags = ninit = init_next = ndata_blocks = 0;
     for (size_t i = 0; i < absent_count; i++)
-        free(absent_slots[i].name);
+        bb_free(absent_slots[i].name);
     absent_count = 0;
     stdclib_reset(); /* the last program's library state went with it */
     carbon_cf_reset();
@@ -1838,7 +1838,7 @@ static void ppc_GetMemFragment(ppc_cpu *c)
     int i = -1;
     uint32_t len = c->gpr[4];
     if (len >= 40 && nfrags < MAX_FRAGMENTS) {
-        uint8_t *bytes = malloc(len);
+        uint8_t *bytes = bb_malloc(len, BB_BYTES);
         gget(bytes, c->gpr[3], len);
         fragment *f = &frags[nfrags];
         memset(f, 0, sizeof *f);
@@ -1855,7 +1855,7 @@ static void ppc_GetMemFragment(ppc_cpu *c)
             if (image)
                 tb_DisposePtr(image);
         }
-        free(bytes);
+        bb_free(bytes);
         run_new_inits(before);
     }
     connect_result(c, i, c->gpr[7], c->gpr[8], c->gpr[9], err);
@@ -1887,7 +1887,7 @@ gaddr cfm_prepare_container(gaddr pef)
     if (rd32(pef) != 0x4A6F7921u /* Joy! */ || nfrags >= MAX_FRAGMENTS)
         return 0;
     uint32_t len = container_length(pef);
-    uint8_t *bytes = malloc(len);
+    uint8_t *bytes = bb_malloc(len, BB_BYTES);
     gget(bytes, pef, len);
     fragment *f = &frags[nfrags];
     memset(f, 0, sizeof *f);
@@ -1897,7 +1897,7 @@ gaddr cfm_prepare_container(gaddr pef)
     int before = ninit, idx = nfrags++;
     gaddr image = memory_image(bytes, len);
     bool ok = pef_load(bytes, len, image, f, err, sizeof err);
-    free(bytes);
+    bb_free(bytes);
     if (!ok && image)
         tb_DisposePtr(image);
     if (!ok) {

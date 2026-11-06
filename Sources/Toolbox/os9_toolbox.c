@@ -146,12 +146,12 @@ static hi_prop *item_prop(gaddr mh, int item, uint32_t tag, bool create)
             return p;
     if (!create)
         return NULL;
-    hi_prop *p = calloc(1, sizeof *p);
+    hi_prop *p = bb_calloc(1, sizeof *p, BB_TAG(hi_prop));
     if (!p)
         return NULL;
-    p->data = calloc(1, 1);
+    p->data = bb_calloc(1, 1, BB_BYTES);
     if (!p->data) {
-        free(p);
+        bb_free(p);
         return NULL;
     }
     p->creator = kSystemCreator;

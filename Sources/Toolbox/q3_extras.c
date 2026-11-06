@@ -102,7 +102,7 @@ static void CEUrlElement_SetData(ppc_cpu *c)
         q3set_clear(s, ce_type(1));
     } else {
         uint32_t nu = gstrlen(rd32(d)), nd = gstrlen(rd32(d + 4));
-        uint8_t *b = malloc(nu + nd + 6);
+        uint8_t *b = bb_malloc(nu + nd + 6, BB_BYTES);
         if (!b) {
             Q3RETURN(kQ3Failure);
             return;
@@ -116,7 +116,7 @@ static void CEUrlElement_SetData(ppc_cpu *c)
         b[nu + nd + 2] = (uint8_t)(opt >> 24), b[nu + nd + 3] = (uint8_t)(opt >> 16),
         b[nu + nd + 4] = (uint8_t)(opt >> 8), b[nu + nd + 5] = (uint8_t)opt;
         q3set_add_bytes(s, ce_type(1), b, nu + nd + 6);
-        free(b);
+        bb_free(b);
     }
     q3_edited(q3_get(Q3R(0)));
     Q3RETURN(kQ3Success);

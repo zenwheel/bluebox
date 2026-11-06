@@ -376,7 +376,7 @@ extension BlueBox {
         static func fetch(_ item: Int32, _ kind: Int32, folder: String? = nil) -> String? {
             var out = machine_drag_data()
             guard machine_drag_out_data(item, kind, folder, &out) else { return nil }
-            defer { free(out.data) }
+            defer { bb_free(out.data) }
             return String(decoding: Data(bytes: out.data, count: out.size), as: UTF8.self)
         }
 
@@ -444,7 +444,7 @@ extension BlueBox {
                 var image = machine_drag_data()
                 if machine_drag_out_data(3, Int32(MACHINE_FLAVOR_IMAGE), nil, &image) {
                     Self.fetched.append("\(image.width)x\(image.height) \(image.data[0]) \(image.data[9 * 48])")
-                    free(image.data)
+                    bb_free(image.data)
                 }
                 machine_drag_out_end(Int32(MACHINE_DRAG_OUT_DROPPED), 0, 0, dir.path)
             }

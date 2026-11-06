@@ -305,7 +305,7 @@ void q3v_push(q3view *v)
 {
     if (v->depth == v->cap) {
         int cap = v->cap ? v->cap * 2 : 16;
-        vstate *n = realloc(v->stack, (size_t)cap * sizeof *n);
+        vstate *n = bb_realloc(v->stack, (size_t)cap * sizeof *n, BB_TAG(vstate));
         if (!n)
             return;
         v->stack = n;
@@ -736,12 +736,12 @@ static int texture_id(gaddr shader, bool *alpha)
         some_alpha = px[i] >> 24 != 0xFF;
     /* QuickDraw 3D's v runs up the image; the renderer's down. */
     int id = r3d_texture_new(w, h, px, true);
-    free(px);
+    bb_free(px);
     if (!id)
         return 0;
     if (ntexs == captexs) {
         int cap = captexs ? captexs * 2 : 32;
-        texcache *n = realloc(texs, (size_t)cap * sizeof *n);
+        texcache *n = bb_realloc(texs, (size_t)cap * sizeof *n, BB_TAG(texcache));
         if (!n) {
             r3d_texture_free(id);
             return 0;
@@ -776,8 +776,8 @@ static void gather_lights(q3view *v)
     int n = 0;
     for (q3pos *p = g ? g->first : NULL; p; p = p->next)
         n++;
-    free(v->L);
-    v->L = n ? calloc((size_t)n, sizeof *v->L) : NULL;
+    bb_free(v->L);
+    v->L = n ? bb_calloc((size_t)n, sizeof *v->L, BB_TAG(vlight)) : NULL;
     for (q3pos *p = g ? g->first : NULL; p && v->L; p = p->next) {
         q3obj *o = q3_get(p->obj);
         if (!o || !q3_type_is(o->type, Q3_LIGHT) || !o->data)
@@ -974,7 +974,7 @@ static void draw_tri(q3view *v, cvert *tri, int texture, bool clamp_u, bool clam
         if (transparent) {
             if (v->ndefer == v->capdefer) {
                 int cap = v->capdefer ? v->capdefer * 2 : 64;
-                deferred *d = realloc(v->defer, (size_t)cap * sizeof *d);
+                deferred *d = bb_realloc(v->defer, (size_t)cap * sizeof *d, BB_TAG(deferred));
                 if (!d)
                     return;
                 v->defer = d;
@@ -1045,7 +1045,7 @@ static void bound_point(q3view *v, const float p[3])
     if (v->loop == LOOP_BOUND_SPHERE) {
         if (v->nbpts == v->capbpts) {
             uint32_t cap = v->capbpts ? v->capbpts * 2 : 256;
-            float *n = realloc(v->bpts, (size_t)cap * 3 * sizeof *n);
+            float *n = bb_realloc(v->bpts, (size_t)cap * 3 * sizeof *n, BB_BYTES);
             if (!n)
                 return;
             v->bpts = n;
@@ -1219,11 +1219,11 @@ void q3v_triangles(q3view *v, const q3pv *pv, uint32_t npv, const q3ptri *t, uin
     } else {
         memcpy(nm, v->st.m, sizeof nm);
     }
-    float (*world)[3] = malloc(npv * sizeof *world);
-    float (*clip)[4] = malloc(npv * sizeof *clip);
+    float (*world)[3] = bb_malloc(npv * sizeof *world, BB_BYTES);
+    float (*clip)[4] = bb_malloc(npv * sizeof *clip, BB_BYTES);
     if (!world || !clip) {
-        free(world);
-        free(clip);
+        bb_free(world);
+        bb_free(clip);
         return;
     }
     for (uint32_t i = 0; i < npv; i++) {
@@ -1355,8 +1355,8 @@ void q3v_triangles(q3view *v, const q3pv *pv, uint32_t npv, const q3ptri *t, uin
         }
         draw_tri(v, cv, texture, clamp_u, clamp_v, transparent);
     }
-    free(world);
-    free(clip);
+    bb_free(world);
+    bb_free(clip);
 }
 
 static void unlit(q3view *v, const q3pv *p, gaddr geom_set, cvert *o)
@@ -1477,7 +1477,7 @@ void q3v_image(q3view *v, const float p[3], int dx, int dy, int w, int h, const 
         return;
     if (v->nframe_tex == v->capframe_tex) {
         int cap = v->capframe_tex ? v->capframe_tex * 2 : 8;
-        int *n = realloc(v->frame_textures, (size_t)cap * sizeof *n);
+        int *n = bb_realloc(v->frame_textures, (size_t)cap * sizeof *n, BB_BYTES);
         if (!n) {
             r3d_texture_free(id);
             return;
@@ -1516,12 +1516,12 @@ static bool frame_setup(q3view *v)
     if (!v->frame || r3d_frame_width(v->frame) != w || r3d_frame_height(v->frame) != h) {
         drop_rave_context(v);
         r3d_frame_free(v->frame);
-        free(v->pixels);
+        bb_free(v->pixels);
         v->frame = r3d_frame_new(w, h);
-        v->pixels = malloc((size_t)w * (size_t)h * 4);
+        v->pixels = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
         if (!v->frame || !v->pixels) {
             r3d_frame_free(v->frame);
-            free(v->pixels);
+            bb_free(v->pixels);
             v->frame = NULL;
             v->pixels = NULL;
             return false;
@@ -1545,8 +1545,8 @@ static bool plugin_frame_setup(q3view *v)
         drop_rave_context(v);
         r3d_frame_free(v->frame);
         v->frame = NULL;
-        free(v->pixels);
-        v->pixels = malloc((size_t)w * (size_t)h * 4);
+        bb_free(v->pixels);
+        v->pixels = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
         if (!v->pixels)
             return false;
     }
@@ -1604,10 +1604,10 @@ static int cmp_defer(const void *a, const void *b)
 
 static void Q3View_New(ppc_cpu *c)
 {
-    q3view *v = calloc(1, sizeof *v);
+    q3view *v = bb_calloc(1, sizeof *v, BB_TAG(q3view));
     q3obj *o = v ? q3_new(Q3_VIEW, v) : NULL;
     if (!o) {
-        free(v);
+        bb_free(v);
         Q3RETURN(0);
         return;
     }
@@ -1639,13 +1639,13 @@ static void view_dispose(q3obj *o)
     q3_assign(&v->default_set, 0);
     r3d_frame_free(v->frame);
     end_frame_textures(v);
-    free(v->frame_textures);
-    free(v->pixels);
-    free(v->stack);
-    free(v->L);
-    free(v->defer);
-    free(v->bpts);
-    free(v);
+    bb_free(v->frame_textures);
+    bb_free(v->pixels);
+    bb_free(v->stack);
+    bb_free(v->L);
+    bb_free(v->defer);
+    bb_free(v->bpts);
+    bb_free(v);
 }
 
 static q3view *view_arg(ppc_cpu *c) { return q3v_of(Q3R(0)); }
@@ -2187,10 +2187,10 @@ static void put_attr(q3set *s, int32_t type, const float *f, int n)
 
 static gaddr state_set(const q3view *v)
 {
-    q3set *s = calloc(1, sizeof *s);
+    q3set *s = bb_calloc(1, sizeof *s, BB_TAG(q3set));
     q3obj *o = s ? q3_new(Q3_ATTRIBUTE_SET, s) : NULL;
     if (!o) {
-        free(s);
+        bb_free(s);
         return 0;
     }
     const q3attrs *a = &v->st.a;

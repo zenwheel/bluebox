@@ -138,7 +138,7 @@ static void tc_UCLoadCharPropsTablePriv(ppc_cpu *c)
 {
     if (!R(0))
         RETURN(paramErr);
-    uint32_t (*pages)[256] = malloc(256 * sizeof *pages);
+    uint32_t (*pages)[256] = bb_malloc(256 * sizeof *pages, BB_BYTES);
     if (!pages)
         RETURN(memFullErr);
     uint16_t index[256];
@@ -157,7 +157,7 @@ static void tc_UCLoadCharPropsTablePriv(ppc_cpu *c)
     }
     gaddr t = tb_NewPtr((int32_t)(TBL_PAGES + n * 1024), false, true);
     if (!t) {
-        free(pages);
+        bb_free(pages);
         RETURN(memFullErr);
     }
     wr32(t, TABLE_TAG);
@@ -168,7 +168,7 @@ static void tc_UCLoadCharPropsTablePriv(ppc_cpu *c)
     for (unsigned k = 0; k < n; k++)
         for (unsigned lo = 0; lo < 256; lo++)
             wr32(t + TBL_PAGES + k * 1024 + lo * 4, pages[k][lo]);
-    free(pages);
+    bb_free(pages);
     wr32(R(0), t);
     RETURN(noErr);
 }

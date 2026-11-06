@@ -960,10 +960,10 @@ uint32_t cm_write(uint16_t sel, const uint32_t *a)
         return (uint32_t)cmNotOpen;
     }
     if ((int16_t)a[3] & cmData) {
-        uint8_t *b = malloc(n ? n : 1);
+        uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
         gget(b, a[1], n);
         send_bytes(c, b, n);
-        free(b);
+        bb_free(b);
     }
     if (a[4])
         complete_later(c, a[5], 0, cmNoErr, 2, n);
@@ -1120,10 +1120,10 @@ uint32_t cm_pb_write(uint16_t sel, const uint32_t *a)
     uint32_t n = rd32(pb + CMIOPB_count_off);
     if (c->state != ST_OPEN && !(c->tool == T_SERIAL && serial_port_in_use(c->port)))
         return (uint32_t)cmNotOpen;
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     gget(b, rd32(pb + CMIOPB_theBuffer_off), n);
     send_bytes(c, b, n);
-    free(b);
+    bb_free(b);
     if (a[2]) {
         complete_later(c, rd32(pb + CMIOPB_userCompletion_off), pb, cmNoErr, 2, n);
     } else {
