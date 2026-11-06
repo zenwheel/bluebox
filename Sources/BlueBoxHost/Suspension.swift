@@ -11,6 +11,7 @@
 
 #if canImport(AppKit)
 import AppKit
+import Toolbox
 
 public enum SuspendNotice {
     /// Shell to program: object the program's process ID, userInfo
@@ -102,23 +103,35 @@ public enum HostKey: Equatable {
     case forceQuit
     /// Command-Q while suspended: resume and ask the program to quit.
     case quit
-    /// Command-H and Command-Option-H while suspended: Hide and Hide
-    /// Others (running, the program has them, as a Mac gave them).
+    /// Command-H and Command-Option-H: Hide and Hide Others, unless the
+    /// running program's menu bar has a Command-H item of its own (Replace
+    /// in many), which then gets both, as MenuKey finds it with Option held.
     case hide, hideOthers
     /// Anything else while suspended: nothing.
     case ignore
 
-    public static func classify(_ flags: NSEvent.ModifierFlags, _ key: String?, suspended: Bool) -> HostKey {
+    /// `programHas`: whether the program's current menu bar has an item
+    /// with Command and this key, asked as the key comes, since programs
+    /// change their menus.  One that takes a Command key without a menu
+    /// item can't be told, and loses Command-H to Hide.
+    public static func classify(_ flags: NSEvent.ModifierFlags, _ key: String?, suspended: Bool,
+                                programHas: (Character) -> Bool = programHasCommandKey) -> HostKey {
         let mods = flags.intersection([.command, .option, .control, .shift])
         if key?.lowercased() == "q" {
             if mods == [.command, .option] { return .forceQuit }
             if mods == [.command] && suspended { return .quit }
         }
-        if key?.lowercased() == "h" && suspended {
-            if mods == [.command] { return .hide }
-            if mods == [.command, .option] { return .hideOthers }
+        if key?.lowercased() == "h" && (mods == [.command] || mods == [.command, .option])
+            && (suspended || !programHas("h")) {
+            return mods == [.command] ? .hide : .hideOthers
         }
         return suspended ? .ignore : .classic
+    }
+
+    /// Whether the classic program's menu bar has a Command-`key` item.
+    public static func programHasCommandKey(_ key: Character) -> Bool {
+        guard let c = key.asciiValue else { return false }
+        return machine_menu_bar_has_command_key(Int32(c))
     }
 }
 
@@ -143,18 +156,36 @@ public enum HostKey: Equatable {
 }
 
 /// The application menu's Hide, Hide Others and Show All, above Suspend
-/// and Quit, as a Mac application's.  Their keys show, but Command-H and
-/// Command-Option-H typed go to the classic program as Command-Q does (many
-/// use Command-H themselves); chosen, they hide.
+/// and Quit, as a Mac application's.  Command-H and Command-Option-H hide
+/// (HostKey.classify) unless the program has a Command-H item, which gets
+/// them; the keys show only when they hide.
 @MainActor public enum HostHideItems {
-    public static func items(title: String) -> [NSMenuItem] {
+    public static func items(title: String, programHasH: Bool = HostKey.programHasCommandKey("h")) -> [NSMenuItem] {
         let hide = NSMenuItem(title: "Hide \(title)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let others = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)),
                                 keyEquivalent: "h")
         others.keyEquivalentModifierMask = [.command, .option]
         let all = NSMenuItem(title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)),
                              keyEquivalent: "")
-        return [hide, others, all, .separator()]
+        let out = [hide, others, all, NSMenuItem.separator()]
+        showKeys(out, programHasH: programHasH)
+        return out
+    }
+
+    /// Hide's and Hide Others' keys shown, or not, as the program's menus
+    /// now are (a menu opened in the window mode, whose menu bar stays).
+    public static func update(_ menu: NSMenu?, programHasH: Bool = HostKey.programHasCommandKey("h")) {
+        guard let menu else { return }
+        showKeys(menu.items, programHasH: programHasH)
+    }
+
+    static func showKeys(_ items: [NSMenuItem], programHasH: Bool) {
+        for item in items {
+            if item.action == #selector(NSApplication.hide(_:))
+                || item.action == #selector(NSApplication.hideOtherApplications(_:)) {
+                item.keyEquivalent = programHasH ? "" : "h"
+            }
+        }
     }
 }
 
