@@ -401,6 +401,45 @@ extension BlueBox {
             g.gl("aglDestroyContext", [ctx])
         }
 
+        /// Two contexts sharing their textures and lists: resumed, the
+        /// second has them though the first, made again first and holding
+        /// them, is destroyed before the second is used again.
+        @Test func openGLSharingContexts() {
+            let dir = launchTestApp()
+            startLoop()
+            let pix = g.gl("aglChoosePixelFormat", [0, 0, g.words([4, 5, 0])])
+            let first = g.gl("aglCreateContext", [pix, 0])
+            let second = g.gl("aglCreateContext", [pix, first])
+            #expect(first != 0 && second != 0)
+            let mem = tb_NewPtr(4 * 4 * 4, false, true)
+            #expect(g.gl("aglSetCurrentContext", [first]) == 1)
+            let names = tb_NewPtr(4, false, true)
+            g.gl("glGenTextures", [1, names])
+            let tex = rd32(names)
+            g.gl("glBindTexture", [G.GL_TEXTURE_2D, tex])
+            g.gl("glTexImage2D", [G.GL_TEXTURE_2D, 0, G.GL_RGBA, 1, 1, 0, G.GL_RGBA, G.GL_UNSIGNED_BYTE, g.words([0x00FF_00FF])])
+            let list = g.gl("glGenLists", [1])
+            g.gl("glNewList", [list, 0x1300])
+            g.gl("glClearColor", fp: [1, 0, 1, 1])
+            g.gl("glEndList")
+            #expect(g.gl("aglSetCurrentContext", [second]) == 1)
+            #expect(g.gl("aglSetOffScreen", [second, 4, 4, 16, mem]) == 1)
+            let snap = hibernate(dir, "share.bbhib")
+            resume(snap)
+            #expect(g.gl("aglSetCurrentContext", [first]) == 1)
+            #expect(g.gl("glGetError") == 0) // the first made again, holding the group's textures and lists
+            #expect(g.gl("aglSetCurrentContext", [0]) == 1)
+            #expect(g.gl("aglDestroyContext", [first]) == 1)
+            #expect(g.gl("aglSetCurrentContext", [second]) == 1)
+            #expect(g.gl("glIsTexture", [tex]) == 1)
+            #expect(g.gl("glIsList", [list]) == 1)
+            g.gl("glCallList", [list])
+            g.gl("glClear", [0x4000])
+            g.gl("aglSwapBuffers", [second])
+            #expect(rd32(mem) & 0xFFFFFF == 0xFF00FF)
+            g.gl("aglDestroyContext", [second])
+        }
+
         /// Texture names after resuming are the ones the host would have
         /// given: one made and never bound is still taken, the next made
         /// is the one after; an error the host had is the program's still.

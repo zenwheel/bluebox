@@ -171,6 +171,11 @@ void hostgl_destroy(hostgl_ctx *h)
 {
     if (!h)
         return;
+    /* Resumed contexts sharing with it and not made again yet would lose
+     * the textures and lists it holds for them: made again now. */
+    for (int i = 0; h->cgl && i < MAX_CONTEXTS; i++)
+        if (contexts[i] && contexts[i]->group == h->group && !contexts[i]->cgl)
+            rebuild(contexts[i]);
     for (int i = 0; i < MAX_CONTEXTS; i++)
         if (contexts[i] == h)
             contexts[i] = NULL;
