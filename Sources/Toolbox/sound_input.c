@@ -280,6 +280,7 @@ static struct {
     uint32_t done;      /* bytes recorded */
     uint64_t start_ns, pause_ns, paused_ns;
     uint64_t frames;    /* frames taken */
+    bool gave_up;       /* a synchronous recording's wait gave up for a drain: made again, it waits */
 } rec;
 
 static void stop_recording(int16_t result);
@@ -316,9 +317,17 @@ static void write_file(int16_t refnum, const uint8_t *data, uint32_t n)
         tb_DisposePtr(pb);
 }
 
+/* Resumed while recording: stopped at the next pump (sound_input_after_resume). */
+static bool rec_stop_due;
+
 /* Take what is due: the host's samples, else (late) silence. */
 static void record_pump(void)
 {
+    if (rec_stop_due) {
+        rec_stop_due = false;
+        stop_recording(abortErr);
+        return;
+    }
     if (!rec.active || rec.paused)
         return;
     double hz = rate_hz(dev.rate);
@@ -433,10 +442,15 @@ static void start_recording(gaddr pb, int16_t file, bool async)
     wr16(pb + SPB_error, async ? ioInProgress : 0);
 }
 
-/* Until the recording is done, with interrupt-time work going on. */
-static void wait_recording(void)
+/* Until the recording is done, with interrupt-time work going on; false
+ * when the wait gave up its call for a drain (at the program's own level,
+ * made again when the machine goes on; resumed, the recording has
+ * stopped). */
+static bool wait_recording(void)
 {
     while (rec.active && !g_cpu->halted) {
+        if (drain_wanted() && drain_abandon())
+            return false;
         if (events_host_attached()) {
             struct timespec ts = { 0, 5000000 };
             nanosleep(&ts, NULL);
@@ -451,24 +465,33 @@ static void wait_recording(void)
         sound_pump();
         time_pump();
     }
+    return true;
 }
 
 static int16_t record(gaddr pb, int16_t file, bool async)
 {
     if (!pb || !refnum_ok((int32_t)rd32(pb + SPB_inRefNum)))
         return siBadRefNum;
-    if (rec.active)
-        return siDeviceBusyErr;
-    start_recording(pb, file, async);
-    record_pump();
-    if (async)
-        return noErr;
-    rec.async = false;
-    if (!rec.total) {
-        stop_recording(noErr);
-        return noErr;
+    if (rec.gave_up && rec.pb == pb && !async) { /* made again after a drain */
+        rec.gave_up = false;
+        record_pump(); /* resumed: stopped here */
+    } else {
+        if (rec.active)
+            return siDeviceBusyErr;
+        start_recording(pb, file, async);
+        record_pump();
+        if (async)
+            return noErr;
+        rec.async = false;
+        if (!rec.total) {
+            stop_recording(noErr);
+            return noErr;
+        }
     }
-    wait_recording();
+    if (!wait_recording()) {
+        rec.gave_up = true;
+        return noErr; /* made again */
+    }
     if (rec.active)
         stop_recording(abortErr);
     return (int16_t)rd16(pb + SPB_error);
@@ -879,7 +902,7 @@ static bool record_dialog_run(gaddr filter, uint32_t corner, uint32_t limit)
         } else if (n == itemPlay && !rec.active && rec.done) {
             gaddr snd = recording_sound();
             if (snd) {
-                tb_SndPlay(0, snd, false);
+                sound_play_through(0, snd);
                 tb_DisposeHandle(snd);
             }
         }
@@ -1001,5 +1024,15 @@ void sound_input_reset(void)
     capturing = false;
 }
 
-/* The host recording for the program. */
-bool sound_input_capturing(void) { return capturing; }
+/* Resumed: the host that was capturing is gone, and the microphone is not
+ * opened again on the program's behalf, maybe days later.  A recording
+ * going on stops as SPBStopRecording stops one, at the next sound pump:
+ * its parameter block says what it recorded before the hibernate and its
+ * completion routine is told abortErr.  The device stays open, and
+ * captures again when the program next records. */
+void sound_input_after_resume(void)
+{
+    capturing = false;
+    ring_reset(ring_rate);
+    rec_stop_due = rec.active;
+}

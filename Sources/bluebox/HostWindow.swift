@@ -686,9 +686,9 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     installPrintHandlers()
     ClipboardSync.shared.install()
     DragOut.shared.install()
-    ClassicAudio.shared.install()
+    if soundRecord == nil { ClassicAudio.shared.install() }
     ClassicSoundInput.shared.install()
-    ClassicMusic.shared.install()
+    if soundRecord == nil { ClassicMusic.shared.install() }
     ClassicMIDI.shared.install()
     GameControllers.shared.install()
     NativeControls.install()

@@ -977,6 +977,28 @@ static void feed_sound(movie *m)
     }
 }
 
+/* Resumed (sound.c's replay): the new host is given the sound a movie had
+ * queued ahead and its old host had not played, from now to where it was
+ * fed; the movie's own state is left as it was. */
+void qt_movies_replay_sound(void)
+{
+    for (int i = 0; i < MAX_MOVIES; i++) {
+        movie *m = &movies[i];
+        if (!m->used || !m->sound_on || !m->native || movie_effective_rate(m) != 0x10000 || m->volume <= 0)
+            continue;
+        int64_t now = movie_ms(m);
+        if (m->sound_ms <= now)
+            continue;
+        int16_t *pcm = NULL;
+        int nch = 1;
+        double rate = 22050;
+        uint32_t frames = qt_native_sound(m->native, now, m->sound_ms, &pcm, &nch, &rate);
+        if (frames)
+            sound_host_pcm(sound_id(m), pcm, (int)frames, nch, rate, (float)m->volume / 256.0f);
+        bb_free(pcm);
+    }
+}
+
 static void ensure_player(movie *m)
 {
     refresh(m);

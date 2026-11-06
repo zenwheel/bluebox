@@ -76,7 +76,7 @@ func newSnapshotPath(title: String) -> String {
 func runArgsToKeep(_ args: [String]) -> [String] {
     let dropWithValue: Set<String> = ["--keys", "--max", "--hibernate-at", "--hibernate-to", "--then", "--snapshot-end",
                                       "--screenshot", "--walk-avoid", "--log", "--debugger", "--print-to",
-                                      "--file-answer", "--redraw-check", "--app"]
+                                      "--file-answer", "--redraw-check", "--app", "--sound"]
     let dropAlone: Set<String> = ["--census", "--walk-menus", "--headless", "--background", "--new", "--screen-window",
                                   "--realtime", "--fresh", "--resume"]
     var out: [String] = []

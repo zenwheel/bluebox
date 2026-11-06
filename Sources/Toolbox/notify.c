@@ -53,7 +53,7 @@ int16_t tb_NMInstall(gaddr nm)
     if (snd == 0xFFFFFFFFu)
         tb_SysBeep(1);
     else if (snd && rd32(snd))
-        tb_SndPlay(0, snd, 0);
+        sound_play_through(0, snd);
     char text[768] = "";
     gaddr str = rd32(nm + NMRec_nmStr_off);
     if (str) {

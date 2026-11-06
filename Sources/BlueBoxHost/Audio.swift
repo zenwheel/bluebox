@@ -28,14 +28,21 @@ public final class ClassicAudio: @unchecked Sendable {
     /// given and play it on from where they stopped.  On `queue`.
     private var suspended = false
 
-    /// Route the machine's sound to the host.
-    public func install() {
+    /// Offline (--sound offline): the engine renders to nowhere, as fast
+    /// as the clock goes, with no output device (a headless run).
+    private var renderer: OfflineRenderer?
+
+    /// Route the machine's sound to the host; `offline`, rendered to
+    /// nowhere without an output device.
+    public func install(offline: Bool = false) {
         // The engine running before the first sound: sound that came while
         // it started (which can take a while) would otherwise all wait for
         // it, and the program's sound would stay that far behind.
         queue.async {
+            if offline { self.renderer = OfflineRenderer(engine: self.engine, queue: self.queue, name: "sound") }
             _ = self.engine.mainMixerNode
             if !self.engine.isRunning { try? self.engine.start() }
+            self.renderer?.begin()
         }
         machine_set_sound_handler({ channel, pcm, frames, channels, rate, volume, _ in
             ClassicAudio.shared.play(channel: channel, pcm: pcm, frames: Int(frames), channels: Int(channels),
@@ -132,13 +139,104 @@ public final class ClassicAudio: @unchecked Sendable {
 
     /// Seconds given to the player that it has not played yet.
     private func backlog(_ node: AVAudioPlayerNode, scheduled: Double) -> Double {
-        guard node.isPlaying, let now = node.lastRenderTime, let played = node.playerTime(forNodeTime: now),
-              played.sampleRate > 0 else { return scheduled }
+        // A render time with neither clock valid (the engine not rendering
+        // yet, or rendering offline) is an exception for playerTime.
+        guard node.isPlaying, let now = node.lastRenderTime, now.isSampleTimeValid || now.isHostTimeValid,
+              let played = node.playerTime(forNodeTime: now), played.sampleRate > 0 else { return scheduled }
         return scheduled - Double(played.sampleTime) / played.sampleRate
     }
 
     private func restartPlayers() {
         if !engine.isRunning && !suspended { try? engine.start() }
+    }
+
+    /// What the offline engine rendered (seconds, and seconds not silent).
+    public func offlineReport() -> String? { queue.sync { renderer?.report() } }
+}
+
+/// An engine in manual rendering mode, pulled on its own queue a slice at
+/// a time as the machine's clock goes (a headless run's follows its
+/// instructions, faster than the wall's) and thrown away: the players, the
+/// mixer and the synthesizers run as with a device, without one.  The
+/// clock is read from this queue while the machine runs: a test mode.
+final class OfflineRenderer: @unchecked Sendable {
+    private let engine: AVAudioEngine
+    private let queue: DispatchQueue
+    private let name: String
+    private let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
+    private let slice: AVAudioFrameCount = 1024
+    private var buffer: AVAudioPCMBuffer?
+    private var timer: DispatchSourceTimer?
+    private var started: UInt64 = 0
+    private var frames: UInt64 = 0, loud: UInt64 = 0
+    private var audible = Set<Int>() // the machine's seconds with sound in them
+    private var failed = false
+
+    /// On `queue`, with the engine stopped.
+    init?(engine: AVAudioEngine, queue: DispatchQueue, name: String) {
+        self.engine = engine
+        self.queue = queue
+        self.name = name
+        do {
+            try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: slice)
+        } catch {
+            return nil
+        }
+        buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: slice)
+    }
+
+    /// On `queue`, the engine started: render as the machine's clock goes.
+    func begin() {
+        started = machine_time_ns()
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(deadline: .now(), repeating: .milliseconds(2))
+        t.setEventHandler { [weak self] in self?.render() }
+        t.resume()
+        timer = t
+    }
+
+    private func render() {
+        guard let buffer, engine.isRunning, !failed else { return }
+        let now = machine_time_ns()
+        let due = now > started ? UInt64(Double(now - started) / 1e9 * format.sampleRate) : 0
+        while frames + UInt64(slice) <= due {
+            let status: AVAudioEngineManualRenderingStatus
+            do { status = try engine.renderOffline(slice, to: buffer) } catch {
+                failed = true
+                return
+            }
+            guard status == .success else { break }
+            let second = Int((Double(started) / 1e9 + Double(frames) / format.sampleRate).rounded(.down))
+            frames += UInt64(buffer.frameLength)
+            if let data = buffer.floatChannelData {
+                var peak: Float = 0
+                for ch in 0..<Int(buffer.format.channelCount) {
+                    for i in 0..<Int(buffer.frameLength) { peak = max(peak, abs(data[ch][i])) }
+                }
+                if peak > 1.0 / 32768 {
+                    loud += UInt64(buffer.frameLength)
+                    audible.insert(second)
+                }
+            }
+        }
+    }
+
+    /// On `queue`: rendered up to the machine's now, and what was heard
+    /// (the machine's seconds, as ranges).
+    func report() -> String {
+        render()
+        var ranges: [String] = []
+        for sec in audible.sorted() {
+            if let last = ranges.last, let dash = last.split(separator: "-").last, Int(dash) == sec - 1 {
+                let from = last.split(separator: "-").first!
+                ranges[ranges.count - 1] = "\(from)-\(sec)"
+            } else {
+                ranges.append("\(sec)")
+            }
+        }
+        return String(format: "%@: rendered %.1f s offline from %.1f s, %.1f s of it not silent%@; heard at %@ s", name,
+                      Double(frames) / format.sampleRate, Double(started) / 1e9, Double(loud) / format.sampleRate,
+                      failed ? " (rendering failed)" : "", ranges.isEmpty ? "none" : ranges.joined(separator: ","))
     }
 }
 #endif
