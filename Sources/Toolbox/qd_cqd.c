@@ -938,6 +938,19 @@ void qd_palettes_reset(void)
     qd_control_colors_reset();
 }
 
+/* The palettes in use (windows' and the system's), for idle.c to compare
+ * their colours from one iteration of a waiting program to the next. */
+int qd_palettes_in_use(gaddr *out, int max)
+{
+    int n = 0;
+    if (system_palette && n < max)
+        out[n++] = system_palette;
+    for (int i = 0; i < MAX_WINDOW_PALETTES && n < max; i++)
+        if (window_pal[i].pal && window_pal[i].pal != system_palette)
+            out[n++] = window_pal[i].pal;
+    return n;
+}
+
 static gaddr entry(gaddr pal, int i) { return rd32(pal) + Palette_pmInfo_off + (uint32_t)i * ColorInfo_SIZEOF; }
 static int entries(gaddr pal) { return pal && rd32(pal) ? (int16_t)rd16(rd32(pal) + Palette_pmEntries_off) : 0; }
 

@@ -120,7 +120,9 @@ void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mod
     hrgn_op(&r, shape, &r, RGN_SECT);
     machine_charge_pixels(region_area(&r));
     pixdst d = qd_port_pixels(port);
+    bool watched = qd_drawn_area(&d, hrgn_bbox(&r));
     if (fill_region_arith(port, &r, &d, pat, mode)) {
+        qd_drawn_resume(watched);
         hrgn_free(&r);
         return;
     }
@@ -144,6 +146,7 @@ void qd_fill_region(gaddr port, const hrgn *shape, const uint8_t pat[8], int mod
             }
         }
     }
+    qd_drawn_resume(watched);
     hrgn_free(&r);
 }
 
@@ -187,6 +190,7 @@ static bool fill_region_pixpat(gaddr port, const hrgn *shape, gaddr pp, int mode
     hrgn_init(&r);
     qd_port_clip(port, &r);
     hrgn_op(&r, shape, &r, RGN_SECT);
+    bool watched = qd_drawn_area(&d, hrgn_bbox(&r));
     for (int i = 0; i < r.nbands; i++) {
         const rband *b = &r.bands[i];
         for (int y = b->top; y < b->bottom; y++) {
@@ -197,6 +201,7 @@ static bool fill_region_pixpat(gaddr port, const hrgn *shape, gaddr pp, int mode
                     put_px(&d, c, row, line[((c % w) + w) % w]);
         }
     }
+    qd_drawn_resume(watched);
     hrgn_free(&r);
     free(px);
     return true;
@@ -1271,6 +1276,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
                  sh == dh && sr.left >= s.bounds.left && sr.top >= s.bounds.top && sr.right <= s.bounds.right &&
                  sr.bottom <= s.bounds.bottom;
     uint8_t *run = rows8 ? malloc((size_t)sw) : NULL;
+    bool watched = qd_drawn_area(&d, hrgn_bbox(&clip));
     for (int i = 0; run && i < clip.nbands; i++) {
         const rband *b = &clip.bands[i];
         for (int y = b->top; y < b->bottom; y++) {
@@ -1341,6 +1347,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
             }
         }
     }
+    qd_drawn_resume(watched);
     free(snap);
     free(run);
     free(lut_conv);

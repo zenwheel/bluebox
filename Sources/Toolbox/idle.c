@@ -18,14 +18,26 @@
  *   - it ran fewer than MAX_RUN instructions (a poll loop) or, with no
  *     calls, stayed within a few hundred bytes of code;
  *   - every Toolbox call it made is a query with no lasting effect
- *     (quiet_names: polls, FrontWindow, GetPort, LoadSeg ...), no drawing,
- *     sound, file or memory work;
- *   - the registers are as they were at the iteration before (a count kept
- *     in a register shows) and, with no calls, no device was touched;
+ *     (quiet_names: polls, FrontWindow, GetPort, LoadSeg ...) or drawing
+ *     (draw_names: CopyBits, PaintRect, DrawString, PlotCIcon, RGBForeColor,
+ *     SetEntries ...), no sound, file or memory work;
+ *   - the registers are as they were at the iteration before ending at the
+ *     same poll (a count kept in a register shows) and, with no calls, no
+ *     device was touched;
  *   - its stores, watched once the rest has held for a few iterations,
- *     left the places it stored to as the iteration before left them (the
+ *     left the places it stored to as that iteration left them (the
  *     same arguments pushed again; a counter kept in memory shows), its own
- *     frames below the stack pointer apart.
+ *     frames below the stack pointer apart;
+ *   - what it drew, watched the same way, left the pixels as that iteration
+ *     left them: QuickDraw's pixels are written from here, which the
+ *     store watch doesn't see, so its blitters say which rectangle of which
+ *     destination they wrote (qd_drawn), and the program's own stores into
+ *     the screen or a destination drawn into are taken as pixels too; at the
+ *     iteration's end each destination's rectangle is hashed, and so are the
+ *     ports drawn with and the colours shown (the screen's table, the video
+ *     hardware's and the palettes', by colour only).  A pause screen drawn
+ *     again and again is the same; a game playing, text scrolling or a count
+ *     drawn are not.
  * Such an iteration repeated is the program doing nothing over and over,
  * and how many times it does it can't show, so the host may sleep between
  * them.  Interrupt-time work (VBL and Time Manager tasks, sound callbacks)
@@ -36,8 +48,11 @@
 #include <string.h>
 
 #include "hw68k.h"
+#include "lowmem_gen.h"
 #include "m68k.h"
 #include "ppc.h"
+#include "qd_internal.h"
+#include "structs_gen.h"
 #include "tb_internal.h"
 #include "trap.h"
 
@@ -45,6 +60,9 @@ enum {
     SAME_BEFORE_WATCH = 3, /* idle iterations in a row before the stores are watched */
     MAX_RUN = 20000,       /* instructions a poll loop's iteration may run */
     MAX_STORES = 64,       /* places an idle iteration may store to */
+    MAX_DRAWN = 16,        /* destinations it may draw into */
+    MAX_PORTS = 8,         /* ports it may draw with */
+    MAX_PALETTES = 16,     /* palettes whose colours are compared */
     STACK_SCRATCH = 0x10000, /* below the stack pointer: the iteration's own frames */
     PC_NEAR = 256,         /* a loop with no calls: how far apart its slices may end */
     NSITES = 8,            /* the polls a loop may make, each from its own place */
@@ -68,15 +86,17 @@ static struct {
 static unsigned next_site;
 
 /* Whether the registers are as they were last time at this poll. */
-static bool same_at_site(const regs *r)
+static bool same_at_site(const regs *r, int *site)
 {
     for (int i = 0; i < NSITES; i++)
         if (sites[i].used && sites[i].r.r[34] == r->r[34] && sites[i].r.r[32] == r->r[32] &&
             sites[i].r.r[35] == r->r[35]) {
             bool same = !memcmp(&sites[i].r, r, sizeof *r);
             sites[i].r = *r;
+            *site = i;
             return same;
         }
+    *site = (int)next_site;
     sites[next_site].used = true;
     sites[next_site].r = *r;
     next_site = (next_site + 1) % NSITES;
@@ -91,6 +111,35 @@ typedef struct {
     uint8_t v[4];
 } store;
 
+/* A destination drawn into in an iteration (the screen, a GWorld, an
+ * offscreen bitmap: by base address and rowBytes), the rectangle of it
+ * drawn, as rows and the bytes of each, and what that held at the
+ * iteration's end. */
+typedef struct {
+    gaddr base;
+    uint32_t row_bytes, rows; /* rows: the destination's, for the program's stores into it */
+    uint32_t r0, r1, b0, b1;
+    uint64_t hash;
+} drawn;
+
+/* What the last iteration to end at a poll (or, the last, at a slice) left
+ * in memory and drawn: a loop polling from more than one place (a frame
+ * drawn, Button; the clock read, TickCount) is compared with itself round
+ * the loop, each stretch with the same stretch last time. */
+static struct {
+    int n; /* -1: none yet in this wait */
+    drawn d[MAX_DRAWN];
+    uint64_t look;
+    int nstores;
+    store stores[MAX_STORES];
+} shots[NSITES + 1];
+
+static void forget_shots(void)
+{
+    for (int i = 0; i <= NSITES; i++)
+        shots[i].n = -1;
+}
+
 static struct {
     int mode;            /* what ends an iteration: NONE, POLLS or SLICES */
     uint64_t at;         /* the program's instructions at the iteration's start */
@@ -103,10 +152,19 @@ static struct {
     unsigned same;       /* idle iterations in a row */
     bool watching;       /* the program's stores are watched */
     bool watched;        /* ... for the whole of this iteration */
-    int nstores, nprev;  /* this iteration's stores; the last one's, if it was watched (else -1) */
+    int nstores;         /* this iteration's stores */
     bool overflow;
-    store stores[MAX_STORES], prev[MAX_STORES];
+    store stores[MAX_STORES];
+    bool drew;                 /* it made drawing calls */
+    int ndrawn, nprev_drawn;
+    bool drawn_overflow;
+    drawn drawn[MAX_DRAWN], prev_drawn[MAX_DRAWN];
+    int nports;
+    gaddr ports[MAX_PORTS];    /* the ports it drew with */
+    uint64_t look;             /* the ports' state and the colours shown, hashed */
 } st;
+
+bool g_qd_drawn_watch;
 
 static uint64_t calls;          /* the program's Toolbox calls */
 static int interrupt_depth;     /* inside interrupt-time work */
@@ -122,6 +180,7 @@ bool display_watch_all_stores(void (*fn)(gaddr a, uint32_t len));
 uint64_t time_next_due(void);
 bool time_in_interrupt(void);
 void ev_idle_sleep(uint64_t ns);
+bool qd_region_recording(void);
 void machine_pass_time(uint64_t ns);
 
 static bool on(void)
@@ -163,9 +222,13 @@ static void take(regs *r, bool at_call)
 static uint32_t pc_now(void) { return g_ppc_mode ? g_ppc.pc : g_cpu->pc; }
 static gaddr sp_now(void) { return g_ppc_mode ? g_ppc.gpr[1] : g_cpu->a[7]; }
 
+static bool drawn_store(gaddr a, uint32_t len);
+
 static void store_seen(gaddr a, uint32_t len)
 {
     if (!st.watching || in_interrupt())
+        return;
+    if (drawn_store(a, len))
         return;
     if (a < st.sp && st.sp - a <= STACK_SCRATCH)
         return;
@@ -190,13 +253,15 @@ static void store_seen(gaddr a, uint32_t len)
  * memory), or there is no telling yet. */
 enum { CHANGED, UNKNOWN, SAME };
 
-static int stores_verdict(void)
+static int stores_verdict(int site)
 {
     if (!st.watched)
         return UNKNOWN;
     if (st.overflow)
         return CHANGED;
-    int verdict = st.nprev < 0 ? UNKNOWN : SAME;
+    const int n = shots[site].n < 0 ? -1 : shots[site].nstores;
+    const store *prev = shots[site].stores;
+    int verdict = n < 0 ? UNKNOWN : SAME;
     for (int i = 0; i < st.nstores; i++) {
         store *s = &st.stores[i];
         for (uint32_t k = 0; k < s->len; k++)
@@ -204,21 +269,218 @@ static int stores_verdict(void)
         if (verdict != SAME)
             continue;
         int j = 0;
-        while (j < st.nprev && (st.prev[j].a != s->a || st.prev[j].len != s->len))
+        while (j < n && (prev[j].a != s->a || prev[j].len != s->len))
             j++;
-        if (j == st.nprev || memcmp(st.prev[j].v, s->v, s->len))
-            verdict = st.nprev < 0 ? UNKNOWN : CHANGED;
+        if (j == n || memcmp(prev[j].v, s->v, s->len))
+            verdict = CHANGED;
     }
-    if (st.nprev >= 0 && verdict == UNKNOWN)
-        verdict = CHANGED;
     return verdict;
+}
+
+/* ---- What it drew ---- */
+
+static uint64_t hash_bytes(uint64_t h, const uint8_t *p, size_t n)
+{
+    const uint64_t k = 0x9E3779B97F4A7C15ull;
+    for (; n >= 8; p += 8, n -= 8) {
+        uint64_t w;
+        memcpy(&w, p, 8);
+        h = (h ^ w) * k;
+        h ^= h >> 32;
+    }
+    while (n--)
+        h = (h ^ *p++) * k;
+    return h ^ (h >> 29);
+}
+
+static uint64_t hash_guest(uint64_t h, gaddr a, uint32_t n)
+{
+    if ((uint64_t)a + n > 0x100000000ull)
+        return h ^ 1;
+    return hash_bytes(h, gptr(a), n);
+}
+
+/* The rectangle drawn into a destination, grown to take in rows [r0, r1)
+ * and bytes [b0, b1). */
+static void draw_into(gaddr base, uint32_t row_bytes, uint32_t rows, uint32_t r0, uint32_t r1, uint32_t b0,
+                      uint32_t b1)
+{
+    static int last;
+    if (r1 <= r0 || b1 <= b0)
+        return;
+    drawn *d = last < st.ndrawn && st.drawn[last].base == base && st.drawn[last].row_bytes == row_bytes
+                   ? &st.drawn[last]
+                   : NULL;
+    for (int i = 0; !d && i < st.ndrawn; i++)
+        if (st.drawn[i].base == base && st.drawn[i].row_bytes == row_bytes)
+            d = &st.drawn[last = i];
+    if (!d) {
+        if (st.ndrawn == MAX_DRAWN) {
+            st.drawn_overflow = true;
+            return;
+        }
+        d = &st.drawn[last = st.ndrawn++];
+        *d = (drawn){ base, row_bytes, rows, r0, r1, b0, b1, 0 };
+        return;
+    }
+    if (rows > d->rows)
+        d->rows = rows;
+    if (r0 < d->r0)
+        d->r0 = r0;
+    if (r1 > d->r1)
+        d->r1 = r1;
+    if (b0 < d->b0)
+        d->b0 = b0;
+    if (b1 > d->b1)
+        d->b1 = b1;
+}
+
+void qd_drawn(const pixdst *d, int c0, int r0, int c1, int r1)
+{
+    if (!st.watching || in_interrupt() || !d->row_bytes)
+        return;
+    int rows = d->bounds.bottom - d->bounds.top;
+    if (c0 < 0)
+        c0 = 0;
+    if (r0 < 0)
+        r0 = 0;
+    if (r1 > rows)
+        r1 = rows;
+    if (c1 <= c0 || r1 <= r0)
+        return;
+    uint32_t b0 = (uint32_t)c0 * (uint32_t)d->depth / 8, b1 = ((uint32_t)c1 * (uint32_t)d->depth + 7) / 8;
+    if (b1 > d->row_bytes)
+        b1 = d->row_bytes;
+    draw_into(d->base, d->row_bytes, (uint32_t)rows, (uint32_t)r0, (uint32_t)r1, b0, b1);
+}
+
+bool qd_drawn_area(const pixdst *d, qrect local)
+{
+    bool was = g_qd_drawn_watch;
+    if (was)
+        qd_drawn(d, local.left - d->bounds.left, local.top - d->bounds.top, local.right - d->bounds.left,
+                 local.bottom - d->bounds.top);
+    g_qd_drawn_watch = false;
+    return was;
+}
+
+/* A store of the program's into the screen, or into a destination drawn
+ * into: pixels, taken as QuickDraw's are (a game drawing on the screen
+ * itself; a pause screen so drawn again is still the same). */
+static bool store_into(const drawn *d, gaddr a, uint32_t len)
+{
+    uint32_t off = a - d->base;
+    if (off >= d->row_bytes * d->rows)
+        return false;
+    uint32_t row = off / d->row_bytes, b = off % d->row_bytes, e = b + len;
+    if (e > d->row_bytes) /* across the end of a row: all of both */
+        draw_into(d->base, d->row_bytes, d->rows, row, row + 2, 0, d->row_bytes);
+    else
+        draw_into(d->base, d->row_bytes, d->rows, row, row + 1, b, e);
+    return true;
+}
+
+static bool drawn_store(gaddr a, uint32_t len)
+{
+    drawn screen = { rd32(LM_ScrnBase), qd_screen_row_bytes(), (uint32_t)g_screen_height, 0, 0, 0, 0, 0 };
+    if (screen.row_bytes && store_into(&screen, a, len))
+        return true;
+    for (int i = 0; i < st.ndrawn; i++)
+        if (store_into(&st.drawn[i], a, len))
+            return true;
+    for (int i = 0; i < st.nprev_drawn; i++)
+        if (store_into(&st.prev_drawn[i], a, len))
+            return true;
+    return false;
+}
+
+static uint64_t hash_region(uint64_t h, gaddr rgn)
+{
+    if (!rgn || !rd32(rgn))
+        return h ^ 2;
+    return hash_guest(h, rd32(rgn), rd16(rd32(rgn)) & 0x7FFF);
+}
+
+/* What the drawing calls left besides pixels: the ports' state (the pen,
+ * colours, clipping) and the colours the screen shows, by colour only (a
+ * palette or table set again to the same colours is the same, though its
+ * seed moves on). */
+static uint64_t look_hash(void)
+{
+    uint64_t h = 0x84222325CBF29CE4ull;
+    for (int i = 0; i < st.nports; i++) {
+        gaddr p = st.ports[i];
+        h = hash_guest(h, p, CGrafPort_SIZEOF);
+        h = hash_region(h, rd32(p + GrafPort_clipRgn_off));
+        h = hash_region(h, rd32(p + GrafPort_visRgn_off));
+        if (qd_port_is_color(p) && rd32(p + CGrafPort_portPixMap_off) && rd32(rd32(p + CGrafPort_portPixMap_off)))
+            h = hash_guest(h, rd32(rd32(p + CGrafPort_portPixMap_off)), PixMap_SIZEOF);
+    }
+    gaddr ct = qd_screen_ctab();
+    if (ct && rd32(ct)) {
+        uint32_t n = (uint32_t)(int16_t)rd16(rd32(ct) + 6) + 1;
+        if (n <= 256)
+            h = hash_guest(h, rd32(ct) + 8, n * 8);
+    }
+    uint16_t hw[256][3];
+    for (int i = 0; i < 256; i++)
+        qd_screen_get_hw_entry(i, hw[i]);
+    h = hash_bytes(h, (const uint8_t *)hw, sizeof hw);
+    const uint8_t (*out)[256] = video_output_lut(); /* NULL: as they are */
+    if (out)
+        h = hash_bytes(h, (const uint8_t *)out, 3 * 256);
+    gaddr pals[MAX_PALETTES];
+    int npals = qd_palettes_in_use(pals, MAX_PALETTES);
+    for (int i = 0; i < npals; i++) {
+        if (!rd32(pals[i]))
+            continue;
+        int n = (int16_t)rd16(rd32(pals[i]) + Palette_pmEntries_off);
+        for (int k = 0; k < n && k < 4096; k++) /* the colour and usage, not the slot kept */
+            h = hash_guest(h, rd32(pals[i]) + Palette_pmInfo_off + (uint32_t)k * ColorInfo_SIZEOF, 8);
+    }
+    return h;
+}
+
+/* Whether this iteration's drawing left the pixels it drew, the ports and
+ * the colours as the last one's did. */
+static int drawn_verdict(int site)
+{
+    if (!st.watched)
+        return UNKNOWN;
+    if (st.drawn_overflow)
+        return CHANGED;
+    for (int i = 0; i < st.ndrawn; i++) {
+        drawn *d = &st.drawn[i];
+        uint64_t h = d->r0 * 0x100000001ull ^ d->b0 ^ (uint64_t)d->b1 << 20;
+        for (uint32_t r = d->r0; r < d->r1; r++)
+            h = hash_guest(h, d->base + r * d->row_bytes + d->b0, d->b1 - d->b0);
+        d->hash = h;
+    }
+    st.look = st.drew ? look_hash() : 0;
+    const int n = shots[site].n;
+    if (n < 0)
+        return UNKNOWN;
+    if (st.ndrawn != n || st.look != shots[site].look)
+        return CHANGED;
+    for (int i = 0; i < st.ndrawn; i++) {
+        const drawn *d = &st.drawn[i];
+        int j = 0;
+        while (j < n && (shots[site].d[j].base != d->base || shots[site].d[j].row_bytes != d->row_bytes))
+            j++;
+        if (j == n)
+            return CHANGED;
+        const drawn *e = &shots[site].d[j];
+        if (e->r0 != d->r0 || e->r1 != d->r1 || e->b0 != d->b0 || e->b1 != d->b1 || e->hash != d->hash)
+            return CHANGED;
+    }
+    return SAME;
 }
 
 static void watch(bool w)
 {
-    if (st.watching == w)
-        return;
-    st.watching = display_watch_all_stores(w ? store_seen : NULL) && w;
+    if (st.watching != w)
+        st.watching = display_watch_all_stores(w ? store_seen : NULL) && w;
+    g_qd_drawn_watch = st.watching;
 }
 
 static void wait_over(void)
@@ -254,13 +516,16 @@ static bool iteration_end(int mode)
     regs r;
     take(&r, mode == POLLS);
     uint32_t pc = pc_now();
-    bool same = mode == POLLS ? same_at_site(&r) : !memcmp(&r, &st.r, sizeof r);
+    int site = NSITES;
+    bool same = mode == POLLS ? same_at_site(&r, &site) : !memcmp(&r, &st.r, sizeof r);
     bool idle = st.mode == mode && !st.busy && same;
     if (idle && mode == POLLS)
         idle = executed() - st.at < MAX_RUN;
     if (idle && mode == SLICES)
         idle = (pc > st.pc ? pc - st.pc : st.pc - pc) < PC_NEAR && hw_device_accesses() == st.hw;
-    int stores = stores_verdict();
+    int stores = stores_verdict(site), pixels = drawn_verdict(site);
+    if (pixels < stores)
+        stores = pixels;
     if (stores == CHANGED)
         idle = false;
     st.same = idle ? st.same + 1 : 0;
@@ -269,10 +534,16 @@ static bool iteration_end(int mode)
         wait_broken();
     watch(st.same >= SAME_BEFORE_WATCH);
     if (idle && st.watched) {
-        memcpy(st.prev, st.stores, (size_t)st.nstores * sizeof *st.stores);
-        st.nprev = st.nstores;
+        memcpy(shots[site].stores, st.stores, (size_t)st.nstores * sizeof *st.stores);
+        shots[site].nstores = st.nstores;
+        memcpy(st.prev_drawn, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
+        st.nprev_drawn = st.ndrawn;
+        memcpy(shots[site].d, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
+        shots[site].n = st.ndrawn;
+        shots[site].look = st.look;
     } else {
-        st.nprev = -1;
+        st.nprev_drawn = 0;
+        forget_shots();
     }
     st.mode = mode;
     st.r = r;
@@ -283,6 +554,9 @@ static bool iteration_end(int mode)
     st.busy = false;
     st.nstores = 0;
     st.overflow = false;
+    st.drew = false;
+    st.ndrawn = st.nports = 0;
+    st.drawn_overflow = false;
     st.watched = st.watching;
     st.at = executed();
     return sleep;
@@ -295,7 +569,8 @@ static void chain_break(void)
     st.same = 0;
     watch(false);
     st.watched = false;
-    st.nprev = -1;
+    st.nprev_drawn = 0;
+    forget_shots();
 }
 
 /* Sleep until the next tick, a Time Manager task's time or input, a few
@@ -388,27 +663,102 @@ void idle_interrupt_leave(void)
 
 /* Calls with no lasting effect, made again and again by a program waiting:
  * the polls themselves and the queries around them. */
-/* (in strcmp order, for bsearch) */
-static const char *const quiet_names[] = {
-    "Button", "EventAvail", "FlushEvents", "FrontNonFloatingWindow", "FrontWindow", "Gestalt",
-    "GestaltDispatch", "GetCCursor", "GetCTSeed", "GetCaretTime", "GetCursor", "GetDateTime", "GetDblTime",
-    "GetGDevice", "GetGWorld", "GetHandleSize", "GetKeys", "GetMainDevice", "GetMouse", "GetNextEvent",
-    "GetOSEvent", "GetOSTrapAddress", "GetPort", "GetPtrSize", "GetToolTrapAddress", "GetToolboxTrapAddress",
-    "GetTrapAddress", "GetZone", "HGetState", "HLock", "HNoPurge", "HSetState", "HUnlock", "InitCursor",
-    "LMGetTicks", "LMGetTime", "LoadSeg", "Microseconds", "NGetTrapAddress", "OSEventAvail", "ObscureCursor",
-    "ReadDateTime", "SetCCursor", "SetCursor", "SetEventMask", "SetGDevice", "SetGWorld", "SetPort", "SetZone",
-    "StillDown", "StripAddress", "SystemTask", "TickCount", "UnloadSeg", "WaitMouseUp", "WaitNextEvent",
+static const char *quiet_names[] = {
+    "Button", "CharWidth", "EventAvail", "FlushEvents", "FrontNonFloatingWindow", "FrontWindow", "Gestalt",
+    "GestaltDispatch", "GetBackColor", "GetCCursor", "GetCPixel", "GetCTSeed", "GetCaretTime", "GetClip",
+    "GetCursor", "GetDateTime", "GetDblTime", "GetDeviceList", "GetEntryColor", "GetFontInfo", "GetForeColor",
+    "GetGDevice", "GetGWorld", "GetGWorldDevice", "GetGWorldPixMap", "GetHandleSize", "GetKeys", "GetMainDevice",
+    "GetMaxDevice", "GetMouse", "GetNextDevice", "GetNextEvent", "GetOSEvent", "GetOSTrapAddress", "GetPalette",
+    "GetPenState", "GetPixBaseAddr", "GetPixel", "GetPixelsState", "GetPort", "GetPortBitMapForCopyBits",
+    "GetPortBounds", "GetPortPixMap", "GetPtrSize", "GetQDGlobalsScreenBits", "GetQDGlobalsThePort",
+    "GetToolTrapAddress", "GetToolboxTrapAddress", "GetTrapAddress", "GetWindowPort", "GetWindowPortBounds",
+    "GetZone", "HGetState", "HLock", "HNoPurge", "HSetState", "HUnlock", "InitCursor", "LMGetTicks", "LMGetTime",
+    "LoadSeg", "LockPixels", "Microseconds", "NGetTrapAddress", "OSEventAvail", "ObscureCursor", "PixMap32Bit",
+    "QDError", "ReadDateTime", "SetCCursor", "SetCursor", "SetEventMask", "SetGDevice", "SetGWorld", "SetPixelsState",
+    "SetPort", "SetZone", "StillDown", "StringWidth", "StripAddress", "SystemTask", "TestDeviceAttribute", "TextWidth",
+    "TickCount", "UnloadSeg", "UnlockPixels", "WaitMouseUp", "WaitNextEvent",
 };
+
+/* Drawing, and the port and colour settings it is done with: what they
+ * leave is the pixels drawn (qd_drawn), the ports drawn with and the
+ * colours shown, which the iteration's end compares with the last's. */
+static const char *draw_names[] = {
+    "ActivatePalette", "AnimateEntry", "AnimatePalette", "BackColor", "BackPat", "BackPixPat", "CharExtra",
+    "ClipRect", "ColorBit", "CopyBits", "CopyDeepMask", "CopyMask", "DrawChar", "DrawPicture", "DrawString",
+    "DrawText", "EraseArc", "EraseOval", "ErasePoly", "EraseRect", "EraseRgn", "EraseRoundRect", "FillArc",
+    "FillCArc", "FillCOval", "FillCPoly", "FillCRect", "FillCRgn", "FillCRoundRect", "FillOval", "FillPoly",
+    "FillRect", "FillRgn", "FillRoundRect", "ForeColor", "FrameArc", "FrameOval", "FramePoly", "FrameRect",
+    "FrameRgn", "FrameRoundRect", "HidePen", "HiliteColor", "InvertArc", "InvertOval", "InvertPoly",
+    "InvertRect", "InvertRgn", "InvertRoundRect", "Line", "LineTo", "Move", "MoveTo", "OpColor",
+    "PaintArc", "PaintOval", "PaintPoly", "PaintRect", "PaintRgn", "PaintRoundRect", "PenMode", "PenNormal",
+    "PenPat", "PenPixPat", "PenSize", "PlotCIcon", "PlotCIconHandle", "PlotIcon", "PlotIconHandle", "PlotIconID",
+    "PlotIconSuite", "PlotSICNHandle", "PmBackColor", "PmForeColor", "RGBBackColor", "RGBForeColor",
+    "RestoreBack", "RestoreFore", "SetCPixel", "SetClip", "SetEntries", "SetOrigin", "SetPenState",
+    "ShowPen", "SpaceExtra", "StdArc", "StdBits", "StdLine", "StdOval", "StdPoly",
+    "StdRRect", "StdRect", "StdRgn", "StdText", "TextFace", "TextFont", "TextMode", "TextSize",
+};
+
+/* Dispatchers whose routines are told apart by selector (idle_selector). */
+static const char *const by_selector[] = { "IconDispatch", "PaletteDispatch", "QDExtensions" };
 
 static int by_name(const void *a, const void *b) { return strcmp(*(const char *const *)a, *(const char *const *)b); }
 
-static bool quiet(const char *name)
+static bool in_list(const char *name, const char **list, size_t n)
 {
-    return name && bsearch(&name, quiet_names, sizeof quiet_names / sizeof *quiet_names, sizeof *quiet_names,
-                           by_name) != NULL;
+    static bool sorted;
+    if (!sorted) {
+        qsort(quiet_names, sizeof quiet_names / sizeof *quiet_names, sizeof *quiet_names, by_name);
+        qsort(draw_names, sizeof draw_names / sizeof *draw_names, sizeof *draw_names, by_name);
+        sorted = true;
+    }
+    return name && bsearch(&name, list, n, sizeof *list, by_name) != NULL;
 }
 
-/* A 68k trap: 0 not yet looked at, 1 quiet, 2 not. */
+/* What a call is: */
+enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK };
+
+static uint8_t kind_of(const char *name)
+{
+    if (in_list(name, quiet_names, sizeof quiet_names / sizeof *quiet_names))
+        return QUIET;
+    if (in_list(name, draw_names, sizeof draw_names / sizeof *draw_names))
+        return DRAWS;
+    for (size_t i = 0; name && i < sizeof by_selector / sizeof *by_selector; i++)
+        if (!strcmp(name, by_selector[i]))
+            return SELECTOR;
+    return WORK;
+}
+
+/* A drawing call: the port it draws with is compared at the iteration's
+ * end.  One recording what is drawn (a picture, a region, a polygon, a
+ * printed page) grows that, which is work. */
+static void drawing(void)
+{
+    gaddr port = qd_port();
+    if (!port || rd32(port + GrafPort_picSave_off) || rd32(port + GrafPort_rgnSave_off) ||
+        rd32(port + GrafPort_polySave_off) || qd_region_recording() || qd_rec_active(port)) {
+        st.busy = true;
+        return;
+    }
+    st.drew = true;
+    for (int i = 0; i < st.nports; i++)
+        if (st.ports[i] == port)
+            return;
+    if (st.nports == MAX_PORTS)
+        st.busy = true;
+    else
+        st.ports[st.nports++] = port;
+}
+
+static void call_kind(uint8_t kind)
+{
+    if (kind == WORK)
+        st.busy = true;
+    else if (kind == DRAWS)
+        drawing();
+}
+
+/* A 68k trap, by its number. */
 static uint8_t trap_kind[2048];
 
 void idle_trap(uint16_t op)
@@ -418,9 +768,17 @@ void idle_trap(uint16_t op)
     calls++;
     unsigned k = (op & 0x0800) ? 1024 + (op & 0x3FFu) : (op & 0xFFu);
     if (!trap_kind[k])
-        trap_kind[k] = quiet(trap_name(op)) ? 1 : 2;
-    if (trap_kind[k] == 2)
-        st.busy = true;
+        trap_kind[k] = kind_of(trap_name(op));
+    call_kind(trap_kind[k]); /* a dispatcher's routine: idle_selector says */
+}
+
+/* The routine a dispatcher (QDExtensions, IconDispatch ...) was asked for. */
+void idle_selector(const char *name)
+{
+    if (in_interrupt())
+        return;
+    uint8_t kind = kind_of(name);
+    call_kind(kind == SELECTOR ? WORK : kind);
 }
 
 /* A PowerPC import, by its index among the natives. */
@@ -443,17 +801,16 @@ void idle_native(uint32_t index, const char *name)
         nkind = n;
     }
     if (!kind[index])
-        kind[index] = quiet(name) ? 1 : 2;
-    if (kind[index] == 2)
-        st.busy = true;
+        kind[index] = kind_of(name);
+    call_kind(kind[index] == SELECTOR ? WORK : kind[index]);
 }
 
 void idle_reset(void)
 {
     watch(false);
     memset(&st, 0, sizeof st);
-    st.nprev = -1;
     memset(sites, 0, sizeof sites);
+    forget_shots();
     interrupt_depth = 0;
     int_68k = int_ppc = 0;
 }
