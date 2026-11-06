@@ -739,6 +739,7 @@ static int texture_id(gaddr shader, bool *alpha)
     bb_free(px);
     if (!id)
         return 0;
+    r3d_texture_derived(id); /* made again from the texture object after resuming */
     if (ntexs == captexs) {
         int cap = captexs ? captexs * 2 : 32;
         texcache *n = bb_realloc(texs, (size_t)cap * sizeof *n, BB_TAG(texcache));
@@ -2309,11 +2310,12 @@ void q3_view_reset(void)
     ntexs = 0;
 }
 
-/* One open (hibernating cannot carry its host-drawn frames yet). */
-bool q3_any_view(void)
+/* Resumed: the renderer's textures of the texture objects are gone (a
+ * snapshot does not carry them, r3d_texture_derived), made again from the
+ * objects as they are next drawn. */
+void q3_view_after_resume(void)
 {
-    for (int i = 0; i < MAX_VIEWS; i++)
-        if (views[i])
-            return true;
-    return false;
+    for (int i = 0; i < ntexs; i++)
+        r3d_texture_free(texs[i].id);
+    ntexs = 0;
 }

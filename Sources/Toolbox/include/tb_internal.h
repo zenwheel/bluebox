@@ -1180,10 +1180,10 @@ void aem_after_resume(void);
 void aem_suspended_after_resume(void);
 void display_after_resume(void);
 const char *host_media_open(void);
-bool hostgl_any_live(void);
-bool rave_any_context(void);
-bool q3_any_view(void);
-bool qt_host_movies_open(void);
+void q3_view_after_resume(void);
+void qt_movies_before_hibernate(void);
+void qt_movies_after_hibernate(void);
+void qt_movies_after_resume(void);
 bool drivevol_any_mounted(void);
 void trap_ctx_load(const trap_ctx *t);
 

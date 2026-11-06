@@ -20,6 +20,15 @@
  *                spoken is over, its completion callbacks made (speech.c);
  *                a recording stops, as SPBStopRecording stops one
  *                (sound_input.c)
+ *   the 3D       QuickDraw 3D's and RAVE's frames and textures are the
+ *                machine's (r3d.c), what the host had drawn and held read
+ *                back into it for the snapshot; the host's are made again
+ *                as each is first used; OpenGL's contexts the same way,
+ *                their state, textures, framebuffers and display lists
+ *                (opengl.c, opengl_hib.c)
+ *   the movies   a movie VLC played is opened again where the machine's
+ *                clock has it when it is next given time; the flattened
+ *                copy VLC played from is made again (quicktime.c)
  *
  *   the network  what listens or is registered is made again on the new
  *                host; a connection is over, and the program hears so
@@ -42,8 +51,10 @@
 #include <unistd.h>
 
 #include "hibernate.h"
+#include "hostgl.h"
 #include "machine.h"
 #include "mem.h"
+#include "r3d.h"
 #include "tb_internal.h"
 
 /* Whether a resumed program's date catches up to the real one (the user's
@@ -112,6 +123,9 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     saved.layout = g_mem_layout;
     saved.host_ns = host_clock_ns();
     files_before_hibernate();
+    r3d_before_hibernate(); /* what the host drew and holds, into the machine */
+    hostgl_before_hibernate();
+    qt_movies_before_hibernate(); /* where VLC has the movies it plays */
     ot_before_hibernate();
     /* BLUEBOX_HIBERNATE_SCAN=1: what the snapshot holds of the host's memory
      * (and any pointer the map misses), listed first. */
@@ -120,6 +134,9 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
         hb_scan(stderr, 200, 0);
     hb_stats st;
     bool ok = hb_save_file_extra(path, record, record ? strlen(record) : 0, &st, err, errlen);
+    r3d_after_hibernate();
+    hostgl_after_hibernate();
+    qt_movies_after_hibernate();
     if (ok && bytes)
         *bytes = st.file_bytes;
     if (ok) {
@@ -196,14 +213,9 @@ const char *print_job_open(void) { return print_job_in_progress() ? "is printing
  * files) and is not reattached yet: refused too. */
 const char *host_media_open(void)
 {
-    if (hostgl_any_live())
-        return "has an OpenGL context open";
-    if (rave_any_context())
-        return "has a QuickDraw 3D RAVE context open";
-    if (q3_any_view())
-        return "has a QuickDraw 3D view open";
-    if (qt_host_movies_open())
-        return "has a QuickTime movie the host plays open";
+    const char *gl = hostgl_blocker();
+    if (gl)
+        return gl;
     if (drivevol_any_mounted())
         return "has a disk image mounted";
     return NULL;
@@ -221,6 +233,10 @@ void hibernate_reattach_host(void)
     sound_after_resume();   /* the host told again what it had not played yet */
     speech_after_resume();  /* an utterance being spoken is over */
     sound_input_after_resume(); /* a recording stops */
+    q3_view_after_resume();  /* QuickDraw 3D's textures, made again from its objects */
+    r3d_after_resume();      /* QuickDraw 3D's and RAVE's frames and textures, made again as used */
+    hostgl_after_resume();   /* OpenGL's contexts, made again as used */
+    qt_movies_after_resume(); /* VLC's movies opened again, their flattened copies made again */
     network_after_resume();
 }
 
