@@ -1118,6 +1118,16 @@ int threads_parked(void);
  * have started); after a resume, their host threads made again. */
 const char *threads_blocker(void);
 void threads_after_resume(void);
+/* For a drain (drain.c): whether the running thread, not the application's,
+ * is at its own level (in its entry routine's call, nothing else of ours
+ * under it) while the application's thread waits in a Thread Manager call
+ * of its own level (Diablo's event loop runs in a thread, its main thread
+ * in YieldToThread); and the running thread parked waiting at the idle
+ * call `name` it has not made, the application's thread going on so that
+ * its call is abandoned (drain_abandon) and the machine drains at its
+ * level.  Returns when the thread's turn comes again. */
+bool thread_drains_aside(void);
+void thread_park_idle(const char *name);
 /* 68k ThreadDispatch calls (trap.c): the arguments and return address of
  * the one under way at this nesting, as the caller pushed them, for a
  * thread parked in it. */

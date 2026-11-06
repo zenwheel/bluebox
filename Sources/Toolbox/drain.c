@@ -214,14 +214,30 @@ static bool idle_call(uint16_t op)
     return (op & 0xFF) == 0x3B; /* Delay */
 }
 
+/* A thread of the program's other than its main one, at an idle call of
+ * its own level, while the main thread waits in a Thread Manager call of
+ * its own (Diablo runs its event loop in a thread, its main thread in
+ * YieldToThread): set aside there, the call not made, its registers and
+ * stack saved with it (threadmgr.c), and the main thread goes on, its
+ * call abandoned, to come to the safe point at its own level.  When the
+ * machine goes on the main thread makes its call again, and the thread,
+ * its turn come, makes its idle call. */
+static bool aside_wanted(void) { return thread_current_index() != 0 && thread_drains_aside(); }
+
 bool drain_at_trap(cpu68k *c, uint16_t op)
 {
+    if (atomic_load(&state) != MACHINE_DRAIN_GOING || !idle_call(op))
+        return false;
+    if (!g_ppc_mode && aside_wanted()) {
+        c->pc = c->op_pc;
+        c->icount--; /* not made: made when the thread's turn comes again */
+        thread_park_idle(trap_name(op));
+        return true;
+    }
     /* A PowerPC program's 68k code runs at its own level only when its
      * PowerPC code called it there (mixedmode.c); otherwise under a host
      * frame (a trap or a callback run for it). */
-    if (atomic_load(&state) != MACHINE_DRAIN_GOING || (g_ppc_mode && !mm_level_68k()) || !drain_program_level())
-        return false;
-    if (!idle_call(op))
+    if ((g_ppc_mode && !mm_level_68k()) || !drain_program_level())
         return false;
     c->pc = c->op_pc;
     c->icount--; /* not made: made again when the machine goes on */
@@ -245,7 +261,16 @@ bool drain_give_up(void) { return drain_wanted() && drain_abandon(); }
 
 bool drain_at_native(ppc_cpu *c, gaddr at, bool idle, const char *name)
 {
-    if (!idle || atomic_load(&state) != MACHINE_DRAIN_GOING || !drain_program_level())
+    if (!idle || atomic_load(&state) != MACHINE_DRAIN_GOING)
+        return false;
+    if (aside_wanted()) {
+        c->pc = at;
+        c->icount--; /* not made: made when the thread's turn comes again */
+        c->tb--;
+        thread_park_idle(name);
+        return true;
+    }
+    if (!drain_program_level())
         return false;
     c->pc = at;
     c->icount--; /* not made: made again when the machine goes on */

@@ -122,7 +122,7 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
     }
     gaddr at = c->pc - 4; /* the NATIVE word */
     bool level = drain_program_level();
-    if (level && drain_at_native(c, at, natives[index].idle, natives[index].name))
+    if ((level || thread_current_index() != 0) && drain_at_native(c, at, natives[index].idle, natives[index].name))
         return;
     trap_set_current_word(0); /* not a trap: no HFS or async bits */
     LOGF(LOG_TRAPS, "%08X PowerPC %s\n", c->lr, natives[index].name);

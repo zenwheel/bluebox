@@ -303,6 +303,97 @@ extension BlueBox {
             #expect(rd32(vars) == 0)                       // noErr
         }
 
+        /// A program whose event loop runs in a thread, its main thread
+        /// waiting in YieldToThread (Diablo): the thread is set aside at its
+        /// idle call, the main thread's YieldToThread abandoned, and the
+        /// machine drains there.  Going on, here or restored, the main
+        /// thread yields again and the thread's loop runs on; the main
+        /// thread's YieldToThread never returns meanwhile.
+        @Test func anEventLoopInAThreadHibernates() {
+            defer {
+                g_ppc_mode = false
+                machine_set_instruction_limit(0)
+                machine_hibernate_at(0)
+            }
+            let task = export("SystemTask"), yield = export("YieldToThread")
+            let vars = ptr(8) // the main thread's count, the thread's
+            let entry = tvector(code(load(29, vars) + [0x839D_0004, 0x3B9C_0001, 0x939D_0004] // count += 1
+                                     + call(task) + [branch(back: 8)]))                    // SystemTask; loop
+            let made = ptr(4)
+            #expect(tb_NewThread(1, entry, 0, 0, 0, 0, made) == 0)
+            // the main thread: loop { YieldToThread(thread); main count += 1 }
+            _ = start(load(29, vars) + load(3, rd32(made)) + call(yield)
+                      + [0x839D_0000, 0x3B9C_0001, 0x939D_0000, branch(back: 10)])
+            machine_hibernate_at(machine_instruction_count() + 300_000)
+            machine_set_instruction_limit(machine_instruction_count() + 20_000_000)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "YieldToThread (abandoned)")
+            #expect(thread_current_index() == 0)
+            #expect(threads_parked() == 1)
+            #expect(rd32(vars) == 0 && rd32(vars + 4) > 0)
+            let snap = snapshot("ppcthreadloop.bbhib")
+            machine_drain_end()
+            func goOn() {
+                let count = rd32(vars + 4)
+                machine_set_instruction_limit(machine_instruction_count() + 400_000)
+                _ = machine_run(10_000_000)
+                #expect(rd32(vars + 4) > count)              // the thread's loop runs on
+                #expect(rd32(vars) == 0)                     // the main thread still waits
+            }
+            goOn()
+            restore(snap)
+            goOn()
+        }
+
+        /// The same for a 68k program: its thread set aside at _SystemTask,
+        /// its main thread's _ThreadDispatch abandoned and made again.
+        @Test func a68kEventLoopInAThreadHibernates() {
+            defer {
+                machine_set_instruction_limit(0)
+                machine_hibernate_at(0)
+            }
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            func code68(_ words: [UInt16]) -> UInt32 {
+                let p = tb_NewPtr(Int32(words.count * 2), false, false)
+                for (i, w) in words.enumerated() { wr16(p + UInt32(i * 2), w) }
+                return p
+            }
+            let vars = ptr(8) // the main thread's count, the thread's
+            // the thread: loop { count += 1; _SystemTask }
+            let entry = code68([0x52B9, hi(vars + 4), lo(vars + 4), 0xA9B4, 0x60F6])
+            let made = ptr(4)
+            #expect(tb_NewThread(1, entry, 0, 0, 0, 0, made) == 0)
+            let id = rd32(made)
+            // the program: loop { YieldToThread(thread); main count += 1 }
+            let app = code68([0x4267, 0x2F3C, hi(id), lo(id), 0x303C, 0x0205, 0xABF2, 0x548F,
+                              0x52B9, hi(vars), lo(vars), 0x60E8])
+            g_cpu!.pointee.a.7 = ptr(65536) + 65000
+            g_cpu!.pointee.sr = 0x2000
+            g_cpu!.pointee.pc = app
+            machine_hibernate_at(machine_instruction_count() + 300_000)
+            machine_set_instruction_limit(machine_instruction_count() + 20_000_000)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()).hasSuffix("(abandoned)"))
+            #expect(g_cpu!.pointee.pc == app + 12)          // on the _ThreadDispatch, to be made again
+            #expect(threads_parked() == 1)
+            #expect(rd32(vars) == 0 && rd32(vars + 4) > 0)
+            let snap = snapshot("68kthreadloop.bbhib")
+            machine_drain_end()
+            func goOn() {
+                let count = rd32(vars + 4)
+                machine_set_instruction_limit(machine_instruction_count() + 400_000)
+                _ = machine_run(10_000_000)
+                #expect(rd32(vars + 4) > count)
+                #expect(rd32(vars) == 0)
+            }
+            goOn()
+            restore(snap)
+            goOn()
+        }
+
         /// The same for a 68k thread waiting in _ThreadDispatch: its
         /// YieldToThread's result on the stack, its loop going on; also
         /// with D0's high word set, as the selector is loaded with MOVE.W
