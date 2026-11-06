@@ -653,7 +653,23 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     /// The application menu opened: Hide's keys as the program's menus now are.
-    func menuNeedsUpdate(_ menu: NSMenu) { MainActor.assumeIsolated { HostHideItems.update(menu) } }
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        MainActor.assumeIsolated {
+            HostHideItems.update(menu)
+            Suspender.shared.menuOpening(menu)
+        }
+    }
+}
+
+/// The screen's window fits the display: a resumed program keeps the screen
+/// it hibernated with, which may be larger than this display.
+@MainActor func fitDisplayScale() {
+    guard let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+    var w: Int32 = 0, h: Int32 = 0
+    machine_screen_size(&w, &h)
+    guard w > 0, h > 0 else { return }
+    let fit = min(vf.width / CGFloat(w), (vf.height - 28) / CGFloat(h)) // a title bar's room
+    if displayScale > fit { displayScale = max(fit, 0.25) }
 }
 
 /// Show the classic screen in a window until the app quits.  Never returns.
