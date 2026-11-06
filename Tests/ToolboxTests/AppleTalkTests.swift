@@ -294,7 +294,7 @@ extension BlueBox {
             func frames() -> [[UInt8]] {
                 var out = [[UInt8]]()
                 var buf = [UInt8](repeating: 0, count: 1600)
-                fcntl(fds[1], F_SETFL, O_NONBLOCK)
+                _ = fcntl(fds[1], F_SETFL, O_NONBLOCK)
                 while true {
                     let n = recv(fds[1], &buf, buf.count, 0)
                     if n <= 0 { break }

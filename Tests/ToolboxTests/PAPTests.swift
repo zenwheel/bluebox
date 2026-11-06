@@ -225,14 +225,16 @@ extension BlueBox {
             launchTestApp()
             _ = initToolbox()
             guestStack()
-            nonisolated(unsafe) var ps = ""
+            let ps = UnsafeMutablePointer<String>.allocate(capacity: 1) // outlives the call, unlike &string
+            ps.initialize(to: "")
+            defer { ps.deinitialize(count: 1); ps.deallocate() }
             machine_set_print_handlers({ job, ctx in
                 var len = 0
                 guard let job, let p = machine_postscript(job, &len) else { return false }
                 ctx!.assumingMemoryBound(to: String.self).pointee = String(decoding: UnsafeRawBufferPointer(start: p, count: len), as: UTF8.self)
                 free(p)
                 return true
-            }, nil, &ps)
+            }, nil, ps)
             defer { machine_set_print_handlers(nil, nil, nil) }
             page(text: "Text") { r in
                 // more of QuickDraw for the printer: an oval, a round rectangle, a wedge,
@@ -256,13 +258,13 @@ extension BlueBox {
                 tb_DrawString(s)
             }
             if let path = ProcessInfo.processInfo.environment["BLUEBOX_TEST_PS"] {
-                try? ps.write(toFile: path, atomically: true, encoding: .utf8)
+                try? ps.pointee.write(toFile: path, atomically: true, encoding: .utf8)
             }
-            #expect(ps.contains("(Copy \\251 19) "))
-            #expect(ps.contains("/Helvetica-BoldOblique-Mac 18 F"))
-            #expect(ps.contains("%%BoundingBox: 0 0 612 792"))
-            #expect(ps.contains("10 10 190 90 R 11.00 11.00 188.00 88.00 R 0.000 setgray eofill")) // the frame
-            #expect(ps.contains("/Times-Roman-Mac 12 F 20 60 translate (Text) "))
+            #expect(ps.pointee.contains("(Copy \\251 19) "))
+            #expect(ps.pointee.contains("/Helvetica-BoldOblique-Mac 18 F"))
+            #expect(ps.pointee.contains("%%BoundingBox: 0 0 612 792"))
+            #expect(ps.pointee.contains("10 10 190 90 R 11.00 11.00 188.00 88.00 R 0.000 setgray eofill")) // the frame
+            #expect(ps.pointee.contains("/Times-Roman-Mac 12 F 20 60 translate (Text) "))
         }
     }
 }

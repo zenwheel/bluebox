@@ -150,8 +150,8 @@ static void top_name(const char *path, char out[NAMESZ])
 static void cstr_at(gaddr a, char *out, size_t size)
 {
     size_t i = 0;
-    for (; a && i < size - 1 && rd8(a + i); i++)
-        out[i] = (char)rd8(a + i);
+    for (; a && i < size - 1 && rd8(a + (gaddr)i); i++)
+        out[i] = (char)rd8(a + (gaddr)i);
     out[i] = 0;
 }
 

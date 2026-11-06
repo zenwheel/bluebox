@@ -245,8 +245,8 @@ const char *rest_locale_id(uint32_t ref, char *buf, size_t cap)
 static void get_cstr(gaddr p, char *out, size_t max)
 {
     size_t n = 0;
-    while (n + 1 < max && rd8(p + n)) {
-        out[n] = (char)rd8(p + n);
+    while (n + 1 < max && rd8(p + (gaddr)n)) {
+        out[n] = (char)rd8(p + (gaddr)n);
         n++;
     }
     out[n] = 0;
@@ -341,7 +341,7 @@ static void loc_GetPartString(ppc_cpu *c)
     if (len + 1 > R(2))
         RETURN(kLocalesBufferTooSmallErr);
     for (size_t i = 0; i <= len; i++)
-        wr8(R(3) + i, (uint8_t)s[i]);
+        wr8(R(3) + (gaddr)i, (uint8_t)s[i]);
     RETURN(noErr);
 }
 

@@ -67,8 +67,8 @@ static urlref *ref_of(uint32_t id)
 static void get_cstr(gaddr p, char *out, size_t max)
 {
     size_t n = 0;
-    while (n + 1 < max && rd8(p + n)) {
-        out[n] = (char)rd8(p + n);
+    while (n + 1 < max && rd8(p + (gaddr)n)) {
+        out[n] = (char)rd8(p + (gaddr)n);
         n++;
     }
     out[n] = 0;

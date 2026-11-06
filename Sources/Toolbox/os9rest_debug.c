@@ -225,8 +225,8 @@ void tb_DebugAssert(int32_t sig, uint32_t options, gaddr assertion, gaddr except
         if (!parts[i])
             continue;
         size_t k = 0;
-        while (k + 1 < sizeof text && rd8(parts[i] + k)) {
-            text[k] = (char)rd8(parts[i] + k);
+        while (k + 1 < sizeof text && rd8(parts[i] + (gaddr)k)) {
+            text[k] = (char)rd8(parts[i] + (gaddr)k);
             k++;
         }
         text[k] = 0;
@@ -236,8 +236,8 @@ void tb_DebugAssert(int32_t sig, uint32_t options, gaddr assertion, gaddr except
     }
     if (file) {
         size_t k = 0;
-        while (k + 1 < sizeof text && rd8(file + k)) {
-            text[k] = (char)rd8(file + k);
+        while (k + 1 < sizeof text && rd8(file + (gaddr)k)) {
+            text[k] = (char)rd8(file + (gaddr)k);
             k++;
         }
         text[k] = 0;

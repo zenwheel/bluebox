@@ -116,7 +116,7 @@ extension RootlessHost {
     /// Open at Login, Suspend (Resume while suspended) and Quit.
     func syncStatusMenu(_ snapshot: [machine_menu], _ n: Int) {
         guard let menu = statusItem?.menu else { return }
-        var menus = snapshot
+        let menus = snapshot
         menu.removeAllItems()
         var deskAccessories: [NSMenuItem] = []
         for i in 0..<n {
