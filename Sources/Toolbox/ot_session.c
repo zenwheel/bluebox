@@ -115,12 +115,7 @@ typedef struct ot_session {
 
 static uint8_t next_sid = 1;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 static uint32_t user_bytes(int b0, int b1, int word)
 {

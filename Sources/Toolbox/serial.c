@@ -85,12 +85,7 @@ typedef struct {
 static sport ports[NPORTS];
 static bool polling;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 static void close_fd(int *fd)
 {

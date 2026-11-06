@@ -86,12 +86,7 @@ typedef struct {
 static dsp_end ends[MAX_ENDS];
 static uint16_t next_cid = 0x1000;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 static void put32(uint8_t *p, uint32_t v)

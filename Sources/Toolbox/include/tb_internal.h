@@ -1071,6 +1071,11 @@ int trap_call_depth(void);
 bool drain_wanted(void);
 bool drain_abandon(void);
 bool drain_take_rewind(cpu68k *c, uint16_t op);
+bool drain_take_rewind_named(cpu68k *c, const char *name);
+/* A Toolbox wait gives its call up for a drain (drain_abandon, when one
+ * is wanted): true when it should return at once, the call to be made
+ * again when the machine goes on, here or resumed. */
+bool drain_give_up(void);
 bool drain_at_trap(cpu68k *c, uint16_t op);
 bool drain_slice_point(void);
 bool drain_exits(void);
@@ -1111,6 +1116,10 @@ void cfm_after_resume(void);
 void sound_after_resume(void);
 void speech_after_resume(void);
 void sound_input_after_resume(void);
+/* The host's monotonic clock, going on after resuming from where it
+ * stopped (the network's timers). */
+uint64_t host_clock_ns(void);
+uint64_t host_clock_ms(void);
 void sound_record_note(const char *what);
 void qt_movies_replay_sound(void);
 void speech_record_note(const char *what);

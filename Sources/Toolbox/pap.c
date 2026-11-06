@@ -43,12 +43,7 @@ typedef struct {
     uint64_t heard;             /* when the printer was last heard from */
 } pap_conn;
 
-static uint64_t ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t ms(void) { return host_clock_ms(); }
 
 /* The printer's requests at our responding socket: SendData (the next
  * piece of the job), Tickle, CloseConn. */

@@ -95,12 +95,7 @@ static atp_request_fn host_fns[256]; /* host code's sockets: requests to a funct
 static void *host_ctx[256];
 static uint16_t next_tid;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 static void put_header(uint8_t *p, uint8_t control, uint8_t bitmap, uint16_t tid, uint32_t user)
 {

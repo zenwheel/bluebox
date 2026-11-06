@@ -74,6 +74,9 @@ int native_index_for(uint32_t addr)
     return (int)((addr - STUB_BASE) / STUB_SIZE);
 }
 
+static bool native_rewound(cpu68k *c, const native_entry *n, gaddr sp0, const uint8_t *args);
+static void native_note(const cpu68k *c, gaddr *sp0, uint8_t *args);
+
 void trap_native(cpu68k *c, uint16_t index)
 {
     if (index >= native_count) {
@@ -87,8 +90,20 @@ void trap_native(cpu68k *c, uint16_t index)
         tw = (uint16_t)c->d[1];
     uint16_t saved = last_trapword;
     last_trapword = tw;
+    /* A 68k program's own call that is not a trap (Open Transport's,
+     * through its glue) may be abandoned for a drain as a trap is
+     * (trap_aline): its registers and arguments are noted, and put back
+     * with the program counter on the NATIVE word, so the call is made
+     * again. */
+    bool level = trap_call_depth() == 0 && !g_ppc_mode;
+    gaddr sp0 = 0;
+    uint8_t args[64];
+    if (level)
+        native_note(c, &sp0, args);
     n->fn(c, tw);
     last_trapword = saved;
+    if (level)
+        native_rewound(c, n, sp0, args);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -524,6 +539,29 @@ static bool rewound(cpu68k *c, uint16_t op, const entry_regs *r, gaddr sp0, cons
     memcpy(c->a, r->a, sizeof r->a);
     c->sr = r->sr;
     c->pc = r->pc;
+    c->icount--;
+    return true;
+}
+
+/* trap_native's notes: the registers and what is on the stack. */
+BB_HOST static entry_regs native_regs;
+
+static void native_note(const cpu68k *c, gaddr *sp0, uint8_t *args)
+{
+    note_entry(c, &native_regs);
+    *sp0 = c->a[7];
+    gget(args, *sp0, ARGS_KEPT);
+}
+
+static bool native_rewound(cpu68k *c, const native_entry *n, gaddr sp0, const uint8_t *args)
+{
+    if (c->halted || !drain_take_rewind_named(c, n->name))
+        return false;
+    gput(sp0, args, ARGS_KEPT);
+    memcpy(c->d, native_regs.d, sizeof native_regs.d);
+    memcpy(c->a, native_regs.a, sizeof native_regs.a);
+    c->sr = native_regs.sr;
+    c->pc = native_regs.pc;
     c->icount--;
     return true;
 }

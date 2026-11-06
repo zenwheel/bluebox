@@ -54,7 +54,26 @@ static struct {
     uint64_t time_ns;      /* machine_time_ns */
     int64_t wall;          /* the host's date (time()) */
     int layout;            /* g_mem_layout: the fresh process must have the same */
+    uint64_t host_ns;      /* host_clock_ns */
 } saved;
+
+/* The host's clock for the network's timers (AppleTalk's retries and
+ * tickles, sessions' idle timeouts, the serial ports' timeouts): the
+ * host's monotonic clock, which starts again at each boot, moved on so
+ * that in a resumed process it goes on from where it stopped, as the
+ * machine's clock does, and a retry due a second after the snapshot comes
+ * a second after resuming. */
+static int64_t host_clock_offset;
+
+static uint64_t host_mono_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+}
+
+uint64_t host_clock_ns(void) { return (uint64_t)((int64_t)host_mono_ns() + host_clock_offset); }
+uint64_t host_clock_ms(void) { return host_clock_ns() / 1000000u; }
 
 /* This process put a snapshot back: the host's to know, not the program's
  * (a snapshot of a resumed machine is the same as of one never stopped). */
@@ -88,6 +107,7 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     saved.time_ns = machine_time_ns();
     saved.wall = (int64_t)time(NULL);
     saved.layout = g_mem_layout;
+    saved.host_ns = host_clock_ns();
     files_before_hibernate();
     /* BLUEBOX_HIBERNATE_SCAN=1: what the snapshot holds of the host's memory
      * (and any pointer the map misses), listed first. */
@@ -143,6 +163,7 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen)
         return false;
     }
     resumed = true;
+    host_clock_offset = (int64_t)saved.host_ns - (int64_t)host_mono_ns();
     events_script_clear();
     bool catch_up = date_override >= 0 ? date_override : resume_date_catches_up;
     machine_resume_clock(saved.time_ns, catch_up, (int64_t)time(NULL) - saved.wall);
