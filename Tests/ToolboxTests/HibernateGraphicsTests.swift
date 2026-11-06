@@ -1,6 +1,7 @@
 import CCore
 import CPU68K
 import CPUPPC
+import ForkStore
 import Foundation
 import Testing
 import Toolbox
@@ -356,6 +357,85 @@ extension BlueBox {
             #expect(machine_hibernatable())
             machine_drain_end()
             g.gl("aglDestroyContext", [ctx])
+        }
+
+        // ---- QuickTime ----
+
+        func atom(_ type: String, _ body: [UInt8]) -> [UInt8] { cat(be32(UInt32(8 + body.count)), Array(type.utf8), body) }
+
+        /// A movie VLC would play (Sorenson Video, which our decoders do
+        /// not have) with its description in the resource fork: played from
+        /// a flattened copy in the temporary folder.
+        func sorensonMovie(_ dir: URL) -> String {
+            func full(_ type: String, _ body: [UInt8]) -> [UInt8] { atom(type, cat([0, 0, 0, 0], body)) }
+            let stsd = cat(be32(86), Array("SVQ1".utf8), [0, 0, 0, 0, 0, 0], be16(1), [UInt8](repeating: 0, count: 16),
+                           be16(2), be16(2), be32(72 << 16), be32(72 << 16), be32(0), be16(1),
+                           [UInt8](repeating: 0, count: 32), be16(24), be16(0xFFFF))
+            let stbl = atom("stbl", cat(full("stsd", cat(be32(1), stsd)), full("stts", cat(be32(1), be32(2), be32(600))),
+                                        full("stsc", cat(be32(1), be32(1), be32(1), be32(1))),
+                                        full("stsz", cat(be32(16), be32(2))), full("stco", cat(be32(2), be32(0), be32(16)))))
+            let mdhd = full("mdhd", cat(be32(0), be32(0), be32(600), be32(1200), be32(0)))
+            let hdlr = full("hdlr", cat(Array("mhlr".utf8), Array("vide".utf8), [UInt8](repeating: 0, count: 13)))
+            let tkhd = cat([0, 0, 0, 1], be32(0), be32(0), be32(1), be32(0), be32(1200), [UInt8](repeating: 0, count: 52),
+                           be32(2 << 16), be32(2 << 16))
+            let trak = atom("trak", cat(atom("tkhd", tkhd), atom("mdia", cat(mdhd, hdlr, atom("minf", stbl)))))
+            let mvhd = full("mvhd", cat(be32(0), be32(0), be32(600), be32(1200), [UInt8](repeating: 0, count: 80)))
+            let moov = atom("moov", cat(mvhd, trak))
+            var fork = buildFork([TestResource(type: "moov", id: 128, data: moov)])
+            var data = [UInt8](repeating: 0x55, count: 32)
+            let path = dir.appendingPathComponent("Sorenson").path
+            var f = mac_file()
+            data.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = $0.count }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+            return path
+        }
+
+        func tempCopies() -> Set<String> {
+            let tmp = ProcessInfo.processInfo.environment["TMPDIR"] ?? "/tmp"
+            let mine = "bluebox-movie-\(getpid())-"
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: tmp)) ?? []
+            return Set(names.filter { $0.hasPrefix(mine) }.map { (tmp as NSString).appendingPathComponent($0) })
+        }
+
+        /// A movie played from a flattened copy (VLC's) hibernates: resumed
+        /// after the process that made the copy has ended (and deleted it),
+        /// the copy is made again, and the movie's time goes on.
+        @Test func movieFlattenedCopyIsMadeAgain() {
+            let dir = launchTestApp()
+            startLoop()
+            #expect(tb_EnterMovies() == 0)
+            let path = sorensonMovie(dir)
+            let before = tempCopies()
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            fm_spec_for_path(path, spec)
+            let rn = tb_NewPtr(2, false, true)
+            #expect(tb_OpenMovieFile(spec, rn, 1) == 0)
+            let mp = tb_NewPtr(4, false, true)
+            #expect(tb_NewMovieFromFile(mp, Int16(bitPattern: rd16(rn)), 0, 0, 0, 0) == 0)
+            _ = tb_CloseMovieFile(Int16(bitPattern: rd16(rn)))
+            let movie = rd32(mp)
+            #expect(movie != 0)
+            let copies = tempCopies().subtracting(before)
+            #expect(copies.count == 1)
+            tb_StartMovie(movie)
+            machine_skip_time(500_000_000)
+            let t0 = tb_GetMovieTime(Int32(bitPattern: movie), 0)
+
+            let snap = hibernate(dir, "movie.bbhib")
+            for c in copies { unlink(c) } // the process that made it, ended
+            resume(snap)
+            let made = tempCopies().subtracting(before)
+            #expect(made.count == 1)
+            #expect(made.allSatisfy { FileManager.default.fileExists(atPath: $0) })
+            let t1 = tb_GetMovieTime(Int32(bitPattern: movie), 0)
+            #expect(t1 >= t0 && t1 <= t0 + 60)
+            machine_skip_time(500_000_000)
+            tb_MoviesTask(movie, 0)
+            #expect(tb_GetMovieTime(Int32(bitPattern: movie), 0) > t1 + 200)
+            tb_DisposeMovie(movie)
+            #expect(tempCopies().subtracting(before).isEmpty)
         }
     }
 }

@@ -26,6 +26,9 @@
  *                as each is first used; OpenGL's contexts the same way,
  *                their state, textures, framebuffers and display lists
  *                (opengl.c, opengl_hib.c)
+ *   the movies   a movie VLC played is opened again where the machine's
+ *                clock has it when it is next given time; the flattened
+ *                copy VLC played from is made again (quicktime.c)
  *
  * What a snapshot cannot carry is refused before it is taken
  * (hibernate_io_blocker): connections, serial ports, print jobs.
@@ -99,6 +102,7 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     files_before_hibernate();
     r3d_before_hibernate(); /* what the host drew and holds, into the machine */
     hostgl_before_hibernate();
+    qt_movies_before_hibernate(); /* where VLC has the movies it plays */
     /* BLUEBOX_HIBERNATE_SCAN=1: what the snapshot holds of the host's memory
      * (and any pointer the map misses), listed first. */
     const char *scan = getenv("BLUEBOX_HIBERNATE_SCAN");
@@ -108,6 +112,7 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     bool ok = hb_save_file_extra(path, record, record ? strlen(record) : 0, &st, err, errlen);
     r3d_after_hibernate();
     hostgl_after_hibernate();
+    qt_movies_after_hibernate();
     if (ok && bytes)
         *bytes = st.file_bytes;
     if (ok) {
@@ -202,8 +207,6 @@ const char *host_media_open(void)
     const char *gl = hostgl_blocker();
     if (gl)
         return gl;
-    if (qt_host_movies_open())
-        return "has a QuickTime movie the host plays open";
     if (drivevol_any_mounted())
         return "has a disk image mounted";
     return NULL;
@@ -224,4 +227,5 @@ void hibernate_reattach_host(void)
     q3_view_after_resume();  /* QuickDraw 3D's textures, made again from its objects */
     r3d_after_resume();      /* QuickDraw 3D's and RAVE's frames and textures, made again as used */
     hostgl_after_resume();   /* OpenGL's contexts, made again as used */
+    qt_movies_after_resume(); /* VLC's movies opened again, their flattened copies made again */
 }

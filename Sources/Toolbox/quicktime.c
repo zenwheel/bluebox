@@ -116,6 +116,7 @@ typedef struct {
     gaddr master;        /* SetMovieMasterTimeBase's, or 0 for the clock */
     gaddr clock;         /* SetMovieMasterClock's component (ours keep machine time) */
     bool vlc_held;       /* VLC paused while the master stands still */
+    bool reopen;         /* hibernated with VLC playing it: opened again after resuming */
     gaddr clip;          /* SetMovieClipRgn's, in the movie's coordinates (ours) */
     gaddr display_clip;  /* SetMovieDisplayClipRgn's, in the port's (ours) */
     qt_vlc_player *player;
@@ -546,16 +547,21 @@ static void remove_temp_files(void)
             unlink(movies[i].play_path);
 }
 
-uint32_t mac_now(void);
-
-/* A movie for a description (taken), from a file or not. */
-static movie *new_movie(qtm_movie *mv, const char *path)
+static void remove_temp_files_at_exit(void)
 {
     BB_HOST static bool registered; /* this process's atexit */
     if (!registered) {
         atexit(remove_temp_files);
         registered = true;
     }
+}
+
+uint32_t mac_now(void);
+
+/* A movie for a description (taken), from a file or not. */
+static movie *new_movie(qtm_movie *mv, const char *path)
+{
+    remove_temp_files_at_exit();
     for (int i = 0; i < MAX_MOVIES; i++) {
         if (movies[i].used)
             continue;
@@ -1082,6 +1088,8 @@ static void draw_frame(movie *m, bool force)
         m->frame_indexed = false;
     } else if (m->player) {
         fresh = qt_vlc_frame(m->player, &m->serial, &m->frame, &m->fw, &m->fh, &m->frame_indexed);
+    } else if (m->frame) {
+        fresh = false; /* resumed, VLC not opened again yet: the frame it last gave */
     } else {
         return;
     }
@@ -1215,11 +1223,34 @@ static void follow_master(movie *m)
     }
 }
 
+/* Resumed with VLC playing it (its player gone with the process that
+ * hibernated): opened again where the movie is now, playing on. */
+static void reopen(movie *m)
+{
+    m->reopen = false;
+    int64_t t = movie_ms(m); /* by the machine's clock: no player yet */
+    ensure_player(m);
+    if (!m->player || !m->playing)
+        return;
+    m->base_ms = t;
+    m->start_ns = source_ns(m, 0);
+    if (m->master) {
+        m->vlc_held = true; /* follow_master plays it from where the master is */
+        return;
+    }
+    qt_vlc_play(m->player);
+    qt_vlc_seek(m->player, t);
+    if (m->rate != 0x10000)
+        qt_vlc_set_rate(m->player, (float)m->rate / 65536.0f);
+}
+
 static void task(movie *m)
 {
     qt_vr_movie_idle(m->handle);
     if (!m->playing)
         return;
+    if (m->reopen && !m->player)
+        reopen(m);
     follow_master(m);
     draw_frame(m, false);
     /* Sound plays a second ahead at normal speed: a master that stops or
@@ -3577,12 +3608,56 @@ bool machine_movie_speed(const char *path, machine_movie_speed_result *r, char *
     return true;
 }
 
-/* A movie the host plays (VLC, or from a temporary file this process
- * deletes when it ends): what a hibernated program cannot take along yet. */
-bool qt_host_movies_open(void)
+/* ---- Hibernating ---- */
+
+/* A movie VLC plays keeps VLC's time: the machine's kept beside it, for a
+ * resumed process to go on from (the process going on keeps VLC's). */
+void qt_movies_before_hibernate(void)
+{
+    for (int i = 0; i < MAX_MOVIES; i++) {
+        movie *m = &movies[i];
+        if (!m->used || !m->player)
+            continue;
+        if (m->playing && !m->master) {
+            m->base_ms = movie_ms(m);
+            m->start_ns = source_ns(m, 0);
+        }
+        m->reopen = true;
+    }
+}
+
+void qt_movies_after_hibernate(void)
 {
     for (int i = 0; i < MAX_MOVIES; i++)
-        if (movies[i].used && (movies[i].player || movies[i].temp_file))
-            return true;
-    return false;
+        movies[i].reopen = false;
+}
+
+/* Resumed: VLC's players are gone (opened again as each movie is next
+ * played or given time), and the flattened copies VLC played were
+ * deleted when the process that hibernated ended: made again. */
+void qt_movies_after_resume(void)
+{
+    int players = 0, copies = 0;
+    for (int i = 0; i < MAX_MOVIES; i++) {
+        movie *m = &movies[i];
+        if (!m->used)
+            continue;
+        if (m->reopen) {
+            m->player = NULL; /* a test resumes in the process that saved: that one's is left alone */
+            m->serial = 0;
+            players++;
+        }
+        if (m->temp_file && m->play_path && access(m->play_path, F_OK) != 0) {
+            bb_free(m->play_path);
+            m->play_path = NULL;
+            m->temp_file = false;
+            prepare_vlc(m, false);
+            copies++;
+        }
+    }
+    if (copies)
+        remove_temp_files_at_exit();
+    if (players || copies)
+        LOGF(LOG_IDLE, "resume: QuickTime: %d movie%s VLC played to open again, %d flattened cop%s made again\n",
+             players, players == 1 ? "" : "s", copies, copies == 1 ? "y" : "ies");
 }
