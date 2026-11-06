@@ -1,0 +1,10 @@
+# Saved statics that hold some of the host's state (a lock, a library's
+# handle, a descriptor), and why each is saved anyway: file, symbol, why
+# (tab-separated).  scripts/state-map.py --check fails on any other.
+Toolbox/ctb_cm.c	conns	connections with their descriptors: reopened or dropped on resume (networking)
+Toolbox/mactcp.c	streams	streams with their sockets: dropped with each protocol's error on resume (networking)
+Toolbox/mactcp.c	early	early-opened sockets with their streams: as streams
+Toolbox/opentransport.c	ot_providers	endpoints with their sockets: dropped on resume (networking)
+Toolbox/ppctoolbox.c	ports	PPC Toolbox ports with their sockets: reopened on resume (networking)
+Toolbox/ppctoolbox.c	sessions	PPC Toolbox sessions with their sockets: dropped on resume (networking)
+Toolbox/serial.c	ports	serial ports with the host devices they use: reopened on resume

@@ -329,4 +329,5 @@ def main():
     print(len(seen), 'variables')
 
 
-main()
+if __name__ == '__main__':
+    main()
