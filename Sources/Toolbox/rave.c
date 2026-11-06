@@ -1375,11 +1375,3 @@ void rave_reset(void)
     engines[0] = engines[1] = 0;
 }
 
-/* One open (hibernating cannot carry its host-drawn frames yet). */
-bool rave_any_context(void)
-{
-    for (int i = 0; i < MAX_CTX; i++)
-        if (ctxs[i])
-            return true;
-    return false;
-}

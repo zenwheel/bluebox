@@ -7,6 +7,7 @@
 #define HOSTGL_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "mem.h"
@@ -58,6 +59,18 @@ void agl_macro_fill(gaddr table, gaddr vectors);
 
 /* Guest memory gone (machine reset): the strings and names made in it. */
 void hostgl_reset(void);
+
+/* Hibernating (opengl_hib.c): why a context cannot be saved as it is, or
+ * NULL; before the snapshot each context's state read back into the
+ * machine, after it let go of; resumed, each context made again from it
+ * at its first use.  hostgl_saved_bytes and hostgl_display_lists: what
+ * the machine holds for it, for the tests. */
+const char *hostgl_blocker(void);
+void hostgl_before_hibernate(void);
+void hostgl_after_hibernate(void);
+void hostgl_after_resume(void);
+size_t hostgl_saved_bytes(void);
+int hostgl_display_lists(void);
 
 /* glFlush or glFinish from the program: AGL shows the frame of a
  * single-buffered context, or one the program drew to the front of

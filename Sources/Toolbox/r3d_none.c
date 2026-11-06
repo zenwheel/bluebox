@@ -1,24 +1,26 @@
 /*
- * r3d.h where the host has no renderer yet (Linux, until its OpenGL
- * one): nothing renders, and QuickDraw 3D's and RAVE's libraries aren't
- * there (cfm.c asks r3d_available).
+ * r3d.h's host side where the host has no renderer yet (Linux, until its
+ * OpenGL one): nothing renders, and QuickDraw 3D's and RAVE's libraries
+ * aren't there (cfm.c asks r3d_available).
  */
 #ifndef __APPLE__
 #include <stddef.h>
 
 #include "r3d.h"
 
-bool r3d_available(void) { return false; }
-r3d_frame *r3d_frame_new(int width, int height) { return NULL; }
-void r3d_frame_free(r3d_frame *f) {}
-int r3d_frame_width(const r3d_frame *f) { return 0; }
-int r3d_frame_height(const r3d_frame *f) { return 0; }
-void r3d_begin(r3d_frame *f, const uint32_t *pixels, uint32_t clear_argb, float clear_z) {}
-void r3d_clear(r3d_frame *f, int x0, int y0, int x1, int y1, bool color, uint32_t argb, bool depth, float z) {}
-void r3d_draw(r3d_frame *f, const r3d_state *s, int primitive, const r3d_vertex *v, int count) {}
-void r3d_end(r3d_frame *f, uint32_t *pixels) {}
-void r3d_read(r3d_frame *f, uint32_t *pixels, float *depth) {}
-void r3d_write(r3d_frame *f, const uint32_t *pixels, const float *depth) {}
-int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap) { return 0; }
-void r3d_texture_free(int texture) {}
+bool r3dh_available(void) { return false; }
+bool r3dh_frame_make(int slot, int width, int height) { return false; }
+void r3dh_frame_drop(int slot) {}
+bool r3dh_frame_live(int slot) { return false; }
+void r3dh_begin(int slot, const uint32_t *pixels, uint32_t clear_argb, float clear_z) {}
+void r3dh_clear(int slot, int x0, int y0, int x1, int y1, bool color, uint32_t argb, bool depth, float z) {}
+void r3dh_draw(int slot, const r3d_state *s, int primitive, const r3d_vertex *v, int count) {}
+void r3dh_end(int slot, uint32_t *pixels) {}
+void r3dh_read(int slot, uint32_t *pixels, float *depth) {}
+void r3dh_write(int slot, const uint32_t *pixels, const float *depth) {}
+bool r3dh_texture_make(int slot, int width, int height, const uint32_t *pixels, bool mipmap) { return false; }
+void r3dh_texture_drop(int slot) {}
+bool r3dh_texture_live(int slot) { return false; }
+void r3dh_texture_read(int slot, uint32_t *pixels) {}
+void r3dh_drop_all(void) {}
 #endif
