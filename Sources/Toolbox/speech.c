@@ -1585,7 +1585,10 @@ int speech_channel_voice(gaddr chan)
 void speech_after_resume(void)
 {
     for (int i = 0; i < MAX_CHANNELS; i++)
-        if (channels[i].chan && channels[i].busy)
+        if (channels[i].chan && channels[i].busy) {
             channels[i].lost = true;
+            LOGF(LOG_SPEECH, "speech: channel %d's utterance is over: its voice was the hibernated process's%s\n", i,
+                 channels[i].paused ? " (paused: when continued)" : "");
+        }
     speech_record_note("resumed");
 }

@@ -255,6 +255,34 @@ extension BlueBox {
             #expect(told.contains { $0.status == 0x90 | ch && $0.data1 == 67 && $0.data2 == 90 })
         }
 
+        /// The MIDI Manager: the host synthesizer its host port plays is told
+        /// the program and the held note again, and a packet time-stamped
+        /// for later reaches it when due, after resuming.
+        @Test func midiManagerPacketsGoOn() {
+            let dir = launchTestApp()
+            let mm = MIDIManager()
+            mm.install()
+            defer { machine_set_midi_handler(nil, nil) }
+            startLoop()
+            mm.signIn("play", "Player")
+            let out = mm.addPort("play", "out ", type: 2)
+            #expect(tb_MIDIWritePacket(out, mm.packet([0xC0, 41])) == 0)
+            #expect(tb_MIDIWritePacket(out, mm.packet([0x90, 60, 100])) == 0)
+            let now = UInt32(machine_time_ns() / 1_000_000)
+            #expect(tb_MIDIWritePacket(out, mm.packet([0x90, 64, 90], stamp: now + 500, now: false)) == 0)
+            #expect(!MIDIManager.synth.contains { $0.data1 == 64 })
+
+            let snap = hibernate(dir, "midi.bbhib")
+            resume(snap)
+            MIDIManager.synth = []
+            sound_pump()
+            let told = MIDIManager.synth.map { [$0.status, $0.data1, $0.data2] }
+            #expect(told == [[0xC0, 41, 0], [0x90, 60, 100]])
+            machine_skip_time(600_000_000)
+            time_pump()
+            #expect(MIDIManager.synth.last.map { [$0.status, $0.data1, $0.data2] } == [0x90, 64, 90])
+        }
+
         /// A voice speaking: hibernating is not refused; resumed, the
         /// utterance is over at the next safe point and the program's
         /// SpeechDone comes.  One the program had paused stays paused, and
