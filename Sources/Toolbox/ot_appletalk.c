@@ -130,6 +130,12 @@ static bool wait_slice(provider *p)
     return ot_wait_slice(p);
 }
 
+/* A blocking call's wait for what may never come (data, a call, a
+ * request), which nothing has started: at the program's own level it
+ * gives up for a drain, as Delay does, and the call is made again when the
+ * machine goes on, here or resumed. */
+static bool wait_or_give_up(provider *p) { return !drain_give_up() && wait_slice(p); }
+
 static bool blocking(provider *p) { return p->blocking && !p->async; }
 
 /* Messages rather than a stream: "adsp(EnableEOM=1)" at open, or the OPT_ENABLEEOM option. */
@@ -767,7 +773,7 @@ void ota_RcvUData(ppc_cpu *c, provider *p)
         return;
     }
     while (!a->nq) {
-        if (!blocking(p) || !wait_slice(p)) {
+        if (!blocking(p) || !wait_or_give_up(p)) {
             p->told_data = false;
             RETURN((uint32_t)kOTNoDataErr);
             return;
@@ -901,7 +907,7 @@ static void ota_RcvUReply(ppc_cpu *c)
         wr32(R(2), 0);
     asked *q;
     while (!(q = answered(a))) {
-        if (!asking(a) || !blocking(p) || !wait_slice(p)) {
+        if (!asking(a) || !blocking(p) || !wait_or_give_up(p)) {
             RETURN((uint32_t)kOTNoDataErr);
             return;
         }
@@ -955,7 +961,7 @@ static void ota_RcvURequest(ppc_cpu *c)
                 h = &a->reqs[i];
         if (h)
             break;
-        if (!blocking(p) || !wait_slice(p)) {
+        if (!blocking(p) || !wait_or_give_up(p)) {
             a->told_request = false;
             RETURN((uint32_t)kOTNoDataErr);
             return;
@@ -1156,7 +1162,7 @@ void ota_RcvConnect(ppc_cpu *c, provider *p)
         RETURN((uint32_t)kOTOutStateErr);
         return;
     }
-    while (pb_result(a->pb_open) == ioInProgress && blocking(p) && wait_slice(p))
+    while (pb_result(a->pb_open) == ioInProgress && blocking(p) && wait_or_give_up(p))
         ;
     int16_t e = pb_result(a->pb_open);
     if (e == ioInProgress) {
@@ -1195,7 +1201,7 @@ void ota_Listen(ppc_cpu *c, provider *p)
             a->have_call = true;
             break;
         }
-        if (!blocking(p) || !wait_slice(p)) {
+        if (!blocking(p) || !wait_or_give_up(p)) {
             p->told_listen = false;
             RETURN((uint32_t)kOTNoDataErr);
             return;
@@ -1331,6 +1337,10 @@ void ota_Snd(ppc_cpu *c, provider *p)
             return;
         }
         if (room <= 0) {
+            if (!done && blocking(p) && drain_give_up()) {
+                RETURN(0); /* nothing sent: made again when the machine goes on */
+                return;
+            }
             if (blocking(p) && wait_slice(p))
                 continue;
             if (!done) {
@@ -1402,7 +1412,7 @@ void ota_Rcv(ppc_cpu *c, provider *p)
             RETURN((uint32_t)kOTLookErr); /* T_ORDREL (or T_DISCONNECT) */
             return;
         }
-        if (!blocking(p) || !wait_slice(p)) {
+        if (!blocking(p) || !wait_or_give_up(p)) {
             p->told_data = false;
             RETURN((uint32_t)kOTNoDataErr);
             return;
@@ -1875,7 +1885,11 @@ void ota_poll(provider *p)
             p->told_listen = true;
             ot_post(p, T_LISTEN, 0, 0);
         }
-        if (adsp_open(p)) {
+        if (p->disconnected && !p->told_disc) {
+            p->told_disc = true;
+            ot_post(p, T_DISCONNECT, 0, 0);
+        }
+        if (adsp_open(p) && !p->disconnected) {
             if (!a->told_attn && adsp_attention(a)) {
                 a->told_attn = true;
                 ot_post(p, T_EXDATA, 0, 0);
@@ -1905,6 +1919,29 @@ void ota_poll(provider *p)
     default:
         break;
     }
+}
+
+/* Resumed (ot_after_resume, AppleTalk back): ddp and atp endpoints, NBP's
+ * mapper and its names are the stack's and go on.  An adsp connection is
+ * over: its connection end is torn down (adsp_after_resume) and the
+ * program hears T_DISCONNECT at the next poll; one being opened goes on
+ * asking, a listener goes on.  pap and asp: ot_session.c's. */
+void ota_after_resume(provider *p)
+{
+    if (SESSION(p)) {
+        ots_after_resume(p);
+        return;
+    }
+    if (p->kind != P_ADSP || !p->at)
+        return;
+    bool connected = adsp_open(p) || (p->state == T_OUTCON && pb_result(p->at->pb_open) == noErr);
+    if (!connected || p->disconnected)
+        return;
+    LOGF(LOG_TRAPS, "OT: adsp %d: its connection ended with the hibernated process\n", (int)(p - ot_providers));
+    p->disconnected = true;
+    p->told_disc = false;
+    p->disc_reason = kECONNRESETErr;
+    p->flow = false;
 }
 
 /* ---------------------------------------------------------------------- */

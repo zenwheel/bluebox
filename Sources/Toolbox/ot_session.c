@@ -115,12 +115,7 @@ typedef struct ot_session {
 
 static uint8_t next_sid = 1;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 static uint32_t user_bytes(int b0, int b1, int word)
 {
@@ -136,6 +131,12 @@ static bool wait_slice(provider *p)
     appletalk_poll();
     return ot_wait_slice(p);
 }
+
+/* A blocking call's wait for what may never come (data, a call, a
+ * request), which nothing has started: at the program's own level it
+ * gives up for a drain, as Delay does, and the call is made again when the
+ * machine goes on, here or resumed. */
+static bool wait_or_give_up(provider *p) { return !drain_give_up() && wait_slice(p); }
 
 static bool is_session(provider *p) { return p && p->used && (p->kind == P_PAP || p->kind == P_ASP) && p->ss; }
 
@@ -565,7 +566,7 @@ void ots_RcvConnect(ppc_cpu *c, provider *p)
         RETURN((uint32_t)kOTOutStateErr);
         return;
     }
-    while (s->opening && blocking(p) && wait_slice(p))
+    while (s->opening && blocking(p) && wait_or_give_up(p))
         opened(p);
     opened(p);
     if (p->disconnected) {
@@ -592,7 +593,7 @@ void ots_Listen(ppc_cpu *c, provider *p)
         return;
     }
     while (!s->have_call) {
-        if (!blocking(p) || !wait_slice(p)) {
+        if (!blocking(p) || !wait_or_give_up(p)) {
             p->told_listen = false;
             RETURN((uint32_t)kOTNoDataErr);
             return;
@@ -696,6 +697,11 @@ void ots_Snd(ppc_cpu *c, provider *p)
         int room = PAP_QUEUE - s->sendlen;
         if (room <= 0) {
             pap_poll(p);
+            if (!done && blocking(p) && drain_give_up()) {
+                bb_free(data);
+                RETURN(0); /* nothing sent: made again when the machine goes on */
+                return;
+            }
             if (blocking(p) && s->live && wait_slice(p))
                 continue;
             if (!done) {
@@ -751,7 +757,7 @@ void ots_Rcv(ppc_cpu *c, provider *p)
             RETURN((uint32_t)kOTLookErr); /* T_ORDREL (or T_DISCONNECT) */
             return;
         }
-        if (!blocking(p) || !wait_slice(p)) {
+        if (!blocking(p) || !wait_or_give_up(p)) {
             p->told_data = false;
             RETURN((uint32_t)kOTNoDataErr);
             return;
@@ -994,7 +1000,7 @@ static void ots_RcvReply(ppc_cpu *c)
         bool asking = false;
         for (int i = 0; i < MAX_OUT; i++)
             asking |= s->out[i].used;
-        if (!asking || !blocking(p) || !wait_slice(p)) {
+        if (!asking || !blocking(p) || !wait_or_give_up(p)) {
             RETURN((uint32_t)kOTNoDataErr);
             return;
         }
@@ -1026,7 +1032,7 @@ static void ots_RcvRequest(ppc_cpu *c)
         wr32(R(2), 0);
     heard *h;
     while (!(h = waiting_request(s))) {
-        if (!blocking(p) || !wait_slice(p)) {
+        if (!blocking(p) || !wait_or_give_up(p)) {
             s->told_request = false;
             RETURN((uint32_t)kOTNoDataErr);
             return;
@@ -1120,7 +1126,7 @@ void ots_RcvUReply(ppc_cpu *c, provider *p)
     if (R(2))
         wr32(R(2), 0);
     while (!s->status_asked || s->status.result == ioInProgress) {
-        if (!s->status_asked || !blocking(p) || !wait_slice(p)) {
+        if (!s->status_asked || !blocking(p) || !wait_or_give_up(p)) {
             RETURN((uint32_t)kOTNoDataErr);
             return;
         }
@@ -1217,6 +1223,21 @@ void ots_poll(provider *p)
         p->told_disc = true;
         ot_post(p, T_DISCONNECT, 0, 0);
     }
+}
+
+/* Resumed: a connection or session is over (its other end has long since
+ * timed it out, or gone on without it).  The other end is told, in case,
+ * and the program hears T_DISCONNECT at the next poll; its commands under
+ * way end.  One being opened goes on asking; a listener goes on. */
+void ots_after_resume(provider *p)
+{
+    ot_session *s = p->ss;
+    if (!s || !s->live)
+        return;
+    LOGF(LOG_TRAPS, "OT: %s %d: its %s ended with the hibernated process\n", s->pap ? "pap" : "asp",
+         (int)(p - ot_providers), s->pap ? "connection" : "session");
+    send_close(p);
+    lost(p, kECONNRESETErr);
 }
 
 const ppc_export ots_exports[] = {

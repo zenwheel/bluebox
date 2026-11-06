@@ -74,23 +74,6 @@ int native_index_for(uint32_t addr)
     return (int)((addr - STUB_BASE) / STUB_SIZE);
 }
 
-void trap_native(cpu68k *c, uint16_t index)
-{
-    if (index >= native_count) {
-        cpu_halt(c, "NATIVE %u: no such native", index);
-        return;
-    }
-    native_entry *n = &natives[index];
-    /* Reached through a stub: an OS routine finds its trap word in D1. */
-    uint16_t tw = n->trapword;
-    if (tw && !(tw & 0x0800))
-        tw = (uint16_t)c->d[1];
-    uint16_t saved = last_trapword;
-    last_trapword = tw;
-    n->fn(c, tw);
-    last_trapword = saved;
-}
-
 /* ---------------------------------------------------------------------- */
 /* Names and census */
 
@@ -526,6 +509,44 @@ static bool rewound(cpu68k *c, uint16_t op, const entry_regs *r, gaddr sp0, cons
     c->pc = r->pc;
     c->icount--;
     return true;
+}
+
+void trap_native(cpu68k *c, uint16_t index)
+{
+    if (index >= native_count) {
+        cpu_halt(c, "NATIVE %u: no such native", index);
+        return;
+    }
+    native_entry *n = &natives[index];
+    /* Reached through a stub: an OS routine finds its trap word in D1. */
+    uint16_t tw = n->trapword;
+    if (tw && !(tw & 0x0800))
+        tw = (uint16_t)c->d[1];
+    uint16_t saved = last_trapword;
+    last_trapword = tw;
+    /* A 68k program's own call that is not a trap (Open Transport's,
+     * through its glue) may be abandoned for a drain as a trap is
+     * (trap_aline): its registers and arguments are noted, and put back
+     * with the program counter on the NATIVE word, so the call is made
+     * again. */
+    bool level = trap_call_depth() == 0 && !g_ppc_mode;
+    entry_regs er;
+    gaddr sp0 = c->a[7];
+    uint8_t args[ARGS_KEPT];
+    if (level) {
+        note_entry(c, &er);
+        gget(args, sp0, sizeof args);
+    }
+    n->fn(c, tw);
+    last_trapword = saved;
+    if (level && !c->halted && drain_take_rewind_named(c, n->name)) {
+        gput(sp0, args, sizeof args);
+        memcpy(c->d, er.d, sizeof er.d);
+        memcpy(c->a, er.a, sizeof er.a);
+        c->sr = er.sr;
+        c->pc = er.pc;
+        c->icount--;
+    }
 }
 
 /* The ThreadDispatch call under way at each nesting of the running

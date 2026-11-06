@@ -124,12 +124,7 @@ const unsigned ctb_export_count = sizeof ctb_exports / sizeof ctb_exports[0];
 /* ---------------------------------------------------------------------- */
 /* Helpers */
 
-uint64_t ctb_now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+uint64_t ctb_now_ms(void) { return host_clock_ms(); }
 
 uint64_t ctb_deadline(int32_t ticks)
 {

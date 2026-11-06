@@ -35,6 +35,10 @@ int asp_write(asp_session *s, const uint8_t *cmd, int len, const uint8_t *data, 
 /* A tickle for the server, which closes a session it has not heard from. */
 void asp_tickle(asp_session *s);
 bool asp_alive(asp_session *s);
+/* After resuming: the session is over (the server has long since timed
+ * it out); the server is told, in case, and the session's calls find it
+ * closed. */
+void asp_lost(asp_session *s);
 void asp_close(asp_session *s);
 
 #endif

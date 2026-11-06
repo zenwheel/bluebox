@@ -83,7 +83,16 @@ typedef struct {
     int32_t cancel_err;  /* OTCancelSynchronousCalls: blocked calls return this */
     int32_t last_err;    /* XTI's t_errno for this endpoint's last call */
     bool owned_by_xti;   /* opened by t_open */
+    struct sockaddr_in local; /* its socket's own address when the process hibernated */
+    /* A blocking call that gave up waiting for a drain (wait_fd): made
+     * again, it goes on from where it was (OTConnect's wait, the bytes
+     * OTSnd had sent of buf). */
+    bool gave_up;        /* the last wait gave up */
+    uint8_t gave_call;   /* GAVE_* */
+    gaddr gave_buf;
+    uint32_t gave_n, gave_done;
 } provider;
+enum { GAVE_CONNECT = 1, GAVE_SND };
 
 extern provider ot_providers[MAX_PROVIDERS];
 
@@ -219,6 +228,10 @@ uint32_t ot_option_bytes(provider *p, uint32_t level, uint32_t name, uint8_t *ou
 
 /* ot_inet.c */
 void ot_inet_reset(void);
+
+/* Resuming (reattach.c): AppleTalk's endpoints after the stack is back. */
+void ota_after_resume(provider *p);
+void ots_after_resume(provider *p);
 
 /* Bring one provider's state up to date with its socket. */
 void ot_poll_provider(provider *p);

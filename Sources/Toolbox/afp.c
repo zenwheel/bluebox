@@ -510,6 +510,18 @@ void afp_idle(afp_session *s)
     }
 }
 
+void afp_after_resume(afp_session *s)
+{
+    if (!s)
+        return;
+    if (s->tcp) {
+        s->fd = -1; /* the old process's: forgotten, never closed */
+    } else {
+        asp_lost(s->asp);
+    }
+    s->alive = false;
+}
+
 /* After a dropped session: open it again, and the volumes. */
 static bool reconnect(afp_session *s)
 {

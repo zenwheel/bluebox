@@ -91,12 +91,7 @@ enum { OP_GROUP_NEW = 1, OP_GROUP_DISPOSE, OP_GROUP_ADD, OP_GROUP_REMOVE, OP_CHA
 
 /* ---- Host time ---- */
 
-static uint64_t mono_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t mono_ms(void) { return host_clock_ms(); }
 
 /* The guest's clock, for time stamps (a headless run's follows the
  * instructions run). */

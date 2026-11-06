@@ -105,12 +105,7 @@ static int nself;
 static const uint8_t *cur;
 static int cur_left;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 /* ---------------------------------------------------------------------- */
 /* The link */
@@ -221,15 +216,15 @@ static int receive(uint8_t *frame, int cap)
 }
 
 /* LLAP node address acquisition: claim a node unless someone answers an
- * enquiry for it. */
-static void acquire_node(void)
+ * enquiry for it, trying `first` first (0: one the sender ID picks). */
+static void acquire_node_from(uint8_t first)
 {
     if (mode == 3) {
         et_acquire(sender, &net, &node);
         return;
     }
     net = 0;
-    uint8_t want = (uint8_t)(1 + (sender % 253));
+    uint8_t want = first >= 1 && first <= 254 ? first : (uint8_t)(1 + (sender % 253));
     for (int attempt = 0; attempt < 20; attempt++, want = (uint8_t)(1 + (want % 253))) {
         bool taken = false;
         for (int i = 0; i < 3 && !taken; i++) {
@@ -254,6 +249,8 @@ static void acquire_node(void)
     }
     node = want;
 }
+
+static void acquire_node(void) { acquire_node_from(0); }
 
 /* ---------------------------------------------------------------------- */
 /* Names */
@@ -413,8 +410,21 @@ typedef struct {
 } host_op;
 static host_op hops[8];
 
+/* A synchronous call that gave up waiting for a drain (at_sync_wait):
+ * the call made again, with the same parameter block, only waits for the
+ * one under way (the poll finishes it meanwhile: its result is kept). */
+static struct {
+    gaddr pb;
+    bool done;
+    int16_t result;
+} gave;
+
 static void complete(gaddr pb, int16_t r)
 {
+    if (pb && pb == gave.pb) {
+        gave.done = true;
+        gave.result = r;
+    }
     wr16(pb + IOParam_ioResult_off, (uint16_t)r);
     gaddr fn = rd32(pb + IOParam_ioCompletion_off);
     if (!fn)
@@ -722,6 +732,36 @@ uint8_t at_node(void) { return node; }
 bool at_opened(void) { return opened; }
 void at_complete(gaddr pb, int16_t r) { complete(pb, r); }
 
+bool at_sync_again(gaddr pb) { return pb && pb == gave.pb; }
+
+int16_t at_sync_wait(gaddr pb)
+{
+    for (;;) {
+        if (gave.pb == pb) {
+            if (gave.done) {
+                gave.pb = 0;
+                return gave.result;
+            }
+        } else if ((int16_t)rd16(pb + IOParam_ioResult_off) != ioInProgress) {
+            return (int16_t)rd16(pb + IOParam_ioResult_off);
+        }
+        if (g_cpu->halted)
+            return (int16_t)rd16(pb + IOParam_ioResult_off);
+        /* At the program's own level the wait gives up for a drain, as
+         * Delay does: the call made again only waits for this one. */
+        if (drain_give_up()) {
+            if (gave.pb != pb) {
+                gave.pb = pb;
+                gave.done = false;
+            }
+            return ioInProgress;
+        }
+        struct timespec ts = { 0, 2000000 };
+        nanosleep(&ts, NULL);
+        appletalk_poll();
+    }
+}
+
 static void send_ddp(uint16_t net, uint8_t dnode, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n)
 {
     uint8_t f[3 + 13 + MAX_DATA];
@@ -897,6 +937,14 @@ static int16_t nbp_call(gaddr pb, int kind, bool async)
     if (async)
         return ioInProgress;
     while ((r = op_done(o)) == ioInProgress) {
+        /* At the program's level the wait gives up for a drain: the poll
+         * finishes the call (o stays), and the call made again waits. */
+        if (drain_give_up()) {
+            gave.pb = pb;
+            gave.done = false;
+            wr16(pb + IOParam_ioResult_off, ioInProgress);
+            return ioInProgress;
+        }
         struct pollfd pf = { fd, POLLIN, 0 };
         poll(&pf, fd >= 0 ? 1 : 0, 10);
         polling = true;
@@ -1092,6 +1140,9 @@ static int16_t write_lap(gaddr pb)
 
 static int16_t mpp_control(gaddr pb, bool async)
 {
+    if (!async && at_sync_again(pb)) /* made again after giving up for a drain */
+        return at_sync_wait(pb);
+    at_use();
     switch ((int16_t)rd16(pb + CntrlParam_csCode_off)) {
     case attachPH: { /* a handler for an LLAP type other than DDP's */
         uint8_t t = rd8(pb + PB_SOCKET);
@@ -1191,6 +1242,18 @@ static int16_t mpp_control(gaddr pb, bool async)
 
 static int16_t mpp_open(gaddr pb);
 int16_t at_open(void) { return mpp_open(0); }
+
+/* The system opened .MPP at startup when AppleTalk was active, and
+ * programs of the time (Chatter) call the drivers without opening them:
+ * the first call opens it, as the driver it reached was already (once:
+ * a link that cannot be opened is not tried at every call). */
+static bool use_failed;
+
+void at_use(void)
+{
+    if (!opened && mode && !use_failed && at_open() != noErr)
+        use_failed = true;
+}
 
 static int16_t mpp_open(gaddr pb)
 {
@@ -1326,6 +1389,51 @@ bool at_router(uint16_t *rnet, uint8_t *rnode)
     return true;
 }
 
+/* ---------------------------------------------------------------------- */
+/* Resuming (reattach.c) */
+
+/* What of AppleTalk a snapshot cannot carry: EtherTalk bridged onto an
+ * interface needs the administrator's password to open its device again. */
+const char *appletalk_unresumable(void)
+{
+    return opened && mode == 3 && appletalk_in_use() ? "has AppleTalk open on EtherTalk (bridged to an interface)"
+                                                     : NULL;
+}
+
+/* The link is the old process's: opened again on this host, with a sender
+ * ID of its own (the old process may still be on the network), and this
+ * node claimed again, the old address if no one answers for it (another
+ * node took it meanwhile: a new one, and the names table, the driver's
+ * variables and the sockets' users see the new one).  DDP sockets, names,
+ * NBP's calls and ATP's transactions are the machine's: they go on, the
+ * calls by their retries. */
+void appletalk_after_resume(void)
+{
+    if (fd >= 0 && mode != 3) /* (this process's own: a test resumed in the process that saved) */
+        close(fd);
+    fd = -1;
+    if (!opened || !mode || mode == 3)
+        return;
+    if (!open_link()) {
+        LOGF(LOG_IDLE, "resume: AppleTalk: the link could not be opened again\n");
+        return;
+    }
+    sender = (uint32_t)getpid() ^ (uint32_t)now_ms() << 16;
+    uint8_t old = node;
+    acquire_node_from(old);
+    if (node != old) {
+        for (int i = 0; i < nnames; i++)
+            wr8(names[i] + 6, node);
+        LOGF(LOG_IDLE, "resume: AppleTalk: node %u was taken: this node is %u now\n", old, node);
+    }
+    if (vars) {
+        wr8(vars + SYS_LAP_ADDR, node);
+        wr16(vars + SYS_NET_NUM, net);
+    }
+    LOGF(LOG_IDLE, "resume: AppleTalk: node %u again, %d name%s registered\n", node, nnames, nnames == 1 ? "" : "s");
+    adsp_after_resume();
+}
+
 bool appletalk_in_use(void)
 {
     if (!opened)
@@ -1363,7 +1471,7 @@ const char *appletalk_set_active(bool on)
         if (mode == 3)
             et_close();
         fd = -1;
-        opened = selfsend = false;
+        opened = selfsend = use_failed = false;
         node = 0;
         nnames = 0;
         memset(sockets, 0, sizeof sockets);
@@ -1393,7 +1501,7 @@ void appletalk_reset(void)
         et_close();
     booted = true;
     fd = -1;
-    opened = selfsend = false;
+    opened = selfsend = use_failed = false;
     node = 0;
     nnames = nself = 0;
     memset(sockets, 0, sizeof sockets);

@@ -81,17 +81,13 @@ typedef struct {
     uint64_t rexmit;
     gaddr reads[MAX_WAIT];
     int nreads;
+    bool lost;         /* open when its process hibernated: torn down at the next poll */
 } dsp_end;
 
 static dsp_end ends[MAX_ENDS];
 static uint16_t next_cid = 0x1000;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]; }
 static void put32(uint8_t *p, uint32_t v)
@@ -400,6 +396,14 @@ void adsp_poll(void)
         dsp_end *e = &ends[i];
         if (!e->used)
             continue;
+        if (e->lost) { /* as when the other end stops answering: torn down */
+            e->lost = false;
+            LOGF(LOG_TRAPS, "  ADSP connection end %d: its connection ended with the hibernated process\n",
+                 refnum_of(e));
+            e->sendlen = e->sent = 0;
+            closed(e, eTearDown);
+            continue;
+        }
         if (e->state == sOpening && e->open_pb && t >= e->oc_next) {
             if (e->oc_tries-- <= 0) {
                 set_state(e, sClosed);
@@ -420,6 +424,22 @@ void adsp_poll(void)
 
 void adsp_reset(void) { memset(ends, 0, sizeof ends); }
 
+/* Resumed (appletalk_after_resume): an open connection is over, its other
+ * end long since gone or gone on without it.  It is told so (close advice,
+ * in case the other end is still there) and torn down at the next poll,
+ * its reads finishing as for a close.  An open being made goes on asking,
+ * a passive one and a listener go on waiting. */
+void adsp_after_resume(void)
+{
+    for (int i = 0; i < MAX_ENDS; i++) {
+        dsp_end *e = &ends[i];
+        if (!e->used || e->listener || (e->state != sOpen && e->state != sClosing))
+            continue;
+        send_control(e, C_CLOSE, false);
+        e->lost = true;
+    }
+}
+
 /* ---------------------------------------------------------------------- */
 /* The driver */
 
@@ -428,12 +448,7 @@ static int16_t wait_for(gaddr pb, bool async)
     wr16(pb + IOParam_ioResult_off, ioInProgress);
     if (async)
         return ioInProgress;
-    while ((int16_t)rd16(pb + IOParam_ioResult_off) == ioInProgress && !g_cpu->halted) {
-        struct timespec ts = { 0, 2000000 };
-        nanosleep(&ts, NULL);
-        appletalk_poll();
-    }
-    return (int16_t)rd16(pb + IOParam_ioResult_off);
+    return at_sync_wait(pb);
 }
 
 static void free_end(dsp_end *e)
@@ -533,6 +548,9 @@ static int16_t dsp_open(dsp_end *e, gaddr pb, bool async)
 
 static int16_t dsp_control(gaddr pb, bool async)
 {
+    if (!async && at_sync_again(pb)) /* made again after giving up for a drain: the call goes on */
+        return at_sync_wait(pb);
+    at_use(); /* .MPP open under it, as the system had it */
     int code = (int16_t)rd16(pb + CntrlParam_csCode_off);
     if (code == dspInit || code == dspCLInit)
         return new_end(pb, code == dspCLInit);

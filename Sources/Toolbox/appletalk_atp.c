@@ -95,12 +95,7 @@ static atp_request_fn host_fns[256]; /* host code's sockets: requests to a funct
 static void *host_ctx[256];
 static uint16_t next_tid;
 
-static uint64_t now_ms(void)
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
-}
+static uint64_t now_ms(void) { return host_clock_ms(); }
 
 static void put_header(uint8_t *p, uint8_t control, uint8_t bitmap, uint16_t tid, uint32_t user)
 {
@@ -326,12 +321,7 @@ static int16_t wait_for(gaddr pb, bool async)
     if (async)
         return ioInProgress;
     /* Synchronous: the poll answers it (it writes ioResult). */
-    while ((int16_t)rd16(pb + IOParam_ioResult_off) == ioInProgress && !g_cpu->halted) {
-        struct timespec ts = { 0, 2000000 };
-        nanosleep(&ts, NULL);
-        appletalk_poll();
-    }
-    return (int16_t)rd16(pb + IOParam_ioResult_off);
+    return at_sync_wait(pb);
 }
 
 static int16_t start_request(gaddr pb, bool async, bool own)
@@ -464,6 +454,9 @@ static int16_t kill_get(gaddr q, int skt)
 
 static int16_t atp_control(gaddr pb, bool async)
 {
+    if (!async && at_sync_again(pb)) /* made again after giving up for a drain: the request goes on */
+        return at_sync_wait(pb);
+    at_use(); /* .MPP open under it, as the system had it */
     int code = (int16_t)rd16(pb + CntrlParam_csCode_off);
     switch (code) {
     case openATPSkt: {
