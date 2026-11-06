@@ -120,6 +120,7 @@ void walker_note_call(uint32_t pc, uint32_t what);
  * emulation slice, and interrupt-time work around guest code. */
 void idle_trap(uint16_t op);
 void idle_native(uint32_t index, const char *name);
+void idle_selector(const char *name); /* a dispatcher's routine */
 bool idle_poll(void);
 void idle_work(void);
 void idle_slice(void);

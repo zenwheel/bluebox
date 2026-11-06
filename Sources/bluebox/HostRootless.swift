@@ -115,7 +115,8 @@ final class MacWindowView: NSView, MacScreenView {
     /// The whole screen of a program in the background: its desktop left
     /// out, so only its windows and its own drawing show over the host's.
     var clearDesktop = false
-    var lastHash = 0
+    private var shownCopy = [UInt8]() // the screen as last shown
+    private var lastClear = false
     private var rgba = [UInt32]()
     private var deskMask = [UInt8]()
 
@@ -160,16 +161,19 @@ final class MacWindowView: NSView, MacScreenView {
         let left = Int(macBounds.left), top = Int(macBounds.top)
         let w = Int(macBounds.right) - left, h = Int(macBounds.bottom) - top
         guard w > 0, h > 0, mask.count == w * h else { return }
+        // Converted only when it changed: every frame, a screen the size of
+        // the host's display cost the main thread most of a core.
+        let size = machine_screen_shadow_size(Int32(left), Int32(top), Int32(w), Int32(h))
+        if shownCopy.count != size { shownCopy = [UInt8](repeating: 0, count: size) }
+        let changed = shownCopy.withUnsafeMutableBufferPointer {
+            machine_screen_changed(Int32(left), Int32(top), Int32(w), Int32(h), $0.baseAddress!, size)
+        }
+        if !force && !changed && clearDesktop == lastClear { return }
+        lastClear = clearDesktop
         if rgba.count != w * h { rgba = [UInt32](repeating: 0, count: w * h) }
         rgba.withUnsafeMutableBytes { raw in
             machine_screen_rgba(Int32(left), Int32(top), Int32(w), Int32(h), raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
         }
-        var hasher = Hasher()
-        rgba.withUnsafeBytes { hasher.combine(bytes: $0) }
-        hasher.combine(clearDesktop)
-        let hash = hasher.finalize()
-        if !force && hash == lastHash { return }
-        lastHash = hash
         // Transparent outside the window's shape.
         for k in 0..<(w * h) where mask[k] == 0 { rgba[k] = 0 }
         if clearDesktop {

@@ -136,8 +136,22 @@ static inline uint32_t get_px(const pixdst *d, int col, int row)
     }
 }
 
+/* While a program that seems to be waiting is watched (idle.c), what
+ * QuickDraw draws: the pixels [c0, c1) x [r0, r1) of a destination, which
+ * the processors' store watch doesn't see.  put_px says so for each pixel;
+ * a blitter that writes rows its own way says so for its whole area, and
+ * may turn the per-pixel calls off meanwhile (qd_drawn_area). */
+extern bool g_qd_drawn_watch;
+void qd_drawn(const pixdst *d, int c0, int r0, int c1, int r1);
+/* An area in the destination's local coordinates; returns whether the
+ * watch was on, and turns put_px's off until qd_drawn_resume. */
+bool qd_drawn_area(const pixdst *d, qrect local);
+static inline void qd_drawn_resume(bool was) { g_qd_drawn_watch = was; }
+
 static inline void put_px(const pixdst *d, int col, int row, uint32_t v)
 {
+    if (__builtin_expect(g_qd_drawn_watch, 0))
+        qd_drawn(d, col, row, col + 1, row + 1);
     gaddr rowp = d->base + (uint32_t)row * d->row_bytes;
     switch (d->depth) {
     case 1: {
@@ -247,6 +261,8 @@ void qd_screen_init(int width, int height);
 void qd_gworlds_reset(void);
 void qd_port_pats_reset(void);
 void qd_port_pixpat_disposed(gaddr pp);
+/* The palettes in use (windows' and the system's), at most max. */
+int qd_palettes_in_use(gaddr *out, int max);
 void qd_palettes_reset(void); /* windows' palettes and the default one, for a new launch */
 void qd_device_itable(gaddr gdh); /* a device's inverse table handle; an indexed one's table, made again */
 /* The pixel value the current device's search procedures give a colour

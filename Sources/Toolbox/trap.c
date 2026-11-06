@@ -250,6 +250,7 @@ static void dispatch_native(cpu68k *c, uint16_t tw)
         c->a[7] += strcmp(loc, "StackL") ? 2 : 4;
         cpu_push32(c, ret);
     }
+    idle_selector(s ? s->name : NULL);
     if (s && s->glue) {
         s->glue(c, tw);
         return;

@@ -144,6 +144,12 @@ void machine_set_input_timing(int double_time, int caret_time, int key_thresh, i
  * NULL forgets them all. */
 bool machine_set_lowmem(const char *name, uint32_t value);
 void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out);
+/* Whether that part of the screen shows something else since the copy in
+ * shadow (machine_screen_shadow_size bytes; any other size counts as
+ * changed) was taken, the copy brought up to date: a host refreshing its
+ * windows every frame converts the pixels only when they changed. */
+size_t machine_screen_shadow_size(int x, int y, int w, int h);
+bool machine_screen_changed(int x, int y, int w, int h, uint8_t *shadow, size_t len);
 /* Window, control and menu appearance; the colour ones use an 8-bit screen.
  * Call before boot. */
 enum { MACHINE_APPEARANCE_BW, MACHINE_APPEARANCE_THEME, MACHINE_APPEARANCE_NATIVE };
