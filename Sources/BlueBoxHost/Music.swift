@@ -27,7 +27,18 @@ public final class ClassicMusic: @unchecked Sendable {
         }
     }
 
-    public func install() {
+    /// Offline (--sound offline): the synthesizers render to nowhere.
+    private var renderer: OfflineRenderer?
+
+    public func install(offline: Bool = false) {
+        if offline {
+            queue.async {
+                self.renderer = OfflineRenderer(engine: self.engine, queue: self.queue, name: "music")
+                _ = self.engine.mainMixerNode
+                try? self.engine.start()
+                self.renderer?.begin()
+            }
+        }
         machine_set_midi_handler({ id, events, n, _ in
             let list = (0..<Int(n)).compactMap { events?[$0] }
             ClassicMusic.shared.queue.async { ClassicMusic.shared.handle(id: id, events: list) }
@@ -59,6 +70,9 @@ public final class ClassicMusic: @unchecked Sendable {
             }
         }
     }
+
+    /// What the offline engine rendered.
+    public func offlineReport() -> String? { queue.sync { renderer?.report() } }
 
     /// On `queue`: the movie's synthesizer, attached and the engine running.
     private func synth(for id: Int32) -> AVAudioUnitMIDIInstrument? {

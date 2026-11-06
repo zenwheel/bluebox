@@ -39,6 +39,11 @@ nonisolated(unsafe) var headlessFileAnswers: [String] = []
 /// --speech: system (NSSpeechSynthesizer), avspeech (AVSpeechSynthesizer) or record:FILE.
 nonisolated(unsafe) var speechBackend = "system"
 nonisolated(unsafe) var speechGiven = false
+/// --sound record:FILE: the host's sound and MIDI logged, played nowhere.
+nonisolated(unsafe) var soundRecord: String?
+/// --sound offline: a headless run's sound and music through the host's
+/// engines, rendered to nowhere (no output device).
+nonisolated(unsafe) var soundOffline = false
 
 /// Where --jit keeps translations: the user's caches folder.
 func defaultJITCache() -> String {
@@ -168,6 +173,10 @@ func usage() -> Never {
                      (AVSpeechSynthesizer, also used when the system one is missing)
                      or record:FILE (requests logged, callbacks at once, no sound); given
                      to a headless run, system and avspeech speak there too
+          --sound record:FILE  the sound and music the host would play written to FILE
+                     a line each (machine time, channel, samples' hash), played nowhere;
+                     --sound offline: a headless run's through the host's engines, rendered
+                     to nowhere without an output device, the seconds rendered said at the end
           --appleshare S  mount an AppleShare volume (repeatable): tcp:[user[:pass]@]host/Volume
                      (AFP over TCP) or atalk:[user[:pass]@]Server:AFPServer[@zone]/Volume
                      (over AppleTalk, which --appletalk must turn on)
@@ -594,6 +603,16 @@ func runCommand(_ args: [String], resume: String? = nil) {
                 }
             } else if !["system", "avspeech"].contains(speechBackend) {
                 fail("--speech expects system, avspeech or record:FILE")
+            }
+        case "--sound":
+            i += 1
+            guard i < args.count else { usage() }
+            if args[i] == "offline" {
+                soundOffline = true
+            } else {
+                guard args[i].hasPrefix("record:") else { fail("--sound expects record:FILE or offline") }
+                soundRecord = String(args[i].dropFirst(7))
+                guard machine_set_sound_record(soundRecord!) else { fail("--sound: can't write \(soundRecord!)") }
             }
         case "--appleshare":
             i += 1
@@ -1083,6 +1102,14 @@ func runCommand(_ args: [String], resume: String? = nil) {
         return true
     }, nil)
 
+    // Headless, the host plays sound only when asked to, rendered to nowhere.
+    #if canImport(AVFoundation)
+    if soundOffline {
+        ClassicAudio.shared.install(offline: true)
+        ClassicMusic.shared.install(offline: true)
+    }
+    #endif
+
     // Headless, the host speaks only when asked to (--speech system or
     // avspeech); the Speech Manager pumps the main thread for it.
     #if canImport(AppKit)
@@ -1190,6 +1217,13 @@ func runCommand(_ args: [String], resume: String? = nil) {
     if missingImports > 0, let missingNames {
         print("\nPowerPC imports missing: \(missingImports): \(String(cString: missingNames))")
     }
+    #if canImport(AVFoundation)
+    if soundOffline {
+        for line in [ClassicAudio.shared.offlineReport(), ClassicMusic.shared.offlineReport()].compactMap({ $0 }) {
+            print(line)
+        }
+    }
+    #endif
     exit(status == RUN_HALTED && String(cString: machine_halt_reason()).hasPrefix("ExitToShell") ? 0 : 1)
 }
 

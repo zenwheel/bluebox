@@ -53,12 +53,26 @@ enum {
 
 #define MAX_CHANNELS 32
 #define QUEUE_LEN 128
+#define HEARD_MAX 6                  /* sounds a channel has given the host and it may not have played yet */
+#define HEARD_MAX_SAMPLES (8u << 20) /* a longer one is not kept (a gap after resuming instead) */
 
 typedef struct {
     uint16_t cmd;
     int16_t p1;
     int32_t p2;
 } sndcmd;
+
+/* A sound given to the host, kept until the machine's clock says it has
+ * played: a resumed process gives the host the rest of it again (its
+ * host, in the process that hibernated, had it queued). */
+typedef struct {
+    int16_t *pcm;        /* interleaved */
+    uint32_t frames;
+    int nch;
+    double rate;         /* as played, the rate multiplier applied */
+    float volume;
+    uint64_t start_ns, end_ns;
+} heard_sound;
 
 typedef struct {
     gaddr chan;          /* guest SndChannel */
@@ -82,6 +96,8 @@ typedef struct {
     int32_t init;        /* SndNewChannel's initialization options (scChannelAttributes) */
     uint32_t rate_mult;  /* rateMultiplierCmd's UnsignedFixed, 0x00010000 = as recorded */
     bool sustained;      /* freqCmd's tone is sounding: it gives way to the next sound */
+    heard_sound heard[HEARD_MAX]; /* oldest first */
+    int nheard;
 } channel;
 
 static channel chans[MAX_CHANNELS];
@@ -141,10 +157,53 @@ static channel *find(gaddr chan)
     return NULL;
 }
 
+/* ---------------------------------------------------------------------- */
+/* What the host has not played yet, for a resumed process */
+
+static void heard_clear(channel *c)
+{
+    for (int i = 0; i < c->nheard; i++)
+        bb_free(c->heard[i].pcm);
+    c->nheard = 0;
+}
+
+/* Forget what has played by `now`. */
+static void heard_trim(channel *c, uint64_t now)
+{
+    int k = 0;
+    while (k < c->nheard && c->heard[k].end_ns <= now)
+        bb_free(c->heard[k++].pcm);
+    if (k) {
+        memmove(&c->heard[0], &c->heard[k], sizeof c->heard[0] * (size_t)(c->nheard - k));
+        c->nheard -= k;
+    }
+}
+
+/* Kept only while a host hears it: headless, nothing is queued anywhere. */
+static void heard_keep(channel *c, const int16_t *pcm, int frames, int nch, double rate, float volume, uint64_t start,
+                       uint64_t end)
+{
+    heard_trim(c, now_ns());
+    size_t n = (size_t)frames * (size_t)nch;
+    if (n > HEARD_MAX_SAMPLES)
+        return;
+    if (c->nheard == HEARD_MAX) { /* the oldest goes: a gap, if it had not played */
+        bb_free(c->heard[0].pcm);
+        memmove(&c->heard[0], &c->heard[1], sizeof c->heard[0] * (HEARD_MAX - 1));
+        c->nheard--;
+    }
+    int16_t *copy = bb_malloc(sizeof *copy * n, BB_BYTES);
+    if (!copy)
+        return;
+    memcpy(copy, pcm, sizeof *copy * n);
+    c->heard[c->nheard++] = (heard_sound){ copy, (uint32_t)frames, nch, rate, volume, start, end };
+}
+
 static channel *add(gaddr chan, bool owned)
 {
     for (int i = 0; i < MAX_CHANNELS; i++)
         if (!chans[i].chan) {
+            heard_clear(&chans[i]);
             memset(&chans[i], 0, sizeof chans[i]);
             chans[i].chan = chan;
             chans[i].owned = owned;
@@ -161,6 +220,7 @@ static channel *add(gaddr chan, bool owned)
 /* Output */
 
 static void stop_host(channel *c);
+static void sound_replay_due(void);
 
 static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rate)
 {
@@ -173,11 +233,13 @@ static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rat
         c->sustained = false;
         stop_host(c);
     }
+    sound_replay_due();
     uint64_t start = c->busy_until > now_ns() ? c->busy_until : now_ns();
     c->busy_until = start + (uint64_t)((double)frames / rate * 1e9);
     if (sound_fn) {
         float vol = (float)((c->volume & 0xFFFF) + (c->volume >> 16)) / 2.0f / 256.0f * (float)c->amp / 255.0f *
                     output_gain();
+        heard_keep(c, pcm, frames, nch, rate, vol, start, c->busy_until);
         sound_fn(c->id, pcm, frames, nch, rate, vol, sound_ctx);
     }
 }
@@ -191,15 +253,129 @@ void machine_set_midi_handler(machine_midi_fn fn, void *ctx)
     midi_ctx = ctx;
 }
 
+/* What each of the host's synthesizers has been told that lasts: its
+ * channels' programs, controllers and pitch bends, and the notes sounding.
+ * A resumed process's synthesizers are new (the old ones were in the
+ * process that hibernated), and are told it all again before anything
+ * else, so a tune goes on with its instruments and its held notes.  Kept
+ * headless too (it is small, and a snapshot taken headless may be resumed
+ * with a host).  A message sent ahead with a delay counts from when it is
+ * sent. */
+#define MAX_SYNTHS 32
+#define FIRST_MODE_CONTROLLER 120 /* 120 to 127 are actions, not settings */
+typedef struct {
+    int32_t id;
+    uint32_t used;                /* when last sent to, for the table's oldest */
+    uint16_t programs, bends;     /* a bit a channel: set */
+    uint8_t program[16];
+    uint16_t bend[16];
+    uint8_t ctl[16][FIRST_MODE_CONTROLLER];
+    uint8_t ctl_set[16][FIRST_MODE_CONTROLLER / 8];
+    uint8_t held[16][128];        /* a sounding note's velocity, 0 for none */
+} synth_state;
+static synth_state *synths[MAX_SYNTHS];
+static uint32_t synth_clock;
+
+static synth_state *synth_of(int id)
+{
+    int free_at = -1, oldest = 0;
+    for (int i = 0; i < MAX_SYNTHS; i++) {
+        if (synths[i] && synths[i]->id == id) {
+            synths[i]->used = ++synth_clock;
+            return synths[i];
+        }
+        if (!synths[i] && free_at < 0)
+            free_at = i;
+        if (synths[i] && synths[oldest] && synths[i]->used < synths[oldest]->used)
+            oldest = i;
+    }
+    int i = free_at >= 0 ? free_at : oldest;
+    if (!synths[i])
+        synths[i] = bb_malloc(sizeof *synths[i], BB_BYTES);
+    if (!synths[i])
+        return NULL;
+    memset(synths[i], 0, sizeof *synths[i]);
+    synths[i]->id = id;
+    synths[i]->used = ++synth_clock;
+    return synths[i];
+}
+
+static void synth_note(synth_state *s, const machine_midi_event *e)
+{
+    int ch = e->status & 15, kind = e->status & 0xF0;
+    uint8_t d1 = e->data1 & 127, d2 = e->data2 & 127;
+    switch (kind) {
+    case 0x80: s->held[ch][d1] = 0; break;
+    case 0x90: s->held[ch][d1] = d2; break; /* velocity 0 is a note off */
+    case 0xB0:
+        if (d1 < FIRST_MODE_CONTROLLER) {
+            s->ctl[ch][d1] = d2;
+            s->ctl_set[ch][d1 / 8] |= (uint8_t)(1u << (d1 % 8));
+        } else if (d1 == 120 || d1 >= 123) { /* all sound off, all notes off, the modes (which end notes) */
+            memset(s->held[ch], 0, sizeof s->held[ch]);
+        } else if (d1 == 121) { /* reset all controllers */
+            memset(s->ctl_set[ch], 0, sizeof s->ctl_set[ch]);
+            s->bends &= (uint16_t)~(1u << ch);
+        }
+        break;
+    case 0xC0:
+        s->program[ch] = d1;
+        s->programs |= (uint16_t)(1u << ch);
+        break;
+    case 0xE0:
+        s->bend[ch] = (uint16_t)(d1 | d2 << 7);
+        s->bends |= (uint16_t)(1u << ch);
+        break;
+    default: break; /* aftertouch passes */
+    }
+}
+
 void sound_host_midi(int id, const machine_midi_event *events, int n)
 {
+    sound_replay_due();
+    synth_state *s = synth_of(id);
+    if (s && !n) /* silenced: all notes off */
+        memset(s->held, 0, sizeof s->held);
+    for (int i = 0; s && i < n; i++)
+        synth_note(s, &events[i]);
     if (midi_fn)
         midi_fn(id, events, n, midi_ctx);
+}
+
+/* A new synthesizer told what the old one had been, a channel at a time:
+ * the bank, the program, the other controllers, the bend, the notes. */
+static void synth_replay(const synth_state *s)
+{
+    machine_midi_event ev[FIRST_MODE_CONTROLLER + 2 + 128];
+    for (int ch = 0; ch < 16; ch++) {
+        int k = 0;
+        uint8_t st = (uint8_t)(0xB0 | ch);
+#define CTL_SET(c) (s->ctl_set[ch][(c) / 8] & (1u << ((c) % 8)))
+        if (CTL_SET(0))
+            ev[k++] = (machine_midi_event){ 0, st, 0, s->ctl[ch][0] };
+        if (CTL_SET(32))
+            ev[k++] = (machine_midi_event){ 0, st, 32, s->ctl[ch][32] };
+        if (s->programs & (1u << ch))
+            ev[k++] = (machine_midi_event){ 0, (uint8_t)(0xC0 | ch), s->program[ch], 0 };
+        for (int c = 1; c < FIRST_MODE_CONTROLLER; c++)
+            if (c != 32 && CTL_SET(c))
+                ev[k++] = (machine_midi_event){ 0, st, (uint8_t)c, s->ctl[ch][c] };
+#undef CTL_SET
+        if (s->bends & (1u << ch))
+            ev[k++] = (machine_midi_event){ 0, (uint8_t)(0xE0 | ch), (uint8_t)(s->bend[ch] & 127),
+                                            (uint8_t)(s->bend[ch] >> 7) };
+        for (int note = 0; note < 128; note++)
+            if (s->held[ch][note])
+                ev[k++] = (machine_midi_event){ 0, (uint8_t)(0x90 | ch), (uint8_t)note, s->held[ch][note] };
+        if (k && midi_fn)
+            midi_fn(s->id, ev, k, midi_ctx);
+    }
 }
 
 /* Sound for the host from elsewhere (movies), on channels of their own. */
 void sound_host_pcm(int id, const int16_t *pcm, int frames, int nch, double rate, float volume)
 {
+    sound_replay_due();
     if (sound_fn && frames > 0)
         sound_fn(id, pcm, frames, nch, rate, volume * output_gain(), sound_ctx);
 }
@@ -214,6 +390,7 @@ static void stop_host(channel *c)
 {
     c->busy_until = 0;
     c->sustained = false;
+    heard_clear(c);
     if (sound_fn)
         sound_fn(c->id, NULL, 0, 0, 0, 0, sound_ctx); /* NULL: stop */
 }
@@ -654,6 +831,7 @@ static void pump(channel *c)
 
 static bool in_pump;
 static void sd_pump(void);
+static void heard_trim_all(void);
 
 /* Called at safe points (Event Manager, TickCount, SystemTask). */
 /* Whether a channel is open: its completions and double-buffer refills
@@ -671,6 +849,8 @@ void sound_pump(void)
     if (in_pump)
         return;
     in_pump = true;
+    sound_replay_due();
+    heard_trim_all();
     for (int i = 0; i < MAX_CHANNELS; i++)
         if (chans[i].chan)
             pump(&chans[i]);
@@ -1567,6 +1747,82 @@ void sound_hw_play(const uint8_t *samples, int n, int volume)
 
 const native_driver sound_driver = { ".Sound", 3, NULL, NULL, sd_control, NULL, NULL, sd_write, sd_kill };
 
+/* ---------------------------------------------------------------------- */
+/* After resuming: the host is new, and has heard none of it */
+
+BB_HOST static bool replay_pcm, replay_midi, replay_noted;
+
+void sound_after_resume(void)
+{
+    replay_pcm = replay_midi = replay_noted = true;
+    sound_record_note("resumed");
+}
+
+#define REPLAY_GAP_MAX_NS 10000000000ull /* silence before a sound the host would have waited for */
+
+/* The rest of what the channel's old host had queued, from the machine's
+ * now (the moment it hibernated), with the silences between. */
+static void heard_replay(channel *c)
+{
+    uint64_t now = now_ns(), at = now;
+    heard_trim(c, now);
+    for (int i = 0; i < c->nheard; i++) {
+        const heard_sound *h = &c->heard[i];
+        if (h->start_ns > at && h->start_ns - at < REPLAY_GAP_MAX_NS) {
+            uint32_t frames = (uint32_t)((double)(h->start_ns - at) / 1e9 * h->rate);
+            int16_t *quiet = frames ? bb_calloc((size_t)frames * (size_t)h->nch, sizeof *quiet, BB_BYTES) : NULL;
+            if (quiet)
+                sound_fn(c->id, quiet, (int)frames, h->nch, h->rate, h->volume, sound_ctx);
+            bb_free(quiet);
+        }
+        uint32_t skip = h->start_ns < now ? (uint32_t)((double)(now - h->start_ns) / 1e9 * h->rate) : 0;
+        if (skip < h->frames)
+            sound_fn(c->id, h->pcm + (size_t)skip * (size_t)h->nch, (int)(h->frames - skip), h->nch, h->rate,
+                     h->volume, sound_ctx);
+        at = h->end_ns;
+    }
+}
+
+/* Before anything new reaches the host after resuming. */
+static void sound_replay_due(void)
+{
+    if (replay_pcm && sound_fn) {
+        replay_pcm = false;
+        sound_record_note("replay");
+        for (int i = 0; i < MAX_CHANNELS; i++)
+            if (chans[i].nheard)
+                heard_replay(&chans[i]);
+        heard_replay(&sd_chan);
+        heard_replay(&hw_chan);
+        qt_movies_replay_sound();
+    }
+    if (replay_midi && midi_fn) {
+        replay_midi = false;
+        sound_record_note("replay midi");
+        for (int i = 0; i < MAX_SYNTHS; i++)
+            if (synths[i])
+                synth_replay(synths[i]);
+    }
+    if (!replay_pcm && !replay_midi && replay_noted) {
+        replay_noted = false;
+        sound_record_note("replay end");
+    }
+}
+
+/* What has played is forgotten (a resumed process without a host keeps
+ * none of it either). */
+static void heard_trim_all(void)
+{
+    uint64_t now = now_ns();
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (chans[i].nheard)
+            heard_trim(&chans[i], now);
+    if (sd_chan.nheard)
+        heard_trim(&sd_chan, now);
+    if (hw_chan.nheard)
+        heard_trim(&hw_chan, now);
+}
+
 /* SndAppDead: the program is gone, and its channels with it. */
 void sound_app_dead(void)
 {
@@ -1578,11 +1834,19 @@ void sound_app_dead(void)
 void sound_reset(void)
 {
     sd_pb = sd_ft = 0;
+    heard_clear(&sd_chan);
     memset(&sd_chan, 0, sizeof sd_chan);
-    for (int i = 0; i < MAX_CHANNELS; i++)
+    heard_clear(&hw_chan);
+    for (int i = 0; i < MAX_CHANNELS; i++) {
         if (chans[i].chan)
             stop_host(&chans[i]);
+        heard_clear(&chans[i]);
+    }
     memset(chans, 0, sizeof chans);
+    for (int i = 0; i < MAX_SYNTHS; i++) {
+        bb_free(synths[i]);
+        synths[i] = NULL;
+    }
     output_reset();
     sound_input_reset();
 }

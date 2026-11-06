@@ -1107,6 +1107,12 @@ void guest_call_resume(uint16_t last_trapword);
 int cfm_level_call(void);
 const char *cfm_native_name(uint32_t index);
 void cfm_after_resume(void);
+void sound_after_resume(void);
+void speech_after_resume(void);
+void sound_input_after_resume(void);
+void sound_record_note(const char *what);
+void qt_movies_replay_sound(void);
+void speech_record_note(const char *what);
 /* Open connections, ports and print jobs a snapshot cannot carry
  * (reattach.c): the reason, or NULL. */
 const char *hibernate_io_blocker(void);
@@ -1146,8 +1152,6 @@ bool hostgl_any_live(void);
 bool rave_any_context(void);
 bool q3_any_view(void);
 bool qt_host_movies_open(void);
-bool speech_any_busy(void);
-bool sound_input_capturing(void);
 bool drivevol_any_mounted(void);
 void trap_ctx_load(const trap_ctx *t);
 

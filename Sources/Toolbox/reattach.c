@@ -12,6 +12,14 @@
  *   the host     what the snapshot held of the host's memory is cleared or
  *                made again (hibernate_reattach_host), the program's
  *                threads' host threads among it (threadmgr.c)
+ *   the sound    the sound channels' queues, callbacks and double buffers
+ *                are the machine's and go on by its clock; the host is
+ *                given again what its old self had queued and not played
+ *                (sound.c), and its synthesizers are told the programs,
+ *                controllers and held notes they had; an utterance being
+ *                spoken is over, its completion callbacks made (speech.c);
+ *                a recording stops, as SPBStopRecording stops one
+ *                (sound_input.c)
  *
  * What a snapshot cannot carry is refused before it is taken
  * (hibernate_io_blocker): connections, serial ports, print jobs.
@@ -90,6 +98,10 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     bool ok = hb_save_file_extra(path, record, record ? strlen(record) : 0, &st, err, errlen);
     if (ok && bytes)
         *bytes = st.file_bytes;
+    if (ok) {
+        sound_record_note("hibernated");
+        speech_record_note("hibernated");
+    }
     if (ok)
         LOGF(LOG_IDLE, "hibernate: %s: %llu bytes (%llu before compressing), %u blocks, %u pointers\n", path,
              (unsigned long long)st.file_bytes, (unsigned long long)st.bytes, st.blocks, st.relocs);
@@ -183,10 +195,6 @@ const char *host_media_open(void)
         return "has a QuickDraw 3D view open";
     if (qt_host_movies_open())
         return "has a QuickTime movie the host plays open";
-    if (speech_any_busy())
-        return "is speaking";
-    if (sound_input_capturing())
-        return "is recording sound";
     if (drivevol_any_mounted())
         return "has a disk image mounted";
     return NULL;
@@ -201,4 +209,7 @@ void hibernate_reattach_host(void)
     display_after_resume();
     threads_after_resume(); /* their host threads, made again when their turns come */
     cfm_after_resume();
+    sound_after_resume();   /* the host told again what it had not played yet */
+    speech_after_resume();  /* an utterance being spoken is over */
+    sound_input_after_resume(); /* a recording stops */
 }

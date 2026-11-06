@@ -282,6 +282,7 @@ typedef struct {
     gaddr done_proc, text_done_proc, sync_proc, word_proc, error_proc, phoneme_proc;
     uint32_t input_mode, char_mode, number_mode;
     bool busy, paused;
+    bool lost;      /* its utterance was the host's in a process that hibernated */
     gaddr text;     /* the text being spoken (the program's buffer) */
     uint32_t text_len;
     /* The current word's made-up phonemes, each said when its time comes
@@ -683,6 +684,7 @@ static void finish(channel *c)
         return;
     c->busy = false;
     c->paused = false;
+    c->lost = false;
     /* The rest of the made-up phonemes, then the silence that closes the mouth. */
     phonemes_due(c, 0, true);
     if (c->mouth_open && c->phoneme_proc && !c->host_phonemes)
@@ -819,6 +821,11 @@ void speech_pump(void)
                 finish(&channels[i]);
     serve_host();
     deliver();
+    /* So is one a host was speaking in a process that hibernated, after
+     * what that host had reported. */
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (channels[i].chan && channels[i].busy && !channels[i].paused && channels[i].lost)
+            finish(&channels[i]);
 }
 
 /* Called by the Time Manager's pump, at interrupt time. */
@@ -1032,6 +1039,7 @@ static int16_t speak(channel *c, gaddr text, uint32_t len)
         host_request(c, MACHINE_SPEECH_STOP, NULL);
     c->busy = len > 0;
     c->paused = false;
+    c->lost = false;
     c->nph = c->iph = 0;
     c->word_at = c->close_at = c->fill_at = 0;
     c->word_from = c->word_end = c->prev_from = c->prev_end = 0;
@@ -1567,12 +1575,17 @@ int speech_channel_voice(gaddr chan)
     return c ? c->voice : -1;
 }
 
-/* A channel speaking: the host's voice says when it is done, and the one
- * that would is in the process that hibernates. */
-bool speech_any_busy(void)
+/* Resumed: an utterance being spoken is over, as if its voice had said the
+ * rest, and the program hears so at the next safe point (TextDone, then
+ * SpeechDone), or when it continues one it had paused.  Its words not yet
+ * said are not said: the host that was saying them is gone, and saying
+ * them again from the word it was at would lose the embedded commands
+ * before it.  What the old host reported and the program had not been
+ * told yet is still told. */
+void speech_after_resume(void)
 {
     for (int i = 0; i < MAX_CHANNELS; i++)
         if (channels[i].chan && channels[i].busy)
-            return true;
-    return false;
+            channels[i].lost = true;
+    speech_record_note("resumed");
 }

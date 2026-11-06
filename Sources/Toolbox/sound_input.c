@@ -316,9 +316,17 @@ static void write_file(int16_t refnum, const uint8_t *data, uint32_t n)
         tb_DisposePtr(pb);
 }
 
+/* Resumed while recording: stopped at the next pump (sound_input_after_resume). */
+static bool rec_stop_due;
+
 /* Take what is due: the host's samples, else (late) silence. */
 static void record_pump(void)
 {
+    if (rec_stop_due) {
+        rec_stop_due = false;
+        stop_recording(abortErr);
+        return;
+    }
     if (!rec.active || rec.paused)
         return;
     double hz = rate_hz(dev.rate);
@@ -1001,5 +1009,15 @@ void sound_input_reset(void)
     capturing = false;
 }
 
-/* The host recording for the program. */
-bool sound_input_capturing(void) { return capturing; }
+/* Resumed: the host that was capturing is gone, and the microphone is not
+ * opened again on the program's behalf, maybe days later.  A recording
+ * going on stops as SPBStopRecording stops one, at the next sound pump:
+ * its parameter block says what it recorded before the hibernate and its
+ * completion routine is told abortErr.  The device stays open, and
+ * captures again when the program next records. */
+void sound_input_after_resume(void)
+{
+    capturing = false;
+    ring_reset(ring_rate);
+    rec_stop_due = rec.active;
+}
