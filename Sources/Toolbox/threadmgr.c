@@ -284,8 +284,11 @@ static bool switching_ppc(gaddr native_word)
            !strcmp(n, "SetThreadStateEndCritical") || !strcmp(n, "SuspendThread");
 }
 
-static bool switching_68k(uint32_t selector)
+static bool switching_68k(uint32_t d0)
 {
+    /* The glue loads the selector with MOVE.W: D0's high word is whatever
+     * it was (IPNetRouter's threads call with FFFF0512). */
+    uint16_t selector = (uint16_t)d0;
     return selector == 0x205 || selector == 0x508 || selector == 0x512; /* Yield, SetThreadState, ...EndCritical */
 }
 

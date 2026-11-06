@@ -188,8 +188,10 @@ extension BlueBox {
         }
 
         /// The same for a 68k thread waiting in _ThreadDispatch: its
-        /// YieldToThread's result on the stack, its loop going on.
-        @Test func a68kThreadGoesOnAfterARestore() {
+        /// YieldToThread's result on the stack, its loop going on; also
+        /// with D0's high word set, as the selector is loaded with MOVE.W
+        /// (IPNetRouter's threads had FFFF0512).
+        @Test(arguments: [false, true]) func a68kThreadGoesOnAfterARestore(highWordSet: Bool) {
             func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
             func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
             func code68(_ words: [UInt16]) -> UInt32 {
@@ -198,13 +200,15 @@ extension BlueBox {
                 return p
             }
             let vars = ptr(8) // result (word), count
-            let yieldCall: [UInt16] = [0x4267, 0x42A7, 0x303C, 0x0205, 0xABF2] // YieldToThread(kNoThreadID)
+            let dirty: [UInt16] = highWordSet ? [0x70FF] : [] // moveq #-1,d0
+            let yieldCall: [UInt16] = [0x4267, 0x42A7] + dirty + [0x303C, 0x0205, 0xABF2] // YieldToThread(kNoThreadID)
+            let back = UInt16(yieldCall.count * 2)
             // pascal entry: loop { count += 1; result := YieldToThread(0) }
-            let entry = code68([0x52B9, hi(vars + 4), lo(vars + 4)] + yieldCall + [0x33DF, hi(vars), lo(vars), 0x60E8])
+            let entry = code68([0x52B9, hi(vars + 4), lo(vars + 4)] + yieldCall + [0x33DF, hi(vars), lo(vars), 0x6000 | (0xF2 - back)])
             let made = ptr(4)
             #expect(tb_NewThread(1, entry, 0, 0, 0, 0, made) == 0)
             // the program: loop { _SystemTask; YieldToThread(0) }
-            let app = code68([0xA9B4] + yieldCall + [0x548F, 0x60F0])
+            let app = code68([0xA9B4] + yieldCall + [0x548F, 0x6000 | (0xFA - back)])
             g_cpu!.pointee.a.7 = ptr(65536) + 65000
             g_cpu!.pointee.sr = 0x2000
             g_cpu!.pointee.pc = app
@@ -215,7 +219,7 @@ extension BlueBox {
             #expect(String(cString: machine_drain_point()) == "SystemTask")
             #expect(machine_hibernate_blocker() == nil)
             #expect(threads_parked() == 1)
-            let snap = snapshot("68kthread.bbhib")
+            let snap = snapshot("68kthread\(highWordSet ? "-d0" : "").bbhib")
             machine_drain_end()
             restore(snap)
             let count = rd32(vars + 4)
