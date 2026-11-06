@@ -65,6 +65,36 @@ extension BlueBox {
             machine_drain_end()
         }
 
+        /// A program that never comes back from a routine of its own the
+        /// Toolbox called (a ModalDialog filter, as Anthem's loop inside its
+        /// Apple Event handler): the instruction limit, reached first in a
+        /// headless run, is refused for where the program waited, not for
+        /// the limit.
+        @Test func theLimitInACallbackIsRefusedForWhereItWas() {
+            launchTestApp()
+            let items = tb_NewHandle(2, false, true)
+            wr16(rd32(items), 0xFFFF) // no items
+            let r = ptr(8)
+            for (i, v) in [100, 100, 200, 300].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            _ = tb_NewDialog(0, r, ptr(2), 1, 0, 0xFFFF_FFFF, 0, 0, items)
+            let filter = code([0x60FE]) // BRA.S self: never returns
+            let item = ptr(2)
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            // ModalDialog(filter, &item), for ever
+            _ = start([0x2F3C, hi(filter), lo(filter), 0x2F3C, hi(item), lo(item), 0xA991, 0x60F2])
+            // In the filter, the drain asked for there; the limit ends it.
+            machine_hibernate_at(machine_instruction_count() + 1_000_000)
+            machine_set_instruction_limit(machine_instruction_count() + 6_000_000)
+            _ = machine_run(10_000_000)
+            machine_hibernate_at(0)
+            machine_set_instruction_limit(0)
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            let why = String(cString: machine_drain_reason())
+            #expect(why.contains("routine of its own called by the Toolbox (ModalDialog)"), Comment(rawValue: why))
+            machine_drain_end()
+        }
+
         /// Suspend drains too: stopped at a safe point, the machine could be
         /// hibernated, and goes on when resumed.
         @Test func suspendStopsAtASafePoint() {

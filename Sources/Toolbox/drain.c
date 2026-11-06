@@ -65,6 +65,7 @@ BB_HOST static bool rewind_wanted;             /* a native abandoned its call */
 BB_HOST static char why[256];
 BB_HOST static uint64_t hibernate_at;          /* --hibernate-at: the instruction count, or 0 */
 BB_HOST static char stopped_at[64];            /* where it stopped (for the log) */
+BB_HOST static char last_where[256];           /* what kept it from a safe point at its last wait */
 
 static uint64_t host_ns(void)
 {
@@ -85,7 +86,7 @@ void machine_drain_begin(bool exit_run)
      * likeliest to go on well; Suspend wants the machine still now. */
     grace_until = exit_run && g_cpu ? g_cpu->icount + DRAIN_GRACE : 0;
     stopped_here = rewind_wanted = false;
-    why[0] = stopped_at[0] = 0;
+    why[0] = stopped_at[0] = last_where[0] = 0;
     atomic_store(&state, MACHINE_DRAIN_GOING);
 }
 
@@ -131,33 +132,41 @@ static void refuse(const char *fmt, ...)
     LOGF(LOG_IDLE, "drain: refused: %s\n", why);
 }
 
-/* Past the deadline: refused, saying what the machine is doing. */
-bool drain_expired(void)
+/* What keeps the machine from a safe point, said as a refusal's reason. */
+static void describe(char *out, size_t len)
 {
-    if (atomic_load(&state) != MACHINE_DRAIN_GOING || host_ns() < deadline)
-        return false;
     uint16_t t = trap_current_word();
     int depth = trap_call_depth();
     int native = cfm_level_call();
     const char *in = t ? trap_name(t) : native >= 0 ? cfm_native_name((uint32_t)native) : NULL;
     if (thread_current_index() != 0)
-        refuse("one of the program's threads (Thread Manager) runs and did not yield back to its main thread");
+        snprintf(out, len, "one of the program's threads (Thread Manager) runs and did not yield back to its main thread");
     else if (mm_call_depth() > 0 && !g_ppc_mode)
-        refuse("the program runs PowerPC code it called through Mixed Mode%s%s and did not come back to its "
-               "event loop", in ? " inside " : "", in ? in : "");
+        snprintf(out, len, "the program runs PowerPC code it called through Mixed Mode%s%s and did not come back to its "
+                 "event loop", in ? " inside " : "", in ? in : "");
     else if (depth > 0)
-        refuse("the program is in a routine of its own called by the Toolbox (%s) and did not come back to its "
-               "event loop", in ? in : "an interrupt task");
+        snprintf(out, len, "the program is in a routine of its own called by the Toolbox (%s) and did not come back to "
+                 "its event loop", in ? in : "an interrupt task");
     else if (mm_call_depth() > 0)
-        refuse("the program is in a routine of its own called by the Toolbox (%s) and did not come back to its "
-               "event loop", in ? in : "a PowerPC callback");
+        snprintf(out, len, "the program is in a routine of its own called by the Toolbox (%s) and did not come back to "
+                 "its event loop", in ? in : "a PowerPC callback");
     else if (ppc_trap_depth() > 0)
-        refuse("the program is in 68k code run for its PowerPC call%s%s (a patch of its own, or a trap run as 68k "
-               "code), which did not come back", in ? " to " : "", in ? in : "");
+        snprintf(out, len, "the program is in 68k code run for its PowerPC call%s%s (a patch of its own, or a trap run "
+                 "as 68k code), which did not come back", in ? " to " : "", in ? in : "");
     else if (in)
-        refuse("the program is waiting inside %s, which could not be interrupted", in);
+        snprintf(out, len, "the program is waiting inside %s, which could not be interrupted", in);
     else
-        refuse("the program did not come to a point where it could be saved");
+        snprintf(out, len, "the program did not come to a point where it could be saved");
+}
+
+/* Past the deadline: refused, saying what the machine is doing. */
+bool drain_expired(void)
+{
+    if (atomic_load(&state) != MACHINE_DRAIN_GOING || host_ns() < deadline)
+        return false;
+    char where[256];
+    describe(where, sizeof where);
+    refuse("%s", where);
     return true;
 }
 
@@ -276,6 +285,8 @@ void drain_poll(void)
         hibernate_at = 0;
         machine_drain_begin(true);
     }
+    if (atomic_load(&state) == MACHINE_DRAIN_GOING && !drain_program_level())
+        describe(last_where, sizeof last_where);
     drain_expired();
 }
 
@@ -293,9 +304,15 @@ bool drain_slice_point(void)
     cpu68k *c = g_cpu;
     if (c->halted || (g_ppc_mode && g_ppc.halted)) {
         /* Stopped where it was (the instruction limit, a crash): whatever
-         * it was inside unwound without finishing, so no safe point. */
-        refuse("the machine stopped (%s) before it came to a point where it could be saved",
-               c->halted ? c->halt_reason : g_ppc.halt_reason);
+         * it was inside unwound without finishing, so no safe point.  The
+         * limit, reached as the program waited where no safe point comes
+         * (a headless run waits faster than the deadline), is refused for
+         * where it waited. */
+        const char *h = c->halted ? c->halt_reason : g_ppc.halt_reason;
+        if (last_where[0] && !strncmp(h, "instruction limit", 17))
+            refuse("%s", last_where);
+        else
+            refuse("the machine stopped (%s) before it came to a point where it could be saved", h);
         return true;
     }
     bool here = stopped_here;
