@@ -1074,6 +1074,7 @@ bool drain_at_trap(cpu68k *c, uint16_t op);
 bool drain_slice_point(void);
 bool drain_exits(void);
 bool drain_expired(void);
+void drain_poll(void);
 /* The program's own threads (Thread Manager), besides the application's. */
 int threads_live(void);
 /* Open connections, ports and print jobs a snapshot cannot carry
@@ -1101,6 +1102,7 @@ void events_script_clear(void);
 void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away);
 void osutil_clock_back(int64_t secs);
 void hibernate_reattach_host(void);
+void aem_after_resume(void);
 void trap_ctx_load(const trap_ctx *t);
 
 #define TRAP_DEPTH 32

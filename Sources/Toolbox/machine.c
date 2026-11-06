@@ -658,7 +658,7 @@ static bool prefer_ppc;
 void machine_set_prefer_ppc(bool on) { prefer_ppc = on; }
 
 BB_HOST static bool jit_on;
-static char jit_cache_dir[1024];
+BB_HOST static char jit_cache_dir[1024]; /* the run's choice */
 
 bool machine_set_jit(bool on, const char *cache_dir)
 {
@@ -688,6 +688,11 @@ static void start_jit(const char *path)
     snprintf(name, sizeof name, "%016llx-68k.bbjit", h);
     cpu_jit_enable(true, dir, name);
 }
+
+/* A resumed program (no machine_launch): the JITs as the run chose, for the
+ * application's cache files.  Their translations start empty, and the 68k
+ * one finds its model and address mask from the CPU (check_mode). */
+void machine_jit_resume(const char *app_path) { start_jit(app_path); }
 
 /* One CPU's line of the report, appended to buf (nothing if it ran no
  * instructions). */
@@ -940,7 +945,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
  * Delay moves it forward either way. */
 bool events_host_attached(void);
 
-static bool realtime;
+BB_HOST static bool realtime; /* the run's choice, kept when a snapshot is put back */
 void machine_set_realtime(bool on) { realtime = on; }
 bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
@@ -1001,6 +1006,7 @@ void machine_charge_pixels(uint64_t n)
 /* Bring the 60 Hz tick counter up to the machine's time. */
 void machine_advance_ticks(void)
 {
+    drain_poll();
     machine_pause_point(); /* every wait in the Toolbox comes here */
     uint64_t ns = machine_time_ns();
     uint64_t ticks = ns * 60 / 1000000000u;

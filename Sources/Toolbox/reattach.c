@@ -165,4 +165,7 @@ const char *print_job_open(void) { return print_job_in_progress() ? "a print job
 
 /* ---- The host's memory ---- */
 
-void hibernate_reattach_host(void) {}
+void hibernate_reattach_host(void)
+{
+    aem_after_resume();
+}

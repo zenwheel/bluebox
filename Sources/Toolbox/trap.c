@@ -10,7 +10,7 @@
 #include "lowmem_gen.h"
 #include "tb_internal.h"
 
-bool g_trap_census;
+BB_HOST bool g_trap_census; /* the run's choice */
 
 static uint16_t last_trapword; /* the trap word of the routine running now */
 

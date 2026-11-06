@@ -33,6 +33,15 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 
+/* The walk is the run's own harness, not the program's state: all of it is
+ * the host's, so a resumed program is walked by the run resuming it (and
+ * its buffers are the host's memory, which a restore leaves alone). */
+#if defined(__APPLE__)
+#pragma clang section bss = "__DATA,__bbhostz,zerofill" data = "__DATA,__bbhost"
+#else
+#pragma clang section bss = "bbhostz" data = "bbhost"
+#endif
+
 /* Time between steps (the program's own work), and from the menu bar's
  * first appearance to the first choice (a program's opening, while it
  * keeps its menus disabled: Glider's title), in the machine's time, which
@@ -371,7 +380,7 @@ void walker_note_call(uint32_t pc, uint32_t what)
     pc ^= what * 2654435761u;
     if (!walking || !pc)
         return;
-    if (!call_sites && !(call_sites = bb_calloc(NCALLS, sizeof *call_sites, BB_BYTES)))
+    if (!call_sites && !(call_sites = bb_host_calloc(NCALLS, sizeof *call_sites)))
         return;
     if (ncall_sites >= NCALLS / 2)
         return;
@@ -627,7 +636,7 @@ static void thumb_now(uint8_t *t)
     int w = 0, h = 0;
     machine_screen_size(&w, &h);
     memset(t, 0, THUMB_SIZE);
-    uint8_t *px = w > 0 && h > 0 ? bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES) : NULL;
+    uint8_t *px = w > 0 && h > 0 ? bb_host_malloc((size_t)w * (size_t)h * 4) : NULL;
     if (!px)
         return;
     machine_screen_rgba(0, 0, w, h, px);
@@ -667,7 +676,7 @@ static bool same_screen(const uint8_t *a, const uint8_t *b)
 /* Which screen a picture is, one of those seen or a new one. */
 static int screen_of(const uint8_t *t)
 {
-    if (!thumbs && !(thumbs = bb_malloc(NSCREENS * sizeof *thumbs, BB_BYTES)))
+    if (!thumbs && !(thumbs = bb_host_malloc(NSCREENS * sizeof *thumbs)))
         return 0;
     int best = -1, best_diff = 0;
     for (int i = 0; i < nscreens; i++) {
@@ -910,10 +919,10 @@ static void find_patches(int s)
     int gw = (a.right - a.left) / CELL, gh = (a.bottom - a.top) / CELL;
     if (gw < 4 || gh < 4)
         return;
-    uint8_t *px = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
-    uint8_t *avg = bb_malloc((size_t)gw * (size_t)gh * 3, BB_BYTES);
-    int16_t *class = bb_malloc((size_t)gw * (size_t)gh * sizeof *class, BB_BYTES);
-    int *queue = bb_malloc((size_t)gw * (size_t)gh * sizeof *queue, BB_BYTES);
+    uint8_t *px = bb_host_malloc((size_t)w * (size_t)h * 4);
+    uint8_t *avg = bb_host_malloc((size_t)gw * (size_t)gh * 3);
+    int16_t *class = bb_host_malloc((size_t)gw * (size_t)gh * sizeof *class);
+    int *queue = bb_host_malloc((size_t)gw * (size_t)gh * sizeof *queue);
     if (!px || !avg || !class || !queue) {
         bb_free(px), bb_free(avg), bb_free(class), bb_free(queue);
         return;
@@ -947,7 +956,7 @@ static void find_patches(int s)
     patch found[PATCHES];
     int nfound = 0;
     /* Cells that stand out from the background, whatever their colour. */
-    int16_t *fg = bb_malloc((size_t)gw * (size_t)gh * sizeof *fg, BB_BYTES);
+    int16_t *fg = bb_host_malloc((size_t)gw * (size_t)gh * sizeof *fg);
     if (fg) {
         for (int c = 0; c < gw * gh; c++) {
             bool out = false;
@@ -1140,7 +1149,7 @@ static bool nudge(void)
 static uint8_t *screen_now(void)
 {
     machine_screen_size(&screen_w, &screen_h);
-    uint8_t *px = bb_malloc((size_t)screen_w * (size_t)screen_h * 4, BB_BYTES);
+    uint8_t *px = bb_host_malloc((size_t)screen_w * (size_t)screen_h * 4);
     if (px)
         machine_screen_rgba(0, 0, screen_w, screen_h, px);
     return px;

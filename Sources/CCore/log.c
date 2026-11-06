@@ -2,7 +2,7 @@
 
 #include <stdarg.h>
 
-unsigned g_log_mask = LOG_UNIMPL | LOG_DEBUGGER;
+BB_HOST unsigned g_log_mask = LOG_UNIMPL | LOG_DEBUGGER; /* the run's, not the program's */
 BB_HOST FILE *g_log_file;
 
 void log_printf(const char *fmt, ...)

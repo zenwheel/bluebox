@@ -176,6 +176,19 @@ BB_HOST static pthread_mutex_t outbox_lock = PTHREAD_MUTEX_INITIALIZER;
 static pending_ae outbox[16];
 static int nout;
 
+/* Resumed in another process (reattach.c): whoever waited for a reply to
+ * a pending event waited in the process that hibernated (its context is
+ * that process's memory), so the event goes on with no reply owed. */
+void aem_after_resume(void)
+{
+    pthread_mutex_lock(&lock);
+    for (int i = 0; i < qn; i++)
+        queue[i].reply = NULL, queue[i].reply_ctx = NULL;
+    current.reply = NULL;
+    current.reply_ctx = NULL;
+    pthread_mutex_unlock(&lock);
+}
+
 static void free_event(pending_ae *e, bool unanswered)
 {
     if (unanswered && e->reply)
@@ -381,7 +394,7 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove
     while (qn > 0 && !aware && !(queue[0].raw ? queue[0].self : has_handler(queue[0].cls, queue[0].id))) {
         free_event(&queue[0], true);
         memmove(queue, queue + 1, (size_t)(qn - 1) * sizeof *queue);
-        qn--;
+        memset(&queue[--qn], 0, sizeof *queue); /* no copy left of a block it now owns */
     }
     bool have = qn > 0;
     if (have) {
@@ -393,7 +406,7 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove
             free_event(&current, true);
             current = queue[0];
             memmove(queue, queue + 1, (size_t)(qn - 1) * sizeof *queue);
-            qn--;
+            memset(&queue[--qn], 0, sizeof *queue);
         }
     }
     pthread_mutex_unlock(&lock);
@@ -2364,7 +2377,7 @@ static void accepted_in_full(pending_ae *p)
     int i = (int)(p - queue);
     free_event(p, true);
     memmove(queue + i, queue + i + 1, (size_t)(qn - i - 1) * sizeof *queue);
-    qn--;
+    memset(&queue[--qn], 0, sizeof *queue);
     examined_gone = true;
 }
 

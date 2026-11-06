@@ -910,6 +910,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     if let resume {
         // The program as it hibernated, in place of a fresh launch.
         guard machine_hibernate_restore(resume, &err, err.count) else { fail("\(resume): \(str(err))") }
+        machine_jit_resume(app)
         print("resumed: \(resume) at instruction \(machine_instruction_count())")
         forgetHibernated(snapshot: resume)
     } else {
@@ -1029,6 +1030,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
     machine_set_instruction_limit(start + maxInstructions)
     queueScript(keyScript, start: start)
     if let hibernateAt { machine_hibernate_at(start + hibernateAt) }
+    // With --then the walk starts once the run has hibernated, as a resumed
+    // run's does: the two are then alike but for the process.
+    if walkMenus && thenRun != nil { machine_set_menu_walk(false) }
     var status = machine_run(budget)
     while status == RUN_DRAINED {
         // At a safe point: saved, then this run ends (or, with --then, goes
@@ -1038,6 +1042,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
         if saved != nil, let more = thenRun {
             // As a resumed run goes on: without this run's scripted input.
             machine_script_clear()
+            if walkMenus { machine_set_menu_walk(true) }
             machine_set_instruction_limit(machine_instruction_count() + more)
             status = machine_run(more)
             thenRun = nil
@@ -1049,6 +1054,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
         }
     }
 
+    if hibernateAt != nil && machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED) {
+        print("hibernate refused: \(String(cString: machine_drain_reason()))")
+    }
     let count = machine_instruction_count()
     relaunchAtWantedDepth()
     screensaverReport()

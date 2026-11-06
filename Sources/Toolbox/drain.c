@@ -193,6 +193,18 @@ const char *machine_hibernate_blocker(void)
     return NULL;
 }
 
+/* Every Toolbox wait (machine_advance_ticks): a program waiting inside one
+ * never comes back to machine_run's slices, so the instruction count that
+ * starts a drain and the deadline that refuses one are looked at here too. */
+void drain_poll(void)
+{
+    if (hibernate_at && g_cpu && g_cpu->icount >= hibernate_at) {
+        hibernate_at = 0;
+        machine_drain_begin(true);
+    }
+    drain_expired();
+}
+
 /* machine_run, between slices: whether the machine stops here, and if so
  * the drain has parked (or been refused, when what it holds cannot be
  * saved). */
