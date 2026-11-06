@@ -1125,6 +1125,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/appletalk.c", "booted", 1, 0 },
     { "Toolbox/appletalk.c", "cur", 8, 2 },
     { "Toolbox/appletalk.c", "cur_left", 4, 0 },
+    { "Toolbox/appletalk.c", "gave", 8, 0 },
     { "Toolbox/appletalk.c", "handlers", 2048, 18 },
     { "Toolbox/appletalk.c", "hops", 1152, 19 },
     { "Toolbox/appletalk.c", "host_lookup", 8, 0 },
@@ -2674,7 +2675,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1685;
+const unsigned hb_nstatics = 1686;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

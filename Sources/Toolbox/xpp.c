@@ -42,6 +42,15 @@ typedef struct {
 } xpp_session;
 static xpp_session sessions[MAX_SESS];
 
+/* Resumed: the program's ASP sessions are over; its next call on one
+ * says aspSessClosed. */
+void xpp_after_resume(void)
+{
+    for (int i = 0; i < MAX_SESS; i++)
+        if (sessions[i].s)
+            asp_lost(sessions[i].s);
+}
+
 void xpp_reset(void)
 {
     /* the sessions went with the machine's AppleTalk */

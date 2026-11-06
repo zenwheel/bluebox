@@ -20,9 +20,14 @@
  *                spoken is over, its completion callbacks made (speech.c);
  *                a recording stops, as SPBStopRecording stops one
  *                (sound_input.c)
+ *   the network  what listens or is registered is made again on the new
+ *                host; a connection is over, and the program hears so
+ *                as each protocol tells it (network_after_resume)
  *
  * What a snapshot cannot carry is refused before it is taken
- * (hibernate_io_blocker): connections, serial ports, print jobs.
+ * (hibernate_io_blocker): MacTCP's and Open Transport's endpoints, the
+ * PPC Toolbox's ports, serial ports, print jobs, EtherTalk bridged onto
+ * an interface, the host's media.
  *
  * The fresh process is booted as the original was (the host replays its
  * launch record) but the program is not launched: the snapshot replaces
@@ -178,14 +183,13 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen)
 
 const char *network_io_open(void)
 {
+    const char *at = appletalk_unresumable();
+    if (at)
+        return at;
     if (mactcp_any_open())
         return "has a MacTCP stream open";
     if (ot_endpoints_open())
         return "has an Open Transport endpoint open";
-    if (appletalk_in_use())
-        return "has AppleTalk sockets or names open";
-    if (as_sessions_live())
-        return "has an AppleShare volume connected";
     if (ppc_toolbox_open())
         return "has a PPC Toolbox port open";
     if (qt_streams_open())
@@ -233,4 +237,31 @@ void hibernate_reattach_host(void)
     sound_after_resume();   /* the host told again what it had not played yet */
     speech_after_resume();  /* an utterance being spoken is over */
     sound_input_after_resume(); /* a recording stops */
+    network_after_resume();
+}
+
+/* ---- The network ----
+ *
+ * The host's sockets did not come along: every descriptor the network's
+ * state names is the old process's (a number that may now be another
+ * file's here), so each is forgotten, never closed.  What only listens
+ * or is registered is made again on the new host: the AppleTalk link and
+ * this node (the old address if no one has taken it), NBP's names, DDP
+ * sockets and ATP's transactions (which go on by their retries); the
+ * program's ASP sessions are over.
+ * A connection is over: the program hears of it at the next safe point as
+ * each protocol says so (ADSP's tear-down, ASP's aspSessClosed), and its
+ * calls under way end with that error; an AppleShare volume's session is
+ * opened again on its next use, as for a server's restart. */
+void network_after_resume(void)
+{
+    appletalk_after_resume(); /* first: the protocols on it send */
+    xpp_after_resume();
+    appleshare_after_resume();
+}
+
+/* The network's host sockets closed, as when a process ends: for the
+ * tests, which resume a snapshot in the process that took it. */
+void network_close_sockets(void)
+{
 }
