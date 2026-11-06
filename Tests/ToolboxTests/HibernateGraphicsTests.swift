@@ -303,6 +303,104 @@ extension BlueBox {
             g.gl("aglDestroyContext", [ctx])
         }
 
+        /// The rarer state comes back the same: an evaluator's 2D map and
+        /// grid, a pixel map, a clip plane and an eye plane set under a
+        /// transformation, stencil, stipples, a 3D texture's levels, the
+        /// raster position, the pixel store, and a list drawn from a
+        /// colour index and edge-flagged array elements.
+        @Test func openGLStateDetailsComeBack() {
+            let dir = launchTestApp()
+            startLoop()
+            let ctx = g.context()
+            let mem = tb_NewPtr(16 * 16 * 4, false, true)
+            #expect(g.gl("aglSetOffScreen", [ctx, 16, 16, 64, mem]) == 1)
+            g.gl("glTranslatef", fp: [1, 2, 3])
+            let coeffs = tb_NewPtr(6 * 3 * 8, false, true)
+            for i in 0..<18 { wr32(coeffs + UInt32(8 * i), 0); wr32(coeffs + UInt32(8 * i + 4), 0) }
+            for i in 0..<18 { // doubles, big-endian: i + 0.5
+                let b = (Double(i) + 0.5).bitPattern
+                wr32(coeffs + UInt32(8 * i), UInt32(b >> 32)); wr32(coeffs + UInt32(8 * i + 4), UInt32(b & 0xFFFF_FFFF))
+            }
+            // glMap2d(GL_MAP2_VERTEX_3, 0, 1, ustride 9, uorder 2, 0, 1, vstride 3, vorder 3, points)
+            g.gl("glMap2d", [0x0DB7, 0, 0, 0, 0, 9, 2, 0, 0, 0, 0, 3, 3, coeffs], fp: [0, 1, 0, 1])
+            g.gl("glMapGrid2f", [4, 0, 0, 5], fp: [0, 1, 0, 1])
+            g.gl("glPixelMapfv", [0x0C76 /* R_TO_R */, 2, g.floats([0.25, 0.75])])
+            let plane = tb_NewPtr(32, false, true)
+            for (i, v) in [1.0, 0, 0, -1].enumerated() {
+                let b = v.bitPattern
+                wr32(plane + UInt32(8 * i), UInt32(b >> 32)); wr32(plane + UInt32(8 * i + 4), UInt32(b & 0xFFFF_FFFF))
+            }
+            g.gl("glClipPlane", [0x3001, plane])
+            g.gl("glTexGendv", [0x2001 /* T */, 0x2502 /* EYE_PLANE */, plane])
+            g.gl("glStencilFunc", [0x0202, 3, 0x0F]); g.gl("glStencilOp", [0x1E00, 0x1E01, 0x1E02])
+            g.gl("glLineStipple", [3, 0xF0F0])
+            let stipple = tb_NewPtr(128, false, true)
+            for i in 0..<128 { wr8(stipple + UInt32(i), UInt8(i * 7 & 0xFF)) }
+            g.gl("glPolygonStipple", [stipple])
+            g.gl("glPixelStorei", [0x0CF5 /* UNPACK_ALIGNMENT */, 2])
+            g.gl("glPixelStorei", [0x0D05 /* PACK_ALIGNMENT */, 8])
+            g.gl("glPixelStorei", [0x0CF0 /* UNPACK_SWAP_BYTES */, 1])
+            g.gl("glMatrixMode", [0x1701]); g.gl("glPushMatrix"); g.gl("glOrtho", fp: [0, 16, 0, 16, -1, 1])
+            g.gl("glMatrixMode", [0x1700]); g.gl("glPushMatrix"); g.gl("glLoadIdentity")
+            g.gl("glRasterPos3f", fp: [3, 4, 0.5])
+            let names = tb_NewPtr(4, false, true)
+            g.gl("glGenTextures", [1, names])
+            g.gl("glBindTexture", [0x806F /* 3D */, rd32(names)])
+            let vox = g.words((0..<8).map { UInt32($0) * 0x1010_1010 })
+            g.gl("glPixelStorei", [0x0CF5, 1])
+            g.gl("glTexImage3D", [0x806F, 0, 0x8058 /* RGBA8 */, 2, 2, 2, 0, G.GL_RGBA, G.GL_UNSIGNED_BYTE, vox])
+            g.gl("glTexImage3D", [0x806F, 1, 0x8058, 1, 1, 1, 0, G.GL_RGBA, G.GL_UNSIGNED_BYTE, vox])
+            g.gl("glPixelStorei", [0x0CF5, 2])
+            let list = g.gl("glGenLists", [1])
+            let colors = g.words([0xFF00_0000, 0x00FF_0000]), edges = g.words([0x0100_0000])
+            let vtx = g.floats([1, 1, 5, 1, 1, 5])
+            g.gl("glColorPointer", [4, G.GL_UNSIGNED_BYTE, 4, colors]); g.gl("glEnableClientState", [0x8076])
+            g.gl("glEdgeFlagPointer", [1, edges]); g.gl("glEnableClientState", [0x8079])
+            g.gl("glVertexPointer", [2, G.GL_FLOAT, 0, vtx]); g.gl("glEnableClientState", [G.GL_VERTEX_ARRAY])
+            g.gl("glNewList", [list, 0x1300])
+            g.gl("glBegin", [G.GL_TRIANGLES])
+            g.gl("glArrayElement", [0]); g.gl("glArrayElement", [1]); g.gl("glArrayElement", [1])
+            g.gl("glEnd")
+            g.gl("glEndList")
+            #expect(g.gl("glGetError") == 0)
+
+            func values() -> [UInt32] {
+                let out = tb_NewPtr(1024, false, true)
+                defer { tb_DisposePtr(out) }
+                var v: [UInt32] = []
+                func take(_ n: Int) { v += (0..<n).map { rd32(out + UInt32(4 * $0)) } }
+                g.gl("glGetMapfv", [0x0DB7, 0x0A01 /* COEFF */, out]); take(18)
+                g.gl("glGetMapfv", [0x0DB7, 0x0A00 /* ORDER */, out]); take(2)
+                g.gl("glGetFloatv", [0x0DD2 /* MAP2_GRID_DOMAIN */, out]); take(4)
+                g.gl("glGetFloatv", [0x0DD3 /* MAP2_GRID_SEGMENTS */, out]); take(2)
+                g.gl("glGetPixelMapfv", [0x0C76, out]); take(2)
+                g.gl("glGetClipPlane", [0x3001, out]); take(8)
+                g.gl("glGetTexGendv", [0x2001, 0x2502, out]); take(8)
+                for p: UInt32 in [0x0B92, 0x0B97, 0x0B93, 0x0B94, 0x0B95, 0x0B96, 0x0B25, 0x0B26, 0x0CF5, 0x0D05, 0x0CF0,
+                                  0x0BA4, 0x0BA3, 0x0B07, 0x0B08] {
+                    g.gl("glGetIntegerv", [p, out]); take(1)
+                }
+                g.gl("glGetFloatv", [0x0B07 /* CURRENT_RASTER_POSITION */, out]); take(4)
+                g.gl("glGetPolygonStipple", [out]); take(32)
+                g.gl("glGetTexLevelParameteriv", [0x806F, 1, 0x1000 /* WIDTH */, out]); take(1)
+                g.gl("glGetTexImage", [0x806F, 0, G.GL_RGBA, G.GL_UNSIGNED_BYTE, out]); take(8)
+                return v
+            }
+            func frame() -> UInt64 {
+                g.gl("glClear", [0x4000])
+                g.gl("glCallList", [list])
+                g.gl("aglSwapBuffers", [ctx])
+                return checksum(mem, 16 * 16)
+            }
+            let before = values(), drawn = frame()
+            let snap = hibernate(dir, "details.bbhib")
+            resume(snap)
+            #expect(values() == before)
+            #expect(frame() == drawn)
+            #expect(g.gl("glGetError") == 0)
+            g.gl("aglDestroyContext", [ctx])
+        }
+
         /// Texture names after resuming are the ones the host would have
         /// given: one made and never bound is still taken, the next made
         /// is the one after; an error the host had is the program's still.
