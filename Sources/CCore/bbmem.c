@@ -74,10 +74,24 @@ bb_block *bb_block_of(const void *p)
         return NULL;
 #if defined(__APPLE__)
     /* The start of a block of the host's malloc is not one of ours (ours
-     * start a header further on); asking costs a zone lookup, and keeps
-     * the header's read off memory before another's block. */
+     * start a header further on).  Asking costs a zone lookup, as much
+     * again as the free itself (Shards frees a million region bands a
+     * second), so it is asked only where reading the header could fault
+     * (it would lie on an earlier page than p) or where AddressSanitizer
+     * would call reading before another's block an error; anywhere else
+     * the magic, keyed by the header's address, tells. */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define BB_ASAN 1
+#endif
+#endif
+#if defined(BB_ASAN) || defined(__SANITIZE_ADDRESS__)
     if (malloc_size(p))
         return NULL;
+#else
+    if (((uintptr_t)p & 4095) < sizeof(bb_block) && malloc_size(p))
+        return NULL;
+#endif
 #endif
     bb_block *b = (bb_block *)p - 1;
     return b->magic == magic_for(b) ? b : NULL;
