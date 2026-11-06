@@ -1130,6 +1130,12 @@ void rm_files_before_hibernate(void);
 int rm_files_after_resume(void);
 void events_script_clear(void);
 void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away);
+void machine_clock_continue(uint64_t ns);
+/* This machine was put back from a snapshot (reattach.c). */
+bool hibernate_resumed(void);
+bool machine_wall_clock(void);
+void cursor_after_resume(void);
+void display_host_attached_after_resume(void);
 void osutil_clock_back(int64_t secs);
 void hibernate_reattach_host(void);
 void aem_after_resume(void);

@@ -79,7 +79,11 @@ func usage() -> Never {
                      run (for networked programs talking to other copies)
           --new      start another copy even if the program is running already
                      (otherwise that one comes to the front, resumed if suspended,
-                     and is given the documents)
+                     and is given the documents), or hibernated (its snapshot kept)
+          --fresh    a hibernated program starts fresh, its snapshot moved to the
+                     Trash (otherwise an interactive run resumes it)
+          --resume   a headless run of a hibernated program resumes it, as an
+                     interactive run does
           --background  run in the background: no Dock icon or menu bar; the
                      program's menus are in a menu bar status item (with Open at
                      Login and Quit), its windows and what an INIT or desk accessory
@@ -192,6 +196,10 @@ func usage() -> Never {
       bluebox resume <snapshot> [run options]
           Resume a hibernated program in this process, booted as the run that saved it
           (the same build only)
+      bluebox snapshots [list]
+      bluebox snapshots delete <snapshot|program>... [--permanently]
+          The hibernated snapshots kept (a resumed one stays until deleted), and
+          deleting them: to the Trash, or at once with --permanently
       bluebox hibernate-diff <snapshot> <snapshot> [N]
           Where two snapshots differ (up to N places)
       bluebox chooser [run options]
@@ -494,7 +502,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var background = false
     var walkMenus = false
     var newCopy = false
+    var startFresh = false
+    var resumeHibernated = false
     var appArgument: String? // the application as given, before it is resolved
+    var appIndex = 0 // where in args
     var screenWindow = false
     var appletalkGiven = false
     var portsGiven = Set<Int32>()
@@ -539,6 +550,8 @@ func runCommand(_ args: [String], resume: String? = nil) {
             machine_set_menu_walk(true)
             walkMenus = true
         case "--new": newCopy = true
+        case "--fresh": startFresh = true
+        case "--resume": resumeHibernated = true
         case "--walk-avoid":
             i += 1
             guard i < args.count else { usage() }
@@ -736,7 +749,13 @@ func runCommand(_ args: [String], resume: String? = nil) {
             // (Starry Night's "Sky Data", a HyperCard standalone's stack)
             // through paths made from its own, which a relative one broke.
             let path = FileManager.default.fileExists(atPath: a) ? URL(fileURLWithPath: a).standardizedFileURL.path : a
-            if app == nil { app = path; appArgument = a } else { documents.append(path) }
+            if app == nil {
+                app = path
+                appArgument = a
+                appIndex = i
+            } else {
+                documents.append(path)
+            }
         }
         i += 1
     }
@@ -755,8 +774,13 @@ func runCommand(_ args: [String], resume: String? = nil) {
         // that one, kept as its setting.
         depthRelaunch = resume == nil ? (app, !census && screenshot == nil && printTo == nil) : nil
     }
+    if resume != nil { depthRelaunch = nil } // a resumed program goes on at its own depth
     #if canImport(AppKit)
     let interactive = !headless && !census && screenshot == nil && printTo == nil
+    #else
+    let interactive = false
+    #endif
+    #if canImport(AppKit)
     if background && !interactive { background = false }
     if interactive && !background { reexecInNamedBundle(app: app, given: appArgument) }
     // Entered in the registry, unless it is running already: then that one
@@ -765,6 +789,17 @@ func runCommand(_ args: [String], resume: String? = nil) {
                     printToFile: printTo != nil) {
         registerRun(app: app, documents: documents, newCopy: newCopy || resume != nil)
     }
+    #endif
+    // A hibernated program resumes (or, --fresh, starts fresh): the shell's
+    // double-click, the Dock, a bundle and a login item all come here.
+    if resume == nil {
+        var extra = args
+        extra.remove(at: appIndex)
+        resumeIfHibernated(app: app, program: Registration.current?.entry.program ?? RunningProgram.canonical(app),
+                           extra: extra, resumes: interactive || resumeHibernated, fresh: startFresh,
+                           newCopy: newCopy, interactive: interactive)
+    }
+    #if canImport(AppKit)
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
         MainActor.assumeIsolated { displayScale = CGFloat(scale) }
@@ -782,13 +817,32 @@ func runCommand(_ args: [String], resume: String? = nil) {
             }
         }
     }
-    if interactive && !screenWindow {
+    if let r = resumeRecord, let sc = r.screen, sc.count == 2 {
+        // Resumed: the screen it was booted with, whatever this display is
+        // (the snapshot's memory is laid out for it).  Shown as it was, or,
+        // rootless on a display now too small for it, in a window.
+        if interactive && !background {
+            if r.display == "screen" {
+                screenWindow = true
+            } else if !screenWindow {
+                let (dw, dh) = MainActor.assumeIsolated { rootlessMacScreenSize() }
+                if sc[0] > dw || sc[1] > dh {
+                    screenWindow = true
+                    eprint("bluebox: \(r.title) hibernated on a \(sc[0])×\(sc[1]) screen, larger than this display's "
+                           + "\(dw)×\(dh): shown in a window\n")
+                }
+            }
+        }
+        machine_set_screen(sc[0], sc[1])
+    } else if interactive && !screenWindow {
         // Rootless: the Mac screen covers the host display's visible area.
         MainActor.assumeIsolated {
             let (w, h) = rootlessMacScreenSize()
             machine_set_screen(w, h)
         }
     }
+    #else
+    if let sc = resumeRecord?.screen, sc.count == 2 { machine_set_screen(sc[0], sc[1]) }
     #endif
     machine_set_appearance(appearance)
     // Network and serial ports from the settings, unless given here.
@@ -828,6 +882,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     } else if let d = saved.depth {
         machine_set_screen_depth(Int32(d))
     }
+    if let d = resumeRecord?.depth { machine_set_screen_depth(d) } // the depth it was booted with
     // The processor: a fat application runs its PowerPC code unless a 68k
     // model is chosen (on the command line or in its settings), which runs
     // its 68k code on that model; a 68k application gets the default 68040,
@@ -874,6 +929,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
     installChooserHost(app: app, keep: !census)
     machine_set_disk(defaultDisk()) // an exported application's own
     guard machine_boot(census) else { fail("could not set up guest memory") }
+    var bootWidth: Int32 = 0, bootHeight: Int32 = 0
+    machine_screen_size(&bootWidth, &bootHeight)
+    let bootDepth = Int32(machine_screen_depth_setting())
     machine_set_log(logMask)
     for (sel, v) in gestalts { gestalt_override(sel, v) }
     // Internet Config's preferences: the Internet settings.
@@ -928,7 +986,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
     _ = machine_listen_for_apple_events()
     // As the Finder does: open the documents, or just open the application.
     // An interactive host waits, since the Finder may still hand it documents.
-    if !documents.isEmpty && resume == nil {
+    // A resumed program is sent them as the Finder sends a running one its
+    // documents.
+    if !documents.isEmpty {
         var cpaths = documents.map { strdup($0) }
         cpaths.withUnsafeMutableBufferPointer { buf in
             buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) {
@@ -968,7 +1028,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     // Rootless, a program's windows have macOS's frames unless an appearance
     // is chosen: they look like the host's own.  On the whole screen the
     // Window Manager draws them.
-    if interactive && !appearanceGiven && saved.appearance == nil && !screenWindow {
+    if interactive && !appearanceGiven && saved.appearance == nil && !screenWindow && resume == nil {
         let depth = machine_screen_depth_setting() /* as chosen above */
         machine_set_appearance(Int32(MACHINE_APPEARANCE_NATIVE))
         machine_set_screen_depth(depth)
@@ -995,7 +1055,11 @@ func runCommand(_ args: [String], resume: String? = nil) {
         let title = bundleTitle ?? (app as NSString).lastPathComponent
         let script = keyScript
         let icons = finderBundle(applicationAt: app).appIcons
+        hibernateContext = HibernateContext(app: app, args: args, title: title, screen: [bootWidth, bootHeight],
+                                            depth: bootDepth, display: background ? "background" : screenWindow ? "screen" : "rootless")
         if screenWindow {
+            // A resumed screen larger than this display: scaled to fit it.
+            if resume != nil { MainActor.assumeIsolated { fitDisplayScale() } }
             MainActor.assumeIsolated { runHostWindow(title: title, icon: dockImage(icons)) }
         } else {
             MainActor.assumeIsolated {
@@ -1033,6 +1097,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
     machine_set_main_thread_pump { _ = CFRunLoopRunInMode(CFRunLoopMode.defaultMode, 0, true) }
     #endif
 
+    if hibernateContext == nil {
+        hibernateContext = HibernateContext(app: app, args: args, title: (app as NSString).lastPathComponent,
+                                            screen: [bootWidth, bootHeight], depth: bootDepth, display: "headless")
+    }
     let budget = maxInstructions
     let start = machine_instruction_count()
     machine_set_instruction_limit(start + maxInstructions)
@@ -1804,6 +1872,7 @@ let rest = Array(argv.dropFirst())
 switch command {
 case "run": runCommand(rest)
 case "resume": resumeCommand(rest)
+case "snapshots": snapshotsCommand(rest)
 case "hibernate-diff": hibernateDiffCommand(rest)
 case "screensaver": screensaverCommand(rest)
 case "import": importCommand(rest)

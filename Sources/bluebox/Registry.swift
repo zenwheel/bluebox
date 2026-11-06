@@ -21,6 +21,7 @@ func defaultRegistry() -> ProgramRegistry {
 /// the front instead, resumed if it is suspended and given the documents,
 /// and this run ends here.
 func registerRun(app: String, documents: [String], newCopy: Bool) {
+    guard Registration.current == nil else { return } // a run resuming its program's snapshot, entered already
     let registry = defaultRegistry()
     let env = ProcessInfo.processInfo.environment
     let own = bundledRun() != nil

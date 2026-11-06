@@ -27,8 +27,8 @@ import Glibc
 public struct RunningProgram: Codable, Equatable, Sendable {
     public enum State: String, Codable, Sendable {
         case running, suspended
-        /// Saved to disk and its process gone (hibernation, still to come):
-        /// the entry stays, with `snapshot`, after the lock is let go.
+        /// Saved to disk and its process gone: the entry stays, with
+        /// `snapshot`, after the lock is let go (Hibernation.swift).
         case hibernated
     }
 
@@ -52,10 +52,12 @@ public struct RunningProgram: Codable, Equatable, Sendable {
     public var bundle: String?
     /// Where a hibernated program's saved state is.
     public var snapshot: String?
+    /// When it hibernated.
+    public var hibernatedAt: Date?
 
     public init(program: String, pid: Int32 = getpid(), executable: String, state: State = .running,
                 started: Date = Date(), title: String, launchedBy: Launcher, bundle: String? = nil,
-                snapshot: String? = nil) {
+                snapshot: String? = nil, hibernatedAt: Date? = nil) {
         self.program = program
         self.pid = pid
         self.executable = executable
@@ -65,6 +67,7 @@ public struct RunningProgram: Codable, Equatable, Sendable {
         self.launchedBy = launchedBy
         self.bundle = bundle
         self.snapshot = snapshot
+        self.hibernatedAt = hibernatedAt.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded(.down)) }
     }
 
     /// The paths of one program compare equal however they were written.
@@ -242,7 +245,7 @@ public struct ProgramRegistry: Sendable {
 }
 
 /// A process's own entry, held for its life: changed when it suspends or
-/// resumes (and, to come, hibernates), removed when it ends.
+/// resumes or hibernates, removed when it ends (unless hibernated).
 public final class Registration: @unchecked Sendable {
     public let registry: ProgramRegistry
     /// The entry's file name, without .json or .lock.
@@ -273,10 +276,11 @@ public final class Registration: @unchecked Sendable {
 
     /// Hibernated: the entry says where the saved state is and stays when
     /// the process ends (end(keeping: true)).
-    public func hibernated(snapshot: String) {
+    public func hibernated(snapshot: String, at date: Date = Date()) {
         update {
             $0.state = .hibernated
             $0.snapshot = snapshot
+            $0.hibernatedAt = Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down)) // as written
         }
     }
 
