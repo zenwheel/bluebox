@@ -210,6 +210,8 @@ enum ShellItem: Hashable {
     @Published var running: [String: Process] = [:] /* by application path */
     /// The running programs' process IDs, and which are suspended (as they say).
     @Published var states = ProgramStates()
+    /// The application Export as App… is showing its options for.
+    @Published var exporting: ShellApp?
     /// Recently launched applications (paths saved before the rename from
     /// Classic follow the moved data folder).
     @Published var recent: [String] = (UserDefaults.standard.stringArray(forKey: "recent") ?? [])
@@ -645,6 +647,8 @@ struct ShellView: View {
                     Button("Show in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: app.path)])
                     }
+                    Divider()
+                    Button("Export as App\u{2026}") { model.exporting = app }
                 }
             } primaryAction: { items in
                 if case .app(let app)? = items.first { model.launch(app) }
@@ -692,6 +696,7 @@ struct ShellView: View {
             Text("\(node.place) › \(node.folder), with \(count) application\(count == 1 ? "" : "s") and everything "
                  + "else in it. Their settings are forgotten; you can put it back from the Trash.")
         }
+        .sheet(item: $model.exporting) { app in ExportSheet(model: model, app: app) }
         .overlay(dropTargeted ? RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor, lineWidth: 3) : nil)
         .onAppear {
             if ProcessInfo.processInfo.environment["BLUEBOX_SHELL_PAGE"] == "app", let first = model.apps.first {
@@ -811,6 +816,8 @@ struct AppPage: View {
                     if model.running[app.path] != nil {
                         Text(model.states.isSuspended(app.path) ? "Suspended" : "Running").foregroundStyle(.secondary)
                     }
+                    Button("Export as App\u{2026}") { model.exporting = app }
+                        .help("Make a Mac application of it that runs without Blue Box")
                     Button("Delete…", role: .destructive) { confirmDelete = true }
                         .disabled(model.running[app.path] != nil)
                         .help(model.running[app.path] != nil ? "Quit it first" : "Move it to the Trash")

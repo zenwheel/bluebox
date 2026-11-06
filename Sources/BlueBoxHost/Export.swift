@@ -142,7 +142,7 @@ public enum ExportBundle {
         guard appledouble_read(path, &mf, &err, err.count) else { return }
         defer { mac_file_free(&mf) }
         guard appledouble_write(path, &mf, &err, err.count) else {
-            throw ExportError("cannot write the resource fork of \(path): \(String(cString: err))")
+            throw ExportError("cannot write the resource fork of \(path): \(String(decoding: err.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self))")
         }
     }
 
