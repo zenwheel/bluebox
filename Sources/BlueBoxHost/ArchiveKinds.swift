@@ -21,6 +21,19 @@ public func looksLikeArchiveData(_ b: [UInt8]) -> Bool {
     return text.contains("(This file must be converted with BinHex")
 }
 
+private let diskImageTypes: Set<String> = ["dImg", "rohd", "dCpy", "ddsk", "hdsk"]
+private let diskImageCreators: Set<String> = ["dCpy", "ddsk", "hdsk"]
+private let programTypes: Set<String> = ["APPL", "appe", "APPC", "APPD", "cdev", "INIT", "dfil"]
+
+/// Whether a Mac file is a disk image by its type and creator: an image's
+/// type, or the creator of a program that makes them (Disk Copy's, DART's)
+/// on anything but a program, since Disk Copy itself is 'APPL' 'ddsk'.
+public func isMacDiskImage(type: UInt32, creator: UInt32) -> Bool {
+    let t = fourCCText(type), c = fourCCText(creator)
+    if diskImageTypes.contains(t) { return true }
+    return diskImageCreators.contains(c) && !programTypes.contains(t)
+}
+
 /// Whether a Mac file (its type, creator, name and the start of its data
 /// fork) is an archive to expand.
 public func isMacArchive(type: UInt32, creator: UInt32, name: String, data: [UInt8]) -> Bool {

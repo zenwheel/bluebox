@@ -20,6 +20,17 @@ import Testing
         #expect(isMacArchive(type: code("ZIP "), creator: code("ZIP "), name: "Classes", data: zip))
     }
 
+    /// Disk Copy is 'APPL' 'ddsk', its images 'dImg' or 'rohd' with the
+    /// same creator: the program runs, the images mount.
+    @Test func diskCopyIsAProgramNotADiskImage() {
+        #expect(!isMacDiskImage(type: code("APPL"), creator: code("ddsk")))
+        #expect(!isMacDiskImage(type: code("APPL"), creator: code("dCpy")))
+        #expect(isMacDiskImage(type: code("rohd"), creator: code("ddsk")))
+        #expect(isMacDiskImage(type: code("dImg"), creator: code("dCpy")))
+        #expect(isMacDiskImage(type: code("????"), creator: code("ddsk")))
+        #expect(!isMacDiskImage(type: code("TEXT"), creator: code("ttxt")))
+    }
+
     @Test func otherFilesAreNot() {
         #expect(!isMacArchive(type: code("APPL"), creator: code("WILD"), name: "HyperCard", data: []))
         // Word's settings are 'SITD' too.
