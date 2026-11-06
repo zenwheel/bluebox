@@ -821,9 +821,8 @@ final class TransientView: NSView {
             let forClassic = MainActor.assumeIsolated { () -> Bool in
                 // Native panels and alerts (Standard File, Alert) keep their keys.
                 if let w = event.window ?? NSApp.keyWindow, !(w is MacWindow) { return false }
-                // Command-Option-Q is the host's Suspend (Resume) and
-                // Control-Option-Command-Q its Force Quit, for a program that
-                // ignores Command-Q (which it gets, as on a Mac).  The menus
+                // Command-Option-Q is the host's Force Quit, for a program
+                // that ignores Command-Q (which it gets, as on a Mac).  The menus
                 // leave command keys to this monitor, so it acts here.  A
                 // suspended program gets no keys: Command-Q quits it.
                 let suspended = Suspender.shared.suspended

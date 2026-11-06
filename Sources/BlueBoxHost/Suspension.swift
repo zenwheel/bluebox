@@ -1,8 +1,8 @@
 // Suspending a running program: what the program's process, the shell and
 // their menus share.
 //
-// A program suspended (Suspend in its application menu, Command-Option-Q,
-// the shell's Suspend button) has its machine held still (machine_pause)
+// A program suspended (Suspend in its application menu, the shell's
+// Suspend button) has its machine held still (machine_pause)
 // and its windows dimmed and inert, each with Resume and Hide buttons
 // over it.  The shell and the programs it launched tell each other with
 // distributed notifications, sent at once even to an application in the
@@ -98,11 +98,7 @@ public struct ProgramStates: Equatable {
 public enum HostKey: Equatable {
     /// To the classic program, as a Mac delivered it.
     case classic
-    /// Command-Option-Q: Suspend, or Resume when suspended.
-    case toggleSuspend
-    /// Control-Option-Command-Q: Force Quit, for a program that ignores
-    /// Command-Q.  (Shift-Command-Q is the system's Log Out and
-    /// Control-Command-Q its Lock Screen.)
+    /// Command-Option-Q: Force Quit, for a program that ignores Command-Q.
     case forceQuit
     /// Command-Q while suspended: resume and ask the program to quit.
     case quit
@@ -115,8 +111,7 @@ public enum HostKey: Equatable {
     public static func classify(_ flags: NSEvent.ModifierFlags, _ key: String?, suspended: Bool) -> HostKey {
         let mods = flags.intersection([.command, .option, .control, .shift])
         if key?.lowercased() == "q" {
-            if mods == [.command, .option, .control] { return .forceQuit }
-            if mods == [.command, .option] { return .toggleSuspend }
+            if mods == [.command, .option] { return .forceQuit }
             if mods == [.command] && suspended { return .quit }
         }
         if key?.lowercased() == "h" && suspended {
@@ -128,8 +123,7 @@ public enum HostKey: Equatable {
 }
 
 /// The application menu's end: Suspend (Resume when suspended), then Quit,
-/// with Option Suspend or Resume (Command-Option-Q) and with Control-Option
-/// Force Quit (Control-Option-Command-Q) in its place.  Quit asks the
+/// with Option Force Quit (Command-Option-Q) in its place.  Quit asks the
 /// classic program to quit, resuming it first.
 @MainActor public enum HostQuitItems {
     public static func items(title: String, suspended: Bool, target: AnyObject, quit: Selector, suspend: Selector,
@@ -140,15 +134,11 @@ public enum HostKey: Equatable {
         let quitItem = NSMenuItem(title: "Quit \(title)", action: quit, keyEquivalent: quitKeys ? "q" : "")
         quitItem.target = target
         guard quitKeys else { return [toggle, quitItem] }
-        let alternate = NSMenuItem(title: "\(verb) \(title)", action: suspend, keyEquivalent: "q")
-        alternate.keyEquivalentModifierMask = [.command, .option]
-        alternate.isAlternate = true
-        alternate.target = target
         let force = NSMenuItem(title: "Force Quit \(title)", action: forceQuit, keyEquivalent: "q")
-        force.keyEquivalentModifierMask = [.command, .option, .control]
+        force.keyEquivalentModifierMask = [.command, .option]
         force.isAlternate = true
         force.target = target
-        return [toggle, .separator(), quitItem, alternate, force]
+        return [toggle, .separator(), quitItem, force]
     }
 }
 

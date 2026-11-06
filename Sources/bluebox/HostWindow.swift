@@ -301,9 +301,8 @@ final class ScreenView: NSView, MacScreenView {
         // Command-Q too, the keystroke a Mac delivered, which a program's
         // MenuKey turns into its Quit item and a Director projector (Total
         // Distortion) quits on itself; the Quit Apple Event the host menu's
-        // item sends went unread.  Command-Option-Q is the host's Suspend
-        // and Control-Option-Command-Q its Force Quit, for a program that
-        // ignores Command-Q; keyDown keeps those.
+        // item sends went unread.  Command-Option-Q is the host's Force
+        // Quit, for a program that ignores Command-Q; keyDown keeps it.
         if event.modifierFlags.contains(.command) {
             keyDown(with: event)
             return true

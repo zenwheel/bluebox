@@ -25,21 +25,17 @@ extension BlueBox {
                                 forceQuit: #selector(Target.force(_:)), quitKeys: quitKeys)
         }
 
-        /// Suspend, then Quit (Command-Q) with Suspend (Command-Option-Q)
-        /// and Force Quit (Control-Option-Command-Q) as its alternates, in
-        /// that order, as AppKit needs alternates to follow their item.
+        /// Suspend, then Quit (Command-Q) with Force Quit (Command-Option-Q)
+        /// as its alternate, after it, as AppKit needs.
         @Test @MainActor func applicationMenuEnds() {
             let m = items(suspended: false)
-            #expect(m.map(\.title) == ["Suspend TeachText", "", "Quit TeachText", "Suspend TeachText",
-                                       "Force Quit TeachText"])
+            #expect(m.map(\.title) == ["Suspend TeachText", "", "Quit TeachText", "Force Quit TeachText"])
             #expect(m[0].keyEquivalent == "" && m[0].action == #selector(Target.suspend(_:)))
             #expect(m[1].isSeparatorItem)
             #expect(m[2].keyEquivalent == "q" && m[2].keyEquivalentModifierMask == [.command] && !m[2].isAlternate)
             #expect(m[2].action == #selector(Target.quit(_:)))
             #expect(m[3].keyEquivalent == "q" && m[3].keyEquivalentModifierMask == [.command, .option] && m[3].isAlternate)
-            #expect(m[3].action == #selector(Target.suspend(_:)))
-            #expect(m[4].keyEquivalent == "q" && m[4].keyEquivalentModifierMask == [.command, .option, .control])
-            #expect(m[4].isAlternate && m[4].action == #selector(Target.force(_:)))
+            #expect(m[3].action == #selector(Target.force(_:)))
             #expect(m.allSatisfy { $0.isSeparatorItem || $0.target === target })
             // The masks differ, so no two items answer the same keys.
             let masks = m.filter { !$0.keyEquivalent.isEmpty }.map(\.keyEquivalentModifierMask.rawValue)
@@ -48,7 +44,7 @@ extension BlueBox {
 
         @Test @MainActor func suspendedSaysResume() {
             let m = items(suspended: true)
-            #expect(m[0].title == "Resume TeachText" && m[3].title == "Resume TeachText")
+            #expect(m[0].title == "Resume TeachText" && m[3].title == "Force Quit TeachText")
             #expect(m[2].title == "Quit TeachText")
         }
 
@@ -78,18 +74,17 @@ extension BlueBox {
             #expect(m.allSatisfy { $0.keyEquivalent.isEmpty && !$0.isAlternate })
         }
 
-        /// Command-Option-Q suspends, Control-Option-Command-Q force quits,
+        /// Command-Option-Q force quits,
         /// other keys go to the program; suspended, only those and
         /// Command-Q (quitting it) do anything.
         @Test func hostKeys() {
-            #expect(HostKey.classify([.command, .option], "q", suspended: false) == .toggleSuspend)
-            #expect(HostKey.classify([.command, .option], "q", suspended: true) == .toggleSuspend)
-            #expect(HostKey.classify([.command, .option, .control], "q", suspended: false) == .forceQuit)
-            #expect(HostKey.classify([.command, .option, .control], "Q", suspended: true) == .forceQuit)
+            #expect(HostKey.classify([.command, .option], "q", suspended: false) == .forceQuit)
+            #expect(HostKey.classify([.command, .option], "Q", suspended: true) == .forceQuit)
+            #expect(HostKey.classify([.command, .option, .control], "q", suspended: false) == .classic)
             #expect(HostKey.classify([.command], "q", suspended: false) == .classic) // the program's Command-Q
             #expect(HostKey.classify([.command], "q", suspended: true) == .quit)
             #expect(HostKey.classify([.command, .shift], "q", suspended: false) == .classic)
-            #expect(HostKey.classify([.command, .option, .capsLock, .numericPad], "q", suspended: false) == .toggleSuspend)
+            #expect(HostKey.classify([.command, .option, .capsLock, .numericPad], "q", suspended: false) == .forceQuit)
             #expect(HostKey.classify([], "a", suspended: false) == .classic)
             #expect(HostKey.classify([], "a", suspended: true) == .ignore)
             #expect(HostKey.classify([.command], "s", suspended: true) == .ignore)

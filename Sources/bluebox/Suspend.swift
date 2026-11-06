@@ -1,8 +1,7 @@
 // macOS host: suspending the program and resuming it.
 //
-// Suspend (in the application menu, Option turning Quit into it with
-// Command-Option-Q, in a background program's status item menu, or asked
-// by the shell) holds the machine still: no instruction runs, and its
+// Suspend (in the application menu, in a background program's status item
+// menu, or asked by the shell) holds the machine still: no instruction runs, and its
 // clock, sound and voices stand still until Resume, so the program finds
 // no jump when it goes on.  Meanwhile its windows are greyed and inert,
 // with Resume and Hide over each.  The shell hears of each change.
@@ -70,7 +69,6 @@ import Toolbox
     func handle(_ key: HostKey) -> Bool {
         switch key {
         case .classic: return false
-        case .toggleSuspend: toggle()
         case .forceQuit: NSApp.terminate(nil)
         case .quit: quit()
         case .hide: NSApp.hide(nil)
