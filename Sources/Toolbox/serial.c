@@ -64,6 +64,7 @@ typedef struct {
     uint8_t xon_char, xoff_char;
     /* a read waiting for its bytes */
     gaddr rd_pb;
+    gaddr gave_pb;     /* a synchronous read that gave up for a drain: made again, it goes on */
     /* the modem */
     int mode;
     char cmd[256];
@@ -834,7 +835,9 @@ static int16_t ser_read(gaddr pb, bool async)
         return notOpenErr;
     if (p->rd_pb)
         return -19; /* readErr: one at a time */
-    wr32(pb + IOParam_ioActCount_off, 0);
+    if (async || p->gave_pb != pb)
+        wr32(pb + IOParam_ioActCount_off, 0); /* (made again: what it read so far stays) */
+    p->gave_pb = 0;
     pump(p);
     if (read_done(p, pb))
         return noErr;
@@ -846,6 +849,12 @@ static int16_t ser_read(gaddr pb, bool async)
      * more than will come gets what came. */
     uint64_t until = now_ms() + 30000;
     while (!read_done(p, pb) && now_ms() < until) {
+        /* At the program's level the wait gives up for a drain, as Delay
+         * does: the read made again goes on with what it has. */
+        if (drain_give_up()) {
+            p->gave_pb = pb;
+            return noErr;
+        }
         struct pollfd pf = { p->fd, POLLIN, 0 };
         poll(&pf, p->fd >= 0 ? 1 : 0, 20);
         pump(p);
@@ -982,6 +991,38 @@ bool serial_port_online(int port)
 
 /* Whether the port is open, by a driver or a tool. */
 bool serial_port_in_use(int port) { return port_n(port)->opened; }
+
+/* Resumed (reattach.c): each open port's host end is the old process's
+ * (forgotten, never closed) and is connected again as at its opening: a
+ * listener listens again, a pseudo-terminal is a new one (its name on
+ * stderr), a device is opened again with the port's settings, a TCP
+ * connection is made again.  The modem's call is over: NO CARRIER, as
+ * when the other end hangs up, and its listener rings again for calls.
+ * Reads under way go on. */
+void serial_after_resume(void)
+{
+    for (int i = 0; i < NPORTS; i++) {
+        sport *p = &ports[i];
+        p->fd = p->lfd = -1;
+        if (!p->opened)
+            continue;
+        p->ringing = false;
+        p->rings = 0;
+        if (p->kind == K_MODEM)
+            hang_up(p, true);
+        connect_port(p);
+        LOGF(LOG_IDLE, "resume: the %s port (%s) is connected again\n", i == PORT_A ? "modem" : "printer", p->spec);
+    }
+}
+
+/* The host ends closed, as when the process ends (the tests). */
+void serial_close_sockets(void)
+{
+    for (int i = 0; i < NPORTS; i++) {
+        close_fd(&ports[i].fd);
+        close_fd(&ports[i].lfd);
+    }
+}
 
 /* ---------------------------------------------------------------------- */
 /* Setup */

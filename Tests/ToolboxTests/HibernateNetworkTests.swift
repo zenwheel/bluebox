@@ -730,5 +730,135 @@ extension BlueBox {
             #expect(rd8(b0) == 0x6F)
         }
 
+        // ---- The PPC Toolbox
+
+        func portName(_ name: String) -> UInt32 {
+            let p = tb_NewPtr(72, false, true)
+            guestPString(name, at: p + 2)
+            guestPString("Test", at: p + 38)
+            return p
+        }
+
+        func ppcOpen(_ name: String) -> UInt16 {
+            let pb = tb_NewPtr(64, false, true)
+            wr8(pb + 44, 1) // ppcServiceRealTime
+            wr32(pb + 46, portName(name))
+            #expect(tb_PPCOpenSync(pb) == 0)
+            return rd16(pb + 38)
+        }
+
+        func ppcPump() {
+            for _ in 0..<100 { usleep(2000); ppc_toolbox_poll() }
+        }
+
+        /// The PPC Toolbox resumed: a port listens again and a PPCInform
+        /// waiting on it hears a session started after resuming; a session
+        /// is over, its read under way ending with sessClosedErr.
+        @Test func ppcToolboxPortsListenAgain() {
+            let dir = launchTestApp()
+            startLoop()
+            let tag = String(getpid() % 10000)
+            let a = ppcOpen("HibA" + tag), b = ppcOpen("HibB" + tag)
+            let inform = tb_NewPtr(64, false, true), who = tb_NewPtr(72, false, true)
+            wr16(inform + 38, b); wr8(inform + 45, 1); wr32(inform + 46, who)
+            #expect(tb_PPCInformAsync(inform) == 0)
+            let start = tb_NewPtr(70, false, true)
+            wr16(start + 38, a); wr32(start + 46, portName("HibB" + tag))
+            #expect(tb_PPCStartSync(start) == 0)
+            ppcPump()
+            #expect(rd16(inform + 16) == 0)
+            let r = tb_NewPtr(70, false, true), buf = tb_NewPtr(64, false, true)
+            wr32(r + 40, rd32(inform + 40)); wr32(r + 44, 64); wr32(r + 52, buf)
+            #expect(tb_PPCReadAsync(r) == 0 && rd16(r + 16) == 1)
+            let inform2 = tb_NewPtr(64, false, true)
+            wr16(inform2 + 38, b); wr8(inform2 + 45, 1); wr32(inform2 + 46, tb_NewPtr(72, false, true))
+            #expect(tb_PPCInformAsync(inform2) == 0)
+
+            let snap = hibernate(dir, "ppc.bbhib")
+            resume(snap)
+            ppc_toolbox_poll()
+            #expect(Int16(bitPattern: rd16(r + 16)) == -917)                  // sessClosedErr
+            #expect(rd16(inform2 + 16) == 1)
+            let again = tb_NewPtr(70, false, true)
+            wr16(again + 38, a); wr32(again + 46, portName("HibB" + tag))
+            #expect(tb_PPCStartSync(again) == 0)
+            ppcPump()
+            #expect(rd16(inform2 + 16) == 0)
+            for port in [a, b] {
+                let c = tb_NewPtr(64, false, true)
+                wr16(c + 38, port)
+                #expect(tb_PPCCloseSync(c) == 0)
+            }
+        }
+
+        // ---- The serial ports
+
+        func serOpen(_ name: String) -> Int16 {
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true), np = tb_NewPtr(8, false, true)
+            guestPString(name, at: np)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), np)
+            #expect(tb_PBOpen(pb, false) == 0)
+            return Int16(bitPattern: rd16(pb + UInt32(IOParam_ioRefNum_off)))
+        }
+
+        func serWrite(_ ref: Int16, _ s: String) {
+            let bytes = Array(s.utf8)
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true), buf = tb_NewPtr(Int32(bytes.count), false, false)
+            for (i, b) in bytes.enumerated() { wr8(buf + UInt32(i), b) }
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: ref))
+            wr32(pb + UInt32(IOParam_ioBuffer_off), buf)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), UInt32(bytes.count))
+            #expect(tb_PBWrite(pb, false) == 0)
+        }
+
+        func serAvailable(_ ref: Int16) -> String {
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: ref))
+            wr16(pb + UInt32(CntrlParam_csCode_off), 2)
+            #expect(tb_PBStatus(pb, false) == 0)
+            let n = rd32(pb + UInt32(CntrlParam_csParam_off))
+            guard n > 0 else { return "" }
+            let buf = tb_NewPtr(Int32(n), false, false)
+            wr32(pb + UInt32(IOParam_ioBuffer_off), buf)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), n)
+            #expect(tb_PBRead(pb, false) == 0)
+            return String(decoding: (0..<rd32(pb + UInt32(IOParam_ioActCount_off))).map { rd8(buf + $0) }, as: UTF8.self)
+        }
+
+        func serWait(_ ref: Int16, _ text: String) -> String {
+            var got = ""
+            for _ in 0..<100 where !got.contains(text) {
+                usleep(10000)
+                serial_poll()
+                got += serAvailable(ref)
+            }
+            return got
+        }
+
+        /// The modem port resumed: its call is over (NO CARRIER), and the
+        /// port it answers calls on rings again for a call made then.
+        @Test func theModemHangsUpAndRingsAgain() {
+            let mport = freePort(SOCK_STREAM)
+            #expect(machine_set_serial(0, "modem:\(mport)"))
+            defer { _ = machine_set_serial(0, "modem") }
+            let dir = launchTestApp()
+            startLoop()
+            let input = serOpen(".AIn"), output = serOpen(".AOut")
+            let (lfd, port) = listener()
+            defer { close(lfd) }
+            serWrite(output, "ATDT127.0.0.1:\(port)\r")
+            #expect(serWait(input, "CONNECT").contains("CONNECT"))
+            let conn = accept(lfd, nil, nil)
+            #expect(conn >= 0)
+
+            let snap = hibernate(dir, "modem.bbhib")
+            close(conn)
+            resume(snap)
+            #expect(serWait(input, "NO CARRIER").contains("NO CARRIER"))
+            let caller = connectTo(mport)
+            #expect(caller >= 0)
+            defer { close(caller) }
+            #expect(serWait(input, "RING").contains("RING"))
+        }
     }
 }

@@ -20,13 +20,14 @@
  *                spoken is over, its completion callbacks made (speech.c);
  *                a recording stops, as SPBStopRecording stops one
  *                (sound_input.c)
+ *
  *   the network  what listens or is registered is made again on the new
  *                host; a connection is over, and the program hears so
  *                as each protocol tells it (network_after_resume)
  *
  * What a snapshot cannot carry is refused before it is taken
- * (hibernate_io_blocker): the PPC Toolbox's ports, serial ports, print
- * jobs, EtherTalk bridged onto an interface, the host's media.
+ * (hibernate_io_blocker): a print job, a streamed movie, EtherTalk
+ * bridged onto an interface, the host's media.
  *
  * The fresh process is booted as the original was (the host replays its
  * launch record) but the program is not launched: the snapshot replaces
@@ -89,8 +90,6 @@ const char *hibernate_io_blocker(void)
 {
     BB_HOST static char reason[200];
     const char *what = network_io_open();
-    if (!what)
-        what = serial_io_open();
     if (!what)
         what = print_job_open();
     if (!what)
@@ -186,19 +185,8 @@ const char *network_io_open(void)
     const char *at = appletalk_unresumable();
     if (at)
         return at;
-    if (ppc_toolbox_open())
-        return "has a PPC Toolbox port open";
     if (qt_streams_open())
         return "has a streamed movie open";
-    return NULL;
-}
-
-const char *serial_io_open(void)
-{
-    if (serial_port_in_use(0) || serial_port_in_use(1))
-        return "has a serial port open";
-    if (ctb_connections_open())
-        return "has a Communications Toolbox connection open";
     return NULL;
 }
 
@@ -245,10 +233,11 @@ void hibernate_reattach_host(void)
  * this node (the old address if no one has taken it), NBP's names, DDP
  * sockets and ATP's transactions (which go on by their retries); MacTCP's
  * and Open Transport's listeners and UDP streams and endpoints, bound to
- * their old ports.
+ * their old ports; the PPC Toolbox's ports; the serial ports' host ends.
  * A connection is over: the program hears of it at the next safe point as
  * each protocol says so (MacTCP's TCPTerminate and connectionTerminated,
- * Open Transport's T_DISCONNECT, ADSP's tear-down, ASP's aspSessClosed), and its
+ * Open Transport's T_DISCONNECT, ADSP's tear-down, ASP's aspSessClosed,
+ * the PPC Toolbox's sessClosedErr, the modem's carrier lost), and its
  * calls under way end with that error; an AppleShare volume's session is
  * opened again on its next use, as for a server's restart. */
 void network_after_resume(void)
@@ -258,6 +247,9 @@ void network_after_resume(void)
     appleshare_after_resume();
     mactcp_after_resume();
     ot_after_resume();
+    ppc_toolbox_after_resume();
+    serial_after_resume();
+    ctb_after_resume();
 }
 
 /* The network's host sockets closed, as when a process ends: for the
@@ -266,4 +258,7 @@ void network_close_sockets(void)
 {
     mactcp_close_sockets();
     ot_close_sockets();
+    ppc_toolbox_close_sockets();
+    serial_close_sockets();
+    ctb_close_sockets();
 }

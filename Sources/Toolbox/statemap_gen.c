@@ -2173,6 +2173,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/ppc_libs.c", "location", 12, 0 },
     { "Toolbox/ppctoolbox.c", "done", 512, 0 },
     { "Toolbox/ppctoolbox.c", "folder.path", 512, 0 },
+    { "Toolbox/ppctoolbox.c", "gave_start", 4, 0 },
     { "Toolbox/ppctoolbox.c", "list.all", 43008, 0 },
     { "Toolbox/ppctoolbox.c", "ndone", 4, 0 },
     { "Toolbox/ppctoolbox.c", "next_port", 2, 0 },
@@ -2676,7 +2677,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1686;
+const unsigned hb_nstatics = 1687;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
