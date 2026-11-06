@@ -84,12 +84,20 @@ final class ScreenView: NSView, MacScreenView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    private var lastChecksum: Int = -1
+    private var shownCopy = [UInt8]() // the screen as last shown
 
-    /// Ask for a redraw only when the framebuffer changed (cheap hash check).
+    /// Ask for a redraw only when the framebuffer changed (compared with a
+    /// copy of it).
     func refreshIfChanged() {
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
+        // Converted only when it changed, or the desktop's showing through
+        // changes (the mask then follows).
+        let clear = !NSApp.isActive && !hostFullScreen && !machine_is_finder()
+        let size = machine_screen_shadow_size(0, 0, w, h)
+        if shownCopy.count != size { shownCopy = [UInt8](repeating: 0, count: size) }
+        let changed = shownCopy.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, w, h, $0.baseAddress!, size) }
+        if !changed && clear == clearing { return }
         if rgba.count != Int(w) * Int(h) { rgba = [UInt32](repeating: 0, count: Int(w) * Int(h)) }
         rgba.withUnsafeMutableBytes { raw in
             machine_screen_rgba(0, 0, w, h, raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
@@ -98,7 +106,6 @@ final class ScreenView: NSView, MacScreenView {
         // sent there, hides its play area and leaves only a small window):
         // the host's desktop shows through the window instead.  Not the
         // Finder's: the desktop is what it shows.
-        let clear = !NSApp.isActive && !hostFullScreen && !machine_is_finder()
         if clear {
             if deskMask.count != rgba.count { deskMask = [UInt8](repeating: 1, count: rgba.count) }
             if machine_desktop_mask(0, 0, w, h, &deskMask) {
@@ -110,13 +117,7 @@ final class ScreenView: NSView, MacScreenView {
             window?.isOpaque = !clear
             window?.backgroundColor = clear ? .clear : .windowBackgroundColor
         }
-        var hasher = Hasher()
-        rgba.withUnsafeBytes { hasher.combine(bytes: $0) }
-        let sum = hasher.finalize()
-        if sum != lastChecksum {
-            lastChecksum = sum
-            needsDisplay = true
-        }
+        needsDisplay = true
     }
 
     private var deskMask = [UInt8]()

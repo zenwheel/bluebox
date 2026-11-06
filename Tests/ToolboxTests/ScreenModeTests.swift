@@ -68,3 +68,38 @@ extension BlueBox {
         }
     }
 }
+
+extension BlueBox {
+    /// The copy of the screen a host refreshing its windows every frame
+    /// compares before converting the pixels: unchanged while nothing
+    /// changes, changed when a pixel or a colour it is shown in does.
+    @Suite struct ScreenShadow {
+        @Test(arguments: [Int32(1), 8, 32]) func changesWithThePixelsAndTheirColours(depth: Int32) throws {
+            machine_set_screen_depth(depth)
+            defer { machine_set_screen_depth(1) }
+            launchTestApp()
+            var w: Int32 = 0, h: Int32 = 0
+            machine_screen_size(&w, &h)
+            var all = [UInt8](repeating: 0, count: machine_screen_shadow_size(0, 0, w, h))
+            var part = [UInt8](repeating: 0, count: machine_screen_shadow_size(0, 0, 10, 10))
+            func changed() -> Bool { all.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, w, h, $0.baseAddress!, $0.count) } }
+            func partChanged() -> Bool { part.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, 10, 10, $0.baseAddress!, $0.count) } }
+            #expect(changed())
+            #expect(!changed())
+            #expect(partChanged())
+            let at = rd32(UInt32(LM_ScrnBase)) + 300 * qd_screen_row_bytes() + 40
+            wr8(at, rd8(at) ^ 0x10)
+            #expect(changed())
+            #expect(!changed())
+            #expect(!partChanged(), "outside the part")
+            wr8(at, rd8(at) ^ 0x10)
+            #expect(changed())
+            if depth == 8 {
+                let rgb: [UInt16] = [0x1234, 0x5678, 0x9ABC]
+                rgb.withUnsafeBufferPointer { qd_screen_set_hw_entry(7, $0.baseAddress!) }
+                #expect(changed())
+                #expect(partChanged())
+            }
+        }
+    }
+}

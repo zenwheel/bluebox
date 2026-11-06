@@ -353,9 +353,24 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
 {
     pixdst d = { display_base, screen_row_bytes, { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width },
                  screen_depth, qd_screen_ctab() };
+    bool inside = x >= 0 && y >= 0 && x + w <= g_screen_width && y + h <= g_screen_height;
     for (int r = 0; r < h; r++) {
         uint8_t *o = out + (size_t)r * (size_t)w * 4;
         int sy = y + r;
+        /* The usual depths a row at a time (a host refreshes the whole
+         * screen when it changes). */
+        if (inside && screen_depth == 32) {
+            const uint8_t *p = gptr(display_base + (uint32_t)sy * screen_row_bytes + (uint32_t)x * 4);
+            for (int c = 0; c < w; c++, o += 4, p += 4)
+                o[0] = p[1], o[1] = p[2], o[2] = p[3], o[3] = 255;
+            continue;
+        }
+        if (inside && screen_depth == 8) {
+            const uint8_t *p = gptr(display_base + (uint32_t)sy * screen_row_bytes + (uint32_t)x);
+            for (int c = 0; c < w; c++, o += 4, p++)
+                o[0] = clut[*p][0], o[1] = clut[*p][1], o[2] = clut[*p][2], o[3] = 255;
+            continue;
+        }
         for (int c = 0; c < w; c++, o += 4) {
             int sx = x + c;
             if (sx < 0 || sy < 0 || sx >= g_screen_width || sy >= g_screen_height) {
@@ -392,6 +407,77 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out)
     }
     if (brightness != 255)
         dim(out, (size_t)w * (size_t)h);
+}
+
+/* A copy of what part of the screen shows, kept by a host that refreshes
+ * its windows every frame: the pixels as they are in memory (the rect's
+ * rows, whole bytes), and the state they are shown through. */
+typedef struct {
+    int32_t x, y, w, h, depth, brightness;
+    uint32_t base, row_bytes;
+    uint8_t clut[256][3], lut[3][256];
+} shadow_head;
+
+static bool clip_rect(int *x0, int *y0, int *x1, int *y1, uint32_t *b0, uint32_t *b1)
+{
+    if (*x0 < 0)
+        *x0 = 0;
+    if (*y0 < 0)
+        *y0 = 0;
+    if (*x1 > g_screen_width)
+        *x1 = g_screen_width;
+    if (*y1 > g_screen_height)
+        *y1 = g_screen_height;
+    if (*x1 <= *x0 || *y1 <= *y0)
+        return false;
+    *b0 = (uint32_t)*x0 * (uint32_t)screen_depth / 8;
+    *b1 = ((uint32_t)*x1 * (uint32_t)screen_depth + 7) / 8;
+    return true;
+}
+
+size_t machine_screen_shadow_size(int x, int y, int w, int h)
+{
+    int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
+    uint32_t b0, b1;
+    size_t rows = clip_rect(&x0, &y0, &x1, &y1, &b0, &b1) ? (size_t)(y1 - y0) * (b1 - b0) : 0;
+    return sizeof(shadow_head) + rows;
+}
+
+/* Whether it changed since the copy was taken, the copy brought up to
+ * date: memory compared is several times faster than the pixels
+ * converted and hashed, and a screen as large as the host's display
+ * unchanged costs a fraction of a millisecond a frame. */
+bool machine_screen_changed(int x, int y, int w, int h, uint8_t *shadow, size_t len)
+{
+    if (len != machine_screen_shadow_size(x, y, w, h))
+        return true;
+    shadow_head head;
+    memset(&head, 0, sizeof head); /* padding too: it is compared */
+    head.x = x, head.y = y, head.w = w, head.h = h;
+    head.depth = screen_depth, head.brightness = brightness;
+    head.base = display_base, head.row_bytes = screen_row_bytes;
+    if (screen_depth > 1 && screen_depth <= 8)
+        memcpy(head.clut, clut, sizeof clut);
+    const uint8_t (*lut)[256] = video_output_lut();
+    if (lut)
+        memcpy(head.lut, lut, sizeof head.lut);
+    bool changed = memcmp(shadow, &head, sizeof head) != 0;
+    if (changed)
+        memcpy(shadow, &head, sizeof head);
+    int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
+    uint32_t b0, b1;
+    if (!clip_rect(&x0, &y0, &x1, &y1, &b0, &b1))
+        return changed;
+    uint8_t *o = shadow + sizeof head;
+    size_t n = b1 - b0;
+    for (int r = y0; r < y1; r++, o += n) {
+        const uint8_t *p = gptr(display_base + (uint32_t)r * screen_row_bytes + b0);
+        if (memcmp(o, p, n)) {
+            memcpy(o, p, n);
+            changed = true;
+        }
+    }
+    return changed;
 }
 
 bool machine_screenshot(const char *path)
