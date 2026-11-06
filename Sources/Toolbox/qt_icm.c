@@ -34,13 +34,13 @@ static bool describe_image(gaddr desc, qt_video_format *f, uint32_t palette[256]
     uint32_t n = rd32(desc);
     if (n < 86 || n > 1 << 20)
         n = 86;
-    uint8_t *b = malloc(n);
+    uint8_t *b = bb_malloc(n, BB_BYTES);
     if (!b)
         return false;
     gget(b, desc, n);
     /* an effect's description may leave its size to its sources */
     if (!qt_video_format_of_desc(b, n, f, palette) && !icm_is_effect(f->format)) {
-        free(b);
+        bb_free(b);
         f->desc = NULL;
         return false;
     }
@@ -49,7 +49,7 @@ static bool describe_image(gaddr desc, qt_video_format *f, uint32_t palette[256]
 
 static void desc_done(qt_video_format *f)
 {
-    free((void *)f->desc);
+    bb_free((void *)f->desc);
     f->desc = NULL;
     f->desc_len = 0;
 }
@@ -76,7 +76,7 @@ static void draw(const uint8_t *frame, int w, int h, qrect src, qrect dst, gaddr
     int sw = src.right - src.left, sh = src.bottom - src.top;
     if (sw <= 0 || sh <= 0 || src.left < 0 || src.top < 0)
         return;
-    uint8_t *part = malloc((size_t)sw * (size_t)sh * 4);
+    uint8_t *part = bb_malloc((size_t)sw * (size_t)sh * 4, BB_BYTES);
     if (!part)
         return;
     for (int y = 0; y < sh; y++)
@@ -93,7 +93,7 @@ static void draw(const uint8_t *frame, int w, int h, qrect src, qrect dst, gaddr
         tb_SetClip(saved);
         tb_DisposeRgn(saved);
     }
-    free(part);
+    bb_free(part);
 }
 
 /* Decode one image into a new frame; NULL if we can't. */
@@ -114,14 +114,14 @@ static uint8_t *decode_one(gaddr desc, gaddr data, int32_t len, int *w, int *h, 
     }
     if (len <= 0)
         len = (int32_t)rd32(desc + 44);
-    uint8_t *bytes = malloc(len > 0 ? (size_t)len : 1), *frame = calloc((size_t)f.width * (size_t)f.height, 4);
+    uint8_t *bytes = bb_malloc(len > 0 ? (size_t)len : 1, BB_BYTES), *frame = bb_calloc((size_t)f.width * (size_t)f.height, 4, BB_BYTES);
     if (len > 0)
         gget(bytes, data, (uint32_t)len);
     bool ok = bytes && frame && len > 0 && qt_vdec_decode(d, bytes, (size_t)len, frame);
     qt_vdec_free(d);
-    free(bytes);
+    bb_free(bytes);
     if (!ok) {
-        free(frame);
+        bb_free(frame);
         *err = codecBadDataErr;
         return NULL;
     }
@@ -143,7 +143,7 @@ bool icm_draw_compressed(gaddr desc, gaddr data, qrect src, qrect dst, gaddr mas
         return false;
     }
     draw(frame, w, h, src, dst, mask);
-    free(frame);
+    bb_free(frame);
     return true;
 }
 
@@ -158,7 +158,7 @@ int16_t tb_DecompressImage(int32_t data, int32_t desc, int32_t dst, gaddr srcRec
     qrect src = srcRect ? qrect_get(srcRect) : (qrect){ 0, 0, (int16_t)h, (int16_t)w };
     qrect to = dstRect ? qrect_get(dstRect) : src;
     draw(frame, w, h, src, to, (gaddr)mask);
-    free(frame);
+    bb_free(frame);
     return noErr;
 }
 
@@ -173,7 +173,7 @@ int16_t tb_FDecompressImage(int32_t data, int32_t desc, int32_t dst, gaddr srcRe
         return err;
     qrect src = srcRect ? qrect_get(srcRect) : (qrect){ 0, 0, (int16_t)h, (int16_t)w };
     draw(frame, w, h, src, apply_matrix((gaddr)matrix, src), (gaddr)mask);
-    free(frame);
+    bb_free(frame);
     return noErr;
 }
 
@@ -209,7 +209,7 @@ void icm_reset(void)
     for (int i = 0; i < MAX_SEQS; i++)
         if (seqs[i].used) {
             qt_vdec_free(seqs[i].dec);
-            free(seqs[i].frame);
+            bb_free(seqs[i].frame);
         }
     memset(seqs, 0, sizeof seqs);
     icm_compress_reset();
@@ -238,7 +238,7 @@ int16_t tb_DecompressSequenceBegin(gaddr seqID, int32_t desc, int32_t port, int3
     desc_done(&s->format);
     if (!s->dec && !s->effect)
         return noCodecErr;
-    s->frame = calloc((size_t)(s->format.width > 0 ? s->format.width : 1) * (size_t)(s->format.height > 0 ? s->format.height : 1), 4);
+    s->frame = bb_calloc((size_t)(s->format.width > 0 ? s->format.width : 1) * (size_t)(s->format.height > 0 ? s->format.height : 1), 4, BB_BYTES);
     s->port = port ? (gaddr)port : qd_port();
     s->src = srcRect ? qrect_get(srcRect) : (qrect){ 0, 0, (int16_t)s->format.height, (int16_t)s->format.width };
     if (matrix) {
@@ -278,7 +278,7 @@ static int16_t sequence_frame(int32_t id, gaddr data, int32_t size, gaddr outFla
             s->format.height = h;
             s->src = (qrect){ 0, 0, (int16_t)h, (int16_t)w };
         }
-        free(s->frame);
+        bb_free(s->frame);
         s->frame = frame;
         ok = true;
     } else {
@@ -286,10 +286,10 @@ static int16_t sequence_frame(int32_t id, gaddr data, int32_t size, gaddr outFla
             return paramErr;
         if (size <= 0)
             size = s->data_size > 0 ? s->data_size : 1 << 18; /* the codec stops where the frame ends */
-        uint8_t *bytes = malloc((size_t)size);
+        uint8_t *bytes = bb_malloc((size_t)size, BB_BYTES);
         gget(bytes, data, (uint32_t)size);
         ok = qt_vdec_decode(s->dec, bytes, (size_t)size, s->frame);
-        free(bytes);
+        bb_free(bytes);
     }
     gaddr saved = qd_port();
     tb_SetPort(s->port);
@@ -330,7 +330,7 @@ int16_t tb_CDSequenceEnd(int32_t seqID)
     if (!s)
         return icm_csequence_end(seqID) ? noErr : paramErr;
     qt_vdec_free(s->dec);
-    free(s->frame);
+    bb_free(s->frame);
     memset(s, 0, sizeof *s);
     return noErr;
 }
@@ -534,8 +534,8 @@ int16_t icm_dseq_replace(int32_t id, gaddr desc)
     if (f.palette)
         s->format.palette = s->palette;
     if (f.width > 0 && f.height > 0) {
-        free(s->frame);
-        s->frame = calloc((size_t)f.width * (size_t)f.height, 4);
+        bb_free(s->frame);
+        s->frame = bb_calloc((size_t)f.width * (size_t)f.height, 4, BB_BYTES);
     }
     s->data_size = (int32_t)rd32(desc + 44);
     return noErr;

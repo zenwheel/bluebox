@@ -34,7 +34,7 @@ static void put(buf *o, const char *fmt, ...)
             return;
         }
         size_t want = o->cap * 2 + (size_t)(n > 0 ? n : 0) + 4096;
-        char *g = realloc(o->b, want);
+        char *g = bb_realloc(o->b, want, BB_BYTES);
         if (!g)
             return;
         o->b = g;
@@ -338,7 +338,7 @@ static void collect_fonts(const machine_print_job *job, char (*fonts)[80], int *
 
 size_t print_postscript(const machine_print_job *job, char **out)
 {
-    buf o = { malloc(65536), 0, 65536 };
+    buf o = { bb_malloc(65536, BB_BYTES), 0, 65536 };
     if (!o.b)
         return 0;
     double sx = job->hres > 72 ? 72.0 / job->hres : 1, sy = job->vres > 72 ? 72.0 / job->vres : 1;

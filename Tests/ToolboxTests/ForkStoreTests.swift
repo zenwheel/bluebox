@@ -224,7 +224,7 @@ struct ForkStoreTests {
         var outLen = 0
         var err = [CChar](repeating: 0, count: 256)
         #expect(rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
-        defer { free(out) }
+        defer { bb_free(out) }
         #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == expected)
     }
 
@@ -238,7 +238,7 @@ struct ForkStoreTests {
         var outLen = 0
         var err = [CChar](repeating: 0, count: 256)
         #expect(rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
-        defer { free(out) }
+        defer { bb_free(out) }
         #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == expected)
     }
 
@@ -251,7 +251,7 @@ struct ForkStoreTests {
         var outLen = 0
         var err = [CChar](repeating: 0, count: 256)
         #expect(rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
-        defer { free(out) }
+        defer { bb_free(out) }
         #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == [0, 0, 0, 8, 0x4E, 0xBA])
     }
 
@@ -291,7 +291,7 @@ struct ForkStoreTests {
         var outLen = 0
         var err = [CChar](repeating: 0, count: 256)
         #expect(rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
-        defer { free(out) }
+        defer { bb_free(out) }
         #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == Array("AAAAbcdAbcdAAAA".utf8))
     }
 
@@ -315,7 +315,7 @@ struct ForkStoreTests {
         var outLen = 0
         var err = [CChar](repeating: 0, count: 256)
         #expect(rsrc_decompress(&res, res.count, &out, &outLen, &err, err.count))
-        defer { free(out) }
+        defer { bb_free(out) }
         #expect(Array(UnsafeBufferPointer(start: out, count: outLen)) == [0, 0, 0, 8, 0x4E, 0xBA])
     }
 
@@ -376,7 +376,7 @@ struct ForkStoreTests {
         var entries: UnsafeMutablePointer<hfs_entry>?
         var count = 0
         #expect(hfs_list(v, &entries, &count, &err, err.count))
-        defer { free(entries) }
+        defer { bb_free(entries) }
         let all = Array(UnsafeBufferPointer(start: entries, count: count))
         func name(_ e: hfs_entry) -> [UInt8] {
             var e = e
@@ -394,7 +394,7 @@ struct ForkStoreTests {
         var dlen = 0, rlen = 0
         #expect(hfs_read_fork(v, &fileEntry, false, &data, &dlen, &err, err.count))
         #expect(hfs_read_fork(v, &fileEntry, true, &rsrc, &rlen, &err, err.count))
-        defer { free(data); free(rsrc) }
+        defer { bb_free(data); bb_free(rsrc) }
         #expect(Array(UnsafeBufferPointer(start: data, count: dlen)) == Array("data fork".utf8))
         #expect(Array(UnsafeBufferPointer(start: rsrc, count: rlen)) == Array("resource fork".utf8))
     }

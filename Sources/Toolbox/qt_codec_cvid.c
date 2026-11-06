@@ -46,10 +46,10 @@ static bool supports(int depth) { return depth == 8 || depth == 24 || depth == 3
 static void *open_(const qt_video_format *f)
 {
     (void)f;
-    return calloc(1, sizeof(cvid_state));
+    return bb_calloc(1, sizeof(cvid_state), BB_TAG(cvid_state));
 }
 
-static void close_(void *s) { free(s); }
+static void close_(void *s) { bb_free(s); }
 
 static void load_codebook(cvid_codebook book, int id, const uint8_t *data, size_t len, const uint32_t *palette)
 {

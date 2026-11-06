@@ -644,7 +644,7 @@ uint8_t *intl_itl2(uint32_t *lenp)
 {
     gaddr h = tb_GetIntlResource(2);
     int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
-    uint8_t *p = malloc(n >= 64 ? (size_t)n : 64);
+    uint8_t *p = bb_malloc(n >= 64 ? (size_t)n : 64, BB_BYTES);
     if (n >= 64) {
         gget(p, rd32(h), (uint32_t)n);
         if (be16_at(p + 8) == 0xFFFF && be16_at(p + 30) >= 1) {
@@ -654,7 +654,7 @@ uint8_t *intl_itl2(uint32_t *lenp)
     }
     for (unsigned i = 0; i < sysres_count; i++)
         if (sysres[i].type == fourcc("itl2") && sysres[i].id == 0) {
-            p = realloc(p, sysres[i].len);
+            p = bb_realloc(p, sysres[i].len, BB_BYTES);
             memcpy(p, sysres[i].data, sysres[i].len);
             *lenp = sysres[i].len;
         }
@@ -672,7 +672,7 @@ static void char_map(int slot, uint8_t map[256])
         uint32_t at = cls + (uint32_t)c < n ? list + p[cls + (uint32_t)c] : n;
         map[c] = (uint8_t)(c + (at < n ? p[at] : 0));
     }
-    free(p);
+    bb_free(p);
 }
 
 /* UppercaseText, LowercaseText, StripDiacritics and

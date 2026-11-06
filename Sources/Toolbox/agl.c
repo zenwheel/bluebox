@@ -198,11 +198,11 @@ static void agl_ChoosePixelFormat(ppc_cpu *c)
         RETURN(0);
         return;
     }
-    apix *p = malloc(sizeof *p);
+    apix *p = bb_malloc(sizeof *p, BB_TAG(apix));
     *p = f;
     p->guest = new_object(TAG_PIX, slot);
     if (!p->guest) {
-        free(p);
+        bb_free(p);
         set_error(AGL_BAD_ALLOC);
         RETURN(0);
         return;
@@ -217,7 +217,7 @@ static void agl_DestroyPixelFormat(ppc_cpu *c)
     if (p) {
         pixs[object_index(R(0), TAG_PIX)] = NULL;
         tb_DisposePtr(p->guest);
-        free(p);
+        bb_free(p);
     } else if (R(0)) {
         set_error(AGL_BAD_PIXELFMT);
     }
@@ -402,7 +402,7 @@ static void agl_CreateContext(ppc_cpu *c)
         RETURN(0);
         return;
     }
-    actx *a = calloc(1, sizeof *a);
+    actx *a = bb_calloc(1, sizeof *a, BB_TAG(actx));
     a->guest = g;
     a->h = h;
     a->fmt = *f;
@@ -425,7 +425,7 @@ static void destroy(actx *a)
     free_frame(a);
     tb_DisposePtr(a->scratch);
     tb_DisposePtr(a->guest);
-    free(a);
+    bb_free(a);
 }
 
 static void agl_DestroyContext(ppc_cpu *c)
@@ -973,7 +973,7 @@ static void destroy_all(void)
             destroy(ctxs[i]);
         if (pixs[i]) {
             tb_DisposePtr(pixs[i]->guest);
-            free(pixs[i]);
+            bb_free(pixs[i]);
             pixs[i] = NULL;
         }
         if (renderers[i]) {
@@ -996,10 +996,10 @@ void agl_reset(void)
     for (int i = 0; i < MAX_OBJECTS; i++) {
         if (ctxs[i]) {
             hostgl_destroy(ctxs[i]->h);
-            free(ctxs[i]);
+            bb_free(ctxs[i]);
             ctxs[i] = NULL;
         }
-        free(pixs[i]);
+        bb_free(pixs[i]);
         pixs[i] = NULL;
         renderers[i] = 0;
     }

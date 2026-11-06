@@ -174,7 +174,7 @@ qt_sprite *qt_sprite_new(const uint8_t *desc, uint32_t len, int w, int h)
 {
     if (w <= 0 || h <= 0 || w > 4096 || h > 4096)
         return NULL;
-    qt_sprite *s = calloc(1, sizeof *s);
+    qt_sprite *s = bb_calloc(1, sizeof *s, BB_TAG(qt_sprite));
     if (!s)
         return NULL;
     s->w = w;
@@ -202,10 +202,10 @@ qt_sprite *qt_sprite_new(const uint8_t *desc, uint32_t len, int w, int h)
 static void free_scene(qt_sprite *s)
 {
     for (int i = 0; i < s->nimg; i++)
-        free(s->img[i].rgba);
-    free(s->img);
-    free(s->key);
-    free(s->cur);
+        bb_free(s->img[i].rgba);
+    bb_free(s->img);
+    bb_free(s->key);
+    bb_free(s->cur);
     s->img = NULL;
     s->key = s->cur = NULL;
     s->nimg = s->nspr = 0;
@@ -216,10 +216,10 @@ void qt_sprite_free(qt_sprite *s)
     if (!s)
         return;
     free_scene(s);
-    free(s->key_data);
+    bb_free(s->key_data);
     for (int i = 0; i < s->npending; i++)
-        free(s->pending[i].data);
-    free(s);
+        bb_free(s->pending[i].data);
+    bb_free(s);
 }
 
 /* A sample with frame-loaded handlers (at the root or a sprite's), for
@@ -228,7 +228,7 @@ static void note_frame(qt_sprite *s, const uint8_t *data, uint32_t len)
 {
     if (s->npending >= MAX_PENDING || !memmem(data, len, "fram", 4) || !memmem(data, len, "evnt", 4))
         return;
-    uint8_t *copy = malloc(len);
+    uint8_t *copy = bb_malloc(len, BB_BYTES);
     if (!copy)
         return;
     memcpy(copy, data, len);
@@ -319,7 +319,7 @@ static bool decode_image(image *im, const uint8_t *d, uint32_t len)
         return false;
     im->w = f.width;
     im->h = f.height;
-    im->rgba = calloc((size_t)f.width * (size_t)f.height, 4);
+    im->rgba = bb_calloc((size_t)f.width * (size_t)f.height, 4, BB_BYTES);
     bool ok = im->rgba && qt_vdec_decode(dec, d + idsize, len - idsize, im->rgba);
     qt_vdec_free(dec);
     return ok;
@@ -373,8 +373,8 @@ bool qt_sprite_key(qt_sprite *s, const uint8_t *data, uint32_t len)
         return false;
     free_scene(s);
     track_properties(s, &root);
-    free(s->key_data);
-    s->key_data = malloc(len);
+    bb_free(s->key_data);
+    s->key_data = bb_malloc(len, BB_BYTES);
     s->key_len = s->key_data ? len : 0;
     if (s->key_data)
         memcpy(s->key_data, data, len);
@@ -384,7 +384,7 @@ bool qt_sprite_key(qt_sprite *s, const uint8_t *data, uint32_t len)
         qtatom imda, reg;
         if (it.type != four("imag") || !find_child(&it, four("imda"), 0, &imda))
             continue;
-        image *grown = realloc(s->img, (size_t)(s->nimg + 1) * sizeof *grown);
+        image *grown = bb_realloc(s->img, (size_t)(s->nimg + 1) * sizeof *grown, BB_TAG(image));
         if (!grown)
             break;
         s->img = grown;
@@ -398,13 +398,13 @@ bool qt_sprite_key(qt_sprite *s, const uint8_t *data, uint32_t len)
         if (decode_image(im, imda.body, leaf_len(&imda)))
             s->nimg++;
         else
-            free(im->rgba);
+            bb_free(im->rgba);
     }
     it = (qtatom){ 0 };
     while (next_child(&root, &it)) {
         if (it.type != four("sprt"))
             continue;
-        sprite *grown = realloc(s->key, (size_t)(s->nspr + 1) * sizeof *grown);
+        sprite *grown = bb_realloc(s->key, (size_t)(s->nspr + 1) * sizeof *grown, BB_TAG(sprite));
         if (!grown)
             break;
         s->key = grown;
@@ -412,7 +412,7 @@ bool qt_sprite_key(qt_sprite *s, const uint8_t *data, uint32_t len)
         *sp = (sprite){ it.id, 1, 0, 0, 1, 0, 0, false, 0, 1, 64, { 0, 0, 0 } };
         set_properties(sp, &it);
     }
-    s->cur = malloc((size_t)(s->nspr ? s->nspr : 1) * sizeof *s->cur);
+    s->cur = bb_malloc((size_t)(s->nspr ? s->nspr : 1) * sizeof *s->cur, BB_TAG(sprite));
     qt_sprite_reset(s);
     return true;
 }
@@ -531,7 +531,7 @@ void qt_sprite_draw_over(const qt_sprite *s, uint8_t *rgba)
         return;
     /* Back to front: the highest layer first, and within a layer the
      * sprites in order of their IDs. */
-    int *order = malloc((size_t)(s->nspr ? s->nspr : 1) * sizeof *order);
+    int *order = bb_malloc((size_t)(s->nspr ? s->nspr : 1) * sizeof *order, BB_BYTES);
     if (!order)
         return;
     for (int i = 0; i < s->nspr; i++)
@@ -548,7 +548,7 @@ void qt_sprite_draw_over(const qt_sprite *s, uint8_t *rgba)
     for (int i = 0; i < s->nspr; i++)
         if (s->cur[order[i]].visible)
             draw_sprite(s, &s->cur[order[i]], rgba);
-    free(order);
+    bb_free(order);
 }
 
 /* ---- At run time: the sprite media handler's calls ---- */
@@ -659,11 +659,11 @@ bool qt_sprite_add(qt_sprite *s, uint32_t id, uint32_t image, const double m[6],
     if (!s->cur || find_sprite(s, id))
         return false;
     sprite sp = { id, m[0], m[1], m[2], m[3], m[4], m[5], visible, layer, image, mode, { op[0], op[1], op[2] } };
-    sprite *k = realloc(s->key, (size_t)(s->nspr + 1) * sizeof *k), *c;
+    sprite *k = bb_realloc(s->key, (size_t)(s->nspr + 1) * sizeof *k, BB_TAG(sprite)), *c;
     if (!k)
         return false;
     s->key = k;
-    c = realloc(s->cur, (size_t)(s->nspr + 1) * sizeof *c);
+    c = bb_realloc(s->cur, (size_t)(s->nspr + 1) * sizeof *c, BB_TAG(sprite));
     if (!c)
         return false;
     s->cur = c;
@@ -756,8 +756,8 @@ qt_sprite *qt_sprite_world(int w, int h)
 {
     qt_sprite *s = qt_sprite_new(NULL, 0, w, h);
     if (s) {
-        s->key = calloc(1, sizeof *s->key);
-        s->cur = calloc(1, sizeof *s->cur);
+        s->key = bb_calloc(1, sizeof *s->key, BB_TAG(sprite));
+        s->cur = bb_calloc(1, sizeof *s->cur, BB_TAG(sprite));
     }
     return s;
 }
@@ -766,18 +766,18 @@ bool qt_sprite_set_image(qt_sprite *s, uint32_t id, const uint8_t *desc_and_data
 {
     image im = { id, 0, 0, NULL, 0, 0 };
     if (!decode_image(&im, desc_and_data, len)) {
-        free(im.rgba);
+        bb_free(im.rgba);
         return false;
     }
     for (int i = 0; i < s->nimg; i++)
         if (s->img[i].id == id) {
-            free(s->img[i].rgba);
+            bb_free(s->img[i].rgba);
             s->img[i] = im;
             return true;
         }
-    image *n = realloc(s->img, (size_t)(s->nimg + 1) * sizeof *n);
+    image *n = bb_realloc(s->img, (size_t)(s->nimg + 1) * sizeof *n, BB_TAG(image));
     if (!n) {
-        free(im.rgba);
+        bb_free(im.rgba);
         return false;
     }
     s->img = n;
@@ -789,7 +789,7 @@ void qt_sprite_forget_image(qt_sprite *s, uint32_t id)
 {
     for (int i = 0; i < s->nimg; i++)
         if (s->img[i].id == id) {
-            free(s->img[i].rgba);
+            bb_free(s->img[i].rgba);
             memmove(&s->img[i], &s->img[i + 1], (size_t)(s->nimg - i - 1) * sizeof *s->img);
             s->nimg--;
             return;

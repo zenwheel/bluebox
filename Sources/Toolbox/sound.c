@@ -86,8 +86,8 @@ typedef struct {
 
 static channel chans[MAX_CHANNELS];
 static int next_id = 1;
-static machine_sound_fn sound_fn;
-static void *sound_ctx;
+BB_HOST static machine_sound_fn sound_fn;
+BB_HOST static void *sound_ctx;
 static uint16_t beep_state = 1;
 static uint32_t beep_volume = 0x01000100;
 
@@ -182,8 +182,8 @@ static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rat
     }
 }
 
-static machine_midi_fn midi_fn;
-static void *midi_ctx;
+BB_HOST static machine_midi_fn midi_fn;
+BB_HOST static void *midi_ctx;
 
 void machine_set_midi_handler(machine_midi_fn fn, void *ctx)
 {
@@ -226,7 +226,7 @@ static void play_note(channel *c, int note, double seconds)
     double freq = 440.0 * pow(2.0, (note - 69) / 12.0);
     double rate = 22254.5454;
     int frames = (int)(seconds * rate);
-    int16_t *pcm = malloc(sizeof *pcm * (size_t)(frames ? frames : 1));
+    int16_t *pcm = bb_malloc(sizeof *pcm * (size_t)(frames ? frames : 1), BB_BYTES);
     for (int i = 0; i < frames; i++) {
         double ph = fmod(i * freq / rate, 1.0);
         int v;
@@ -239,7 +239,7 @@ static void play_note(channel *c, int note, double seconds)
         pcm[i] = (int16_t)(v * edge / 64);
     }
     emit(c, pcm, frames, 1, rate);
-    free(pcm);
+    bb_free(pcm);
 }
 
 static double fixed_rate(uint32_t r) { return (double)r / 65536.0; }
@@ -260,7 +260,7 @@ static const int8_t ima_index[16] = { -1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1
 static int16_t *decode_ima4(gaddr data, uint32_t packets, int nch)
 {
     uint32_t frames = packets * 64;
-    int16_t *pcm = malloc(sizeof *pcm * (frames * (uint32_t)nch ? frames * (uint32_t)nch : 1));
+    int16_t *pcm = bb_malloc(sizeof *pcm * (frames * (uint32_t)nch ? frames * (uint32_t)nch : 1), BB_BYTES);
     for (uint32_t p = 0; p < packets; p++)
         for (int ch = 0; ch < nch; ch++) {
             gaddr pk = data + (p * (uint32_t)nch + (uint32_t)ch) * 34;
@@ -308,7 +308,7 @@ static int16_t *decode_header(gaddr h, uint32_t *frames_out, int *nch_out, doubl
             data = h + 22;
         if (n > 0x4000000)
             return NULL;
-        int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
+        int16_t *pcm = bb_malloc(sizeof *pcm * (n ? n : 1), BB_BYTES);
         for (uint32_t i = 0; i < n; i++)
             pcm[i] = (int16_t)(((int)rd8(data + i) - 128) << 8);
         *frames_out = n;
@@ -325,7 +325,7 @@ static int16_t *decode_header(gaddr h, uint32_t *frames_out, int *nch_out, doubl
         if (!data)
             data = h + 64;
         uint32_t n = frames * nch;
-        int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
+        int16_t *pcm = bb_malloc(sizeof *pcm * (n ? n : 1), BB_BYTES);
         for (uint32_t i = 0; i < n; i++)
             pcm[i] = bits == 16 ? (int16_t)rd16(data + i * 2) : (int16_t)(((int)rd8(data + i) - 128) << 8);
         *frames_out = frames;
@@ -345,7 +345,7 @@ static int16_t *decode_header(gaddr h, uint32_t *frames_out, int *nch_out, doubl
     if (format == fourcc("twos") || format == fourcc("sowt") || format == fourcc("raw ") || format == fourcc("NONE")) {
         int bits = (int16_t)rd16(h + 62);
         uint32_t n = frames * nch;
-        int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
+        int16_t *pcm = bb_malloc(sizeof *pcm * (n ? n : 1), BB_BYTES);
         for (uint32_t i = 0; i < n; i++) {
             if (bits == 16)
                 pcm[i] = format == fourcc("sowt") ? (int16_t)(rd8(data + i * 2) | rd8(data + i * 2 + 1) << 8)
@@ -365,12 +365,12 @@ static int16_t *decode_header(gaddr h, uint32_t *frames_out, int *nch_out, doubl
     bool mace3 = cid == 3 || format == fourcc("MAC3"), mace6 = cid == 4 || format == fourcc("MAC6");
     if (mace3 || mace6) {
         uint32_t bytes = frames * (mace3 ? 2 : 1) * nch;
-        uint8_t *in = malloc(bytes ? bytes : 1);
+        uint8_t *in = bb_malloc(bytes ? bytes : 1, BB_BYTES);
         gget(in, data, bytes);
         size_t cap = (size_t)bytes * (mace3 ? 3 : 6) / nch + 6;
-        int16_t *pcm = calloc(cap * nch, sizeof *pcm);
+        int16_t *pcm = bb_calloc(cap * nch, sizeof *pcm, BB_BYTES);
         *frames_out = (uint32_t)mace_decode(in, bytes, (int)nch, mace3, pcm);
-        free(in);
+        bb_free(in);
         return pcm;
     }
     *frames_out = frames;
@@ -387,10 +387,10 @@ static void play_header(channel *c, gaddr h)
     int16_t *pcm = decode_header(h, &frames, &nch, &rate, &bits);
     /* Formats we can't decode keep their timing as silence. */
     if (!pcm && frames)
-        pcm = calloc((size_t)frames * (size_t)nch, sizeof *pcm);
+        pcm = bb_calloc((size_t)frames * (size_t)nch, sizeof *pcm, BB_BYTES);
     if (pcm)
         emit(c, pcm, (int)frames, nch, rate);
-    free(pcm);
+    bb_free(pcm);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -603,12 +603,12 @@ static void pump_double(channel *c)
         if (rate < 1000 || rate > 100000)
             rate = 22254.5454;
         uint32_t n = frames * (uint32_t)(nch > 0 ? nch : 1);
-        int16_t *pcm = malloc(sizeof *pcm * (n ? n : 1));
+        int16_t *pcm = bb_malloc(sizeof *pcm * (n ? n : 1), BB_BYTES);
         gaddr data = buf + SndDoubleBuffer_dbSoundData_off;
         for (uint32_t i = 0; i < n; i++)
             pcm[i] = bits == 16 ? (int16_t)rd16(data + i * 2) : (int16_t)(((int)rd8(data + i) - 128) << 8);
         emit(c, pcm, (int)frames, nch, rate);
-        free(pcm);
+        bb_free(pcm);
         bool last = flags & 4; /* dbLastBuffer */
         wr32(buf + SndDoubleBuffer_dbFlags_off, flags & ~1u);
         c->db_index ^= 1;
@@ -1329,14 +1329,14 @@ void sound_beep(void)
         return;
     double rate = 22254.5454, secs = 0.12;
     int frames = (int)(secs * rate);
-    int16_t *pcm = malloc(sizeof *pcm * (size_t)frames);
+    int16_t *pcm = bb_malloc(sizeof *pcm * (size_t)frames, BB_BYTES);
     for (int i = 0; i < frames; i++) {
         double t = i / rate;
         double env = exp(-t * 18.0);
         pcm[i] = (int16_t)(sin(2 * M_PI * 880.0 * t) * 9000 * env + (fmod(t * 440.0, 1.0) < 0.5 ? 1 : -1) * 2500 * env);
     }
     emit(c, pcm, frames, 1, rate);
-    free(pcm);
+    bb_free(pcm);
     c->chan = 0; /* the host plays it out; we do not wait */
 }
 
@@ -1477,12 +1477,12 @@ static int16_t sd_write(gaddr pb, bool async)
     if (mode == ffMode && len > 6) {
         double rate = MAC_RATE * fixed_rate(rd32(rec + 2));
         uint32_t n = len - 6;
-        int16_t *pcm = malloc(sizeof *pcm * n);
+        int16_t *pcm = bb_malloc(sizeof *pcm * n, BB_BYTES);
         for (uint32_t i = 0; i < n; i++)
             pcm[i] = (int16_t)(((int)rd8(rec + 6 + i) - 128) << 8);
         if (rate > 1000 && rate < 100000)
             emit(&sd_chan, pcm, (int)n, 1, rate);
-        free(pcm);
+        bb_free(pcm);
     } else if (mode == swMode) {
         for (gaddr t = rec + 2; t + 6 <= rec + len; t += 6) {
             uint16_t count = rd16(t), amp = rd16(t + 2), ticks = rd16(t + 4);
@@ -1490,11 +1490,11 @@ static int16_t sd_write(gaddr pb, bool async)
                 break;
             double freq = 783360.0 / count, secs = ticks / 60.0;
             int frames = (int)(secs * MAC_RATE);
-            int16_t *pcm = malloc(sizeof *pcm * (size_t)(frames ? frames : 1));
+            int16_t *pcm = bb_malloc(sizeof *pcm * (size_t)(frames ? frames : 1), BB_BYTES);
             for (int i = 0; i < frames; i++)
                 pcm[i] = (int16_t)((fmod(i * freq / MAC_RATE, 1.0) < 0.5 ? 1 : -1) * (int)(amp & 255) * 24);
             emit(&sd_chan, pcm, frames, 1, MAC_RATE);
-            free(pcm);
+            bb_free(pcm);
         }
     } else if (mode == ftMode) {
         sd_ft = rd32(rec + 2);
@@ -1862,11 +1862,11 @@ static void mace_expand(gaddr inp, gaddr outp, int32_t cnt, int32_t nch, int32_t
         return;
     uint32_t per = mace3 ? 2 : 1;
     uint32_t bytes = (uint32_t)cnt * per;
-    uint8_t *in = malloc(bytes);
-    int16_t *pcm = malloc((size_t)cnt * 6 * sizeof *pcm);
+    uint8_t *in = bb_malloc(bytes, BB_BYTES);
+    int16_t *pcm = bb_malloc((size_t)cnt * 6 * sizeof *pcm, BB_BYTES);
     if (!in || !pcm) {
-        free(in);
-        free(pcm);
+        bb_free(in);
+        bb_free(pcm);
         return;
     }
     for (int32_t k = 0; k < cnt; k++) /* this channel's packets */
@@ -1874,8 +1874,8 @@ static void mace_expand(gaddr inp, gaddr outp, int32_t cnt, int32_t nch, int32_t
     size_t frames = mace_decode(in, bytes, 1, mace3, pcm);
     for (size_t i = 0; i < frames; i++)
         wr8(outp + (uint32_t)(i * (size_t)nch + (size_t)(which - 1)), (uint8_t)((pcm[i] >> 8) + 128));
-    free(in);
-    free(pcm);
+    bb_free(in);
+    bb_free(pcm);
 }
 
 void tb_Exp1to3(gaddr inp, gaddr outp, int32_t cnt, gaddr instatep, gaddr outstatep, int32_t numchannels,

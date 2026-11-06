@@ -77,10 +77,10 @@ static tracker *tracker_of(gaddr g)
     return o ? o->data : NULL;
 }
 
-static void tracker_dispose(q3obj *o) { free(o->data); }
+static void tracker_dispose(q3obj *o) { bb_free(o->data); }
 static bool tracker_duplicate(q3obj *to, const q3obj *from)
 {
-    tracker *t = malloc(sizeof *t);
+    tracker *t = bb_malloc(sizeof *t, BB_TAG(tracker));
     if (t)
         *t = *(tracker *)from->data;
     to->data = t;
@@ -95,10 +95,10 @@ typedef struct {
     bool saved;
 } cstate;
 
-static void cstate_dispose(q3obj *o) { free(o->data); }
+static void cstate_dispose(q3obj *o) { bb_free(o->data); }
 static bool cstate_duplicate(q3obj *to, const q3obj *from)
 {
-    cstate *s = malloc(sizeof *s);
+    cstate *s = bb_malloc(sizeof *s, BB_TAG(cstate));
     if (s)
         *s = *(cstate *)from->data;
     to->data = s;
@@ -207,7 +207,7 @@ static void Q3Controller_New(ppc_cpu *c)
         Q3RETURN(0);
         return;
     }
-    ctl *x = calloc(1, sizeof *x);
+    ctl *x = bb_calloc(1, sizeof *x, BB_TAG(ctl));
     if (!x) {
         Q3RETURN(0);
         return;
@@ -217,13 +217,13 @@ static void Q3Controller_New(ppc_cpu *c)
     x->channel_count = rd32(d + 8);
     x->get_method = rd32(d + 12);
     x->set_method = rd32(d + 16);
-    x->values = calloc(x->value_count + 1, sizeof *x->values);
+    x->values = bb_calloc(x->value_count + 1, sizeof *x->values, BB_BYTES);
     x->active = true;
     x->orient[0] = 1;
     x->g = q3_handle_new(Q3H_CLASS, x);
     if (!x->g || !x->values) {
-        free(x->values);
-        free(x);
+        bb_free(x->values);
+        bb_free(x);
         Q3RETURN(0);
         return;
     }
@@ -474,10 +474,10 @@ static void Q3Controller_SetValues(ppc_cpu *c)
 static void Q3ControllerState_New(ppc_cpu *c)
 {
     ctl *x = ctl_of(Q3R(0));
-    cstate *s = x ? calloc(1, sizeof *s) : NULL;
+    cstate *s = x ? bb_calloc(1, sizeof *s, BB_TAG(cstate)) : NULL;
     q3obj *o = s ? q3_new(CSTATE, s) : NULL;
     if (!o) {
-        free(s);
+        bb_free(s);
         Q3RETURN(0);
         return;
     }
@@ -529,10 +529,10 @@ static void Q3ControllerState_Restore(ppc_cpu *c)
 
 static void Q3Tracker_New(ppc_cpu *c)
 {
-    tracker *t = calloc(1, sizeof *t);
+    tracker *t = bb_calloc(1, sizeof *t, BB_TAG(tracker));
     q3obj *o = t ? q3_new(TRACKER, t) : NULL;
     if (!o) {
-        free(t);
+        bb_free(t);
         Q3RETURN(0);
         return;
     }
@@ -816,8 +816,8 @@ void q3_controller_reset(void);
 void q3_controller_reset(void)
 {
     for (int i = 0; i < nctls; i++) {
-        free(ctls[i]->values);
-        free(ctls[i]);
+        bb_free(ctls[i]->values);
+        bb_free(ctls[i]);
     }
     nctls = 0;
     list_serial = 1;

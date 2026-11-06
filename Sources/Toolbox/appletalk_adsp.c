@@ -439,8 +439,8 @@ static int16_t wait_for(gaddr pb, bool async)
 static void free_end(dsp_end *e)
 {
     at_close_socket(e->skt);
-    free(e->sendq);
-    free(e->recvq);
+    bb_free(e->sendq);
+    bb_free(e->recvq);
     for (int i = 0; i < e->nreads; i++)
         finish(e->reads[i], errAborted);
     if (e->open_pb)
@@ -473,8 +473,8 @@ static int16_t new_end(gaddr pb, bool listener)
     e->skt = (uint8_t)skt;
     e->sendcap = sq > 0 ? sq : 0;
     e->recvcap = rq > 0 ? rq : 0;
-    e->sendq = malloc((size_t)(e->sendcap ? e->sendcap : 1));
-    e->recvq = malloc((size_t)(e->recvcap ? e->recvcap : 1));
+    e->sendq = bb_malloc((size_t)(e->sendcap ? e->sendcap : 1), BB_BYTES);
+    e->recvq = bb_malloc((size_t)(e->recvcap ? e->recvcap : 1), BB_BYTES);
     if (e->ccb) {
         gmemset(e->ccb, 0, 242);
         wr16(e->ccb + 4, (uint16_t)refnum_of(e));

@@ -173,7 +173,7 @@ static void file_dispose(q3obj *o)
     close_file(f, true);
     q3_assign(&f->storage, 0);
     q3_assign(&f->ext_refs, 0);
-    free(f);
+    bb_free(f);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -537,7 +537,7 @@ static void free_item(item *it)
         for (uint32_t i = 0; i < it->asl_n; i++)
             if (it->asl[i] > 1)
                 q3_release(it->asl[i]);
-        free(it->asl);
+        bb_free(it->asl);
     }
     if (it->kind == IT_WORDS && (it->type == T4("tcap") || it->type == T4("bcap") || it->type == T4("fcap") ||
                                   it->type == T4("icap")) && it->w[0])
@@ -554,17 +554,17 @@ static void free_item(item *it)
             q3_release(m->set);
         for (uint32_t i = 0; i < m->nparts; i++)
             q3_release(m->parts[i][3]);
-        free(m->parts);
-        free(m->pts);
-        free(m->vsets);
-        free(m->fsets);
-        free(m->fcount);
-        free(m->fidx);
-        free(m);
+        bb_free(m->parts);
+        bb_free(m->pts);
+        bb_free(m->vsets);
+        bb_free(m->fsets);
+        bb_free(m->fcount);
+        bb_free(m->fidx);
+        bb_free(m);
     }
-    free(it->a_data);
-    free(it->a_use);
-    free(it->recs);
+    bb_free(it->a_data);
+    bb_free(it->a_use);
+    bb_free(it->recs);
     memset(it, 0, sizeof *it);
 }
 
@@ -600,10 +600,10 @@ static q3node *new_node(uint32_t type)
 
 static q3node *bytes_node(const uint8_t *b, uint32_t n)
 {
-    q3node *k = calloc(1, sizeof *k);
+    q3node *k = bb_calloc(1, sizeof *k, BB_TAG(q3node));
     if (!k)
         return NULL;
-    k->bytes = malloc(n ? n : 1);
+    k->bytes = bb_malloc(n ? n : 1, BB_BYTES);
     k->nbytes = n;
     if (k->bytes && n)
         memcpy(k->bytes, b, n);
@@ -676,13 +676,13 @@ static bool read_pixmap(q3file *f, uint32_t *w)
     uint32_t n = v[1] * v[2];
     if (n > (64u << 20))
         return false;
-    uint8_t *img = malloc(n ? n : 1);
+    uint8_t *img = bb_malloc(n ? n : 1, BB_BYTES);
     if (!img || !r_raw(f, img, n)) {
-        free(img);
+        bb_free(img);
         return false;
     }
     w[0] = memory_storage(img, n);
-    free(img);
+    bb_free(img);
     for (int i = 0; i < 7; i++)
         w[1 + i] = v[i];
     return w[0] != 0;
@@ -773,10 +773,10 @@ static item parse(q3file *f, uint32_t type)
         if (total > (1u << 24))
             total = 0;
         it.asl_n = total;
-        it.asl = calloc(total + 1, sizeof *it.asl);
+        it.asl = bb_calloc(total + 1, sizeof *it.asl, BB_BYTES);
         /* Which of them have sets: w[] would be too small; mark in asl
          * with 1 those that do, filled in order by the children. */
-        bool *has = calloc(total + 1, 1);
+        bool *has = bb_calloc(total + 1, 1, BB_BYTES);
         for (uint32_t i = 0; has && i < total; i++)
             has[i] = packing == 1; /* exclude: all but those listed */
         for (uint32_t i = 0; i < nidx; i++) {
@@ -790,7 +790,7 @@ static item parse(q3file *f, uint32_t type)
                 has[i] = true;
         for (uint32_t i = 0; it.asl && has && i < total; i++)
             it.asl[i] = has[i] ? 1 : 0;
-        free(has);
+        bb_free(has);
         return it;
     }
     case T4("crnr"): case T4("edge"): {
@@ -802,9 +802,9 @@ static item parse(q3file *f, uint32_t type)
         if (n > (1u << 22))
             n = 0;
         it.asl_n = n;
-        it.asl = calloc(n + 1, sizeof *it.asl);
+        it.asl = bb_calloc(n + 1, sizeof *it.asl, BB_BYTES);
         uint32_t cap = n * 3 + 1;
-        it.recs = malloc(cap * sizeof *it.recs);
+        it.recs = bb_malloc(cap * sizeof *it.recs, BB_BYTES);
         for (uint32_t i = 0; it.asl && it.recs && i < n; i++) {
             it.asl[i] = 1;
             uint32_t a = 0, b = 0;
@@ -813,7 +813,7 @@ static item parse(q3file *f, uint32_t type)
             uint32_t need = it.nrecs + 2 + (type == T4("crnr") && b < (1u << 20) ? b : 0);
             if (need > cap) {
                 cap = need * 2;
-                uint32_t *r = realloc(it.recs, cap * sizeof *r);
+                uint32_t *r = bb_realloc(it.recs, cap * sizeof *r, BB_BYTES);
                 if (!r)
                     break;
                 it.recs = r;
@@ -840,25 +840,25 @@ static item parse(q3file *f, uint32_t type)
         char s[1024];
         uint32_t len = 0;
         r_str(f, s, sizeof s, &len);
-        q3obj *o = q3_new(Q3_CSTRING, strdup(s));
+        q3obj *o = q3_new(Q3_CSTRING, bb_strdup(s));
         it.kind = IT_OBJ;
         it.g = o ? o->g : 0;
         return it;
     }
     case T4("attr"): case T4("set "): {
-        q3set *s = calloc(1, sizeof *s);
+        q3set *s = bb_calloc(1, sizeof *s, BB_TAG(q3set));
         q3obj *o = s ? q3_new(type == T4("attr") ? Q3_ATTRIBUTE_SET : Q3_SET, s) : NULL;
         if (!o)
-            free(s);
+            bb_free(s);
         it.kind = IT_OBJ;
         it.g = o ? o->g : 0;
         return it;
     }
     case T4("grup"): case T4("dspg"): case T4("ordg"): case T4("iopx"): case T4("lghg"): case T4("info"): {
-        q3group *g = calloc(1, sizeof *g);
+        q3group *g = bb_calloc(1, sizeof *g, BB_TAG(q3group));
         q3obj *o = g ? q3_new(type, g) : NULL;
         if (!o)
-            free(g);
+            bb_free(g);
         else
             g->state = 1 | 4 | 8 | 16 | 32;
         it.kind = IT_OBJ;
@@ -870,7 +870,7 @@ static item parse(q3file *f, uint32_t type)
         it.g = q3_renderer_new(type);
         return it;
     case T4("mesh"): {
-        meshb *m = calloc(1, sizeof *m);
+        meshb *m = bb_calloc(1, sizeof *m, BB_TAG(meshb));
         it.kind = IT_MESH;
         it.mesh = m;
         if (!m)
@@ -878,8 +878,8 @@ static item parse(q3file *f, uint32_t type)
         r_u32(f, &m->nverts);
         if (m->nverts > (1u << 24))
             m->nverts = 0;
-        m->pts = calloc(m->nverts + 1, sizeof *m->pts);
-        m->vsets = calloc(m->nverts + 1, sizeof *m->vsets);
+        m->pts = bb_calloc(m->nverts + 1, sizeof *m->pts, BB_BYTES);
+        m->vsets = bb_calloc(m->nverts + 1, sizeof *m->vsets, BB_BYTES);
         for (uint32_t i = 0; m->pts && i < m->nverts; i++)
             r_fs(f, m->pts[i], 3);
         uint32_t nfaces = 0, ncont = 0;
@@ -888,10 +888,10 @@ static item parse(q3file *f, uint32_t type)
         uint32_t total = nfaces + ncont;
         if (total > (1u << 24))
             total = 0;
-        m->fcount = calloc(total + 1, sizeof *m->fcount);
-        m->fsets = calloc(total + 1, sizeof *m->fsets);
+        m->fcount = bb_calloc(total + 1, sizeof *m->fcount, BB_BYTES);
+        m->fsets = bb_calloc(total + 1, sizeof *m->fsets, BB_BYTES);
         uint32_t cap = 64;
-        m->fidx = malloc(cap * sizeof *m->fidx);
+        m->fidx = bb_malloc(cap * sizeof *m->fidx, BB_BYTES);
         for (uint32_t i = 0; m->fcount && m->fidx && i < total; i++) {
             uint32_t cnt = 0;
             r_u32(f, &cnt);
@@ -905,7 +905,7 @@ static item parse(q3file *f, uint32_t type)
                 r_u32(f, &x);
                 if (m->nidx == cap) {
                     cap *= 2;
-                    uint32_t *nn = realloc(m->fidx, cap * sizeof *nn);
+                    uint32_t *nn = bb_realloc(m->fidx, cap * sizeof *nn, BB_BYTES);
                     if (!nn)
                         break;
                     m->fidx = nn;
@@ -1135,10 +1135,10 @@ static item parse(q3file *f, uint32_t type)
         uint32_t n = w[7] * w[8];
         if (n > (16u << 20))
             break;
-        uint8_t *img = malloc(n ? n : 1);
+        uint8_t *img = bb_malloc(n ? n : 1, BB_BYTES);
         if (img && r_raw(f, img, n))
             q3d_set_kid(nd, q3_schema_of(type), 0, 0, bytes_node(img, n));
-        free(img);
+        bb_free(img);
         break;
     }
     case T4("mrkp"):
@@ -1282,10 +1282,10 @@ static item parse(q3file *f, uint32_t type)
         uint32_t n = w[7] * w[8];
         if (n > (64u << 20))
             break;
-        uint8_t *img = malloc(n ? n : 1);
+        uint8_t *img = bb_malloc(n ? n : 1, BB_BYTES);
         if (img && r_raw(f, img, n))
             w[0] = memory_storage(img, n);
-        free(img);
+        bb_free(img);
         break;
     }
     case T4("vwhn"): case T4("push"): case T4("pop "): case T4("rset"):
@@ -1425,7 +1425,7 @@ static void read_array(q3file *f, item *root, item *a)
     const q3schema *es = s->f[field].elem;
     uint8_t *use = NULL;
     if (a->w[1]) {
-        use = malloc(n ? n : 1);
+        use = bb_malloc(n ? n : 1, BB_BYTES);
         for (uint32_t i = 0; use && i < n; i++) {
             uint64_t x = 0;
             r_u(f, 1, &x);
@@ -1433,10 +1433,10 @@ static void read_array(q3file *f, item *root, item *a)
         }
     }
     if (size <= 0 || type == kQ3AttributeTypeSurfaceShader) {
-        free(use);
+        bb_free(use);
         return; /* shaders and custom ones: objects follow, not kept */
     }
-    uint8_t *data = malloc((size_t)n * (size_t)size + 1);
+    uint8_t *data = bb_malloc((size_t)n * (size_t)size + 1, BB_BYTES);
     for (uint32_t i = 0; data && i < n; i++)
         for (int32_t k = 0; k < size / 4; k++) {
             uint32_t x = 0;
@@ -1455,8 +1455,8 @@ static void read_array(q3file *f, item *root, item *a)
         q3d_set_kid(arr, es, a->a_index, 0, bytes_node(data, n * (uint32_t)size));
     if (use)
         q3d_set_kid(arr, es, a->a_index, 1, bytes_node(use, n));
-    free(data);
-    free(use);
+    bb_free(data);
+    bb_free(use);
 }
 
 /* A mesh's corners or edges with their sets, kept to put on it once
@@ -1469,7 +1469,7 @@ static void mesh_parts(meshb *m, const item *c)
         uint32_t nfaces = corners ? b : 1;
         gaddr set = c->asl[i] > 1 ? c->asl[i] : 0;
         for (uint32_t k = 0; k < nfaces && set; k++) {
-            uint32_t (*n)[4] = realloc(m->parts, (m->nparts + 1) * sizeof *n);
+            uint32_t (*n)[4] = bb_realloc(m->parts, (m->nparts + 1) * sizeof *n, BB_BYTES);
             if (!n)
                 return;
             m->parts = n;
@@ -1674,21 +1674,21 @@ static void unknown_dispose(q3obj *o)
 {
     unknown *u = o->data;
     if (u) {
-        free(u->name);
-        free(u->contents);
-        free(u);
+        bb_free(u->name);
+        bb_free(u->contents);
+        bb_free(u);
     }
 }
 
 static bool unknown_duplicate(q3obj *to, const q3obj *from)
 {
     const unknown *s = from->data;
-    unknown *u = calloc(1, sizeof *u);
+    unknown *u = bb_calloc(1, sizeof *u, BB_TAG(unknown));
     if (!u)
         return false;
     *u = *s;
-    u->name = s->name ? strdup(s->name) : NULL;
-    u->contents = malloc(s->size ? s->size : 1);
+    u->name = s->name ? bb_strdup(s->name) : NULL;
+    u->contents = bb_malloc(s->size ? s->size : 1, BB_BYTES);
     if (u->contents && s->size)
         memcpy(u->contents, s->contents, s->size);
     to->data = u;
@@ -1707,21 +1707,21 @@ static item unknown_item(q3file *f, uint32_t type, const char *name, uint32_t st
 {
     item it;
     memset(&it, 0, sizeof it);
-    unknown *u = calloc(1, sizeof *u);
+    unknown *u = bb_calloc(1, sizeof *u, BB_TAG(unknown));
     if (!u)
         return it;
     u->type = type;
     u->byte_order = f->swap ? 1 : 0;
     u->size = end > start ? end - start : 0;
-    u->contents = malloc(u->size + 1);
+    u->contents = bb_malloc(u->size + 1, BB_BYTES);
     if (u->contents) {
         memcpy(u->contents, f->b + start, u->size);
         u->contents[u->size] = 0;
     }
     if (name)
-        u->name = strdup(name);
+        u->name = bb_strdup(name);
     else if ((int32_t)type < 0 && custom_name(f, (int32_t)type))
-        u->name = strdup(custom_name(f, (int32_t)type));
+        u->name = bb_strdup(custom_name(f, (int32_t)type));
     q3obj *o = q3_new(f->text ? UNKNOWN_TEXT : UNKNOWN_BINARY, u);
     if (!o) {
         unknown_dispose(&(q3obj){ .data = u });
@@ -1853,7 +1853,7 @@ static item read_binary(q3file *f)
         bin_u(f, 4, &id);
         char name[128];
         if (r_str(f, name, sizeof name, NULL)) {
-            typeent *n = realloc(f->types, (size_t)(f->ntypes + 1) * sizeof *n);
+            typeent *n = bb_realloc(f->types, (size_t)(f->ntypes + 1) * sizeof *n, BB_TAG(typeent));
             if (n) {
                 f->types = n;
                 f->types[f->ntypes].id = (int32_t)id;
@@ -2128,7 +2128,7 @@ static bool read_toc_binary(q3file *f, uint32_t at)
                 break;
             if (etype == 1)
                 bin_u(f, 4, &ot);
-            tocent *n = realloc(f->toc, (size_t)(f->ntoc + 1) * sizeof *n);
+            tocent *n = bb_realloc(f->toc, (size_t)(f->ntoc + 1) * sizeof *n, BB_TAG(tocent));
             if (!n)
                 break;
             f->toc = n;
@@ -2163,7 +2163,7 @@ static void scan_text_labels(q3file *f)
             break;
         size_t len = strlen(t);
         if (k == TK_WORD && len > 1 && t[len - 1] == ':') {
-            void *n = realloc(labels, (size_t)(nl + 1) * sizeof *labels);
+            void *n = bb_realloc(labels, (size_t)(nl + 1) * sizeof *labels, BB_BYTES);
             if (!n)
                 break;
             labels = n;
@@ -2186,7 +2186,7 @@ static void scan_text_labels(q3file *f)
                     last = (uint32_t)strtoul(t, NULL, 10);
                     have = true;
                 } else if (k == TK_WORD && len > 1 && t[len - 1] == '>' && have) {
-                    tocent *n = realloc(f->toc, (size_t)(f->ntoc + 1) * sizeof *n);
+                    tocent *n = bb_realloc(f->toc, (size_t)(f->ntoc + 1) * sizeof *n, BB_TAG(tocent));
                     if (!n)
                         break;
                     f->toc = n;
@@ -2204,7 +2204,7 @@ static void scan_text_labels(q3file *f)
         for (int j = 0; j < nl; j++)
             if (!strcmp(f->toc[i].label, labels[j].label))
                 f->toc[i].pos = labels[j].pos;
-    free(labels);
+    bb_free(labels);
     f->pos = save;
     f->depth = depth;
 }
@@ -2286,7 +2286,7 @@ static bool out(q3file *f, const void *p, uint32_t n)
         uint32_t cap = f->ocap ? f->ocap : 4096;
         while (cap < f->olen + n)
             cap *= 2;
-        uint8_t *nb = realloc(f->o, cap);
+        uint8_t *nb = bb_realloc(f->o, cap, BB_BYTES);
         if (!nb)
             return false;
         f->o = nb;
@@ -2552,7 +2552,7 @@ static gaddr *vsets_of(const q3node *vs)
 {
     if (!vs || !vs->n)
         return NULL;
-    gaddr *s = calloc(vs->n, sizeof *s);
+    gaddr *s = bb_calloc(vs->n, sizeof *s, BB_BYTES);
     for (uint32_t i = 0; s && i < vs->n; i++)
         s[i] = vs->w[i * 4 + 3];
     return s;
@@ -2571,12 +2571,12 @@ static void write_pixmap(q3file *f, const uint32_t *w)
     uint32_t size = 0;
     uint8_t *b = q3_storage_bytes(w[0], &size);
     uint32_t n = w[2] * w[3];
-    uint8_t *img = calloc(n + 1, 1);
+    uint8_t *img = bb_calloc(n + 1, 1, BB_BYTES);
     if (img && b)
         memcpy(img, b, size < n ? size : n);
     w_raw(f, img ? img : (uint8_t *)"", img ? n : 0);
-    free(img);
-    free(b);
+    bb_free(img);
+    bb_free(b);
 }
 
 /* A geometry or other data object: its data, then its children in a
@@ -2594,7 +2594,7 @@ static void write_data(q3file *f, q3obj *o)
     q3node *vs = NULL;
     if (t == T4("trng") || t == T4("line")) {
         nv = t == T4("trng") ? 3 : 2;
-        vsets = calloc(nv, sizeof *vsets);
+        vsets = bb_calloc(nv, sizeof *vsets, BB_BYTES);
         for (uint32_t i = 0; vsets && i < nv; i++)
             vsets[i] = w[i * 4 + 3];
     } else if (t == T4("plyg") || t == T4("plyl") || t == T4("trig") || t == T4("plhd")) {
@@ -2606,7 +2606,7 @@ static void write_data(q3file *f, q3obj *o)
         for (uint32_t c = 0; cs && c < cs->n; c++) {
             q3node *cv = q3d_kid(cs, s->f[0].elem, c, 0);
             for (uint32_t i = 0; cv && i < cv->n; i++) {
-                gaddr *n = realloc(vsets, (nv + 1) * sizeof *n);
+                gaddr *n = bb_realloc(vsets, (nv + 1) * sizeof *n, BB_BYTES);
                 if (!n)
                     break;
                 vsets = n;
@@ -2617,14 +2617,14 @@ static void write_data(q3file *f, q3obj *o)
     if (t == T4("box ") || t == T4("trig") || t == T4("plhd")) {
         q3node *fa = q3d_kid(d, s, 0, t == T4("box ") ? 0 : t == T4("trig") ? 1 : 2);
         nf = fa ? fa->n : 0;
-        fsets = nf ? calloc(nf, sizeof *fsets) : NULL;
+        fsets = nf ? bb_calloc(nf, sizeof *fsets, BB_BYTES) : NULL;
         for (uint32_t i = 0; fsets && i < nf; i++)
             fsets[i] = t == T4("plhd") ? fa->w[i * 5 + 4] : fa->w[i];
     }
     if (t == T4("plyl")) {
         q3node *sa = q3d_kid(d, s, 0, 1);
         ng = sa ? sa->n : 0;
-        gsets = ng ? calloc(ng, sizeof *gsets) : NULL;
+        gsets = ng ? bb_calloc(ng, sizeof *gsets, BB_BYTES) : NULL;
         for (uint32_t i = 0; gsets && i < ng; i++)
             gsets[i] = sa->w[i];
     }
@@ -2775,12 +2775,12 @@ static void write_data(q3file *f, q3obj *o)
         w_u32(f, w[3]), w_u32(f, w[4]);
         w_u32(f, w[6]), w_u32(f, w[7]), w_u32(f, w[8]), w_u32(f, w[9]);
         uint32_t size = 0, n = w[7] * w[8];
-        uint8_t *b = q3_storage_bytes(w[0], &size), *img = calloc(n + 1, 1);
+        uint8_t *b = q3_storage_bytes(w[0], &size), *img = bb_calloc(n + 1, 1, BB_BYTES);
         if (img && b)
             memcpy(img, b, size < n ? size : n);
         w_raw(f, img ? img : (uint8_t *)"", img ? n : 0);
-        free(img);
-        free(b);
+        bb_free(img);
+        bb_free(b);
         break;
     }
     default: break;
@@ -2895,9 +2895,9 @@ static void write_data(q3file *f, q3obj *o)
         write_set(f, o->set);
     end_obj(f);
 done:
-    free(vsets);
-    free(fsets);
-    free(gsets);
+    bb_free(vsets);
+    bb_free(fsets);
+    bb_free(gsets);
 }
 
 /* A class of the program's: a type declaring its name first (binary
@@ -2908,7 +2908,7 @@ static int32_t custom_type_id_named(q3file *f, const char *name)
         if (!strcmp(f->types[i].name, name))
             return f->types[i].id;
     int32_t id = --f->next_custom;
-    typeent *n = realloc(f->types, (size_t)(f->ntypes + 1) * sizeof *n);
+    typeent *n = bb_realloc(f->types, (size_t)(f->ntypes + 1) * sizeof *n, BB_TAG(typeent));
     if (n) {
         f->types = n;
         f->types[f->ntypes].id = id;
@@ -3026,7 +3026,7 @@ typedef struct {
 
 static void mw_part(meshw *m, uint32_t corner, uint32_t a, uint32_t b, gaddr set)
 {
-    uint32_t (*n)[4] = realloc(m->parts, (m->nparts + 1) * sizeof *n);
+    uint32_t (*n)[4] = bb_realloc(m->parts, (m->nparts + 1) * sizeof *n, BB_BYTES);
     if (!n)
         return;
     m->parts = n;
@@ -3043,7 +3043,7 @@ static void mw_edge(void *ctx, uint32_t v1, uint32_t v2, gaddr set) { mw_part(ct
 static void write_corners(q3file *f, meshw *m)
 {
     uint32_t n = 0;
-    bool *done = calloc(m->nparts + 1, 1);
+    bool *done = bb_calloc(m->nparts + 1, 1, BB_BYTES);
     for (uint32_t i = 0; done && i < m->nparts; i++) {
         if (!m->parts[i][0] || done[i])
             continue;
@@ -3053,11 +3053,11 @@ static void write_corners(q3file *f, meshw *m)
                 done[j] = true;
     }
     if (!n || !done) {
-        free(done);
+        bb_free(done);
         return;
     }
     memset(done, 0, m->nparts + 1);
-    gaddr *sets = calloc(n, sizeof *sets);
+    gaddr *sets = bb_calloc(n, sizeof *sets, BB_BYTES);
     uint32_t k = 0;
     begin_obj(f, T4("cntr"));
     begin_obj(f, T4("crnr"));
@@ -3081,8 +3081,8 @@ static void write_corners(q3file *f, meshw *m)
     for (uint32_t i = 0; sets && i < k; i++)
         write_set(f, sets[i]);
     end_obj(f);
-    free(sets);
-    free(done);
+    bb_free(sets);
+    bb_free(done);
 }
 
 static void write_edges(q3file *f, meshw *m)
@@ -3125,7 +3125,7 @@ static void mw_face(void *ctx, uint32_t i, uint32_t ncont, const uint32_t *nvert
     for (uint32_t c = 0; c < ncont; c++) {
         if (m->ncounts == m->capcounts) {
             m->capcounts = m->capcounts ? m->capcounts * 2 : 64;
-            int32_t *n = realloc(m->counts, m->capcounts * sizeof *n);
+            int32_t *n = bb_realloc(m->counts, m->capcounts * sizeof *n, BB_BYTES);
             if (!n)
                 return;
             m->counts = n;
@@ -3135,7 +3135,7 @@ static void mw_face(void *ctx, uint32_t i, uint32_t ncont, const uint32_t *nvert
         for (uint32_t k = 0; k < nverts[c]; k++) {
             if (m->nidx == m->capidx) {
                 m->capidx = m->capidx ? m->capidx * 2 : 256;
-                uint32_t *n = realloc(m->idx, m->capidx * sizeof *n);
+                uint32_t *n = bb_realloc(m->idx, m->capidx * sizeof *n, BB_BYTES);
                 if (!n)
                     return;
                 m->idx = n;
@@ -3157,9 +3157,9 @@ static void write_mesh(q3file *f, q3obj *o)
     meshw m;
     memset(&m, 0, sizeof m);
     q3_mesh_walk(o, &(q3mesh_walker){ mw_count_v, mw_count_f, NULL, NULL }, &m);
-    m.pts = calloc(m.nv + 1, sizeof *m.pts);
-    m.vsets = calloc(m.nv + 1, sizeof *m.vsets);
-    m.fsets = calloc(m.nf + 1, sizeof *m.fsets);
+    m.pts = bb_calloc(m.nv + 1, sizeof *m.pts, BB_BYTES);
+    m.vsets = bb_calloc(m.nv + 1, sizeof *m.vsets, BB_BYTES);
+    m.fsets = bb_calloc(m.nf + 1, sizeof *m.fsets, BB_BYTES);
     if (m.pts && m.vsets && m.fsets) {
         q3_mesh_walk(o, &(q3mesh_walker){ mw_vertex, mw_face, mw_corner, mw_edge }, &m);
         gaddr set = q3_mesh_set(o);
@@ -3186,12 +3186,12 @@ static void write_mesh(q3file *f, q3obj *o)
             write_set(f, set);
         end_obj(f);
     }
-    free(m.parts);
-    free(m.pts);
-    free(m.vsets);
-    free(m.fsets);
-    free(m.counts);
-    free(m.idx);
+    bb_free(m.parts);
+    bb_free(m.pts);
+    bb_free(m.vsets);
+    bb_free(m.fsets);
+    bb_free(m.counts);
+    bb_free(m.idx);
 }
 
 static void write_obj(q3file *f, gaddr g)
@@ -3281,13 +3281,13 @@ static void free_read(q3file *f)
     for (int i = 0; i < f->ntoc; i++)
         if (f->toc[i].obj)
             q3_release(f->toc[i].obj);
-    free(f->toc);
+    bb_free(f->toc);
     f->toc = NULL;
     f->ntoc = 0;
-    free(f->types);
+    bb_free(f->types);
     f->types = NULL;
     f->ntypes = 0;
-    free(f->b);
+    bb_free(f->b);
     f->b = NULL;
     f->n = f->eof = f->pos = 0;
 }
@@ -3300,7 +3300,7 @@ static void close_file(q3file *f, bool write_out)
         q3_storage_write(f->storage, 0, f->olen, f->o);
         q3_storage_truncate(f->storage, f->olen);
     }
-    free(f->o);
+    bb_free(f->o);
     f->o = NULL;
     f->olen = f->ocap = 0;
     free_read(f);
@@ -3359,18 +3359,18 @@ bool q3_file_end_writing(gaddr file) { return file_of(file) != NULL; }
 
 gaddr q3_read_3dmf(const uint8_t *bytes, uint32_t size)
 {
-    q3group *gr = calloc(1, sizeof *gr);
+    q3group *gr = bb_calloc(1, sizeof *gr, BB_TAG(q3group));
     q3obj *g = gr ? q3_new(Q3_DISPLAY_GROUP, gr) : NULL;
     if (!g) {
-        free(gr);
+        bb_free(gr);
         return 0;
     }
     gr->state = 1 | 4 | 8 | 16 | 32;
     q3file f;
     memset(&f, 0, sizeof f);
-    uint8_t *copy = malloc(size ? size : 1);
+    uint8_t *copy = bb_malloc(size ? size : 1, BB_BYTES);
     if (!copy || !open_bytes(&f, (memcpy(copy, bytes, size), copy), size)) {
-        free(f.b ? f.b : copy);
+        bb_free(f.b ? f.b : copy);
         q3_release(g->g);
         return 0;
     }
@@ -3424,10 +3424,10 @@ static q3file *file_arg(ppc_cpu *c)
 
 static void Q3File_New(ppc_cpu *c)
 {
-    q3file *f = calloc(1, sizeof *f);
+    q3file *f = bb_calloc(1, sizeof *f, BB_TAG(q3file));
     q3obj *o = f ? q3_new(FILE_TYPE, f) : NULL;
     if (!o)
-        free(f);
+        bb_free(f);
     Q3RETURN(o ? o->g : 0);
 }
 
@@ -3471,7 +3471,7 @@ static void Q3File_OpenRead(ppc_cpu *c)
     uint32_t n = 0;
     uint8_t *b = q3_storage_bytes(f->storage, &n);
     if (!b || !open_bytes(f, b, n)) {
-        free(f->b ? f->b : b);
+        bb_free(f->b ? f->b : b);
         f->b = NULL;
         q3_storage_close(f->storage);
         q3_error(kQ3ErrorInvalidMetafile);
@@ -3712,10 +3712,10 @@ static void Q3File_MarkAsExternalReference(ppc_cpu *c)
 {
     q3file *f = file_arg(c);
     if (f && !f->ext_refs) {
-        q3group *g = calloc(1, sizeof *g);
+        q3group *g = bb_calloc(1, sizeof *g, BB_TAG(q3group));
         q3obj *o = g ? q3_new(Q3_GROUP, g) : NULL;
         if (!o)
-            free(g);
+            bb_free(g);
         f->ext_refs = o ? o->g : 0;
     }
     if (f && f->ext_refs && Q3R(1))
@@ -3950,11 +3950,11 @@ static void Q3RawData_Read(ppc_cpu *c)
 {
     q3file *f = prim_file(Q3R(2), false);
     uint32_t n = Q3R(1);
-    uint8_t *b = f && n < (64u << 20) ? malloc(n ? n : 1) : NULL;
+    uint8_t *b = f && n < (64u << 20) ? bb_malloc(n ? n : 1, BB_BYTES) : NULL;
     bool ok = b && r_raw(f, b, n);
     if (ok && Q3R(0))
         gput(Q3R(0), b, n);
-    free(b);
+    bb_free(b);
     Q3RETURN(ok ? kQ3Success : kQ3Failure);
 }
 
@@ -3962,12 +3962,12 @@ static void Q3RawData_Write(ppc_cpu *c)
 {
     q3file *f = prim_file(Q3R(2), true);
     uint32_t n = Q3R(1);
-    uint8_t *b = f && n < (64u << 20) ? malloc(n ? n : 1) : NULL;
+    uint8_t *b = f && n < (64u << 20) ? bb_malloc(n ? n : 1, BB_BYTES) : NULL;
     if (b && n)
         gget(b, Q3R(0), n);
     if (b)
         w_raw(f, b, n);
-    free(b);
+    bb_free(b);
     Q3RETURN(b ? kQ3Success : kQ3Failure);
 }
 

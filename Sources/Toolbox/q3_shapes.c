@@ -687,13 +687,13 @@ static uint32_t *compressed_argb(const uint32_t *d, int *w, int *h)
         if (dw > 0 && dh > 0 && dw <= 8192 && dh <= 8192 && qt_vdec_supported(ctype, depth)) {
             qt_video_format f = { ctype, dw, dh, depth, NULL, NULL, 0 };
             qt_vdec *dec = qt_vdec_new(&f);
-            uint8_t *frame = dec ? calloc((size_t)dw * (size_t)dh, 4) : NULL;
+            uint8_t *frame = dec ? bb_calloc((size_t)dw * (size_t)dh, 4, BB_BYTES) : NULL;
             if (frame && qt_vdec_decode(dec, img, isize, frame)) {
                 out = rgba_argb(frame, dw, dh);
                 *w = dw;
                 *h = dh;
             } else {
-                free(frame);
+                bb_free(frame);
             }
             if (dec)
                 qt_vdec_free(dec);
@@ -707,8 +707,8 @@ static uint32_t *compressed_argb(const uint32_t *d, int *w, int *h)
             }
         }
     }
-    free(desc);
-    free(img);
+    bb_free(desc);
+    bb_free(img);
     return out;
 }
 
@@ -787,7 +787,7 @@ static void Q3CompressedPixmapTexture_CompressImage(ppc_cpu *c)
     src.depth = PixMap_pixelSize(pm);
     src.ctab = PixMap_pmTable(pm);
     pixdst_clamp(&src);
-    uint32_t *px = w > 0 && h > 0 ? malloc((size_t)w * (size_t)h * 4) : NULL;
+    uint32_t *px = w > 0 && h > 0 ? bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES) : NULL;
     uint8_t *data = NULL;
     size_t n = 0;
     if (px) {
@@ -795,9 +795,9 @@ static void Q3CompressedPixmapTexture_CompressImage(ppc_cpu *c)
         qt_venc_format f = { ctype, w, h, depth ? depth : 32, (int32_t)Q3R(5) };
         n = qt_venc_encode(&f, px, NULL, &data);
     }
-    free(px);
+    bb_free(px);
     if (!n) {
-        free(data);
+        bb_free(data);
         Q3RETURN(kQ3Failure);
         return;
     }
@@ -814,7 +814,7 @@ static void Q3CompressedPixmapTexture_CompressImage(ppc_cpu *c)
     desc[82] = (uint8_t)((depth ? depth : 24) >> 8), desc[83] = (uint8_t)(depth ? depth : 24);
     desc[84] = 0xFF, desc[85] = 0xFF; /* clutID -1 */
     gaddr image = q3_memory_storage_new(data, sz), idesc = q3_memory_storage_new(desc, sizeof desc);
-    free(data);
+    bb_free(data);
     wr32(out, image);
     wr32(out + 4, 0); /* kQ3EndianBig */
     wr32(out + 8, idesc);
@@ -882,9 +882,9 @@ static void bitmap_field(ppc_cpu *c, uint32_t type, const q3schema *s, int field
         uint32_t n = d->w[off + 2] * d->w[off + 3];
         q3node *img = NULL;
         if (rd32(b) && n < (64u << 20)) {
-            img = calloc(1, sizeof *img);
+            img = bb_calloc(1, sizeof *img, BB_TAG(q3node));
             if (img) {
-                img->bytes = malloc(n ? n : 1);
+                img->bytes = bb_malloc(n ? n : 1, BB_BYTES);
                 img->nbytes = n;
                 if (img->bytes && n)
                     gget(img->bytes, rd32(b), n);
@@ -1186,10 +1186,10 @@ static void Q3Attribute_Submit(ppc_cpu *c)
         Q3RETURN(kQ3Failure);
         return;
     }
-    q3set *s = calloc(1, sizeof *s);
+    q3set *s = bb_calloc(1, sizeof *s, BB_TAG(q3set));
     q3obj *o = s ? q3_new(Q3_ATTRIBUTE_SET, s) : NULL;
     if (!o) {
-        free(s);
+        bb_free(s);
         Q3RETURN(kQ3Failure);
         return;
     }

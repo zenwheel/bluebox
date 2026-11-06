@@ -80,7 +80,7 @@ static ctl_info *ctl_add(gaddr ch)
 {
     ctl_info *c = ctl_find(ch);
     if (c) {
-        free(c->ap);
+        bb_free(c->ap);
         c->ap = NULL;
         carbon_ctl_free(c);
     }
@@ -90,7 +90,7 @@ static ctl_info *ctl_add(gaddr ch)
     if (!c) {
         if (nctls == cap_ctls) {
             cap_ctls = cap_ctls ? cap_ctls * 2 : 256;
-            ctls = realloc(ctls, (size_t)cap_ctls * sizeof *ctls);
+            ctls = bb_realloc(ctls, (size_t)cap_ctls * sizeof *ctls, BB_TAG(ctl_info));
         }
         c = &ctls[nctls++];
     }
@@ -132,10 +132,10 @@ static int win_index(gaddr w, bool create)
 void controls_reset(void)
 {
     for (int i = 0; i < nctls; i++) {
-        free(ctls[i].ap);
+        bb_free(ctls[i].ap);
         carbon_ctl_free(&ctls[i]);
     }
-    free(ctls);
+    bb_free(ctls);
     ctls = NULL;
     nctls = cap_ctls = 0;
     memset(wins, 0, sizeof wins);
@@ -153,7 +153,7 @@ void controls_forget_window(gaddr w)
     for (gaddr x = WindowRecord_controlList(w); x && rd32(x) && k < 4096; x = ControlRecord_nextControl(cp(x)), k++) {
         ctl_info *c = ctl_find(x);
         if (c) {
-            free(c->ap);
+            bb_free(c->ap);
             c->ap = NULL;
             carbon_ctl_free(c);
             c->ch = 0;
@@ -1416,7 +1416,7 @@ void tb_DisposeControl(gaddr ch)
     if (c) {
         if (c->parent)
             ctl_call(c->parent, kControlMsgSubControlRemoved, (int32_t)ch);
-        free(c->ap);
+        bb_free(c->ap);
         c->ap = NULL;
         carbon_ctl_free(c);
         c->ch = 0;

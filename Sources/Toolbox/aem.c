@@ -52,7 +52,7 @@ static void grow(uint8_t **buf, uint32_t *cap, uint32_t need)
         return;
     while (*cap < need)
         *cap = *cap ? *cap * 2 : 256;
-    *buf = realloc(*buf, *cap);
+    *buf = bb_realloc(*buf, *cap, BB_BYTES);
 }
 
 static void put32(uint8_t *p, uint32_t v)
@@ -110,24 +110,24 @@ uint8_t *aem_build_flat(uint32_t cls, uint32_t id, const char *const *files, int
         put32(list + 4, (uint32_t)nfiles);
         for (int i = 0; i < nfiles; i++) {
             size_t plen = strlen(files[i]);
-            uint8_t *item = malloc(4 + plen);
+            uint8_t *item = bb_malloc(4 + plen, BB_BYTES);
             put32(item, T("fss "));
             memcpy(item + 4, files[i], plen);
             host_entry(&list, &ln, &lcap, 0, T("bbfp"), item, (uint32_t)(4 + plen));
-            free(item);
+            bb_free(item);
         }
         host_entry(&buf, &n, &cap, T("----"), T("list"), list, ln);
-        free(list);
+        bb_free(list);
     } else if (text) {
         /* Direct object: the text, MacRoman with Mac line ends. */
         size_t tn = strlen(text);
-        uint8_t *mac = malloc(tn + 1);
+        uint8_t *mac = bb_malloc(tn + 1, BB_BYTES);
         size_t m = utf8_to_macroman(text, mac, tn + 1);
         for (size_t i = 0; i < m; i++)
             if (mac[i] == '\n')
                 mac[i] = '\r';
         host_entry(&buf, &n, &cap, T("----"), T("TEXT"), mac, (uint32_t)m);
-        free(mac);
+        bb_free(mac);
     }
     *len_out = n;
     return buf;
@@ -164,7 +164,7 @@ enum {
 };
 enum { msgWasNotAccepted = 0, msgWasFullyAccepted = 1, msgWasPartiallyAccepted = 2 };
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pending_ae queue[16];
 static int qn;
 static pending_ae current; /* delivered to the app, waiting for AEProcessAppleEvent */
@@ -172,7 +172,7 @@ static pending_ae current; /* delivered to the app, waiting for AEProcessAppleEv
 /* Return receipts owed for raw events that are done with.  Events are
  * freed with and without the queue's lock held, so the receipts wait here
  * (under a lock of their own) and go out once the queue's lock is free. */
-static pthread_mutex_t outbox_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t outbox_lock = PTHREAD_MUTEX_INITIALIZER;
 static pending_ae outbox[16];
 static int nout;
 
@@ -192,7 +192,7 @@ static void free_event(pending_ae *e, bool unanswered)
                                            .sender_sig = e->sender_sig };
         pthread_mutex_unlock(&outbox_lock);
     }
-    free(e->flat);
+    bb_free(e->flat);
     memset(e, 0, sizeof *e);
 }
 
@@ -226,7 +226,7 @@ static void queue_event(uint32_t cls, uint32_t id, const char *const *files, int
     uint32_t len;
     uint8_t *flat = aem_build_flat(cls, id, files, n, text, reply != NULL, &len);
     aem_queue_flat(flat, len, reply, ctx);
-    free(flat);
+    bb_free(flat);
 }
 
 void machine_open_documents(const char *const *paths, int n, bool print)
@@ -255,7 +255,7 @@ static void queue_quit_all_answer(void)
     host_entry(&flat, &len, &cap, T("errn"), T("shor"), err, 2);
     put32(flat + 8, 1); /* that parameter */
     aem_queue_flat(flat, len, NULL, NULL);
-    free(flat);
+    bb_free(flat);
 }
 
 /* A raw high-level event between processes: a header, then the message.
@@ -266,7 +266,7 @@ enum { RAW_TAG = 0x42484C45 /* 'BHLE' */, RAW_HEAD = 64 };
 
 static uint8_t *raw_flatten(const pending_ae *e, const uint8_t *msg, uint32_t len, uint32_t *len_out)
 {
-    uint8_t *buf = calloc(1, RAW_HEAD + len);
+    uint8_t *buf = bb_calloc(1, RAW_HEAD + len, BB_BYTES);
     put32(buf, RAW_TAG);
     put32(buf + 4, e->cls);
     put32(buf + 8, e->id);
@@ -292,7 +292,7 @@ static void queue_raw(const uint8_t *data, uint32_t len)
     memcpy(e.sender_name, data + 32, 32);
     e.sender_name[0] = e.sender_name[0] > 31 ? 31 : e.sender_name[0];
     e.flatlen = len - RAW_HEAD;
-    e.flat = malloc(e.flatlen ? e.flatlen : 1); /* never NULL: an empty message is still an event */
+    e.flat = bb_malloc(e.flatlen ? e.flatlen : 1, BB_BYTES); /* never NULL: an empty message is still an event */
     memcpy(e.flat, data + RAW_HEAD, e.flatlen);
     enqueue(&e);
 }
@@ -325,7 +325,7 @@ void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply
         }
         off += 12 + ((elen + 1) & ~1u);
     }
-    pending_ae e = { .cls = cls, .id = id, .flat = malloc(len), .flatlen = len, .reply = reply, .reply_ctx = ctx };
+    pending_ae e = { .cls = cls, .id = id, .flat = bb_malloc(len, BB_BYTES), .flatlen = len, .reply = reply, .reply_ctx = ctx };
     memcpy(e.flat, data, len);
     enqueue(&e);
 }
@@ -443,11 +443,11 @@ static gaddr new_handle_with(const void *data, uint32_t n)
  * that moves when the new one is made, so it goes through the host). */
 static gaddr handle_from_guest(gaddr src, uint32_t n)
 {
-    uint8_t *tmp = malloc(n ? n : 1);
+    uint8_t *tmp = bb_malloc(n ? n : 1, BB_BYTES);
     if (n)
         gget(tmp, src, n);
     gaddr h = new_handle_with(tmp, n);
-    free(tmp);
+    bb_free(tmp);
     return h;
 }
 
@@ -533,7 +533,7 @@ static bool insert_entry(gaddr h, uint32_t at, bool attr, uint32_t key, uint32_t
 {
     uint8_t *tmp = NULL;
     if (!host_data && len) { /* data may live in a handle that moves */
-        tmp = malloc(len);
+        tmp = bb_malloc(len, BB_BYTES);
         gget(tmp, data, len);
         host_data = tmp;
     }
@@ -541,7 +541,7 @@ static bool insert_entry(gaddr h, uint32_t at, bool attr, uint32_t key, uint32_t
     uint32_t entry = 12 + pad(len);
     tb_SetHandleSize(h, size + (int32_t)entry);
     if (tb_GetHandleSize(h) != size + (int32_t)entry) {
-        free(tmp);
+        bb_free(tmp);
         return false;
     }
     gaddr p = rd32(h);
@@ -554,7 +554,7 @@ static bool insert_entry(gaddr h, uint32_t at, bool attr, uint32_t key, uint32_t
     if (pad(len) != len)
         wr8(p + at + 12 + len, 0);
     bump_count(h, attr, 1);
-    free(tmp);
+    bb_free(tmp);
     return true;
 }
 
@@ -712,15 +712,15 @@ static int ncoercions[2], coercion_room[2];
 /* Room in a table for one more entry: the Apple Event Manager's tables
  * grow as handlers are installed (iCab installs 65 event handlers, and
  * one refused made it give up building what its 'oapp' handler uses). */
-static bool table_room(void **table, int n, int *room, size_t size)
+static bool table_room(void **table, int n, int *room, size_t size, const bb_type *t)
 {
     if (n < *room)
         return true;
     int more = *room ? *room * 2 : 64;
-    void *t = realloc(*table, (size_t)more * size);
-    if (!t)
+    void *grown = bb_realloc(*table, (size_t)more * size, t);
+    if (!grown)
         return false;
-    *table = t;
+    *table = grown;
     *room = more;
     return true;
 }
@@ -979,8 +979,8 @@ static int item_paths(gaddr h, uint32_t off, char ***paths, int count)
     else if (type == T("alis"))
         ok = alias_host_of_record(data, len, host, sizeof host);
     if (ok) {
-        *paths = realloc(*paths, (size_t)(count + 1) * sizeof **paths);
-        (*paths)[count++] = strdup(host);
+        *paths = bb_realloc(*paths, (size_t)(count + 1) * sizeof **paths, BB_TAG(char *));
+        (*paths)[count++] = bb_strdup(host);
     }
     return count;
 }
@@ -1173,7 +1173,7 @@ int16_t tb_AEInstallEventHandler(int32_t event_class, int32_t event_id, gaddr hd
             handlers[s][i].refcon = refcon;
             return noErr;
         }
-    if (!table_room((void **)&handlers[s], nhandlers[s], &handler_room[s], sizeof handlers[s][0]))
+    if (!table_room((void **)&handlers[s], nhandlers[s], &handler_room[s], sizeof handlers[s][0], BB_TAG(handler_entry)))
         return memFullErr;
     handlers[s][nhandlers[s]++] = (handler_entry){ (uint32_t)event_class, (uint32_t)event_id, hdlr, refcon };
     return noErr;
@@ -1235,7 +1235,7 @@ int16_t tb_AEInstallCoercionHandler(int32_t from, int32_t to, gaddr hdlr, int32_
             coercions[s][i] = e;
             return noErr;
         }
-    if (!table_room((void **)&coercions[s], ncoercions[s], &coercion_room[s], sizeof e))
+    if (!table_room((void **)&coercions[s], ncoercions[s], &coercion_room[s], sizeof e, BB_TAG(coercion_entry)))
         return memFullErr;
     coercions[s][ncoercions[s]++] = e;
     return noErr;
@@ -1446,7 +1446,7 @@ static void finish(gaddr evt, gaddr reply, int16_t result, machine_ae_reply_fn r
         uint32_t len = 0;
         uint8_t *data = desc_handle(reply) ? flatten_data(desc_handle(reply), &len) : NULL;
         reply_fn(ctx, data, len, result);
-        free(data);
+        bb_free(data);
     }
     tb_AEDisposeDesc(evt);
     tb_AEDisposeDesc(reply);
@@ -1921,9 +1921,9 @@ static int16_t finder_event(gaddr evt)
         int16_t e = finder_open(paths[i]);
         if (e && !err)
             err = e;
-        free(paths[i]);
+        bb_free(paths[i]);
     }
-    free(paths);
+    bb_free(paths);
     return err;
 }
 
@@ -1949,7 +1949,7 @@ static int16_t send_to_self(gaddr evt, gaddr reply, int32_t send_mode)
         uint32_t len;
         uint8_t *data = flatten_data(desc_handle(r), &len);
         aem_queue_flat(data, len, NULL, NULL);
-        free(data);
+        bb_free(data);
         tb_AEDisposeDesc(r);
     } else
         tb_AEDisposeDesc(r);
@@ -1999,12 +1999,12 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
     uint8_t *answer = NULL;
     uint32_t answer_len = 0;
     int16_t err = aem_remote_send(addr, atype, alen > 64 ? 64 : alen, data, len, mode, timeout, &answer, &answer_len);
-    free(data);
+    bb_free(data);
     if (answer && mode == kAEWaitReply && reply) {
         gaddr rh = unflatten_data(answer, answer_len);
         set_desc(reply, T("aevt"), rh);
     }
-    free(answer);
+    bb_free(answer);
     return err;
 }
 
@@ -2041,10 +2041,10 @@ int16_t aem_script_send(gaddr evt, gaddr reply)
     uint8_t *answer = NULL;
     uint32_t answer_len = 0;
     int16_t err = aem_remote_send(addr, atype, 4, data, len, kAEWaitReply, -1, &answer, &answer_len);
-    free(data);
+    bb_free(data);
     if (answer && reply)
         set_desc(reply, T("aevt"), unflatten_data(answer, answer_len));
-    free(answer);
+    bb_free(answer);
     return err;
 }
 
@@ -2394,7 +2394,7 @@ int16_t tb_AcceptHighLevelEvent(gaddr sender_id_return, gaddr refcon_return, gad
     if (msg_length_return)
         wr32(msg_length_return, err ? rest - n : n);
     if (owned)
-        free(msg);
+        bb_free(msg);
     pthread_mutex_lock(&lock);
     p = accepting(); /* the queue may have grown meanwhile; entries stay put */
     if (p) {
@@ -2436,7 +2436,7 @@ int8_t tb_GetSpecificHighLevelEvent(gaddr fn, gaddr data, gaddr err_return)
         uint32_t len;
         uint8_t *bytes = event_message(&e, &len, &owned);
         if (owned)
-            free(bytes);
+            bb_free(bytes);
         gmemset(msg, 0, HighLevelEventMsg_SIZEOF);
         HighLevelEventMsg_set_HighLevelEventMsgHeaderlength(msg, HighLevelEventMsg_SIZEOF);
         gaddr ev = msg + HighLevelEventMsg_theMsgEvent_off;
@@ -2473,18 +2473,18 @@ static int16_t post_to_run(const pending_ae *e, uint32_t atype, uint32_t a0, uin
     uint8_t addr[8];
     put32(addr, a0);
     put32(addr + 4, a1);
-    uint8_t *msg = malloc(msg_len ? msg_len : 1);
+    uint8_t *msg = bb_malloc(msg_len ? msg_len : 1, BB_BYTES);
     if (msg_len)
         gget(msg, msg_buf, msg_len);
     uint32_t len;
     uint8_t *flat = raw_flatten(e, msg, msg_len, &len);
-    free(msg);
+    bb_free(msg);
     uint8_t *reply = NULL;
     uint32_t reply_len = 0;
     int16_t err = aem_remote_send(addr, atype, atype == T("psn ") ? 8 : 4, flat, len, kAENoReply, 0, &reply,
                                   &reply_len);
-    free(reply);
-    free(flat);
+    bb_free(reply);
+    bb_free(flat);
     return err;
 }
 
@@ -2556,14 +2556,14 @@ int16_t tb_PostHighLevelEvent(gaddr evt, gaddr receiver_id, int32_t refcon, gadd
     }
     e.self = true;
     e.flatlen = (uint32_t)msg_length;
-    e.flat = malloc(e.flatlen ? e.flatlen : 1); /* never NULL: an empty message is still an event */
+    e.flat = bb_malloc(e.flatlen ? e.flatlen : 1, BB_BYTES); /* never NULL: an empty message is still an event */
     if (e.flatlen)
         gget(e.flat, msg_buf, e.flatlen);
     pthread_mutex_lock(&lock);
     bool full = qn >= 16;
     pthread_mutex_unlock(&lock);
     if (full) {
-        free(e.flat);
+        bb_free(e.flat);
         return memFullErr;
     }
     enqueue(&e);
@@ -2587,15 +2587,15 @@ static void send_receipts(void)
         our_name(r.sender_name);
         if (owed[i].sender_pid == getpid()) {
             r.self = true;
-            r.flat = malloc(1);
+            r.flat = bb_malloc(1, BB_BYTES);
             enqueue(&r);
             continue;
         }
         uint32_t len, reply_len;
         uint8_t *flat = raw_flatten(&r, NULL, 0, &len), *reply = NULL;
         machine_ae_send(owed[i].sender_pid, owed[i].sender_sig, flat, len, kAENoReply, 0, &reply, &reply_len);
-        free(reply);
-        free(flat);
+        bb_free(reply);
+        bb_free(flat);
     }
 }
 

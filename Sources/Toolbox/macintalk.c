@@ -219,11 +219,11 @@ static struct {
 
 static void remember(const uint8_t *english, size_t elen, const char *phonemes, size_t plen)
 {
-    free(reads[MAX_READ - 1].english);
-    free(reads[MAX_READ - 1].phonemes);
+    bb_free(reads[MAX_READ - 1].english);
+    bb_free(reads[MAX_READ - 1].phonemes);
     memmove(&reads[1], &reads[0], sizeof reads[0] * (MAX_READ - 1));
-    reads[0].english = malloc(elen ? elen : 1);
-    reads[0].phonemes = malloc(plen ? plen : 1);
+    reads[0].english = bb_malloc(elen ? elen : 1, BB_BYTES);
+    reads[0].phonemes = bb_malloc(plen ? plen : 1, BB_BYTES);
     memcpy(reads[0].english, english, elen);
     memcpy(reads[0].phonemes, phonemes, plen);
     reads[0].elen = elen;
@@ -235,14 +235,14 @@ static void remember(const uint8_t *english, size_t elen, const char *phonemes, 
 gaddr macintalk_read(const uint8_t *english, size_t len)
 {
     size_t room = len * 6 + 16;
-    char *ph = malloc(room);
+    char *ph = bb_malloc(room, BB_BYTES);
     size_t n = english_to_mt(english, len, ph, room);
     gaddr h = tb_NewHandle((int32_t)n, true, false); /* the system heap: kept by code that lives there */
     if (h && rd32(h)) {
         gput(rd32(h), ph, (uint32_t)n);
         remember(english, len, ph, n);
     }
-    free(ph);
+    bb_free(ph);
     return h;
 }
 
@@ -262,10 +262,10 @@ static void reader_native(cpu68k *c, uint16_t tw)
     } else {
         if (len > 32767)
             len = 32767;
-        uint8_t *english = malloc(len ? len : 1);
+        uint8_t *english = bb_malloc(len ? len : 1, BB_BYTES);
         gget(english, text, len);
         size_t room = (size_t)len * 6 + 16;
-        char *ph = malloc(room);
+        char *ph = bb_malloc(room, BB_BYTES);
         size_t n = english_to_mt(english, len, ph, room);
         tb_SetHandleSize(out, (int32_t)n);
         err = (int16_t)rd16(LM_MemErr);
@@ -273,8 +273,8 @@ static void reader_native(cpu68k *c, uint16_t tw)
             gput(rd32(out), ph, (uint32_t)n);
             remember(english, len, ph, n);
         }
-        free(ph);
-        free(english);
+        bb_free(ph);
+        bb_free(english);
     }
     wr16(sp + 16, (uint16_t)err);
     c->a[7] = sp + 12;
@@ -368,7 +368,7 @@ static int16_t drawn_rect[4];
 
 static void keep_drawn(void)
 {
-    free(drawn);
+    bb_free(drawn);
     drawn = NULL;
     bool on;
     machine_overlay(drawn_rect, &on);
@@ -378,7 +378,7 @@ static void keep_drawn(void)
     uint32_t rb = qd_screen_row_bytes(), depth = (uint32_t)qd_screen_depth();
     uint32_t left = (uint32_t)drawn_rect[1] * depth / 8, right = ((uint32_t)drawn_rect[3] * depth + 7) / 8;
     uint32_t rows = (uint32_t)(drawn_rect[2] - drawn_rect[0]);
-    if (right <= left || !rows || !(drawn = malloc((size_t)(right - left) * rows)))
+    if (right <= left || !rows || !(drawn = bb_malloc((size_t)(right - left) * rows, BB_BYTES)))
         return;
     for (uint32_t y = 0; y < rows; y++)
         gget(drawn + (size_t)y * (right - left), base + ((uint32_t)drawn_rect[0] + y) * rb + left, right - left);
@@ -393,7 +393,7 @@ static void put_back_drawn(void)
     uint32_t left = (uint32_t)drawn_rect[1] * depth / 8, right = ((uint32_t)drawn_rect[3] * depth + 7) / 8;
     for (uint32_t y = 0; y < (uint32_t)(drawn_rect[2] - drawn_rect[0]); y++)
         gput(base + ((uint32_t)drawn_rect[0] + y) * rb + left, drawn + (size_t)y * (right - left), right - left);
-    free(drawn);
+    bb_free(drawn);
     drawn = NULL;
 }
 
@@ -434,7 +434,7 @@ static void prime_native(cpu68k *c, uint16_t tw)
     }
     if (!s->chan || !count)
         return;
-    uint8_t *ph = malloc(count);
+    uint8_t *ph = bb_malloc(count, BB_BYTES);
     size_t n = count;
     gget(ph, p, count);
     const uint8_t *say = NULL;
@@ -448,7 +448,7 @@ static void prime_native(cpu68k *c, uint16_t tw)
             say = swapped;
             say_len = swapped_len;
         } else {
-            free(ph);
+            bb_free(ph);
             ph = swapped;
             n = swapped_len;
             swapped = NULL;
@@ -464,7 +464,7 @@ static void prime_native(cpu68k *c, uint16_t tw)
     char *host = NULL;
     if (!say) {
         size_t room = n * 4 + 40;
-        host = malloc(room);
+        host = bb_malloc(room, BB_BYTES);
         strcpy(host, "[[inpt PHON]]");
         mt_to_host(ph, n, host + strlen(host), room - strlen(host) - 16);
         strcat(host, "[[inpt TEXT]]");
@@ -484,9 +484,9 @@ static void prime_native(cpu68k *c, uint16_t tw)
         s->speaking = s->err == noErr;
         s->give_up = now_seconds() + 30 + say_len / 4.0;
     }
-    free(host);
-    free(swapped);
-    free(ph);
+    bb_free(host);
+    bb_free(swapped);
+    bb_free(ph);
 }
 
 /* Where MacinTalk 1.31 waited for the next tick between the frames it
@@ -664,8 +664,8 @@ void macintalk_reset(void)
     for (int i = 0; i < MAX_SPEECH; i++)
         speech[i].refnum = 0; /* the channels went with the last run's heap */
     for (int i = 0; i < MAX_READ; i++) {
-        free(reads[i].english);
-        free(reads[i].phonemes);
+        bb_free(reads[i].english);
+        bb_free(reads[i].phonemes);
     }
     memset(reads, 0, sizeof reads);
     open_stub = native_register(open_native, "MacinTalk Open", 0);
@@ -831,7 +831,7 @@ void macintalk_install_file(void)
         return;
     mac_file mf;
     memset(&mf, 0, sizeof mf);
-    mf.data = malloc(1);
+    mf.data = bb_malloc(1, BB_BYTES);
     mf.rsrc = fork;
     mf.rsrc_len = len;
     memcpy(mf.finder_info, "ZSYSMACS", 8); /* as Apple's */

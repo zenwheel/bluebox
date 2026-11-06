@@ -33,8 +33,8 @@ void hi_item_free(hi_item *h)
 {
     for (hi_prop *p = h->props, *next; p; p = next) {
         next = p->next;
-        free(p->data);
-        free(p);
+        bb_free(p->data);
+        bb_free(p);
     }
     memset(h, 0, sizeof *h);
 }
@@ -686,11 +686,11 @@ static void copy_item(gaddr src, int si, gaddr dst, int di)
     copy.props = NULL;
     hi_prop **tail = &copy.props;
     for (hi_prop *p = from->props; p; p = p->next) {
-        hi_prop *q = malloc(sizeof *q);
+        hi_prop *q = bb_malloc(sizeof *q, BB_TAG(hi_prop));
         if (!q)
             break;
         *q = *p;
-        q->data = malloc(p->size ? p->size : 1);
+        q->data = bb_malloc(p->size ? p->size : 1, BB_BYTES);
         if (q->data && p->size)
             memcpy(q->data, p->data, p->size);
         q->next = NULL;
@@ -956,7 +956,7 @@ static int16_t set_prop(gaddr m, int i, uint32_t creator, uint32_t tag, uint32_t
     if (!creator)
         return menuPropertyInvalidErr;
     hi_prop *p = find_prop(m, i, creator, tag);
-    uint8_t *d = malloc(size ? size : 1);
+    uint8_t *d = bb_malloc(size ? size : 1, BB_BYTES);
     if (!d)
         return memFullErr;
     if (size && data)
@@ -964,12 +964,12 @@ static int16_t set_prop(gaddr m, int i, uint32_t creator, uint32_t tag, uint32_t
     if (!p) {
         hi_item *h = i ? menu_hi_item(m, i, true) : NULL;
         if (!h) {
-            free(d);
+            bb_free(d);
             return i ? memFullErr : paramErr;
         }
-        p = calloc(1, sizeof *p);
+        p = bb_calloc(1, sizeof *p, BB_TAG(hi_prop));
         if (!p) {
-            free(d);
+            bb_free(d);
             return memFullErr;
         }
         p->creator = creator;
@@ -977,7 +977,7 @@ static int16_t set_prop(gaddr m, int i, uint32_t creator, uint32_t tag, uint32_t
         p->next = h->props;
         h->props = p;
     }
-    free(p->data);
+    bb_free(p->data);
     p->data = d;
     p->size = size;
     return noErr;
@@ -990,8 +990,8 @@ static int16_t remove_prop(gaddr m, int i, uint32_t creator, uint32_t tag)
         if ((*pp)->creator == creator && (*pp)->tag == tag) {
             hi_prop *p = *pp;
             *pp = p->next;
-            free(p->data);
-            free(p);
+            bb_free(p->data);
+            bb_free(p);
             return noErr;
         }
     return menuPropertyNotFoundErr;

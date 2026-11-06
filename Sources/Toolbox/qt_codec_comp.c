@@ -178,7 +178,7 @@ uint8_t *qt_codec_pixmap_to_rgba(gaddr pm, qrect r)
     int w = r.right - r.left, h = r.bottom - r.top;
     if (!pixmap_dst(pm, &d) || w <= 0 || h <= 0)
         return NULL;
-    uint8_t *out = calloc((size_t)w * (size_t)h, 4);
+    uint8_t *out = bb_calloc((size_t)w * (size_t)h, 4, BB_BYTES);
     if (!out)
         return NULL;
     for (int y = 0; y < h; y++)
@@ -219,8 +219,8 @@ typedef struct {
 static void drop_decoder(codec *c)
 {
     qt_vdec_free(c->dec);
-    free(c->desc);
-    free(c->frame);
+    bb_free(c->desc);
+    bb_free(c->frame);
     c->dec = NULL;
     c->desc = NULL;
     c->frame = NULL;
@@ -235,29 +235,29 @@ static int16_t decoder_for(codec *c, gaddr idh)
     uint32_t n = rd32(d);
     if (n < 86 || n > 1 << 20)
         return badImageDescription;
-    uint8_t *b = malloc(n);
+    uint8_t *b = bb_malloc(n, BB_BYTES);
     gget(b, d, n);
     if (c->dec && c->desc_len == n && !memcmp(c->desc, b, n)) {
-        free(b);
+        bb_free(b);
         return noErr;
     }
     drop_decoder(c);
     qt_video_format f;
     uint32_t palette[256];
     if (!qt_video_format_of_desc(b, n, &f, palette)) {
-        free(b);
+        bb_free(b);
         return badImageDescription;
     }
     c->dec = qt_vdec_new(&f);
     if (!c->dec) {
-        free(b);
+        bb_free(b);
         return noCodecErr;
     }
     c->desc = b;
     c->desc_len = n;
     c->w = f.width;
     c->h = f.height;
-    c->frame = calloc((size_t)f.width * (size_t)f.height, 4);
+    c->frame = bb_calloc((size_t)f.width * (size_t)f.height, 4, BB_BYTES);
     return c->frame ? noErr : memFullErr;
 }
 
@@ -265,12 +265,12 @@ static bool decode_into_frame(codec *c, gaddr data, int32_t size)
 {
     if (!data || size <= 0)
         return false;
-    uint8_t *b = malloc((size_t)size);
+    uint8_t *b = bb_malloc((size_t)size, BB_BYTES);
     if (!b)
         return false;
     gget(b, data, (uint32_t)size);
     bool ok = qt_vdec_decode(c->dec, b, (size_t)size, c->frame);
-    free(b);
+    bb_free(b);
     return ok;
 }
 
@@ -558,7 +558,7 @@ static void prog_close(void *s)
         tb_DisposePtr(p->cap);
     if (p->pixels)
         tb_DisposePtr(p->pixels);
-    free(p);
+    bb_free(p);
 }
 
 static void *prog_open(const qt_video_format *f)
@@ -566,7 +566,7 @@ static void *prog_open(const qt_video_format *f)
     uint32_t comp = program_component(f->format);
     if (!comp || !f->desc || f->desc_len < 86)
         return NULL;
-    prog_codec *p = calloc(1, sizeof *p);
+    prog_codec *p = bb_calloc(1, sizeof *p, BB_TAG(prog_codec));
     int16_t err;
     p->ci = components_open_component(comp, &err);
     p->w = f->width;

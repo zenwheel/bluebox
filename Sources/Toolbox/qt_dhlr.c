@@ -91,11 +91,11 @@ static bool read_at(dhlr *d, uint64_t off, gaddr dst, uint32_t n)
 
 static bool write_at(dhlr *d, uint64_t off, gaddr src, uint32_t n)
 {
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     if (n)
         gget(b, src, n);
     bool ok = qt_src_write(&d->src, off, b, n);
-    free(b);
+    bb_free(b);
     return ok;
 }
 
@@ -238,10 +238,10 @@ static int32_t dh_call(qtc_call *k)
         return noErr;
     case kQTCClose:
         close_source(d);
-        free(d->ref);
-        free(d->anchor);
+        bb_free(d->ref);
+        bb_free(d->anchor);
         for (int i = 0; i < MAX_EXT; i++)
-            free(d->ext[i].data);
+            bb_free(d->ext[i].data);
         return noErr;
     case kQTCVersion:
         return 0x00040000;
@@ -252,11 +252,11 @@ static int32_t dh_call(qtc_call *k)
     case 0x000A: /* SetDataRef(dataRef) */
     case 0x0029: /* SetDataRefWithAnchor(anchor, type, dataRef) */
         close_source(d);
-        free(d->ref);
+        bb_free(d->ref);
         d->ref = qt_dref_bytes(k->what == 0x000A ? a[0] : a[2], &d->reflen);
         d->have_ref = true;
         if (k->what == 0x0029) {
-            free(d->anchor);
+            bb_free(d->anchor);
             d->anchor = qt_dref_bytes(a[0], &d->anchor_len);
         }
         return noErr;
@@ -293,7 +293,7 @@ static int32_t dh_call(qtc_call *k)
         bool eq = d->have_ref && n == d->reflen && !memcmp(b, d->ref, n);
         if (!eq && d->have_ref && qt_dref_path(d->type, b, n, NULL, p1, sizeof p1) && file_of(d, p2, sizeof p2))
             eq = !strcmp(p1, p2);
-        free(b);
+        bb_free(b);
         if (a[1])
             wr8(a[1], eq);
         return noErr;
@@ -315,7 +315,7 @@ static int32_t dh_call(qtc_call *k)
             if (qt_dref_path(d->type, b, n, NULL, path, sizeof path))
                 flags = kDataHCanWrite;
         }
-        free(b);
+        bb_free(b);
         if (a[1])
             wr32(a[1], (uint32_t)flags);
         return noErr;
@@ -329,7 +329,7 @@ static int32_t dh_call(qtc_call *k)
         bool ok = d->type == fourcc("null") || qt_src_open(d->type, 0, b, n, NULL, false, &s);
         if (ok && d->type != fourcc("null"))
             qt_src_close(&s);
-        free(b);
+        bb_free(b);
         return ok ? noErr : couldNotResolveDataRef;
     }
     case 0x0008: /* OpenForRead */
@@ -604,7 +604,7 @@ static int32_t dh_call(qtc_call *k)
                 at = i;
         if (at < 0)
             return memFullErr;
-        free(d->ext[at].data);
+        bb_free(d->ext[at].data);
         d->ext[at].type = a[1];
         d->ext[at].data = qt_dref_bytes(a[0], &d->ext[at].len);
         return noErr;

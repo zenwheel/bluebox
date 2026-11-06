@@ -15,10 +15,10 @@ enum { noScrapErr = -100, noTypeErr = -102 };
 
 /* Host clipboard: text arriving from the host waits here until the
  * emulator thread next touches the scrap; text the app puts goes out. */
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char *incoming;
-static machine_clipboard_fn clipboard_fn;
-static void *clipboard_ctx;
+BB_HOST static machine_clipboard_fn clipboard_fn;
+BB_HOST static void *clipboard_ctx;
 
 void machine_set_clipboard_handler(machine_clipboard_fn fn, void *ctx)
 {
@@ -29,8 +29,8 @@ void machine_set_clipboard_handler(machine_clipboard_fn fn, void *ctx)
 void machine_set_clipboard_text(const char *utf8)
 {
     pthread_mutex_lock(&lock);
-    free(incoming);
-    incoming = strdup(utf8 ? utf8 : "");
+    bb_free(incoming);
+    incoming = bb_strdup(utf8 ? utf8 : "");
     pthread_mutex_unlock(&lock);
 }
 
@@ -38,16 +38,16 @@ static void export_text(gaddr data, int32_t len)
 {
     if (!clipboard_fn || len < 0)
         return;
-    uint8_t *mac = malloc((size_t)len + 1);
+    uint8_t *mac = bb_malloc((size_t)len + 1, BB_BYTES);
     gget(mac, data, (uint32_t)len);
-    char *utf8 = malloc((size_t)len * 3 + 1);
+    char *utf8 = bb_malloc((size_t)len * 3 + 1, BB_BYTES);
     size_t n = macroman_to_utf8(mac, (size_t)len, utf8, (size_t)len * 3 + 1);
     for (size_t i = 0; i < n; i++)
         if (utf8[i] == '\r')
             utf8[i] = '\n';
     clipboard_fn(utf8, clipboard_ctx);
-    free(utf8);
-    free(mac);
+    bb_free(utf8);
+    bb_free(mac);
 }
 
 int32_t tb_ZeroScrap(void);
@@ -64,7 +64,7 @@ static void import_host(void)
     if (!text)
         return;
     size_t n = strlen(text);
-    uint8_t *mac = malloc(n + 1);
+    uint8_t *mac = bb_malloc(n + 1, BB_BYTES);
     size_t m = utf8_to_macroman(text, mac, n + 1);
     for (size_t i = 0; i < m; i++)
         if (mac[i] == '\n')
@@ -76,8 +76,8 @@ static void import_host(void)
     tb_PutScrap((int32_t)m, (int32_t)fourcc("TEXT"), p);
     importing = false;
     tb_DisposePtr(p);
-    free(mac);
-    free(text);
+    bb_free(mac);
+    bb_free(text);
 }
 
 void scrap_sync(void) { import_host(); }

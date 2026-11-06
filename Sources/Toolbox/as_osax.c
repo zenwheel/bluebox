@@ -30,8 +30,8 @@ void machine_pass_tick(void);                    /* trap.c */
 /* ---------------------------------------------------------------------- */
 /* Dialogs, shown by the host */
 
-static machine_script_dialog_fn dialog_fn;
-static void *dialog_ctx;
+BB_HOST static machine_script_dialog_fn dialog_fn;
+BB_HOST static void *dialog_ctx;
 
 void machine_set_script_dialog_handler(machine_script_dialog_fn fn, void *ctx)
 {
@@ -250,16 +250,16 @@ static as_obj *choose_from_list(as_obj *direct, as_obj *params)
     d.nbuttons = 2;
     d.default_button = 1;
     d.cancel_button = 2;
-    char **items = calloc(l->n ? l->n : 1, sizeof *items);
+    char **items = bb_calloc(l->n ? l->n : 1, sizeof *items, BB_TAG(char *));
     for (uint32_t i = 0; i < l->n; i++) {
         as_obj *t = as_to_text(l->items[i]);
         if (!t) {
             for (uint32_t k = 0; k < i; k++)
-                free(items[k]);
-            free(items);
+                bb_free(items[k]);
+            bb_free(items);
             return NULL;
         }
-        items[i] = strndup((const char *)t->bytes, t->n);
+        items[i] = bb_strndup((const char *)t->bytes, t->n);
     }
     d.items = (const char *const *)items;
     d.nitems = (int)l->n;
@@ -275,8 +275,8 @@ static as_obj *choose_from_list(as_obj *direct, as_obj *params)
     }
     int b = l->n ? as_ask(&d) : 2;
     for (uint32_t i = 0; i < l->n; i++)
-        free(items[i]);
-    free(items);
+        bb_free(items[i]);
+    bb_free(items);
     if (b != 1 || d.selected < 0 || d.selected >= (int)l->n)
         return as_bool(false);
     as_obj *r = as_list(1);
@@ -348,10 +348,10 @@ static as_obj *alias_of_spec(gaddr spec)
     if (err || !h || !rd32(h))
         return as_raise(err ? err : memFullErr, NULL, "Can't make an alias (error %d).", err);
     int32_t n = tb_GetHandleSize(h);
-    uint8_t *buf = malloc((size_t)n);
+    uint8_t *buf = bb_malloc((size_t)n, BB_BYTES);
     gget(buf, rd32(h), (uint32_t)n);
     as_obj *a = as_desc(T("alis"), buf, (size_t)n);
-    free(buf);
+    bb_free(buf);
     tb_DisposeHandle(h);
     return a;
 }
@@ -531,11 +531,11 @@ static as_obj *read_file(as_obj *direct, as_obj *params)
         tb_DisposePtr(buf);
         return as_raise(-39, direct, "End of file error.");
     }
-    uint8_t *host = malloc((size_t)got + 1);
+    uint8_t *host = bb_malloc((size_t)got + 1, BB_BYTES);
     gget(host, buf, (uint32_t)got);
     tb_DisposePtr(buf);
     as_obj *t = as_text(host, (size_t)got);
-    free(host);
+    bb_free(host);
     return t;
 }
 
@@ -726,7 +726,7 @@ as_obj *as_from_desc(gaddr desc)
         return r;
     }
     uint32_t n = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
-    uint8_t *b = malloc(n + 1);
+    uint8_t *b = bb_malloc(n + 1, BB_BYTES);
     if (n)
         gget(b, rd32(h), n);
     as_obj *v;
@@ -773,7 +773,7 @@ as_obj *as_from_desc(gaddr desc)
         v = as_desc(type, b, n);
         break;
     }
-    free(b);
+    bb_free(b);
     return v;
 }
 
@@ -1016,10 +1016,10 @@ static as_obj *clipboard_get(void)
     if (n < 0) {
         r = as_cstr("");
     } else {
-        uint8_t *b = malloc((size_t)n + 1);
+        uint8_t *b = bb_malloc((size_t)n + 1, BB_BYTES);
         gget(b, rd32(h), (uint32_t)n);
         r = as_text(b, (size_t)n);
-        free(b);
+        bb_free(b);
     }
     tb_DisposeHandle(h);
     tb_DisposePtr(off);

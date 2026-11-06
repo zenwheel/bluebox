@@ -204,7 +204,7 @@ static share_dir *add_dir(share *sh, const char *path, uint32_t id)
     }
     if (sh->ndirs == MAX_DIRS_PER_SHARE)
         return NULL;
-    share_dir *grown = realloc(sh->dirs, sizeof *grown * (size_t)(sh->ndirs + 1));
+    share_dir *grown = bb_realloc(sh->dirs, sizeof *grown * (size_t)(sh->ndirs + 1), BB_TAG(share_dir));
     if (!grown)
         return NULL;
     sh->dirs = grown;
@@ -269,11 +269,11 @@ static void add_pending(share *sh, const char *path)
 {
     if (sh->npending == MAX_PENDING)
         return;
-    char **grown = realloc(sh->pending, sizeof *grown * (size_t)(sh->npending + 1));
+    char **grown = bb_realloc(sh->pending, sizeof *grown * (size_t)(sh->npending + 1), BB_TAG(char *));
     if (!grown)
         return;
     sh->pending = grown;
-    sh->pending[sh->npending++] = strdup(path);
+    sh->pending[sh->npending++] = bb_strdup(path);
 }
 
 static int pending_index(share *sh, const char *path)
@@ -286,7 +286,7 @@ static int pending_index(share *sh, const char *path)
 
 static void drop_pending(share *sh, int i)
 {
-    free(sh->pending[i]);
+    bb_free(sh->pending[i]);
     sh->pending[i] = NULL;
 }
 
@@ -315,7 +315,7 @@ static void fill(share *sh, share_dir *d)
         }
         mac_file mf;
         memset(&mf, 0, sizeof mf);
-        uint8_t *rsrc = calloc(e[i].rsrc_len ? e[i].rsrc_len : 1, 1), empty = 0;
+        uint8_t *rsrc = bb_calloc(e[i].rsrc_len ? e[i].rsrc_len : 1, 1, BB_BYTES), empty = 0;
         mf.data = &empty;
         mf.rsrc = rsrc;
         mf.rsrc_len = e[i].rsrc_len;
@@ -329,10 +329,10 @@ static void fill(share *sh, share_dir *d)
                 truncate(path, (off_t)e[i].data_len);
             add_pending(sh, path);
         }
-        free(rsrc);
+        bb_free(rsrc);
     }
     sh->busy = false;
-    free(e);
+    bb_free(e);
 }
 
 /* Before a file's forks are read: from the server, if they are still there. */
@@ -357,8 +357,8 @@ void as_ensure_file(const char *path)
               afp_read_fork(sh->s, sh->vol, dir, name, true, &rsrc, &rl) == 0;
     if (ok) {
         uint8_t empty = 0;
-        free(mf.data);
-        free(mf.rsrc);
+        bb_free(mf.data);
+        bb_free(mf.rsrc);
         mf.data = data ? data : &empty;
         mf.data_len = dl;
         mf.rsrc = rsrc ? rsrc : &empty;
@@ -367,13 +367,13 @@ void as_ensure_file(const char *path)
         appledouble_write(path, &mf, err, sizeof err);
         sh->busy = false;
         if (data)
-            free(data);
+            bb_free(data);
         if (rsrc)
-            free(rsrc);
+            bb_free(rsrc);
         mf.data = mf.rsrc = NULL;
     } else {
-        free(data);
-        free(rsrc);
+        bb_free(data);
+        bb_free(rsrc);
         LOGF(LOG_UNIMPL, "AppleShare: %s: not read from the server\n", path);
     }
     mac_file_free(&mf);
@@ -484,8 +484,8 @@ void as_moved(const char *from, const char *to)
         if (sh->pending[i] && !strncmp(sh->pending[i], from, n) && (sh->pending[i][n] == '/' || sh->pending[i][n] == 0)) {
             char moved[1100];
             snprintf(moved, sizeof moved, "%s%s", to, sh->pending[i] + n);
-            free(sh->pending[i]);
-            sh->pending[i] = strdup(moved);
+            bb_free(sh->pending[i]);
+            sh->pending[i] = bb_strdup(moved);
         }
     for (int i = 0; i < sh->ndirs; i++)
         if (!strncmp(sh->dirs[i].path, from, n) && (sh->dirs[i].path[n] == '/' || sh->dirs[i].path[n] == 0)) {
@@ -518,10 +518,10 @@ void machine_close_appleshares(void)
                 *slash = 0;
             nftw(base, remove_entry, 16, FTW_DEPTH | FTW_PHYS);
         }
-        free(shares[i].dirs);
+        bb_free(shares[i].dirs);
         for (int k = 0; k < shares[i].npending; k++)
-            free(shares[i].pending[k]);
-        free(shares[i].pending);
+            bb_free(shares[i].pending[k]);
+        bb_free(shares[i].pending);
         memset(&shares[i], 0, sizeof shares[i]);
     }
 }

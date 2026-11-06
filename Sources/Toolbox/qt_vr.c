@@ -78,11 +78,11 @@ static uint8_t *read_sample(qtm_movie *mv, qtm_media *md, uint32_t n, uint32_t *
     qt_src src;
     if (!qt_src_open(r->type, r->flags, r->data, r->len, qt_movie_path(mv), false, &src))
         return NULL;
-    uint8_t *b = malloc(bytes ? bytes : 1);
+    uint8_t *b = bb_malloc(bytes ? bytes : 1, BB_BYTES);
     bool ok = b && qt_src_read(&src, off, b, (uint32_t)bytes);
     qt_src_close(&src);
     if (!ok) {
-        free(b);
+        bb_free(b);
         return NULL;
     }
     *len = (uint32_t)bytes;
@@ -170,7 +170,7 @@ static void frames_close(frames *r)
 {
     if (r->dec)
         qt_vdec_free(r->dec);
-    free(r->frame);
+    bb_free(r->frame);
     memset(r, 0, sizeof *r);
 }
 
@@ -206,20 +206,20 @@ static const uint8_t *frames_get(frames *r, uint32_t n)
                 qt_vdec_free(r->dec);
             r->dec = NULL;
             if (!video_format(r, d)) {
-                free(b);
+                bb_free(b);
                 return NULL;
             }
             r->desc = d;
             r->dec = qt_vdec_new(&r->f);
-            free(r->frame);
-            r->frame = calloc((size_t)r->f.width * r->f.height, 4);
+            bb_free(r->frame);
+            r->frame = bb_calloc((size_t)r->f.width * r->f.height, 4, BB_BYTES);
             if (!r->dec || !r->frame) {
-                free(b);
+                bb_free(b);
                 return NULL;
             }
         }
         qt_vdec_decode(r->dec, b, len, r->frame);
-        free(b);
+        bb_free(b);
     }
     return r->frame;
 }
@@ -271,7 +271,7 @@ static bool old_object_info(const qtm_movie *mv, uint8_t navg[48])
         }
         o += sz;
     }
-    free(u);
+    bb_free(u);
     return stna && found;
 }
 
@@ -304,8 +304,8 @@ gaddr vr_find_track(gaddr movie, int32_t index)
 static void free_faces(vr *v)
 {
     for (int i = 0; i < 6; i++) {
-        free(v->faces[i]);
-        free(v->hot_faces[i]);
+        bb_free(v->faces[i]);
+        bb_free(v->hot_faces[i]);
         v->faces[i] = NULL;
         v->hot_faces[i] = NULL;
     }
@@ -314,9 +314,9 @@ static void free_faces(vr *v)
 
 static void free_node_state(vr *v)
 {
-    free(v->image);
-    free(v->hot);
-    free(v->obj_frame);
+    bb_free(v->image);
+    bb_free(v->hot);
+    bb_free(v->obj_frame);
     free_faces(v);
     v->image = NULL;
     v->hot = NULL;
@@ -328,11 +328,11 @@ static void free_vr(vr *v)
 {
     free_node_state(v);
     for (int i = 0; i < v->nnodes; i++)
-        free(v->nodes[i].info);
-    free(v->nodes);
-    free(v->world);
-    free(v->view);
-    free(v->areas);
+        bb_free(v->nodes[i].info);
+    bb_free(v->nodes);
+    bb_free(v->world);
+    bb_free(v->view);
+    bb_free(v->areas);
     if (v->token)
         tb_DisposePtr(v->token);
     memset(v, 0, sizeof *v);
@@ -348,7 +348,7 @@ static bool load_nodes(vr *v)
     uint8_t navg[48];
     if (md->type == fourcc("vide") && old_object_info(mv, navg)) { /* QTVR 1.0: one object */
         v->old = v->old_object = true;
-        v->nodes = calloc(1, sizeof *v->nodes);
+        v->nodes = bb_calloc(1, sizeof *v->nodes, BB_TAG(vr_node));
         v->nodes[0] = (vr_node){ 1, fourcc("obje"), 0, mv->duration, NULL, 0 };
         v->nnodes = 1;
         v->default_node = 1;
@@ -356,7 +356,7 @@ static bool load_nodes(vr *v)
     }
     if (md->type == fourcc("STpn")) { /* QTVR 1.0: one panorama */
         v->old = true;
-        v->nodes = calloc(1, sizeof *v->nodes);
+        v->nodes = bb_calloc(1, sizeof *v->nodes, BB_TAG(vr_node));
         v->nodes[0] = (vr_node){ 1, fourcc("pano"), 0, mv->duration, NULL, 0 };
         v->nnodes = 1;
         v->default_node = 1;
@@ -365,7 +365,7 @@ static bool load_nodes(vr *v)
     if (md->ndescs < 1 || md->desc_len[0] < 16 + QTA_HEADER + QTA_ATOM)
         return false;
     v->world_len = md->desc_len[0] - 16;
-    v->world = malloc(v->world_len);
+    v->world = bb_malloc(v->world_len, BB_BYTES);
     memcpy(v->world, md->descs[0] + 16, v->world_len);
     uint32_t n;
     const uint8_t *hdr = atom_leaf(v->world, v->world_len, 0, fourcc("vrsc"), 0, &n);
@@ -373,7 +373,7 @@ static bool load_nodes(vr *v)
     uint32_t count = qtm_sample_count(md);
     if (count > VR_MAX_NODES)
         count = VR_MAX_NODES;
-    v->nodes = calloc(count ? count : 1, sizeof *v->nodes);
+    v->nodes = bb_calloc(count ? count : 1, sizeof *v->nodes, BB_TAG(vr_node));
     for (uint32_t s = 1; s <= count; s++) {
         int64_t start, dur;
         if (!qtm_sample_time(md, s, &start, &dur))
@@ -488,7 +488,7 @@ static uint32_t *assemble(qtm_movie *mv, qtm_track *t, int64_t time, uint32_t sx
     uint32_t first = sample_at_movie_time(mv, t, time);
     if (!first)
         first = 1;
-    uint32_t *out = calloc((size_t)sx * sy, 4);
+    uint32_t *out = bb_calloc((size_t)sx * sy, 4, BB_BYTES);
     if (!out)
         return NULL;
     frames r = { .mv = mv, .md = t->media, .ids = ids };
@@ -520,15 +520,15 @@ static uint32_t *unrotate(uint32_t *s, uint32_t sx, uint32_t sy, bool horizontal
     }
     *w = (int)sy;
     *h = (int)sx;
-    uint32_t *o = malloc((size_t)sx * sy * 4);
+    uint32_t *o = bb_malloc((size_t)sx * sy * 4, BB_BYTES);
     if (!o) {
-        free(s);
+        bb_free(s);
         return NULL;
     }
     for (uint32_t u = 0; u < sy; u++)     /* across the panorama */
         for (uint32_t v = 0; v < sx; v++) /* down it */
             o[(size_t)v * sy + u] = s[(size_t)(sy - 1 - u) * sx + v];
-    free(s);
+    bb_free(s);
     return o;
 }
 
@@ -548,8 +548,8 @@ static void set_limits(vr *v, float p0, float p1, float t0, float t1, float f0, 
 
 static void load_picture(vr *v, qtm_movie *mv, int64_t time)
 {
-    free(v->image);
-    free(v->hot);
+    bb_free(v->image);
+    bb_free(v->hot);
     v->image = NULL;
     v->hot = NULL;
     qtm_track *it = qt_track_model(v->image_track, NULL), *ht = qt_track_model(v->hot_track, NULL);
@@ -560,10 +560,10 @@ static void load_picture(vr *v, qtm_movie *mv, int64_t time)
     if (s) {
         uint32_t *h = unrotate(s, v->hot_size[0], v->hot_size[1], v->horizontal, &v->hw, &v->hh);
         if (h) {
-            v->hot = malloc((size_t)v->hw * v->hh);
+            v->hot = bb_malloc((size_t)v->hw * v->hh, BB_BYTES);
             for (size_t i = 0; i < (size_t)v->hw * v->hh; i++)
                 v->hot[i] = (uint8_t)h[i];
-            free(h);
+            bb_free(h);
         }
     }
 }
@@ -585,7 +585,7 @@ static bool load_faces(vr *v, qtm_movie *mv, int64_t time)
             if (!px)
                 break;
             uint32_t sx = (uint32_t)r.f.width, sy = (uint32_t)r.f.height;
-            uint32_t *s = malloc((size_t)sx * sy * 4);
+            uint32_t *s = bb_malloc((size_t)sx * sy * 4, BB_BYTES);
             for (size_t i = 0; i < (size_t)sx * sy; i++)
                 s[i] = pass ? px[i * 4 + 2] : (uint32_t)px[i * 4] << 16 | (uint32_t)px[i * 4 + 1] << 8 | px[i * 4 + 2];
             int w, h;
@@ -593,10 +593,10 @@ static bool load_faces(vr *v, qtm_movie *mv, int64_t time)
             if (!u)
                 break;
             if (pass) {
-                v->hot_faces[f] = malloc((size_t)w * h);
+                v->hot_faces[f] = bb_malloc((size_t)w * h, BB_BYTES);
                 for (size_t i = 0; i < (size_t)w * h; i++)
                     v->hot_faces[f][i] = (uint8_t)u[i];
-                free(u);
+                bb_free(u);
                 v->hw = w;
                 v->hh = h;
             } else {
@@ -622,7 +622,7 @@ static bool load_pano(vr *v, qtm_movie *mv, const vr_node *nd)
     uint8_t *c = s ? read_sample(mv, pt->media, s, &len, NULL) : NULL;
     const uint8_t *d = c ? atom_leaf(c, len, 0, fourcc("pdat"), 0, &n) : NULL;
     if (!d || n < 80) {
-        free(c);
+        bb_free(c);
         return false;
     }
     uint32_t iref = be32(d + 4), href = be32(d + 8);
@@ -645,7 +645,7 @@ static bool load_pano(vr *v, qtm_movie *mv, const vr_node *nd)
     const uint8_t *cuvw = cube ? atom_leaf(c, len, 0, fourcc("cuvw"), 0, &n) : NULL;
     for (int k = 0; cuvw && n >= 36 && k < 9; k++)
         cv[k] = bef(cuvw + 4 * k);
-    free(c);
+    bb_free(c);
     qtm_track *it = track_ref(mv, pt, fourcc("imgt"), iref ? iref : 1);
     qtm_track *ht = href ? track_ref(mv, pt, fourcc("hott"), href) : NULL;
     v->image_track = it ? it->token : 0;
@@ -736,7 +736,7 @@ static bool load_old_pano(vr *v, qtm_movie *mv)
         if (z > 0)
             v->def_fov = z < f0 ? f0 : z > f1 ? f1 : z;
     }
-    free(h);
+    bb_free(h);
     return true;
 }
 
@@ -749,7 +749,7 @@ static bool load_object(vr *v, qtm_movie *mv, const vr_node *nd)
     uint8_t *c = s ? read_sample(mv, ot->media, s, &len, NULL) : NULL;
     const uint8_t *d = c ? atom_leaf(c, len, 0, fourcc("obji"), 0, &n) : NULL;
     if (!d || n < 88) {
-        free(c);
+        bb_free(c);
         return false;
     }
     v->ui = be16(d + 4);
@@ -786,7 +786,7 @@ static bool load_object(vr *v, qtm_movie *mv, const vr_node *nd)
     if (hstr && hn >= 4)
         href = be32(hstr);
     qtm_track *ht = track_ref(mv, ot, fourcc("hott"), href);
-    free(c);
+    bb_free(c);
     v->image_track = it ? it->token : 0;
     v->hot_track = ht ? ht->token : 0;
     if (!it)
@@ -1231,10 +1231,10 @@ static bool object_frame(vr *v)
     frames r = { .mv = mv, .md = it->media };
     const uint8_t *f = frames_get(&r, s);
     if (f) {
-        free(v->obj_frame);
+        bb_free(v->obj_frame);
         v->ow = r.f.width;
         v->oh = r.f.height;
-        v->obj_frame = malloc((size_t)v->ow * v->oh * 4);
+        v->obj_frame = bb_malloc((size_t)v->ow * v->oh * 4, BB_BYTES);
         for (size_t i = 0; i < (size_t)v->ow * v->oh; i++)
             v->obj_frame[i] = (uint32_t)f[i * 4] << 16 | (uint32_t)f[i * 4 + 1] << 8 | f[i * 4 + 2];
         v->obj_frame_time = t;
@@ -1287,8 +1287,8 @@ static void render_cube(vr *v, int w, int h);
 static void render(vr *v, int w, int h)
 {
     if (w != v->vw || h != v->vh || !v->view) {
-        free(v->view);
-        v->view = calloc((size_t)w * h, 4);
+        bb_free(v->view);
+        v->view = bb_calloc((size_t)w * h, 4, BB_BYTES);
         v->vw = w;
         v->vh = h;
     }
@@ -1453,7 +1453,7 @@ static void draw(vr *v)
         return;
     if (v->hots_visible)
         tint_hots(v, w, h);
-    uint8_t *rgba = malloc((size_t)w * h * 4);
+    uint8_t *rgba = bb_malloc((size_t)w * h * 4, BB_BYTES);
     for (size_t i = 0; i < (size_t)w * h; i++) {
         uint32_t p = v->view[i];
         rgba[i * 4] = (uint8_t)(p >> 16);
@@ -1465,7 +1465,7 @@ static void draw(vr *v)
     tb_SetPort(v->port);
     qd_draw_rgba(rgba, w, h, v->box);
     tb_SetPort(saved);
-    free(rgba);
+    bb_free(rgba);
     vr_prescreen(v);
 }
 

@@ -59,7 +59,7 @@ enum { kHRLookingForHTMLSource = 1, kHRLookingForImage = 2 };
 
 static char *dupn(const char *s, size_t n)
 {
-    char *p = malloc(n + 1);
+    char *p = bb_malloc(n + 1, BB_BYTES);
     if (p) {
         memcpy(p, s, n);
         p[n] = 0;
@@ -170,7 +170,7 @@ static int attr_int(const node *n, const char *name, int def)
 
 static node *node_new(int tag, node *parent)
 {
-    node *n = calloc(1, sizeof *n);
+    node *n = bb_calloc(1, sizeof *n, BB_TAG(node));
     if (!n)
         return NULL;
     n->tag = tag;
@@ -193,12 +193,12 @@ static void node_free(node *n)
     }
     for (attr *a = n->attrs, *next; a; a = next) {
         next = a->next;
-        free(a->name);
-        free(a->val);
-        free(a);
+        bb_free(a->name);
+        bb_free(a->val);
+        bb_free(a);
     }
-    free(n->text);
-    free(n);
+    bb_free(n->text);
+    bb_free(n);
 }
 
 /* The entities of HTML 3.2 and ISO Latin-1, as MacRoman bytes for what
@@ -241,7 +241,7 @@ static uint8_t latin1_to_mac(unsigned c)
 /* Text with its entities replaced (and, unless keep, no change to blanks). */
 static char *decode(const char *s, size_t n)
 {
-    char *out = malloc(n + 1);
+    char *out = bb_malloc(n + 1, BB_BYTES);
     size_t o = 0;
     if (!out)
         return NULL;
@@ -328,9 +328,9 @@ static node *parse_html(const char *s, size_t n)
                 if (tn)
                     tn->text = t;
                 else
-                    free(t);
+                    bb_free(t);
             } else {
-                free(t);
+                bb_free(t);
             }
             i = j;
             continue;
@@ -370,7 +370,7 @@ static node *parse_html(const char *s, size_t n)
             size_t as = j;
             while (j < n && !isspace((unsigned char)s[j]) && s[j] != '=' && s[j] != '>')
                 j++;
-            attr *a = calloc(1, sizeof *a);
+            attr *a = bb_calloc(1, sizeof *a, BB_TAG(attr));
             if (!a)
                 break;
             a->name = dupn(s + as, j - as);
@@ -409,9 +409,9 @@ static node *parse_html(const char *s, size_t n)
                 }
             for (attr *a = head, *nx; a; a = nx) {
                 nx = a->next;
-                free(a->name);
-                free(a->val);
-                free(a);
+                bb_free(a->name);
+                bb_free(a->val);
+                bb_free(a);
             }
             continue;
         }
@@ -485,7 +485,7 @@ typedef struct hr {
     bool have_spec;
     char **links;
     int nlinks;
-    struct { char *name; int y; } *anchors;
+    struct html_anchor { char *name; int y; } *anchors;
     int nanchors;
     image *images;
     int nimages;
@@ -594,7 +594,7 @@ static ditem *dl_add(dlist *d, const ditem *it)
 {
     if (d->n == d->cap) {
         int cap = d->cap ? d->cap * 2 : 64;
-        ditem *v = realloc(d->v, (size_t)cap * sizeof *v);
+        ditem *v = bb_realloc(d->v, (size_t)cap * sizeof *v, BB_TAG(ditem));
         if (!v)
             return NULL;
         d->v = v;
@@ -607,8 +607,8 @@ static ditem *dl_add(dlist *d, const ditem *it)
 static void dl_free(dlist *d)
 {
     for (int i = 0; i < d->n; i++)
-        free(d->v[i].text);
-    free(d->v);
+        bb_free(d->v[i].text);
+    bb_free(d->v);
     d->v = NULL;
     d->n = d->cap = 0;
 }
@@ -622,7 +622,7 @@ static void dl_move(dlist *to, dlist *from, int dx, int dy)
         it.y += dy;
         dl_add(to, &it);
     }
-    free(from->v);
+    bb_free(from->v);
     from->v = NULL;
     from->n = from->cap = 0;
 }
@@ -665,8 +665,8 @@ static const int BIG = 100000;
 static void lay_free(lay *l)
 {
     for (int i = 0; i < l->na; i++)
-        free(l->a[i].s);
-    free(l->a);
+        bb_free(l->a[i].s);
+    bb_free(l->a);
     dl_free(&l->out);
 }
 
@@ -674,7 +674,7 @@ static void atom_add(lay *l, atom a)
 {
     if (l->na == l->ca) {
         int cap = l->ca ? l->ca * 2 : 32;
-        atom *v = realloc(l->a, (size_t)cap * sizeof *v);
+        atom *v = bb_realloc(l->a, (size_t)cap * sizeof *v, BB_TAG(atom));
         if (!v)
             return;
         l->a = v;
@@ -754,7 +754,7 @@ static void flush_line(lay *l, bool force)
     if (x > l->maxx)
         l->maxx = x;
     for (int i = 0; i < l->na; i++)
-        free(l->a[i].s);
+        bb_free(l->a[i].s);
     l->na = 0;
     l->lw = 0;
     l->y = top + asc + desc;
@@ -837,7 +837,7 @@ static void lay_text(lay *l, const char *t)
 
 static int link_index(hr *h, const char *href)
 {
-    char **v = realloc(h->links, (size_t)(h->nlinks + 1) * sizeof *v);
+    char **v = bb_realloc(h->links, (size_t)(h->nlinks + 1) * sizeof *v, BB_TAG(char *));
     if (!v)
         return -1;
     h->links = v;
@@ -848,7 +848,7 @@ static int link_index(hr *h, const char *href)
 static void add_anchor(lay *l, const char *name)
 {
     hr *h = l->h;
-    void *v = realloc(h->anchors, (size_t)(h->nanchors + 1) * sizeof *h->anchors);
+    void *v = bb_realloc(h->anchors, (size_t)(h->nanchors + 1) * sizeof *h->anchors, BB_TAG(struct html_anchor));
     if (!v)
         return;
     h->anchors = v;
@@ -955,7 +955,7 @@ static void lay_image(lay *l, node *n)
         atom a = { .kind = A_BOX, .w = 0, .asc = 0, .desc = 0, .st = l->st, .box = tx, .valign = valign };
         atom_add(l, a);
     } else {
-        free(label);
+        bb_free(label);
     }
 }
 
@@ -1342,7 +1342,7 @@ static void lay_table(lay *l, node *t)
             for (node *c = row->first; c; c = c->next) {
                 if (c->tag != T_TD && c->tag != T_TH)
                     continue;
-                cell *v = realloc(cells, (size_t)(ncells + 1) * sizeof *cells);
+                cell *v = bb_realloc(cells, (size_t)(ncells + 1) * sizeof *cells, BB_TAG(cell));
                 if (!v)
                     break;
                 cells = v;
@@ -1361,7 +1361,7 @@ static void lay_table(lay *l, node *t)
         }
     }
     if (!ncells) {
-        free(cells);
+        bb_free(cells);
         return;
     }
     /* rowspans occupy the columns below them: shift cells right past them */
@@ -1379,9 +1379,9 @@ static void lay_table(lay *l, node *t)
         if (cells[i].col + cells[i].cspan > ncols)
             ncols = cells[i].col + cells[i].cspan;
     }
-    int *colmin = calloc((size_t)ncols, sizeof(int)), *colmax = calloc((size_t)ncols, sizeof(int)),
-        *colw = calloc((size_t)ncols, sizeof(int)), *rowh = calloc((size_t)nrows, sizeof(int)),
-        *rowy = calloc((size_t)nrows + 1, sizeof(int));
+    int *colmin = bb_calloc((size_t)ncols, sizeof(int), BB_BYTES), *colmax = bb_calloc((size_t)ncols, sizeof(int), BB_BYTES),
+        *colw = bb_calloc((size_t)ncols, sizeof(int), BB_BYTES), *rowh = bb_calloc((size_t)nrows, sizeof(int), BB_BYTES),
+        *rowy = bb_calloc((size_t)nrows + 1, sizeof(int), BB_BYTES);
     int pad = cp + (bw ? 1 : 0);
     for (int i = 0; i < ncells; i++) {
         cell *ce = &cells[i];
@@ -1570,12 +1570,12 @@ static void lay_table(lay *l, node *t)
     l->gap = 6;
     if (tx + tablew > l->maxx)
         l->maxx = tx + tablew;
-    free(cells);
-    free(colmin);
-    free(colmax);
-    free(colw);
-    free(rowh);
-    free(rowy);
+    bb_free(cells);
+    bb_free(colmin);
+    bb_free(colmax);
+    bb_free(colw);
+    bb_free(rowh);
+    bb_free(rowy);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1603,7 +1603,7 @@ static char *full_url(const char *root, const char *link)
     size_t rl = strlen(root);
     size_t strip = strcspn(root, "#"); /* no fragment */
     if (*link == '#') {
-        char *r = malloc(strip + strlen(link) + 1);
+        char *r = bb_malloc(strip + strlen(link) + 1, BB_BYTES);
         memcpy(r, root, strip);
         strcpy(r + strip, link);
         return r;
@@ -1617,7 +1617,7 @@ static char *full_url(const char *root, const char *link)
         while (root[auth_end] && root[auth_end] != '/')
             auth_end++;
     }
-    char *r = malloc(q + strlen(link) + 8);
+    char *r = bb_malloc(q + strlen(link) + 8, BB_BYTES);
     if (!r)
         return NULL;
     if (link[0] == '/' && link[1] == '/') {
@@ -1760,7 +1760,7 @@ static int16_t find_file(hr *h, const char *link, int kind, gaddr spec)
             e = (int16_t)svc_call_upp(h->tospec_upp, 0xEFF0, args, 5);
         }
     }
-    free(full);
+    bb_free(full);
     return e;
 }
 
@@ -1777,7 +1777,7 @@ static char *read_file(gaddr spec, size_t *size)
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);
-    char *buf = n >= 0 ? malloc((size_t)n + 1) : NULL;
+    char *buf = n >= 0 ? bb_malloc((size_t)n + 1, BB_BYTES) : NULL;
     if (buf) {
         *size = fread(buf, 1, (size_t)n, f);
         buf[*size] = 0;
@@ -1794,7 +1794,7 @@ static int image_index(hr *h, const char *src)
     for (int i = 0; i < h->nimages; i++)
         if (!strcmp(h->images[i].src, src))
             return i;
-    image *v = realloc(h->images, (size_t)(h->nimages + 1) * sizeof *v);
+    image *v = bb_realloc(h->images, (size_t)(h->nimages + 1) * sizeof *v, BB_TAG(image));
     if (!v)
         return -1;
     h->images = v;
@@ -1841,13 +1841,13 @@ static void page_clear(hr *h)
 {
     dl_free(&h->items);
     for (int i = 0; i < h->nlinks; i++)
-        free(h->links[i]);
-    free(h->links);
+        bb_free(h->links[i]);
+    bb_free(h->links);
     h->links = NULL;
     h->nlinks = 0;
     for (int i = 0; i < h->nanchors; i++)
-        free(h->anchors[i].name);
-    free(h->anchors);
+        bb_free(h->anchors[i].name);
+    bb_free(h->anchors);
     h->anchors = NULL;
     h->nanchors = 0;
     h->width_laid = 0;
@@ -1858,9 +1858,9 @@ static void images_free(hr *h)
     for (int i = 0; i < h->nimages; i++) {
         if (h->images[i].importer)
             components_close(h->images[i].importer);
-        free(h->images[i].src);
+        bb_free(h->images[i].src);
     }
-    free(h->images);
+    bb_free(h->images);
     h->images = NULL;
     h->nimages = 0;
 }
@@ -1871,10 +1871,10 @@ static void doc_free(hr *h)
     if (h->doc)
         node_free(h->doc);
     h->doc = NULL;
-    free(h->html);
+    bb_free(h->html);
     h->html = NULL;
-    free(h->base);
-    free(h->title);
+    bb_free(h->base);
+    bb_free(h->title);
     h->base = h->title = NULL;
     images_free(h);
 }
@@ -2205,7 +2205,7 @@ static int32_t hr_load_spec(hr *h, gaddr spec)
     if (url_of_spec(spec, url, sizeof url))
         u = dups(url);
     doc_set(h, html, n);
-    free(h->url);
+    bb_free(h->url);
     h->url = u;
     gget(h->spec, spec, 70);
     h->have_spec = true;
@@ -2256,12 +2256,12 @@ static int32_t hr_go_url(hr *h, const char *url, bool force)
             scroll_to(h, 0, y);
         else
             e = fnfErr;
-        free(full);
+        bb_free(full);
         return e ? e : hr_refresh(h, force);
     }
     gaddr spec = tb_NewPtr(70, false, true);
     if (!spec) {
-        free(full);
+        bb_free(full);
         return memFullErr;
     }
     e = find_file(h, url, kHRLookingForHTMLSource, spec);
@@ -2276,7 +2276,7 @@ static int32_t hr_go_url(hr *h, const char *url, bool force)
         e = hr_refresh(h, force);
     }
     tb_DisposePtr(spec);
-    free(full);
+    bb_free(full);
     return e;
 }
 
@@ -2335,8 +2335,8 @@ static bool click(hr *h, int px, int py)
             }
         }
         hr_go_url(h, url, true);
-        free(url);
-        free(full);
+        bb_free(url);
+        bb_free(full);
     }
     return true;
 }
@@ -2350,7 +2350,7 @@ static void hr_NewReference(ppc_cpu *c)
     if (!R(0) || R(1) != 0x68743332)
         RETURN(paramErr);
     wr32(R(0), 0);
-    hr *h = calloc(1, sizeof *h);
+    hr *h = bb_calloc(1, sizeof *h, BB_TAG(hr));
     if (!h)
         RETURN(memFullErr);
     h->port = R(2);
@@ -2386,9 +2386,9 @@ static void hr_DisposeReference(ppc_cpu *c)
 {
     WITH(h);
     doc_free(h);
-    free(h->url);
+    bb_free(h->url);
     ref_free(h->id);
-    free(h);
+    bb_free(h);
     RETURN(noErr);
 }
 
@@ -2607,7 +2607,7 @@ static char *cstr_at(gaddr p)
     size_t n = 0;
     while (rd8(p + (uint32_t)n) && n < 4096)
         n++;
-    char *s = malloc(n + 1);
+    char *s = bb_malloc(n + 1, BB_BYTES);
     if (s) {
         for (size_t i = 0; i < n; i++)
             s[i] = (char)rd8(p + (uint32_t)i);
@@ -2625,7 +2625,7 @@ static void hr_GoToURL(ppc_cpu *c)
     if (!u)
         RETURN(memFullErr);
     int32_t e = hr_go_url(h, u, (R(3) & 0xFF) != 0);
-    free(u);
+    bb_free(u);
     RETURN(e);
 }
 
@@ -2636,7 +2636,7 @@ static void hr_GoToAnchor(ppc_cpu *c)
         RETURN(paramErr);
     char *name = cstr_at(R(1));
     int y = name ? anchor_y(h, name) : -1;
-    free(name);
+    bb_free(name);
     if (y < 0)
         RETURN(fnfErr);
     scroll_to(h, 0, y);
@@ -2645,7 +2645,7 @@ static void hr_GoToAnchor(ppc_cpu *c)
 
 static int32_t go_buffer(hr *h, const uint8_t *src, size_t n, bool force)
 {
-    char *html = malloc(n + 1);
+    char *html = bb_malloc(n + 1, BB_BYTES);
     if (!html)
         return memFullErr;
     memcpy(html, src, n);
@@ -2661,12 +2661,12 @@ static void hr_GoToPtr(ppc_cpu *c)
     WITH(h);
     if (!R(1))
         RETURN(paramErr);
-    uint8_t *tmp = malloc(R(2) + 1);
+    uint8_t *tmp = bb_malloc(R(2) + 1, BB_BYTES);
     if (!tmp)
         RETURN(memFullErr);
     gget(tmp, R(1), R(2));
     int32_t e = go_buffer(h, tmp, R(2), (R(4) & 0xFF) != 0);
-    free(tmp);
+    bb_free(tmp);
     RETURN(e);
 }
 
@@ -2735,9 +2735,9 @@ static void hr_UtilCreateFullURL(ppc_cpu *c)
     char *root = cstr_at(R(0)), *link = cstr_at(R(1));
     char *full = root && link ? full_url(root, link) : NULL;
     int32_t e = full ? put_handle(R(2), full) : memFullErr;
-    free(root);
-    free(link);
-    free(full);
+    bb_free(root);
+    bb_free(link);
+    bb_free(full);
     RETURN(e);
 }
 
@@ -2748,9 +2748,9 @@ static void hr_UtilGetFSSpecFromURL(ppc_cpu *c)
     char *root = cstr_at(R(0)), *link = cstr_at(R(1));
     char *full = root && link ? full_url(root, link) : NULL;
     int32_t e = full ? spec_of_file_url(full, R(2)) : memFullErr;
-    free(root);
-    free(link);
-    free(full);
+    bb_free(root);
+    bb_free(link);
+    bb_free(full);
     RETURN(e);
 }
 
@@ -2829,7 +2829,7 @@ static char *cf_to_cstr(gaddr cf)
         return NULL;
     uint16_t u[1024];
     uint32_t n = svc_cfstring_get(cf, u, 1023);
-    char *s = malloc(n + 1);
+    char *s = bb_malloc(n + 1, BB_BYTES);
     if (!s)
         return NULL;
     for (uint32_t i = 0; i < n; i++)
@@ -2871,7 +2871,7 @@ static void hr_GoToCFURL(ppc_cpu *c)
     if (!u)
         RETURN(paramErr);
     int32_t e = hr_go_url(h, u, (R(3) & 0xFF) != 0);
-    free(u);
+    bb_free(u);
     RETURN(e);
 }
 
@@ -2880,7 +2880,7 @@ static void hr_GoToAnchorCFString(ppc_cpu *c)
     WITH(h);
     char *name = cf_to_cstr(R(1));
     int y = name ? anchor_y(h, name) : -1;
-    free(name);
+    bb_free(name);
     if (y < 0)
         RETURN(fnfErr);
     scroll_to(h, 0, y);
@@ -2909,12 +2909,12 @@ static void hr_GoToData(ppc_cpu *c)
     uint32_t a[1] = { R(1) };
     gaddr bytes = os9rest_call(c, "CFDataGetBytePtr", a, 1);
     uint32_t n = os9rest_call(c, "CFDataGetLength", a, 1);
-    uint8_t *tmp = malloc(n + 1);
+    uint8_t *tmp = bb_malloc(n + 1, BB_BYTES);
     if (!tmp)
         RETURN(memFullErr);
     gget(tmp, bytes, n);
     int32_t e = go_buffer(h, tmp, n, (R(3) & 0xFF) != 0);
-    free(tmp);
+    bb_free(tmp);
     RETURN(e);
 }
 
@@ -2977,9 +2977,9 @@ static void hr_UtilCreateFullCFURL(ppc_cpu *c)
     char *full = root && link ? full_url(root, link) : NULL;
     if (full)
         wr32(R(2), cfurl_from_cstr(c, full));
-    free(root);
-    free(link);
-    free(full);
+    bb_free(root);
+    bb_free(link);
+    bb_free(full);
     RETURN(full && rd32(R(2)) ? noErr : memFullErr);
 }
 
@@ -2995,9 +2995,9 @@ static void hr_UtilGetFSRefFromURL(ppc_cpu *c)
         e = tb_FSpMakeFSRef(spec, R(2));
     if (spec)
         tb_DisposePtr(spec);
-    free(root);
-    free(link);
-    free(full);
+    bb_free(root);
+    bb_free(link);
+    bb_free(full);
     RETURN(e);
 }
 
@@ -3026,8 +3026,8 @@ void os9left_html_reset(void)
             h->images = NULL; /* the importers went with the Component Manager */
             h->nimages = 0;
             doc_free(h);
-            free(h->url);
-            free(h);
+            bb_free(h->url);
+            bb_free(h);
         }
         ref_free(id);
     }

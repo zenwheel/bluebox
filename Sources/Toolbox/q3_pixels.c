@@ -128,7 +128,7 @@ uint32_t *q3_image_argb(gaddr image, int width, int height, uint32_t row_bytes, 
 {
     if (width <= 0 || height <= 0 || !image)
         return NULL;
-    uint32_t *px = malloc((size_t)width * (size_t)height * 4);
+    uint32_t *px = bb_malloc((size_t)width * (size_t)height * 4, BB_BYTES);
     if (!px)
         return NULL;
     int bytes = q3_pixel_bytes(format);

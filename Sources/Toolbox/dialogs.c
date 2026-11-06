@@ -569,7 +569,7 @@ static void apply_dftb(gaddr d, int16_t id, int base)
     if (x < 0 || n <= 0)
         return;
     if (extras[x].nfonts < base + n) {
-        extras[x].fonts = realloc(extras[x].fonts, (size_t)(base + n) * 24);
+        extras[x].fonts = bb_realloc(extras[x].fonts, (size_t)(base + n) * 24, BB_BYTES);
         extras[x].nfonts = base + n;
     }
     memset(extras[x].fonts + base, 0, (size_t)n * 24); /* not the items' before them */
@@ -629,7 +629,7 @@ static void apply_ictb(gaddr d, int16_t id)
     if (x < 0 || n <= 0)
         return;
     if (extras[x].nfonts < n) {
-        extras[x].fonts = realloc(extras[x].fonts, (size_t)n * 24);
+        extras[x].fonts = bb_realloc(extras[x].fonts, (size_t)n * 24, BB_BYTES);
         memset(extras[x].fonts + extras[x].nfonts, 0, (size_t)(n - extras[x].nfonts) * 24);
         extras[x].nfonts = n;
     }
@@ -791,7 +791,7 @@ void tb_CloseDialog(gaddr d)
     wr32(d + DialogRecord_items_off, 0);
     int x = extra_index(d, false);
     if (x >= 0) {
-        free(extras[x].fonts);
+        bb_free(extras[x].fonts);
         extras[x] = (dialog_extra){ 0 };
     }
 }
@@ -942,7 +942,7 @@ int16_t tb_FindDialogItem(gaddr d, uint32_t pt)
 static void draw_text_item(gaddr h, qrect r, bool substitute)
 {
     uint32_t n = text_size(h);
-    uint8_t *src = malloc(n ? n : 1), *out = malloc(n + 4 * 256 + 1);
+    uint8_t *src = bb_malloc(n ? n : 1, BB_BYTES), *out = bb_malloc(n + 4 * 256 + 1, BB_BYTES);
     gget(src, rd32(h), n);
     uint32_t k = 0;
     for (uint32_t i = 0; i < n; i++) {
@@ -965,8 +965,8 @@ static void draw_text_item(gaddr h, qrect r, bool substitute)
     tb_TETextBox(text, (int32_t)k, rp, teJustLeft);
     tb_DisposePtr(rp);
     tb_DisposePtr(text);
-    free(src);
-    free(out);
+    bb_free(src);
+    bb_free(out);
 }
 
 /* Platinum's edit text: white inside a well frame, the one being edited
@@ -1703,7 +1703,7 @@ int16_t tb_AutoSizeDialog(gaddr d)
         uint32_t len = text_size(h);
         if (!len)
             continue;
-        uint8_t *text = malloc(len);
+        uint8_t *text = bb_malloc(len, BB_BYTES);
         gget(text, rd32(h), len);
         item_font_saved fs;
         item_font_begin(d, i, &fs);
@@ -1728,7 +1728,7 @@ int16_t tb_AutoSizeDialog(gaddr d)
             }
         }
         item_font_end(d, &fs);
-        free(text);
+        bb_free(text);
         int need = lines * line - (r.bottom - r.top);
         if (need <= 0)
             continue;

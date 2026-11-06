@@ -433,12 +433,12 @@ int16_t tb_QTParseTextHREF(gaddr href, int32_t hrefLen, int32_t inContainer, gad
         wr32(outContainer, 0);
     if (!href || hrefLen < 0)
         return paramErr;
-    char *s = malloc((size_t)hrefLen + 1);
+    char *s = bb_malloc((size_t)hrefLen + 1, BB_BYTES);
     gget(s, href, (uint32_t)hrefLen);
     s[hrefLen] = 0;
     gaddr out = qt_atoms_new();
     if (!out) {
-        free(s);
+        bb_free(s);
         return memFullErr;
     }
     char base[1024] = "";
@@ -517,7 +517,7 @@ int16_t tb_QTParseTextHREF(gaddr href, int32_t hrefLen, int32_t inContainer, gad
     snprintf(rhref, sizeof rhref, "<%s%s%s>%s%s%s", full, hash ? "#" : "", hash ? hash + 1 : "", *target ? " T<" : "",
              target, *target ? ">" : "");
     add_string_atom(out, fourcc("href"), rhref, strlen(rhref));
-    free(s);
+    bb_free(s);
     if (outContainer)
         wr32(outContainer, out);
     return noErr;
@@ -536,9 +536,9 @@ int16_t tb_QTTextToNativeText(int32_t theText, int32_t encoding, int32_t flags)
     if (base != 0x100 && base != 0x103) /* Unicode 2.0 and its forms */
         return paramErr;
     uint32_t n = (uint32_t)tb_GetHandleSize(h);
-    uint8_t *in = malloc(n + 2);
+    uint8_t *in = bb_malloc(n + 2, BB_BYTES);
     gget(in, rd32(h), n);
-    char *utf8 = malloc((size_t)n * 3 + 1);
+    char *utf8 = bb_malloc((size_t)n * 3 + 1, BB_BYTES);
     size_t u = 0;
     if (form == 2 || base == 0x103 || (encoding & 0x0C000000) == 0x08000000) { /* UTF-8 */
         memcpy(utf8, in, n);
@@ -561,14 +561,14 @@ int16_t tb_QTTextToNativeText(int32_t theText, int32_t encoding, int32_t flags)
         }
     }
     utf8[u] = 0;
-    uint8_t *mac = malloc(u + 1);
+    uint8_t *mac = bb_malloc(u + 1, BB_BYTES);
     size_t m = utf8_to_macroman(utf8, mac, u + 1);
     tb_SetHandleSize(h, (int32_t)m);
     if (m)
         gput(rd32(h), mac, (uint32_t)m);
-    free(in);
-    free(utf8);
-    free(mac);
+    bb_free(in);
+    bb_free(utf8);
+    bb_free(mac);
     return noErr;
 }
 
@@ -585,7 +585,7 @@ static struct {
 static uint8_t *handle_copy_bytes(gaddr h, uint32_t *n)
 {
     *n = h && rd32(h) ? (uint32_t)tb_GetHandleSize(h) : 0;
-    uint8_t *b = malloc(*n ? *n : 1);
+    uint8_t *b = bb_malloc(*n ? *n : 1, BB_BYTES);
     if (*n)
         gget(b, rd32(h), *n);
     return b;
@@ -597,7 +597,7 @@ int16_t tb_QTRegisterAccessKey(int32_t accessKeyType, int32_t flags, int32_t acc
     uint8_t *b = handle_copy_bytes((gaddr)accessKey, &n);
     for (int i = 0; i < MAX_KEYS; i++)
         if (keys[i].key && keys[i].type == (uint32_t)accessKeyType && keys[i].len == n && !memcmp(keys[i].key, b, n)) {
-            free(b);
+            bb_free(b);
             return noErr;
         }
     for (int i = 0; i < MAX_KEYS; i++)
@@ -608,7 +608,7 @@ int16_t tb_QTRegisterAccessKey(int32_t accessKeyType, int32_t flags, int32_t acc
             keys[i].len = n;
             return noErr;
         }
-    free(b);
+    bb_free(b);
     return memFullErr;
 }
 
@@ -620,11 +620,11 @@ int16_t tb_QTUnregisterAccessKey(int32_t accessKeyType, int32_t flags, int32_t a
     int16_t err = paramErr;
     for (int i = 0; i < MAX_KEYS; i++)
         if (keys[i].key && keys[i].type == (uint32_t)accessKeyType && keys[i].len == n && !memcmp(keys[i].key, b, n)) {
-            free(keys[i].key);
+            bb_free(keys[i].key);
             keys[i].key = NULL;
             err = noErr;
         }
-    free(b);
+    bb_free(b);
     return err;
 }
 
@@ -1002,7 +1002,7 @@ int16_t tb_QTAddMovieError(int32_t movieH, int32_t c, int32_t errorCode, int32_t
 void qt_util_reset(void)
 {
     for (int i = 0; i < MAX_KEYS; i++)
-        free(keys[i].key);
+        bb_free(keys[i].key);
     memset(keys, 0, sizeof keys);
     memset(prefs, 0, sizeof prefs);
     memset(idlers, 0, sizeof idlers);

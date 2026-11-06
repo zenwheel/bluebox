@@ -412,10 +412,10 @@ void tb_CharExtra(int32_t extra)
 
 static void draw_guest(gaddr p, int n)
 {
-    uint8_t *buf = malloc(n > 0 ? (size_t)n : 1);
+    uint8_t *buf = bb_malloc(n > 0 ? (size_t)n : 1, BB_BYTES);
     gget(buf, p, (uint32_t)(n > 0 ? n : 0));
     qd_draw_text(qd_port(), buf, n);
-    free(buf);
+    bb_free(buf);
 }
 
 /* Text goes through the port's textProc when the application installed one. */
@@ -462,10 +462,10 @@ int16_t tb_CharWidth(int16_t thec)
 
 static int width_guest(gaddr p, int n)
 {
-    uint8_t *buf = malloc(n > 0 ? (size_t)n : 1);
+    uint8_t *buf = bb_malloc(n > 0 ? (size_t)n : 1, BB_BYTES);
     gget(buf, p, (uint32_t)(n > 0 ? n : 0));
     int w = qd_text_width(qd_port(), buf, n);
-    free(buf);
+    bb_free(buf);
     return w;
 }
 

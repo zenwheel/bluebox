@@ -63,7 +63,7 @@
 #include "jit.h"
 #include "ppc.h"
 
-bool ppc_jit_enabled;
+BB_HOST bool ppc_jit_enabled;
 
 #if !(defined(__aarch64__) || defined(__arm64__))
 
@@ -96,9 +96,9 @@ enum { MAX_INSN = 64, CODE_SIZE = 64 << 20 };
 /* The translator's helpers in the engine's context. */
 enum { H_EXECUTE, H_ST8, H_ST16, H_ST32, H_ICBI };
 
-static jit_engine E;
-static uint32_t *scratch; /* translation buffer */
-static ppc_jit_stats st;
+BB_HOST static jit_engine E;
+BB_HOST static uint32_t *scratch; /* translation buffer */
+BB_HOST static ppc_jit_stats st;
 
 /* ------------------------------------------------------------------ */
 /* Helpers translated code calls */
@@ -1179,7 +1179,7 @@ static bool setup(void)
 {
     if (E.ready)
         return true;
-    scratch = malloc(16384 * 4);
+    scratch = bb_host_malloc(16384 * 4);
     if (!scratch || !jit_engine_init(&E, CODE_PPC, 2, CODE_SIZE))
         return false;
     E.build = build_id();
@@ -1346,10 +1346,10 @@ int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
     int bad = 0;
     why[0] = 0;
     enum { AREA = 0x10000 };
-    uint8_t *before = malloc(AREA), *after_i = malloc(AREA);
+    uint8_t *before = bb_host_malloc(AREA), *after_i = bb_host_malloc(AREA);
     if (!before || !after_i) {
-        free(before);
-        free(after_i);
+        bb_host_free(before);
+        bb_host_free(after_i);
         return -1;
     }
     bool was = ppc_jit_enabled;
@@ -1455,8 +1455,8 @@ int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
         }
     }
     ppc_jit_enabled = was;
-    free(before);
-    free(after_i);
+    bb_host_free(before);
+    bb_host_free(after_i);
     return bad;
 }
 

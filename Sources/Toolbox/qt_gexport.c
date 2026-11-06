@@ -94,12 +94,12 @@ static uint8_t *input_bytes(grex *x, size_t *len)
     *len = 0;
     if (x->in == IN_HANDLE && x->in_obj && rd32(x->in_obj)) {
         *len = (size_t)tb_GetHandleSize(x->in_obj);
-        b = malloc(*len ? *len : 1);
+        b = bb_malloc(*len ? *len : 1, BB_BYTES);
         if (b)
             gget(b, rd32(x->in_obj), (uint32_t)*len);
     } else if (x->in == IN_PTR && x->in_obj) {
         *len = x->in_size;
-        b = malloc(*len ? *len : 1);
+        b = bb_malloc(*len ? *len : 1, BB_BYTES);
         if (b)
             gget(b, x->in_obj, (uint32_t)*len);
     } else if (x->in == IN_FILE || x->in == IN_DATAREF) {
@@ -113,7 +113,7 @@ static uint8_t *input_bytes(grex *x, size_t *len)
             uint32_t n = 0;
             uint8_t *rb = ref ? qt_dref_bytes(ref, &n) : NULL;
             open = rb && qt_src_open(fourcc("alis"), 0, rb, n, NULL, false, &src);
-            free(rb);
+            bb_free(rb);
             if (ref)
                 tb_DisposeHandle(ref);
         } else {
@@ -123,9 +123,9 @@ static uint8_t *input_bytes(grex *x, size_t *len)
             int64_t n = qt_src_size(&src);
             if (n > 0 && n < 256 * 1024 * 1024) {
                 *len = (size_t)n;
-                b = malloc(*len);
+                b = bb_malloc(*len, BB_BYTES);
                 if (b && !qt_src_read(&src, 0, b, (uint32_t)*len)) {
-                    free(b);
+                    bb_free(b);
                     b = NULL;
                 }
             }
@@ -228,7 +228,7 @@ static uint8_t *input_rgba(grex *x, int *w, int *h, gaddr *pict)
         } else if (!qt_decode_image(b, n, &rgba, w, h)) {
             rgba = NULL;
         }
-        free(b);
+        bb_free(b);
         return rgba;
     }
     }
@@ -318,7 +318,7 @@ static double quality_of(int32_t q) { return q >= codecLosslessQuality ? 1.0 : q
 static uint8_t *pict_file(gaddr pic, size_t *n)
 {
     size_t pn = (size_t)tb_GetHandleSize(pic);
-    uint8_t *b = calloc(512 + pn, 1);
+    uint8_t *b = bb_calloc(512 + pn, 1, BB_BYTES);
     if (b)
         gget(b + 512, rd32(pic), (uint32_t)pn);
     *n = b ? 512 + pn : 0;
@@ -351,7 +351,7 @@ static uint8_t *qtif_file(const uint8_t *rgba, int w, int h, int32_t quality, si
                               (int32_t)desc, (int32_t)data) == noErr) {
             uint32_t dn = rd32(rd32(desc)), in = rd32(rd32(desc) + 44);
             *n = 8 + dn + 8 + in;
-            out = malloc(*n);
+            out = bb_malloc(*n, BB_BYTES);
             if (out) {
                 be32put(out, 8 + dn);
                 memcpy(out + 4, "idsc", 4);
@@ -401,14 +401,14 @@ static int32_t do_export(grex *x, uint32_t type, gaddr written)
         if (!hostimage_encode(type, rgba, w, h, quality_of(x->quality), dpi, &bytes, &n))
             bytes = NULL;
     }
-    free(rgba);
+    bb_free(rgba);
     if (pict)
         tb_DisposeHandle(pict);
     if (!bytes)
         return codecErr;
     uint32_t done;
     int16_t err = write_out(x, bytes, n, &done);
-    free(bytes);
+    bb_free(bytes);
     if (!err && written)
         wr32(written, done);
     return err;
@@ -420,7 +420,7 @@ static void free_in(grex *x)
 {
     if (x->in_spec)
         tb_DisposePtr(x->in_spec);
-    free(x->in_ref);
+    bb_free(x->in_ref);
     x->in_spec = 0;
     x->in_ref = NULL;
     x->in = IN_NONE;
@@ -430,7 +430,7 @@ static void free_out(grex *x)
 {
     if (x->out_spec)
         tb_DisposePtr(x->out_spec);
-    free(x->out_ref);
+    bb_free(x->out_ref);
     x->out_spec = 0;
     x->out_ref = NULL;
     x->out = OUT_NONE;
@@ -455,7 +455,7 @@ static int16_t input_dimensions(grex *x, int *w, int *h)
 {
     gaddr pict;
     uint8_t *rgba = input_rgba(x, w, h, &pict);
-    free(rgba);
+    bb_free(rgba);
     if (pict)
         tb_DisposeHandle(pict);
     return *w > 0 && *h > 0 ? noErr : paramErr;
@@ -592,7 +592,7 @@ static int32_t grex_fn(qtc_call *k)
     case 0x0037: if (a[0]) wr8(a[0], x->in >= IN_HANDLE); return noErr;        /* MayExporterReadInputData */
     case 0x0038: {                                                             /* GetInputDataSize */
         size_t n;
-        free(input_bytes(x, &n));
+        bb_free(input_bytes(x, &n));
         put32(a[0], (uint32_t)n);
         return noErr;
     }
@@ -604,7 +604,7 @@ static int32_t grex_fn(qtc_call *k)
         int16_t err = a[1] + a[2] <= n ? noErr : eofErr;
         if (!err)
             gput(a[0], b + a[1], a[2]);
-        free(b);
+        bb_free(b);
         return err;
     }
     case 0x003A: {                                                             /* GetInputImageDescription */
@@ -650,7 +650,7 @@ static int32_t grex_fn(qtc_call *k)
         qd_draw_rgba(rgba, w, h, dst);
         tb_SetGWorld(rd32(saved), rd32(saved + 4));
         tb_DisposePtr(saved);
-        free(rgba);
+        bb_free(rgba);
         return noErr;
     }
     case 0x003E:                                                               /* SetOutputDataReference */
@@ -690,7 +690,7 @@ static int32_t grex_fn(qtc_call *k)
     case 0x0046: x->file_type = a[0]; x->creator = a[1]; return noErr;          /* SetOutputFileTypeAndCreator */
     case 0x0047: put32(a[0], x->file_type); put32(a[1], x->creator); return noErr;
     case 0x0048: {                                                             /* WriteOutputData(buffer, size) */
-        uint8_t *b = malloc(a[1] ? a[1] : 1);
+        uint8_t *b = bb_malloc(a[1] ? a[1] : 1, BB_BYTES);
         if (!b)
             return memFullErr;
         gget(b, a[0], a[1]);
@@ -701,7 +701,7 @@ static int32_t grex_fn(qtc_call *k)
         int16_t err = write_out(x, b, a[1], &done);
         x->out_offset = saved;
         x->out_truncate = trunc;
-        free(b);
+        bb_free(b);
         return err;
     }
     case 0x0049: x->out_mark = a[0]; return noErr;                             /* SetOutputMark */

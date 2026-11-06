@@ -16,7 +16,7 @@
 #include "hw68k.h"
 #include "tb_internal.h"
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* ---------------------------------------------------------------------- */
 /* Windows */
@@ -68,7 +68,7 @@ static void publish_windows(void)
             hrgn_free(&s);
             continue;
         }
-        uint8_t *mask = calloc((size_t)bw * (size_t)bh, 1);
+        uint8_t *mask = bb_calloc((size_t)bw * (size_t)bh, 1, BB_BYTES);
         for (int i = 0; i < s.nbands; i++) {
             const rband *band = &s.bands[i];
             for (int y = band->top; y < band->bottom; y++)
@@ -88,7 +88,7 @@ static void publish_windows(void)
     }
     pthread_mutex_lock(&lock);
     for (int i = 0; i < nwins; i++)
-        free(wins[i].mask);
+        bb_free(wins[i].mask);
     memcpy(wins, fresh, (size_t)n * sizeof *fresh);
     nwins = n;
     win_version++;
@@ -242,7 +242,7 @@ static int32_t pending_choice;
 /* Clicks posted for a pending choice, and when the last one was. */
 static int choice_clicks;
 static uint32_t choice_click_ticks;
-static pthread_cond_t track_cond = PTHREAD_COND_INITIALIZER;
+BB_HOST static pthread_cond_t track_cond = PTHREAD_COND_INITIALIZER;
 static bool tracking, in_select, track_done;
 
 void ev_post_menubar_click(void);
@@ -399,7 +399,7 @@ const char *machine_screen_mode_wanted(void) { return screen_reason; }
  * host's desktop shows instead.  Each byte painted keeps the value painted;
  * a byte still holding it, outside every window, is desktop. */
 
-static pthread_mutex_t desk_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t desk_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t *desk_val, *desk_have; /* per byte of the screen */
 static uint32_t desk_size, desk_rb;
 static gaddr desk_base;
@@ -413,10 +413,10 @@ void display_desk_painted(const hrgn *area)
     uint32_t size = rb * (uint32_t)h;
     pthread_mutex_lock(&desk_lock);
     if (size != desk_size || base != desk_base || rb != desk_rb) {
-        free(desk_val);
-        free(desk_have);
-        desk_val = malloc(size);
-        desk_have = calloc(size, 1);
+        bb_free(desk_val);
+        bb_free(desk_have);
+        desk_val = bb_malloc(size, BB_BYTES);
+        desk_have = bb_calloc(size, 1, BB_BYTES);
         desk_size = desk_val && desk_have ? size : 0;
         desk_base = base;
         desk_rb = rb;
@@ -490,7 +490,7 @@ bool machine_desktop_mask(int left, int top, int width, int height, uint8_t *out
  * there before its first store; the overlay is the written bytes while
  * any of them differs from that, and ends when all are back. */
 
-static pthread_mutex_t ov_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t ov_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t *ov_orig, *ov_have; /* per byte of the screen */
 static uint32_t ov_size, ov_rb;
 static gaddr ov_base;
@@ -516,10 +516,10 @@ static void overlay_written(gaddr base, uint32_t off, uint32_t len)
     uint32_t size = rb * (uint32_t)h;
     pthread_mutex_lock(&ov_lock);
     if (size != ov_size || base != ov_base || rb != ov_rb) {
-        free(ov_orig);
-        free(ov_have);
-        ov_orig = malloc(size);
-        ov_have = calloc(size, 1);
+        bb_free(ov_orig);
+        bb_free(ov_have);
+        ov_orig = bb_malloc(size, BB_BYTES);
+        ov_have = bb_calloc(size, 1, BB_BYTES);
         ov_size = ov_orig && ov_have ? size : 0;
         ov_base = base;
         ov_rb = rb;
@@ -682,7 +682,7 @@ static void debug_watch_written(gaddr a, uint32_t len)
  * while idle.c is making sure a program waiting changes nothing, every
  * store, to it as well. */
 static gaddr screen_watch_lo, screen_watch_len;
-static void (*all_stores)(gaddr a, uint32_t len);
+BB_HOST static void (*all_stores)(gaddr a, uint32_t len);
 
 static void any_store(gaddr a, uint32_t len)
 {
@@ -811,7 +811,7 @@ void display_reset(void)
 /* Transient drawing outside the windows: a pop-up menu.  Rootless hosts
  * show the area above everything while it is up, and take every click. */
 
-static pthread_mutex_t transient_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t transient_lock = PTHREAD_MUTEX_INITIALIZER;
 static int16_t transient[4];
 static bool transient_on;
 static uint32_t transient_version;

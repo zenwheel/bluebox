@@ -126,8 +126,8 @@ static gaddr scratch; /* FontInfo */
 static void attrs_clear(attrset *s)
 {
     for (int i = 0; i < s->n; i++)
-        free(s->a[i].data);
-    free(s->a);
+        bb_free(s->a[i].data);
+    bb_free(s->a);
     s->a = NULL;
     s->n = 0;
 }
@@ -144,13 +144,13 @@ static void attrs_set(attrset *s, uint32_t tag, const uint8_t *data, uint32_t si
 {
     attr *a = attrs_find(s, tag);
     if (!a) {
-        s->a = realloc(s->a, sizeof *s->a * (size_t)(s->n + 1));
+        s->a = bb_realloc(s->a, sizeof *s->a * (size_t)(s->n + 1), BB_TAG(attr));
         a = &s->a[s->n++];
         a->tag = tag;
         a->data = NULL;
     }
-    free(a->data);
-    a->data = malloc(size ? size : 1);
+    bb_free(a->data);
+    a->data = bb_malloc(size ? size : 1, BB_BYTES);
     memcpy(a->data, data, size);
     a->size = size;
 }
@@ -159,7 +159,7 @@ static void attrs_remove(attrset *s, uint32_t tag)
 {
     for (int i = 0; i < s->n; i++)
         if (s->a[i].tag == tag) {
-            free(s->a[i].data);
+            bb_free(s->a[i].data);
             s->a[i] = s->a[--s->n];
             return;
         }
@@ -242,10 +242,10 @@ static int32_t set_attrs(attrset *s, uint32_t count, gaddr tags, gaddr sizes, ga
     }
     for (uint32_t i = 0; i < count; i++) {
         uint32_t size = rd32(sizes + 4 * i);
-        uint8_t *buf = malloc(size ? size : 1);
+        uint8_t *buf = bb_malloc(size ? size : 1, BB_BYTES);
         gget(buf, rd32(values + 4 * i), size);
         attrs_set(s, rd32(tags + 4 * i), buf, size);
-        free(buf);
+        bb_free(buf);
     }
     return noErr;
 }
@@ -352,14 +352,14 @@ static style_t *new_style(void)
     while (i < nstyles && styles[i])
         i++;
     if (i == nstyles) {
-        styles = realloc(styles, sizeof *styles * (size_t)(nstyles + 16));
+        styles = bb_realloc(styles, sizeof *styles * (size_t)(nstyles + 16), BB_TAG(style_t *));
         memset(styles + nstyles, 0, sizeof *styles * 16);
         nstyles += 16;
     }
-    style_t *st = calloc(1, sizeof *st);
+    style_t *st = bb_calloc(1, sizeof *st, BB_TAG(style_t));
     st->addr = new_handle_block(STYLE_TAG, i);
     if (!st->addr) {
-        free(st);
+        bb_free(st);
         return NULL;
     }
     styles[i] = st;
@@ -372,7 +372,7 @@ static void free_style(style_t *st)
     wr32(st->addr, 0);
     tb_DisposePtr(st->addr);
     attrs_clear(&st->attrs);
-    free(st);
+    bb_free(st);
 }
 
 static layout_t *new_layout(void)
@@ -381,14 +381,14 @@ static layout_t *new_layout(void)
     while (i < nlayouts && layouts[i])
         i++;
     if (i == nlayouts) {
-        layouts = realloc(layouts, sizeof *layouts * (size_t)(nlayouts + 16));
+        layouts = bb_realloc(layouts, sizeof *layouts * (size_t)(nlayouts + 16), BB_TAG(layout_t *));
         memset(layouts + nlayouts, 0, sizeof *layouts * 16);
         nlayouts += 16;
     }
-    layout_t *l = calloc(1, sizeof *l);
+    layout_t *l = bb_calloc(1, sizeof *l, BB_TAG(layout_t));
     l->addr = new_handle_block(LAYOUT_TAG, i);
     if (!l->addr) {
-        free(l);
+        bb_free(l);
         return NULL;
     }
     layouts[i] = l;
@@ -399,7 +399,7 @@ static void clear_lines(layout_t *l)
 {
     for (int i = 0; i < l->nlines; i++)
         attrs_clear(&l->lines[i].a);
-    free(l->lines);
+    bb_free(l->lines);
     l->lines = NULL;
     l->nlines = 0;
 }
@@ -411,9 +411,9 @@ static void free_layout(layout_t *l)
     tb_DisposePtr(l->addr);
     attrs_clear(&l->controls);
     clear_lines(l);
-    free(l->runs);
-    free(l->breaks);
-    free(l);
+    bb_free(l->runs);
+    bb_free(l->breaks);
+    bb_free(l);
 }
 
 void carbon_atsui_reset(void)
@@ -422,20 +422,20 @@ void carbon_atsui_reset(void)
     for (int i = 0; i < nstyles; i++)
         if (styles[i]) {
             attrs_clear(&styles[i]->attrs);
-            free(styles[i]);
+            bb_free(styles[i]);
         }
     for (int i = 0; i < nlayouts; i++)
         if (layouts[i]) {
             attrs_clear(&layouts[i]->controls);
             for (int k = 0; k < layouts[i]->nlines; k++)
                 attrs_clear(&layouts[i]->lines[k].a);
-            free(layouts[i]->lines);
-            free(layouts[i]->runs);
-            free(layouts[i]->breaks);
-            free(layouts[i]);
+            bb_free(layouts[i]->lines);
+            bb_free(layouts[i]->runs);
+            bb_free(layouts[i]->breaks);
+            bb_free(layouts[i]);
         }
-    free(styles);
-    free(layouts);
+    bb_free(styles);
+    bb_free(layouts);
     styles = NULL;
     layouts = NULL;
     nstyles = nlayouts = 0;
@@ -670,7 +670,7 @@ static void walk(const layout_t *l, uint32_t a, uint32_t b, bool draw, int x, in
         m->ascent = asc > m->ascent ? asc : m->ascent;
         m->descent = desc > m->descent ? desc : m->descent;
         m->leading = lead > m->leading ? lead : m->leading;
-        uint8_t *bytes = malloc(end - pos + 1);
+        uint8_t *bytes = bb_malloc(end - pos + 1, BB_BYTES);
         size_t n = segment_bytes(l, pos, end, bytes);
         int w = n ? qd_text_width(ps.port, bytes, (int)n) : 0;
         style_t *sty = style_of(st);
@@ -686,7 +686,7 @@ static void walk(const layout_t *l, uint32_t a, uint32_t b, bool draw, int x, in
                 tb_DisposePtr(buf);
             }
         }
-        free(bytes);
+        bb_free(bytes);
         px += w;
         m->width += w << 16;
         pos = end;
@@ -1170,10 +1170,10 @@ static void at_ATSUPasteFromHandle(ppc_cpu *c)
         uint32_t tag = rd32(p + pos), len = rd32(p + pos + 4);
         if (len > size - pos - 8)
             RET(kATSUInvalidCacheErr);
-        uint8_t *buf = malloc(len ? len : 1);
+        uint8_t *buf = bb_malloc(len ? len : 1, BB_BYTES);
         gget(buf, p + pos + 8, len);
         attrs_set(&st->attrs, tag, buf, len);
-        free(buf);
+        bb_free(buf);
         pos += 8 + ((len + 3) & ~3u);
     }
     RET(noErr);
@@ -1184,7 +1184,7 @@ static void at_ATSUPasteFromHandle(ppc_cpu *c)
 
 static void add_run(layout_t *l, uint32_t start, uint32_t len, gaddr style)
 {
-    l->runs = realloc(l->runs, sizeof *l->runs * (size_t)(l->nruns + 1));
+    l->runs = bb_realloc(l->runs, sizeof *l->runs * (size_t)(l->nruns + 1), BB_TAG(run_t));
     l->runs[l->nruns++] = (run_t){ start, len, style };
 }
 
@@ -1325,11 +1325,11 @@ static void at_ATSUCreateAndCopyTextLayout(ppc_cpu *c)
     l->lines = NULL;
     l->nlines = 0;
     for (int i = 0; i < src->nlines; i++) {
-        l->lines = realloc(l->lines, sizeof *l->lines * (size_t)(l->nlines + 1));
+        l->lines = bb_realloc(l->lines, sizeof *l->lines * (size_t)(l->nlines + 1), BB_TAG(linectl));
         l->lines[l->nlines] = (linectl){ src->lines[i].start, { 0, NULL } };
         attrs_copy(&l->lines[l->nlines++].a, &src->lines[i].a);
     }
-    l->breaks = src->nbreaks ? malloc(sizeof *l->breaks * (size_t)src->nbreaks) : NULL;
+    l->breaks = src->nbreaks ? bb_malloc(sizeof *l->breaks * (size_t)src->nbreaks, BB_BYTES) : NULL;
     if (src->nbreaks)
         memcpy(l->breaks, src->breaks, sizeof *l->breaks * (size_t)src->nbreaks);
     wr32(A(1), l->addr);
@@ -1522,7 +1522,7 @@ static attrset *line_controls(layout_t *l, uint32_t start, bool make)
             return &l->lines[i].a;
     if (!make)
         return NULL;
-    l->lines = realloc(l->lines, sizeof *l->lines * (size_t)(l->nlines + 1));
+    l->lines = bb_realloc(l->lines, sizeof *l->lines * (size_t)(l->nlines + 1), BB_TAG(linectl));
     l->lines[l->nlines] = (linectl){ start, { 0, NULL } };
     return &l->lines[l->nlines++].a;
 }
@@ -1932,7 +1932,7 @@ static void add_break(layout_t *l, uint32_t b)
     for (int i = 0; i < l->nbreaks; i++)
         if (l->breaks[i] == b)
             return;
-    l->breaks = realloc(l->breaks, sizeof *l->breaks * (size_t)(l->nbreaks + 1));
+    l->breaks = bb_realloc(l->breaks, sizeof *l->breaks * (size_t)(l->nbreaks + 1), BB_BYTES);
     int i = l->nbreaks++;
     while (i > 0 && l->breaks[i - 1] > b) {
         l->breaks[i] = l->breaks[i - 1];

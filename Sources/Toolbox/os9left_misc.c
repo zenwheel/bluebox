@@ -130,7 +130,7 @@ static void nav_NavCreatePreviewReference(ppc_cpu *c)
     if (rn < 0)
         RETURN(tb_ResError() ? tb_ResError() : rfNumErr);
     tb_UseResFile(rn);
-    preview *p = calloc(1, sizeof *p);
+    preview *p = bb_calloc(1, sizeof *p, BB_TAG(preview));
     if (!p) {
         tb_CloseResFile(rn);
         tb_UseResFile(saved);
@@ -161,7 +161,7 @@ static void nav_NavDisposePreviewReference(ppc_cpu *c)
     if (p->picture)
         tb_DisposeHandle(p->picture);
     ref_free(p->id);
-    free(p);
+    bb_free(p);
     RETURN(noErr);
 }
 

@@ -153,10 +153,10 @@ static unsigned setup(void **opaque, char *chroma, unsigned *width, unsigned *he
     p->w = *width;
     p->h = *height;
     p->indexed = indexed;
-    free(p->decode);
-    free(p->frame);
-    p->decode = calloc((size_t)p->w * p->h, bpp);
-    p->frame = calloc((size_t)p->w * p->h, bpp);
+    bb_free(p->decode);
+    bb_free(p->frame);
+    p->decode = bb_calloc((size_t)p->w * p->h, bpp, BB_BYTES);
+    p->frame = bb_calloc((size_t)p->w * p->h, bpp, BB_BYTES);
     pthread_mutex_unlock(&p->lock);
     pitches[0] = p->w * bpp;
     lines[0] = p->h;
@@ -205,13 +205,13 @@ qt_vlc_player *qt_vlc_open(const char *path, bool indices)
     if (!m)
         return NULL;
     vlc.media_add_option(m, ":no-video-title-show");
-    qt_vlc_player *p = calloc(1, sizeof *p);
+    qt_vlc_player *p = bb_calloc(1, sizeof *p, BB_TAG(qt_vlc_player));
     p->want_indices = indices;
     pthread_mutex_init(&p->lock, NULL);
     p->mp = vlc.player_new_from_media(m);
     vlc.media_release(m);
     if (!p->mp) {
-        free(p);
+        bb_free(p);
         return NULL;
     }
     vlc.video_set_format_callbacks(p->mp, setup, cleanup);
@@ -225,10 +225,10 @@ void qt_vlc_close(qt_vlc_player *p)
         return;
     vlc.stop(p->mp);
     vlc.player_release(p->mp);
-    free(p->decode);
-    free(p->frame);
+    bb_free(p->decode);
+    bb_free(p->frame);
     pthread_mutex_destroy(&p->lock);
-    free(p);
+    bb_free(p);
 }
 
 void qt_vlc_play(qt_vlc_player *p)
@@ -288,7 +288,7 @@ bool qt_vlc_frame(qt_vlc_player *p, uint32_t *serial, uint8_t **rgba, int *w, in
     if (fresh) {
         size_t n = (size_t)p->w * p->h * (p->indexed ? 1 : 4);
         *indexed = p->indexed;
-        *rgba = realloc(*rgba, n);
+        *rgba = bb_realloc(*rgba, n, BB_BYTES);
         memcpy(*rgba, p->frame, n);
         *w = (int)p->w;
         *h = (int)p->h;

@@ -116,7 +116,7 @@ private func fontResources(_ path: String) -> Data? {
     guard rsrc_filter(mf.rsrc, mf.rsrc_len, fontTypes, fontTypes.count, &out, &len, &err, err.count), let out else {
         return nil
     }
-    defer { free(out) }
+    defer { bb_free(out) }
     return Data(bytes: out, count: len)
 }
 

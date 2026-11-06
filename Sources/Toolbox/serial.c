@@ -497,7 +497,7 @@ static void online_bytes(sport *p, const uint8_t *b, size_t n)
  * bytes for the connection go out together. */
 static void modem_write(sport *p, const uint8_t *b, size_t n)
 {
-    uint8_t *out = malloc(n + 3);
+    uint8_t *out = bb_malloc(n + 3, BB_BYTES);
     size_t k = 0;
     for (size_t i = 0; i < n; i++) {
         if (p->mode != M_ONLINE) {
@@ -520,7 +520,7 @@ static void modem_write(sport *p, const uint8_t *b, size_t n)
         p->last_out = t;
     }
     online_bytes(p, out, k);
-    free(out);
+    bb_free(out);
 }
 
 /* Telnet from the other end: options refused but echo and go-ahead
@@ -864,13 +864,13 @@ static int16_t ser_write(gaddr pb, bool async)
     if (!p->opened)
         return notOpenErr;
     uint32_t n = rd32(pb + IOParam_ioReqCount_off);
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     gget(b, rd32(pb + IOParam_ioBuffer_off), n);
     if (p->kind == K_MODEM)
         modem_write(p, b, n);
     else
         to_host(p, b, n);
-    free(b);
+    bb_free(b);
     wr32(pb + IOParam_ioActCount_off, n);
     return noErr;
 }

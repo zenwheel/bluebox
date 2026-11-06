@@ -122,7 +122,7 @@ static void write_callbacks(gaddr p, const callbacks *cb, bool hash)
 /* Guest words from memory (malloc'd). */
 static uint32_t *read_words(gaddr p, uint32_t n)
 {
-    uint32_t *v = malloc(sizeof *v * (n ? n : 1));
+    uint32_t *v = bb_malloc(sizeof *v * (n ? n : 1), BB_BYTES);
     for (uint32_t i = 0; v && i < n; i++)
         v[i] = p ? rd32(p + 4 * i) : 0;
     return v;
@@ -146,7 +146,7 @@ static bool array_room(cf_array *a, uint32_t more)
     if (a->n + more <= a->cap)
         return true;
     uint32_t cap = (a->n + more) * 2 + 4;
-    uint32_t *p = realloc(a->v, sizeof *p * cap);
+    uint32_t *p = bb_realloc(a->v, sizeof *p * cap, BB_BYTES);
     if (!p)
         return false;
     a->v = p;
@@ -170,7 +170,7 @@ static void array_remove(cf_array *a, uint32_t idx, uint32_t n)
 {
     if (idx > a->n || n > a->n - idx)
         return;
-    uint32_t *gone = malloc(sizeof *gone * (n ? n : 1));
+    uint32_t *gone = bb_malloc(sizeof *gone * (n ? n : 1), BB_BYTES);
     if (!gone)
         return;
     memcpy(gone, a->v + idx, sizeof *gone * n);
@@ -178,7 +178,7 @@ static void array_remove(cf_array *a, uint32_t idx, uint32_t n)
     a->n -= n;
     for (uint32_t i = 0; i < n; i++)
         cb_release(&a->cb, a->o.alloc, gone[i]);
-    free(gone);
+    bb_free(gone);
 }
 
 static void array_finalize(cf_obj *o)
@@ -189,7 +189,7 @@ static void array_finalize(cf_obj *o)
         cf_deallocate(a->o.alloc, a->block);
 }
 
-static void array_dispose(cf_obj *o) { free(((cf_array *)o)->v); }
+static void array_dispose(cf_obj *o) { bb_free(((cf_array *)o)->v); }
 
 static bool array_equal(cf_obj *x, cf_obj *y)
 {
@@ -288,7 +288,7 @@ static void cf_CFArrayCreate(ppc_cpu *c)
     uint32_t *v = read_words(R(1), R(2));
     if (v)
         array_insert(a, 0, v, R(2));
-    free(v);
+    bb_free(v);
     RETURN(a->o.ref);
 }
 
@@ -375,7 +375,7 @@ static void cf_CFArrayApplyFunction(ppc_cpu *c)
     gaddr fn = R(3), ctx = R(4);
     if (!arange_ok(a, R(1), R(2)) || !fn)
         RETURN_VOID();
-    uint32_t n = R(2), *v = malloc(sizeof *v * (n ? n : 1));
+    uint32_t n = R(2), *v = bb_malloc(sizeof *v * (n ? n : 1), BB_BYTES);
     if (!v)
         RETURN_VOID();
     memcpy(v, a->v + R(1), sizeof *v * n);
@@ -383,7 +383,7 @@ static void cf_CFArrayApplyFunction(ppc_cpu *c)
         uint32_t args[2] = { v[i], ctx };
         cf_call(fn, args, 2);
     }
-    free(v);
+    bb_free(v);
     RETURN_VOID();
 }
 
@@ -474,7 +474,7 @@ static void cf_CFArrayReplaceValues(ppc_cpu *c)
     /* The new ones retained before the old ones go, in case they are the same. */
     array_insert(a, R(1) + R(2), v, R(4));
     array_remove(a, R(1), R(2));
-    free(v);
+    bb_free(v);
     RETURN_VOID();
 }
 
@@ -513,7 +513,7 @@ static void cf_CFArraySortValues(ppc_cpu *c)
     cf_array *a = array_of(R(0));
     if (!arange_ok(a, R(1), R(2)) || !R(3))
         RETURN_VOID();
-    uint32_t n = R(2), *v = malloc(sizeof *v * (n ? n : 1)), *tmp = malloc(sizeof *tmp * (n ? n : 1));
+    uint32_t n = R(2), *v = bb_malloc(sizeof *v * (n ? n : 1), BB_BYTES), *tmp = bb_malloc(sizeof *tmp * (n ? n : 1), BB_BYTES);
     if (v && tmp) {
         memcpy(v, a->v + R(1), sizeof *v * n);
         merge_sort(v, tmp, n, R(3), R(4));
@@ -521,8 +521,8 @@ static void cf_CFArraySortValues(ppc_cpu *c)
         if (arange_ok(a, R(1), n))
             memcpy(a->v + R(1), v, sizeof *v * n);
     }
-    free(v);
-    free(tmp);
+    bb_free(v);
+    bb_free(tmp);
     RETURN_VOID();
 }
 
@@ -531,12 +531,12 @@ static void cf_CFArrayAppendArray(ppc_cpu *c)
 {
     cf_array *a = array_of(R(0)), *o = array_of(R(1));
     if (a && arange_ok(o, R(2), R(3))) {
-        uint32_t *v = malloc(sizeof *v * (R(3) ? R(3) : 1));
+        uint32_t *v = bb_malloc(sizeof *v * (R(3) ? R(3) : 1), BB_BYTES);
         if (v) {
             memcpy(v, o->v + R(2), sizeof *v * R(3));
             array_insert(a, a->n, v, R(3));
         }
-        free(v);
+        bb_free(v);
     }
     RETURN_VOID();
 }
@@ -573,7 +573,7 @@ static void hashed_add(cf_hashed *h, uint32_t key, uint32_t value)
 {
     if (h->n == h->cap) {
         uint32_t cap = h->cap * 2 + 8;
-        entry *p = realloc(h->e, sizeof *p * cap);
+        entry *p = bb_realloc(h->e, sizeof *p * cap, BB_TAG(entry));
         if (!p)
             return;
         h->e = p;
@@ -625,7 +625,7 @@ static void hashed_finalize(cf_obj *o)
         hashed_drop(h, h->n - 1);
 }
 
-static void hashed_dispose(cf_obj *o) { free(((cf_hashed *)o)->e); }
+static void hashed_dispose(cf_obj *o) { bb_free(((cf_hashed *)o)->e); }
 
 static bool hashed_equal(cf_obj *x, cf_obj *y)
 {
@@ -753,7 +753,7 @@ static void hashed_apply(cf_hashed *h, gaddr fn, gaddr ctx)
     if (!h || !fn)
         return;
     uint32_t n = h->n;
-    entry *e = malloc(sizeof *e * (n ? n : 1));
+    entry *e = bb_malloc(sizeof *e * (n ? n : 1), BB_TAG(entry));
     if (!e)
         return;
     memcpy(e, h->e, sizeof *e * n);
@@ -763,7 +763,7 @@ static void hashed_apply(cf_hashed *h, gaddr fn, gaddr ctx)
             uint32_t args[3] = { e[i].key, dict ? e[i].value : ctx, ctx };
             cf_call(fn, args, dict ? 3 : 2);
         }
-    free(e);
+    bb_free(e);
 }
 
 /* Dictionaries */
@@ -799,8 +799,8 @@ uint32_t cfdict_entries(gaddr d, uint32_t **keys, uint32_t **values)
 {
     cf_hashed *h = hashed_of(d, CFT_DICTIONARY);
     uint32_t n = h ? h->n : 0;
-    *keys = malloc(sizeof **keys * (n ? n : 1));
-    *values = malloc(sizeof **values * (n ? n : 1));
+    *keys = bb_malloc(sizeof **keys * (n ? n : 1), BB_BYTES);
+    *values = bb_malloc(sizeof **values * (n ? n : 1), BB_BYTES);
     for (uint32_t i = 0; i < n && *keys && *values; i++) {
         (*keys)[i] = h->e[i].key;
         (*values)[i] = h->e[i].value;
@@ -936,7 +936,7 @@ static uint32_t hashed_values(gaddr ref, uint32_t type, uint32_t **values)
 {
     cf_hashed *h = hashed_of(ref, type);
     uint32_t n = h ? total(h) : 0, k = 0;
-    *values = malloc(sizeof **values * (n ? n : 1));
+    *values = bb_malloc(sizeof **values * (n ? n : 1), BB_BYTES);
     for (uint32_t i = 0; h && *values && i < h->n; i++)
         for (uint32_t r = 0; r < h->e[i].count; r++)
             (*values)[k++] = h->e[i].key;
@@ -1005,7 +1005,7 @@ uint32_t cfbag_entries(gaddr s, uint32_t **values) { return hashed_values(s, CFT
         uint32_t *v, n = hashed_values(R(0), TYPE, &v);                                                     \
         for (uint32_t i = 0; v && R(1) && i < n; i++)                                                       \
             wr32(R(1) + 4 * i, v[i]);                                                                       \
-        free(v);                                                                                            \
+        bb_free(v);                                                                                            \
         RETURN_VOID();                                                                                      \
     }                                                                                                       \
     static void cf_##Name##ApplyFunction(ppc_cpu *c)                                                        \
@@ -1096,7 +1096,7 @@ static void tree_finalize(cf_obj *o)
         cf_call_info(t->release, t->info);
 }
 
-static void tree_dispose(cf_obj *o) { free(((cf_tree *)o)->kids); }
+static void tree_dispose(cf_obj *o) { bb_free(((cf_tree *)o)->kids); }
 
 static void tree_describe(cf_obj *o, cf_text *out)
 {
@@ -1123,7 +1123,7 @@ static bool tree_insert(cf_tree *t, uint32_t at, gaddr child)
         return false;
     if (t->n == t->cap) {
         uint32_t cap = t->cap * 2 + 4;
-        gaddr *p = realloc(t->kids, sizeof *p * cap);
+        gaddr *p = bb_realloc(t->kids, sizeof *p * cap, BB_BYTES);
         if (!p)
             return false;
         t->kids = p;
@@ -1170,7 +1170,7 @@ uint32_t cftree_children(gaddr tree, gaddr **children)
 {
     cf_tree *t = tree_of(tree);
     uint32_t n = t ? t->n : 0;
-    *children = malloc(sizeof **children * (n ? n : 1));
+    *children = bb_malloc(sizeof **children * (n ? n : 1), BB_BYTES);
     if (*children && n)
         memcpy(*children, t->kids, sizeof **children * n);
     return n;
@@ -1257,7 +1257,7 @@ static void cf_CFTreeApplyFunctionToChildren(ppc_cpu *c)
         uint32_t args[2] = { k[i], R(2) };
         cf_call(R(1), args, 2);
     }
-    free(k);
+    bb_free(k);
     RETURN_VOID();
 }
 
@@ -1329,8 +1329,8 @@ static void cf_CFTreeSortChildren(ppc_cpu *c)
     cf_tree *t = tree_of(R(0));
     if (!t || !R(1) || t->n < 2)
         RETURN_VOID();
-    uint32_t n = t->n, *info = malloc(sizeof *info * n), *tmp = malloc(sizeof *tmp * n);
-    gaddr *kids = malloc(sizeof *kids * n);
+    uint32_t n = t->n, *info = bb_malloc(sizeof *info * n, BB_BYTES), *tmp = bb_malloc(sizeof *tmp * n, BB_BYTES);
+    gaddr *kids = bb_malloc(sizeof *kids * n, BB_BYTES);
     if (info && tmp && kids) {
         memcpy(kids, t->kids, sizeof *kids * n);
         for (uint32_t i = 0; i < n; i++)
@@ -1355,9 +1355,9 @@ static void cf_CFTreeSortChildren(ppc_cpu *c)
             for (uint32_t i = 0; i < n; i++)
                 t->kids[i] = kids[info[i]];
     }
-    free(info);
-    free(tmp);
-    free(kids);
+    bb_free(info);
+    bb_free(tmp);
+    bb_free(kids);
     RETURN_VOID();
 }
 
@@ -1544,13 +1544,13 @@ static void data_replace(cf_data *d, uint32_t loc, uint32_t len, gaddr from, uin
     uint32_t total = d->len - len + n;
     uint8_t *copy = NULL;
     if (from && n) { /* the bytes may be the data's own */
-        copy = malloc(n);
+        copy = bb_malloc(n, BB_BYTES);
         if (!copy)
             return;
         gget(copy, from, n);
     }
     if (!data_room(d, total)) {
-        free(copy);
+        bb_free(copy);
         return;
     }
     gmemcpy(d->bytes + loc + n, d->bytes + loc + len, d->len - loc - len);
@@ -1559,7 +1559,7 @@ static void data_replace(cf_data *d, uint32_t loc, uint32_t len, gaddr from, uin
     else if (n)
         gmemset(d->bytes + loc, 0, n);
     d->len = total;
-    free(copy);
+    bb_free(copy);
 }
 
 /* CFDataSetLength(theData, length): longer is zeros. */

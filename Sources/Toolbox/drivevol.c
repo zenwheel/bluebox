@@ -277,7 +277,7 @@ void drivevol_reset(void)
 {
     for (int i = 0; i < ndisks; i++) {
         remove_tree(disks[i].root);
-        free(disks[i].image);
+        bb_free(disks[i].image);
     }
     ndisks = 0;
 }
@@ -314,20 +314,20 @@ int16_t drivevol_mount(int16_t drive, gaddr pb)
         len = (uint64_t)drive_blocks * SECTOR;
     if (len < sizeof head || len > 0x7FFFFE00u)
         return badMDBErr;
-    uint8_t *img = calloc(1, (size_t)len);
+    uint8_t *img = bb_calloc(1, (size_t)len, BB_BYTES);
     if (!img)
         return memFullErr;
     memcpy(img, head, sizeof head);
     err = read_disk(drive, dref, img, (size_t)len);
     if (err) {
-        free(img);
+        bb_free(img);
         return err;
     }
     char why[256];
     hfs_volume *v = hfs_open(img, (size_t)len, why, sizeof why);
     if (!v) {
         LOGF(LOG_TRAPS, "  MountVol drive %d: %s\n", drive, why);
-        free(img);
+        bb_free(img);
         return badMDBErr;
     }
     /* The folder its files go to. */
@@ -352,7 +352,7 @@ int16_t drivevol_mount(int16_t drive, gaddr pb)
     if (!ok) {
         LOGF(LOG_TRAPS, "  MountVol drive %d: %s\n", drive, why);
         remove_tree(d->root);
-        free(img);
+        bb_free(img);
         return badMDBErr;
     }
     static bool cleanup;
@@ -388,7 +388,7 @@ int16_t drivevol_mount(int16_t drive, gaddr pb)
     err = fm_mount_disk(d->root, d->name, drive, dref, &fi, &vref);
     if (err) {
         remove_tree(d->root);
-        free(img);
+        bb_free(img);
         return err;
     }
     d->vref = vref;
@@ -405,7 +405,7 @@ void drivevol_forget(int16_t vref)
     if (!d)
         return;
     remove_tree(d->root);
-    free(d->image);
+    bb_free(d->image);
     int i = (int)(d - disks);
     memmove(&disks[i], &disks[i + 1], (size_t)(ndisks - i - 1) * sizeof *disks);
     ndisks--;
@@ -453,8 +453,8 @@ static hfs_build_entry *add_entry(walk_ctx *w)
 {
     if (w->n == w->cap) {
         size_t cap = w->cap ? w->cap * 2 : 64;
-        hfs_build_entry *nl = realloc(w->list, cap * sizeof *nl);
-        mac_file *nf = nl ? realloc(w->files, cap * sizeof *nf) : NULL;
+        hfs_build_entry *nl = bb_realloc(w->list, cap * sizeof *nl, BB_TAG(hfs_build_entry));
+        mac_file *nf = nl ? bb_realloc(w->files, cap * sizeof *nf, BB_TAG(mac_file)) : NULL;
         if (nl)
             w->list = nl;
         if (!nl || !nf) {
@@ -532,8 +532,8 @@ static void walk_free(walk_ctx *w)
 {
     for (size_t i = 0; i < w->n; i++)
         mac_file_free(&w->files[i]);
-    free(w->files);
-    free(w->list);
+    bb_free(w->files);
+    bb_free(w->list);
 }
 
 int16_t drivevol_write_back(int16_t vref)
@@ -583,10 +583,10 @@ int16_t drivevol_write_back(int16_t vref)
     }
     LOGF(LOG_TRAPS, "  volume %d written back: %zu sectors, %d\n", vref, written, err);
     if (err) {
-        free(img);
+        bb_free(img);
         return err;
     }
-    free(d->image);
+    bb_free(d->image);
     d->image = img;
     d->info.write_count++;
     d->stamp = stamp;
@@ -717,7 +717,7 @@ static int16_t zero(int16_t drive, gaddr vname, uint32_t size)
     if (!err)
         err = drive_io(drive, (int16_t)rd16(e + DrvQEl_dQRefNum_off), true, size - 2 * SECTOR, 2 * SECTOR,
                        img + size - 2 * SECTOR);
-    free(img);
+    bb_free(img);
     LOGF(LOG_TRAPS, "  DIZero drive %d: %d\n", drive, err);
     return err;
 }

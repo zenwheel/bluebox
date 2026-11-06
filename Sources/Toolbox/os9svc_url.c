@@ -54,7 +54,7 @@ static urlref refs[MAX_REFS];
 void os9svc_url_reset(void)
 {
     for (int i = 0; i < MAX_REFS; i++)
-        free(refs[i].body);
+        bb_free(refs[i].body);
     memset(refs, 0, sizeof refs);
 }
 
@@ -143,7 +143,7 @@ static void url_DisposeReference(ppc_cpu *c)
     urlref *r = ref_of(R(0));
     if (!r)
         RETURN(kURLInvalidURLReferenceError);
-    free(r->body);
+    bb_free(r->body);
     r->used = false;
     RETURN(noErr);
 }
@@ -394,12 +394,12 @@ static void url_SetProperty(ppc_cpu *c)
     else if (!strcmp(name, "URLHTTPRequestHeader"))
         r->have_header = set_cstr(r->header, sizeof r->header, buf, size);
     else if (!strcmp(name, "URLHTTPRequestBody")) {
-        uint8_t *body = size ? malloc(size) : NULL;
+        uint8_t *body = size ? bb_malloc(size, BB_BYTES) : NULL;
         if (size && !body)
             RETURN(memFullErr);
         for (uint32_t i = 0; i < size; i++)
             body[i] = rd8(buf + i);
-        free(r->body);
+        bb_free(r->body);
         r->body = body;
         r->body_len = size;
     } else if (!strcmp(name, "URLConnectTimeout")) {

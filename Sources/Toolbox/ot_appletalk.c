@@ -367,7 +367,7 @@ int32_t ota_open(provider *p, const char *config)
 {
     if (!appletalk_enabled() || at_open() != noErr)
         return kOTNotFoundErr;
-    p->at = calloc(1, sizeof *p->at);
+    p->at = bb_calloc(1, sizeof *p->at, BB_TAG(struct ot_atalk));
     if (!p->at)
         return kOTOutOfMemoryErr;
     p->at->eom = p->kind == P_ADSP && config && strcasestr(config, "EnableEOM=1");
@@ -442,7 +442,7 @@ void ota_close(provider *p)
         free_ptr(&a->pb_open);
         free_ptr(&a->pb_listen);
     }
-    free(a);
+    bb_free(a);
     p->at = NULL;
 }
 
@@ -1009,7 +1009,7 @@ static void ota_SndUReply(ppc_cpu *c)
     static uint8_t data[4 + 8 * ATP_MAX];
     memset(data, 0, 4);
     ot_data_get(data, rd32(reply + 20), rd32(reply + 16), n);
-    uint8_t (*pkts)[578] = calloc(8, sizeof *pkts);
+    uint8_t (*pkts)[578] = bb_calloc(8, sizeof *pkts, BB_BYTES);
     int lens[8] = { 0 }, count = 0;
     uint32_t users[8] = { (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 | data[3] };
     for (uint32_t off = 4; count < 8 && (off < n || count == 0); off += ATP_MAX) {
@@ -1018,7 +1018,7 @@ static void ota_SndUReply(ppc_cpu *c)
         lens[count++] = k;
     }
     atp_host_respond(a->skt, h->node, h->rskt, h->tid, count, (const uint8_t(*)[578])pkts, lens, users);
-    free(pkts);
+    bb_free(pkts);
     h->used = false;
     appletalk_poll();
     RETURN(kOTNoError);
@@ -1301,10 +1301,10 @@ void ota_Snd(ppc_cpu *c, provider *p)
             RETURN((uint32_t)kOTOutOfMemoryErr);
             return;
         }
-        uint8_t *tmp = malloc(n ? n : 1);
+        uint8_t *tmp = bb_malloc(n ? n : 1, BB_BYTES);
         ot_data_get(tmp, buf, kNetbufDataIsOTData, n);
         gput(flat, tmp, n);
-        free(tmp);
+        bb_free(tmp);
         R(1) = flat;
         R(2) = n;
         ota_Snd(c, p);

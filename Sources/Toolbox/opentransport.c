@@ -131,7 +131,7 @@ void opentransport_reset(void)
                 close(providers[i].fd);
             if (providers[i].pending_fd >= 0)
                 close(providers[i].pending_fd);
-            free(providers[i].at); /* AppleTalk went with the machine */
+            bb_free(providers[i].at); /* AppleTalk went with the machine */
             ot_options_free(&providers[i]);
         }
     }
@@ -827,7 +827,7 @@ static void ot_Snd(ppc_cpu *c)
     uint8_t *gathered = NULL; /* an OTData chain, in one piece */
     if (n == kNetbufDataIsOTData) {
         n = ot_data_len(buf, kNetbufDataIsOTData);
-        gathered = malloc(n ? n : 1);
+        gathered = bb_malloc(n ? n : 1, BB_BYTES);
         if (!gathered) {
             RETURN((uint32_t)kOTOutOfMemoryErr);
             return;
@@ -851,7 +851,7 @@ static void ot_Snd(ppc_cpu *c)
                 continue;
             if (p->used && p->cancel_err) {
                 int32_t ce = take_cancel(p);
-                free(gathered);
+                bb_free(gathered);
                 if (sendflags)
                     fcntl(p->fd, F_SETFL, oldfl);
                 RETURN((uint32_t)(done ? done : (uint32_t)ce));
@@ -859,7 +859,7 @@ static void ot_Snd(ppc_cpu *c)
             }
             if (!done) {
                 p->flow = true;
-                free(gathered);
+                bb_free(gathered);
                 if (sendflags)
                     fcntl(p->fd, F_SETFL, oldfl);
                 RETURN((uint32_t)kOTFlowErr);
@@ -869,13 +869,13 @@ static void ot_Snd(ppc_cpu *c)
         }
         p->disconnected = true;
         p->disc_reason = errno;
-        free(gathered);
+        bb_free(gathered);
         if (sendflags)
             fcntl(p->fd, F_SETFL, oldfl);
         RETURN((uint32_t)(done ? done : (uint32_t)kOTLookErr));
         return;
     }
-    free(gathered);
+    bb_free(gathered);
     if (sendflags)
         fcntl(p->fd, F_SETFL, oldfl);
     RETURN(done);

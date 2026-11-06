@@ -177,7 +177,7 @@ static bool fill_region_pixpat(gaddr port, const hrgn *shape, gaddr pp, int mode
     uint16_t (*rgb)[3];
     if (!qd_pixpat_image(pp, &w, &h, &rgb))
         return false;
-    uint32_t *px = malloc(sizeof *px * (size_t)w * (size_t)h);
+    uint32_t *px = bb_malloc(sizeof *px * (size_t)w * (size_t)h, BB_BYTES);
     for (int i = 0; i < w * h; i++) {
         uint16_t c[3] = { rgb[i][0], rgb[i][1], rgb[i][2] };
         if (mode & 4)
@@ -185,7 +185,7 @@ static bool fill_region_pixpat(gaddr port, const hrgn *shape, gaddr pp, int mode
                 c[k] = (uint16_t)~c[k];
         px[i] = qd_rgb_px(d.depth, d.ctab, c);
     }
-    free(rgb);
+    bb_free(rgb);
     hrgn r;
     hrgn_init(&r);
     qd_port_clip(port, &r);
@@ -203,7 +203,7 @@ static bool fill_region_pixpat(gaddr port, const hrgn *shape, gaddr pp, int mode
     }
     qd_drawn_resume(watched);
     hrgn_free(&r);
-    free(px);
+    bb_free(px);
     return true;
 }
 
@@ -310,7 +310,7 @@ void qd_line_region(hrgn *out, int h0, int v0, int h1, int v1, int pw, int ph)
         return;
     int top = v0 < v1 ? v0 : v1, bottom = (v0 > v1 ? v0 : v1) + ph;
     int nrows = bottom - top;
-    int16_t (*rows)[2] = malloc((size_t)nrows * sizeof *rows);
+    int16_t (*rows)[2] = bb_malloc((size_t)nrows * sizeof *rows, BB_BYTES);
     for (int i = 0; i < nrows; i++) {
         rows[i][0] = 32767;
         rows[i][1] = -32768;
@@ -339,7 +339,7 @@ void qd_line_region(hrgn *out, int h0, int v0, int h1, int v1, int pw, int ph)
         }
     }
     hrgn_from_rows(out, top, nrows, (const int16_t (*)[2])rows);
-    free(rows);
+    bb_free(rows);
 }
 
 /* Restrict a region to an arc: angles in degrees clockwise from 12 o'clock. */
@@ -950,7 +950,7 @@ static void poly_region(gaddr poly, hrgn *out)
     hrgn_rect(out, (qrect){ 0, 0, 0, 0 });
     if (n < 3)
         return;
-    int (*e)[4] = malloc((size_t)n * sizeof *e);
+    int (*e)[4] = bb_malloc((size_t)n * sizeof *e, BB_BYTES);
     for (int i = 0; i < n; i++) {
         uint32_t a = rd32(p + 10 + (uint32_t)i * 4), c = rd32(p + 10 + (uint32_t)((i + 1) % n) * 4);
         e[i][0] = pt_h(a);
@@ -959,7 +959,7 @@ static void poly_region(gaddr poly, hrgn *out)
         e[i][3] = pt_v(c);
     }
     hrgn_even_odd(out, (const int (*)[4])e, n);
-    free(e);
+    bb_free(e);
 }
 
 static void verb_poly(int verb, gaddr poly, gaddr pat)
@@ -1168,8 +1168,8 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     uint8_t *lut_white = NULL;
     if (s.depth > 1 && s.depth <= 8) {
         int nv = 1 << s.depth;
-        lut_conv = malloc(sizeof *lut_conv * (size_t)nv);
-        lut_white = malloc((size_t)nv);
+        lut_conv = bb_malloc(sizeof *lut_conv * (size_t)nv, BB_BYTES);
+        lut_white = bb_malloc((size_t)nv, BB_BYTES);
         /* Tables with the same seed are the same colours: indices copy as
          * they are (how programs put palette slots' indices on the screen). */
         bool same_seed = s.ctab && d.ctab && rd32(s.ctab) && rd32(d.ctab) && rd32(rd32(s.ctab)) == rd32(rd32(d.ctab));
@@ -1241,7 +1241,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
      * transparent copies spent most of its time there). */
     uint16_t (*s_rgb)[3] = NULL, (*d_rgb)[3] = NULL;
     if (arith_mode && s.depth <= 8) {
-        s_rgb = malloc(sizeof *s_rgb << s.depth);
+        s_rgb = bb_malloc(sizeof *s_rgb << s.depth, BB_BYTES);
         if (s.depth == 1)
             for (uint32_t v = 0; v < 2; v++)
                 qd_px_rgb(1, s.ctab, v, s_rgb[v]);
@@ -1249,7 +1249,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
             qd_px_rgb_all(s.depth, s.ctab, s_rgb);
     }
     if (arith_mode && arith_mode != transparent && d.depth <= 8) {
-        d_rgb = malloc(sizeof *d_rgb << d.depth);
+        d_rgb = bb_malloc(sizeof *d_rgb << d.depth, BB_BYTES);
         if (d.depth == 1)
             for (uint32_t v = 0; v < 2; v++)
                 qd_px_rgb(1, d.ctab, v, d_rgb[v]);
@@ -1261,7 +1261,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     bool same = s.base == d.base;
     uint32_t *snap = NULL;
     if (same) {
-        snap = malloc((size_t)sw * (size_t)sh * sizeof *snap);
+        snap = bb_malloc((size_t)sw * (size_t)sh * sizeof *snap, BB_BYTES);
         for (int y = 0; y < sh; y++)
             for (int x = 0; x < sw; x++) {
                 int sx = sr.left + x - s.bounds.left, sy = sr.top + y - s.bounds.top;
@@ -1275,7 +1275,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     bool rows8 = lut_conv && !arith_mode && (m & 3) == 0 && !snap && s.depth == 8 && d.depth == 8 && sw == dw &&
                  sh == dh && sr.left >= s.bounds.left && sr.top >= s.bounds.top && sr.right <= s.bounds.right &&
                  sr.bottom <= s.bounds.bottom;
-    uint8_t *run = rows8 ? malloc((size_t)sw) : NULL;
+    uint8_t *run = rows8 ? bb_malloc((size_t)sw, BB_BYTES) : NULL;
     bool watched = qd_drawn_area(&d, hrgn_bbox(&clip));
     for (int i = 0; run && i < clip.nbands; i++) {
         const rband *b = &clip.bands[i];
@@ -1348,12 +1348,12 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
         }
     }
     qd_drawn_resume(watched);
-    free(snap);
-    free(run);
-    free(lut_conv);
-    free(lut_white);
-    free(s_rgb);
-    free(d_rgb);
+    bb_free(snap);
+    bb_free(run);
+    bb_free(lut_conv);
+    bb_free(lut_white);
+    bb_free(s_rgb);
+    bb_free(d_rgb);
     hrgn_free(&clip);
     hrgn_free(&tmp);
 }
@@ -1379,7 +1379,7 @@ static void record_copy(gaddr src_bitmap, gaddr src_rect, gaddr dst_rect)
     int w = sr.right - sr.left, h = sr.bottom - sr.top;
     if (w <= 0 || h <= 0 || w > 4096 || h > 4096)
         return;
-    uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
+    uint8_t *rgba = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             int sx = sr.left + x - s.bounds.left, sy = sr.top + y - s.bounds.top;
@@ -1394,7 +1394,7 @@ static void record_copy(gaddr src_bitmap, gaddr src_rect, gaddr dst_rect)
             p[3] = 255;
         }
     qd_rec_image(qd_port(), w, h, rgba, (qrect){ 0, 0, (int16_t)h, (int16_t)w }, qrect_get(dst_rect));
-    free(rgba);
+    bb_free(rgba);
 }
 
 /* Bytes for a picture's CopyBits opcode. */
@@ -1407,7 +1407,7 @@ static void pb_put(picbuf *b, const void *data, size_t n)
 {
     if (b->n + n > b->cap) {
         b->cap = (b->n + n) * 2 + 256;
-        b->p = realloc(b->p, b->cap);
+        b->p = bb_realloc(b->p, b->cap, BB_BYTES);
     }
     memcpy(b->p + b->n, data, n);
     b->n += n;
@@ -1464,7 +1464,7 @@ static void pb_packbits(picbuf *b, const uint8_t *in, size_t n, int count_bytes)
         pb_put(b, &c, 1);
     }
     pb_put(b, row.p, row.n);
-    free(row.p);
+    bb_free(row.p);
 }
 
 /* Copying into a port recording a picture: the source rectangle as a
@@ -1525,12 +1525,12 @@ static void record_copy_pic(gaddr port, gaddr src_bitmap, gaddr src_rect, gaddr 
     pb16(&b, mode);
     if (mask && rd32(mask)) {
         uint32_t len = rd16(rd32(mask));
-        uint8_t *m = malloc(len ? len : 1);
+        uint8_t *m = bb_malloc(len ? len : 1, BB_BYTES);
         gget(m, rd32(mask), len);
         pb_put(&b, m, len);
-        free(m);
+        bb_free(m);
     }
-    uint8_t *row = calloc(rb + 8, 1), *planes = direct ? malloc((size_t)w * 3) : NULL;
+    uint8_t *row = bb_calloc(rb + 8, 1, BB_BYTES), *planes = direct ? bb_malloc((size_t)w * 3, BB_BYTES) : NULL;
     for (int y = 0; y < h; y++) {
         memset(row, 0, rb);
         for (int x = 0; x < w; x++) {
@@ -1557,10 +1557,10 @@ static void record_copy_pic(gaddr port, gaddr src_bitmap, gaddr src_rect, gaddr 
         else
             pb_put(&b, row, rb);
     }
-    free(row);
-    free(planes);
+    bb_free(row);
+    bb_free(planes);
     qd_pic_bits(port, code, b.p, (uint32_t)b.n);
-    free(b.p);
+    bb_free(b.p);
 }
 
 static void copy_bits_entry(gaddr src_bitmap, gaddr dst_bitmap, gaddr src_rect, gaddr dst_rect, int16_t mode,
@@ -1639,7 +1639,7 @@ static void mask_region(gaddr mask_bm, qrect mr, qrect dr, hrgn *out)
 {
     pixdst mk = bits_at(resolve_bits(mask_bm));
     int w = mr.right - mr.left;
-    int16_t *runs = malloc(sizeof *runs * (size_t)(w + 2));
+    int16_t *runs = bb_malloc(sizeof *runs * (size_t)(w + 2), BB_BYTES);
     for (int y = mr.top; y < mr.bottom; y++) {
         int n = 0;
         bool on = false;
@@ -1653,7 +1653,7 @@ static void mask_region(gaddr mask_bm, qrect mr, qrect dr, hrgn *out)
         }
         hrgn_add_runs(out, y - mr.top + dr.top, runs, n);
     }
-    free(runs);
+    bb_free(runs);
 }
 
 void tb_CopyMask(gaddr srcbp, gaddr mskbp, gaddr dstbp, gaddr srcrp, gaddr mskrp, gaddr dstrp)
@@ -1686,7 +1686,7 @@ void tb_ScrollRect(gaddr rp, int16_t dh, int16_t dv, gaddr updatergn)
     qrect bb = hrgn_bbox(&moved);
     int w = bb.right - bb.left, h = bb.bottom - bb.top;
     if (w > 0 && h > 0) {
-        uint32_t *buf = malloc((size_t)w * (size_t)h * sizeof *buf);
+        uint32_t *buf = bb_malloc((size_t)w * (size_t)h * sizeof *buf, BB_BYTES);
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
                 buf[(size_t)y * (size_t)w + (size_t)x] = get_px(
@@ -1699,7 +1699,7 @@ void tb_ScrollRect(gaddr rp, int16_t dh, int16_t dv, gaddr updatergn)
                         put_px(&d, x - d.bounds.left, y - d.bounds.top,
                                buf[(size_t)(y - bb.top) * (size_t)w + (size_t)(x - bb.left)]);
         }
-        free(buf);
+        bb_free(buf);
     }
     /* What was uncovered is erased and reported for updating. */
     hrgn_op(&update, &vis, &moved, RGN_DIFF);
@@ -1718,7 +1718,7 @@ void tb_ScrollRect(gaddr rp, int16_t dh, int16_t dv, gaddr updatergn)
  * so each is on the stack once at most. */
 static void bit_flood(gaddr srcp, int16_t srcr, int w, int h, uint8_t *mark, const int *starts, int nstarts)
 {
-    int *stack = malloc((size_t)w * (size_t)h * 2 * sizeof *stack);
+    int *stack = bb_malloc((size_t)w * (size_t)h * 2 * sizeof *stack, BB_BYTES);
     int sp = 0;
 #define PUSH(px, py)                                                                                     \
     do {                                                                                                 \
@@ -1740,7 +1740,7 @@ static void bit_flood(gaddr srcp, int16_t srcr, int w, int h, uint8_t *mark, con
         PUSH(x, y - 1);
     }
 #undef PUSH
-    free(stack);
+    bb_free(stack);
 }
 
 void tb_SeedFill(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t height, int16_t width, int16_t seedh,
@@ -1750,7 +1750,7 @@ void tb_SeedFill(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
     int w = width * 16, h = height;
     if (w <= 0 || h <= 0)
         return;
-    uint8_t *vis = calloc((size_t)w * (size_t)h, 1);
+    uint8_t *vis = bb_calloc((size_t)w * (size_t)h, 1, BB_BYTES);
     int seed[2] = { seedh, seedv };
     bit_flood(srcp, srcr, w, h, vis, seed, 1);
     for (int y = 0; y < h; y++)
@@ -1759,7 +1759,7 @@ void tb_SeedFill(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
             uint8_t m = (uint8_t)(0x80 >> (x & 7));
             wr8(a, vis[y * w + x] ? (uint8_t)(rd8(a) | m) : (uint8_t)(rd8(a) & ~m));
         }
-    free(vis);
+    bb_free(vis);
 }
 
 void tb_CalcMask(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t height, int16_t width)
@@ -1768,8 +1768,8 @@ void tb_CalcMask(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
     int w = width * 16, h = height;
     if (w <= 0 || h <= 0)
         return;
-    uint8_t *outside = calloc((size_t)w * (size_t)h, 1);
-    int *edge = malloc((size_t)(4 * (w + h)) * sizeof *edge);
+    uint8_t *outside = bb_calloc((size_t)w * (size_t)h, 1, BB_BYTES);
+    int *edge = bb_malloc((size_t)(4 * (w + h)) * sizeof *edge, BB_BYTES);
     int n = 0;
     for (int x = 0; x < w; x++) {
         edge[2 * n] = x; edge[2 * n++ + 1] = 0;
@@ -1780,14 +1780,14 @@ void tb_CalcMask(gaddr srcp, gaddr dstp, int16_t srcr, int16_t dstr, int16_t hei
         edge[2 * n] = w - 1; edge[2 * n++ + 1] = y;
     }
     bit_flood(srcp, srcr, w, h, outside, edge, n);
-    free(edge);
+    bb_free(edge);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             gaddr a = dstp + (uint32_t)(y * dstr + (x >> 3));
             uint8_t m = (uint8_t)(0x80 >> (x & 7));
             wr8(a, outside[y * w + x] ? (uint8_t)(rd8(a) & ~m) : (uint8_t)(rd8(a) | m));
         }
-    free(outside);
+    bb_free(outside);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1881,7 +1881,7 @@ static void flood(matcher *m, qrect sr, uint8_t *mark, int sx, int sy)
     if (sx < 0 || sy < 0 || sx >= w || sy >= h || mark[sy * w + sx] ||
         !passable(m, get_px(s, sr.left + sx - s->bounds.left, sr.top + sy - s->bounds.top)))
         return;
-    int *stack = malloc(sizeof(int) * 2 * (size_t)(w * h));
+    int *stack = bb_malloc(sizeof(int) * 2 * (size_t)(w * h), BB_BYTES);
     int n = 0;
     mark[sy * w + sx] = 1;
     stack[n++] = sx;
@@ -1900,7 +1900,7 @@ static void flood(matcher *m, qrect sr, uint8_t *mark, int sx, int sy)
             stack[n++] = ny;
         }
     }
-    free(stack);
+    bb_free(stack);
 }
 
 /* The matchData goes in the current device's gdRefCon while a fill runs. */
@@ -1929,8 +1929,8 @@ void tb_SeedCFill(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, int16_t 
     int w = sr.right - sr.left, h = sr.bottom - sr.top;
     if (w <= 0 || h <= 0 || seed_h < sr.left || seed_v < sr.top || seed_h >= sr.right || seed_v >= sr.bottom)
         return;
-    uint8_t *mark = calloc((size_t)(w * h), 1);
-    matcher *m = calloc(1, sizeof *m);
+    uint8_t *mark = bb_calloc((size_t)(w * h), 1, BB_BYTES);
+    matcher *m = bb_calloc(1, sizeof *m, BB_TAG(matcher));
     m->s = &s;
     m->key = get_px(&s, seed_h - s.bounds.left, seed_v - s.bounds.top);
     m->through_key = true;
@@ -1944,8 +1944,8 @@ void tb_SeedCFill(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, int16_t 
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
             set_mask_bit(dst, dr.left - d.bounds.left + x, dr.top - d.bounds.top + y, mark[y * w + x]);
-    free(m);
-    free(mark);
+    bb_free(m);
+    bb_free(mark);
 }
 
 /* CalcCMask: what can't be reached from the rectangle's edges without
@@ -1958,8 +1958,8 @@ void tb_CalcCMask(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, gaddr se
     if (w <= 0 || h <= 0)
         return;
     uint16_t rgb[3] = { rd16(seed_rgb), rd16(seed_rgb + 2), rd16(seed_rgb + 4) };
-    uint8_t *mark = calloc((size_t)(w * h), 1);
-    matcher *m = calloc(1, sizeof *m);
+    uint8_t *mark = bb_calloc((size_t)(w * h), 1, BB_BYTES);
+    matcher *m = bb_calloc(1, sizeof *m, BB_TAG(matcher));
     m->s = &s;
     m->key = qd_rgb_px(s.depth, s.ctab, rgb);
     m->through_key = false;
@@ -1980,6 +1980,6 @@ void tb_CalcCMask(gaddr src, gaddr dst, gaddr src_rect, gaddr dst_rect, gaddr se
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
             set_mask_bit(dst, dr.left - d.bounds.left + x, dr.top - d.bounds.top + y, !mark[y * w + x]);
-    free(m);
-    free(mark);
+    bb_free(m);
+    bb_free(mark);
 }

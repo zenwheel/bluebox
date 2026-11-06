@@ -49,7 +49,7 @@ static gaddr scratch64; /* 8 bytes for the File Manager's 64-bit arguments */
 void fmap_reset(void)
 {
     for (int i = 0; i < MAX_FILES; i++)
-        free(files[i].scratch);
+        bb_free(files[i].scratch);
     memset(files, 0, sizeof files);
     memset(views, 0, sizeof views);
     scratch64 = 0;
@@ -153,12 +153,12 @@ int16_t tb_OpenMappedScratchFile(int16_t volume, uint32_t fileSize, uint32_t pri
         wr32(backingFile, 0);
     if (!privileges_ok(privileges))
         return vmMappingPrivilegesErr;
-    uint8_t *bytes = calloc(1, fileSize ? fileSize : 1);
+    uint8_t *bytes = bb_calloc(1, fileSize ? fileSize : 1, BB_BYTES);
     if (!bytes)
         return memFullErr;
     int16_t err = add_file(0, privileges, 0, backingFile);
     if (err) {
-        free(bytes);
+        bb_free(bytes);
         return err;
     }
     mapped_file *f = file_of(rd32(backingFile));
@@ -176,7 +176,7 @@ int16_t tb_CloseMappedFile(uint32_t backingFile)
         if (views[i].used && &files[views[i].file] == f)
             return vmBusyBackingFileErr;
     int16_t err = f->refnum ? tb_FSCloseFork(f->refnum) : noErr;
-    free(f->scratch);
+    bb_free(f->scratch);
     if (f->ref)
         tb_DisposePtr(f->ref);
     memset(f, 0, sizeof *f);
@@ -237,7 +237,7 @@ int16_t tb_SetMappedFileSize(uint32_t backingFile, uint16_t positionMode, gaddr 
     }
     if (size < 0)
         return -40; /* posErr */
-    uint8_t *p = realloc(f->scratch, size ? (size_t)size : 1);
+    uint8_t *p = bb_realloc(f->scratch, size ? (size_t)size : 1, BB_BYTES);
     if (!p)
         return memFullErr;
     if ((uint64_t)size > f->scratch_size)

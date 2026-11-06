@@ -209,7 +209,7 @@ static int64_t tune_time(const player *p, uint64_t now)
 static void free_queue(player *p)
 {
     for (int i = 0; i < p->nq; i++)
-        free(p->q[i].ev);
+        bb_free(p->q[i].ev);
     p->nq = 0;
 }
 
@@ -220,14 +220,14 @@ static int32_t prepare(player *p, segment *s, uint32_t start, uint32_t stop)
     size_t len = events_len(s->tune, MAX_EVENTS_BYTES, &rests);
     if (!len)
         return tuneParseErr;
-    uint8_t *buf = malloc(len);
+    uint8_t *buf = bb_malloc(len, BB_BYTES);
     if (!buf)
         return memFullErr;
     gget(buf, s->tune, (uint32_t)len);
     qt_music_sample sample = { buf, len, 0 };
     size_t n = 0;
     qt_midi_event *ev = qt_music_events(p->header, p->header_len, &sample, 1, &n);
-    free(buf);
+    bb_free(buf);
     int64_t last = 0;
     for (size_t i = 0; i < n; i++)
         if (ev[i].time > last)
@@ -351,7 +351,7 @@ static void pump_player(player *p, uint64_t now)
         segment done = *s;
         memmove(&p->q[0], &p->q[1], sizeof p->q[0] * (size_t)(p->nq - 1));
         p->nq--;
-        free(done.ev);
+        bb_free(done.ev);
         p->last_end_ns = end_ns;
         p->start_ns = chained_start(end_ns, now);
         if (done.callback)
@@ -434,7 +434,7 @@ static int32_t tune_instant(player *p, gaddr tune, uint32_t pos)
     }
     if (k)
         sound_host_midi(p->id, out, k);
-    free(s.ev);
+    bb_free(s.ev);
     return noErr_;
 }
 
@@ -443,11 +443,11 @@ static int32_t tune_set_header(player *p, gaddr header, uint32_t size)
     size_t len = events_len(header, size ? size : MAX_EVENTS_BYTES, NULL);
     if (!len)
         return tuneParseErr;
-    uint8_t *h = malloc(len);
+    uint8_t *h = bb_malloc(len, BB_BYTES);
     if (!h)
         return memFullErr;
     gget(h, header, (uint32_t)len);
-    free(p->header);
+    bb_free(p->header);
     p->header = h;
     p->header_len = len;
     return noErr_;
@@ -486,7 +486,7 @@ static int32_t tune_open(uint32_t ci)
 static void tune_close(player *p)
 {
     tune_stop(p);
-    free(p->header);
+    bb_free(p->header);
     if (p->status)
         tb_DisposePtr(p->status);
     if (p->na)

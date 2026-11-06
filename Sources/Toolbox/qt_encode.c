@@ -31,8 +31,8 @@
 
 enum { RAW = 0x72617720, RLE = 0x726C6520, JPEG = 0x6A706567 };
 
-static machine_image_encode_fn encode_fn;
-static void *encode_ctx;
+BB_HOST static machine_image_encode_fn encode_fn;
+BB_HOST static void *encode_ctx;
 
 void machine_set_image_encoder(machine_image_encode_fn fn, void *ctx)
 {
@@ -75,7 +75,7 @@ static void put8(buf *b, unsigned v)
 {
     if (b->n == b->cap) {
         size_t cap = b->cap ? b->cap * 2 : 4096;
-        uint8_t *p = realloc(b->p, cap);
+        uint8_t *p = bb_realloc(b->p, cap, BB_BYTES);
         if (!p) {
             b->bad = true;
             return;
@@ -313,11 +313,11 @@ static bool rle_encode(const qt_venc_format *f, const uint32_t *px, const uint32
 {
     int bits = bits_of(f->depth), group = rle_group(bits);
     int nu = (f->width + group - 1) / group, h = f->height;
-    uint32_t *cur = malloc((size_t)nu * (size_t)h * sizeof *cur);
-    uint32_t *old = prev ? malloc((size_t)nu * (size_t)h * sizeof *old) : NULL;
+    uint32_t *cur = bb_malloc((size_t)nu * (size_t)h * sizeof *cur, BB_BYTES);
+    uint32_t *old = prev ? bb_malloc((size_t)nu * (size_t)h * sizeof *old, BB_BYTES) : NULL;
     if (!cur || (prev && !old)) {
-        free(cur);
-        free(old);
+        bb_free(cur);
+        bb_free(old);
         return false;
     }
     for (int y = 0; y < h; y++) {
@@ -353,8 +353,8 @@ static bool rle_encode(const qt_venc_format *f, const uint32_t *px, const uint32
     if (bits == 1 && start != end)
         put8(b, 0);
     put8(b, 0);
-    free(cur);
-    free(old);
+    bb_free(cur);
+    bb_free(old);
     if (b->bad)
         return false;
     uint32_t n = (uint32_t)b->n;
@@ -370,7 +370,7 @@ static bool rle_encode(const qt_venc_format *f, const uint32_t *px, const uint32
 static bool jpeg_encode(const qt_venc_format *f, const uint32_t *px, buf *b)
 {
     size_t n = (size_t)f->width * (size_t)f->height;
-    uint8_t *rgba = malloc(n * 4), *out = NULL;
+    uint8_t *rgba = bb_malloc(n * 4, BB_BYTES), *out = NULL;
     size_t len = 0;
     if (!rgba)
         return false;
@@ -388,13 +388,13 @@ static bool jpeg_encode(const qt_venc_format *f, const uint32_t *px, buf *b)
     double q = f->quality >= 0x400 ? 1.0 : f->quality / 1023.0;
     q = q < 0.05 ? 0.05 : q > 1 ? 1 : q;
     bool ok = encode_fn(rgba, f->width, f->height, q, &out, &len, encode_ctx) && out && len;
-    free(rgba);
+    bb_free(rgba);
     if (ok) {
-        free(b->p);
+        bb_free(b->p);
         b->p = out;
         b->n = b->cap = len;
     } else {
-        free(out);
+        bb_free(out);
     }
     return ok;
 }
@@ -434,7 +434,7 @@ size_t qt_venc_encode(const qt_venc_format *f, const uint32_t *px, const uint32_
         ok = jpeg_encode(f, px, &b);
     }
     if (!ok || !b.n) {
-        free(b.p);
+        bb_free(b.p);
         return 0;
     }
     *out = b.p;

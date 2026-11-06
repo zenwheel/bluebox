@@ -98,8 +98,8 @@ static uint32_t find(const dictionary *d, const uint8_t *key, bool *found)
 static void free_records(dictionary *d)
 {
     for (uint32_t i = 0; i < d->count; i++)
-        free(d->recs[i].data);
-    free(d->recs);
+        bb_free(d->recs[i].data);
+    bb_free(d->recs);
     d->recs = NULL;
     d->count = d->cap = 0;
 }
@@ -137,7 +137,7 @@ static int16_t file_read_all(int16_t refnum, uint8_t **out, uint32_t *len)
     *len = 0;
     *out = NULL;
     if (!e) {
-        *out = malloc(n ? n : 1);
+        *out = bb_malloc(n ? n : 1, BB_BYTES);
         gget(*out, buf, n);
         *len = n;
     }
@@ -184,7 +184,7 @@ static uint8_t *encode(const dictionary *d, uint32_t *len)
     uint32_t n = HEADER;
     for (uint32_t i = 0; i < d->count; i++)
         n += 1u + d->recs[i].key[0] + 4 + d->recs[i].len;
-    uint8_t *b = malloc(n), *p = b + HEADER;
+    uint8_t *b = bb_malloc(n, BB_BYTES), *p = b + HEADER;
     put32(b, DICT_MAGIC);
     put16(b + 4, 1);
     put16(b + 6, (uint16_t)d->script);
@@ -211,7 +211,7 @@ static int16_t decode(dictionary *d, const uint8_t *b, uint32_t n)
     d->max_key = (int16_t)get16(b + 8);
     d->attributes = b[10];
     uint32_t count = get32(b + 12), at = HEADER;
-    d->recs = calloc(count ? count : 1, sizeof *d->recs);
+    d->recs = bb_calloc(count ? count : 1, sizeof *d->recs, BB_TAG(drecord));
     d->cap = count ? count : 1;
     for (uint32_t i = 0; i < count; i++) {
         if (at >= n || at + 1u + b[at] + 4 > n)
@@ -223,7 +223,7 @@ static int16_t decode(dictionary *d, const uint8_t *b, uint32_t n)
         at += 4;
         if (r->len > n - at)
             return notBTree;
-        r->data = malloc(r->len ? r->len : 1);
+        r->data = bb_malloc(r->len ? r->len : 1, BB_BYTES);
         memcpy(r->data, b + at, r->len);
         at += r->len;
         d->count++;
@@ -236,7 +236,7 @@ static int16_t save(dictionary *d)
     uint32_t n;
     uint8_t *b = encode(d, &n);
     int16_t e = file_write_all(d->refnum, b, n);
-    free(b);
+    bb_free(b);
     return e;
 }
 
@@ -286,7 +286,7 @@ int16_t tb_OpenDictionary(gaddr spec, int8_t accessPermission, gaddr dictionaryR
     e = file_read_all(refnum, &b, &n);
     if (!e) {
         e = decode(d, b, n);
-        free(b);
+        bb_free(b);
     }
     if (e) {
         free_records(d);
@@ -336,15 +336,15 @@ int16_t tb_InsertRecordToDictionary(int32_t dictionaryReference, gaddr key, gadd
         return btDupRecErr;
     if (!found && whichMode == kReplace)
         return btRecNotFnd;
-    uint8_t *data = malloc(len ? len : 1);
+    uint8_t *data = bb_malloc(len ? len : 1, BB_BYTES);
     if (len)
         gget(data, rd32(recordDataHandle), len);
     if (found) {
-        free(d->recs[at].data);
+        bb_free(d->recs[at].data);
     } else {
         if (d->count == d->cap) {
             d->cap = d->cap ? d->cap * 2 : 16;
-            d->recs = realloc(d->recs, d->cap * sizeof *d->recs);
+            d->recs = bb_realloc(d->recs, d->cap * sizeof *d->recs, BB_TAG(drecord));
         }
         memmove(&d->recs[at + 1], &d->recs[at], (d->count - at) * sizeof *d->recs);
         d->count++;
@@ -368,7 +368,7 @@ int16_t tb_DeleteRecordFromDictionary(int32_t dictionaryReference, gaddr key)
     uint32_t at = find(d, k, &found);
     if (!found)
         return btRecNotFnd;
-    free(d->recs[at].data);
+    bb_free(d->recs[at].data);
     memmove(&d->recs[at], &d->recs[at + 1], (d->count - at - 1) * sizeof *d->recs);
     d->count--;
     return save(d);
@@ -643,7 +643,7 @@ static void bury(avl_tree *t)
         if (dead) {
             t->root = unlink_node(t, t->root, dead);
             tb_DisposePtr(dead->item);
-            free(dead);
+            bb_free(dead);
             t->has_dead = true;
         }
     }
@@ -678,7 +678,7 @@ static void free_nodes(avl_tree *t, avl_node *n, bool rtl)
     if (!n->dead)
         dispose_item(t, n);
     tb_DisposePtr(n->item);
-    free(n);
+    bb_free(n);
 }
 
 int16_t tb_AVLDispose(gaddr tree, uint16_t order)
@@ -792,13 +792,13 @@ int16_t tb_AVLInsert(gaddr tree, gaddr data)
     if (!copy)
         return memFullErr;
     gmemcpy(copy, data, size);
-    avl_node *n = calloc(1, sizeof *n);
+    avl_node *n = bb_calloc(1, sizeof *n, BB_TAG(avl_node));
     *n = (avl_node){ .height = 1, .item = copy, .size = size };
     int16_t e = noErr;
     t->root = insert_node(t, t->root, n, &e);
     if (e) {
         tb_DisposePtr(copy);
-        free(n);
+        bb_free(n);
         return e;
     }
     t->count++;
@@ -823,7 +823,7 @@ int16_t tb_AVLRemove(gaddr tree, gaddr key, gaddr dataPtr, gaddr itemSize)
     }
     t->root = unlink_node(t, t->root, n);
     tb_DisposePtr(n->item);
-    free(n);
+    bb_free(n);
     return noErr;
 }
 
@@ -865,7 +865,7 @@ void dictionary_reset(void)
                 stack[sp++] = n->left;
             if (n->right && sp < 128)
                 stack[sp++] = n->right;
-            free(n);
+            bb_free(n);
         }
     }
     memset(trees, 0, sizeof trees);

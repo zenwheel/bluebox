@@ -128,7 +128,7 @@ static txn_t *object_of(gaddr o)
 
 static void forget_snapshot(snapshot *s)
 {
-    free(s->text);
+    bb_free(s->text);
     if (s->styles)
         tb_DisposeHandle(s->styles);
     memset(s, 0, sizeof *s);
@@ -138,12 +138,12 @@ void carbon_mlte_reset(void)
 {
     for (int i = 0; i < nobjects; i++)
         if (objects[i]) {
-            free(objects[i]->undo.text);
-            free(objects[i]->redo.text);
-            free(objects[i]->shadow);
-            free(objects[i]);
+            bb_free(objects[i]->undo.text);
+            bb_free(objects[i]->redo.text);
+            bb_free(objects[i]->shadow);
+            bb_free(objects[i]);
         }
-    free(objects);
+    bb_free(objects);
     objects = NULL;
     nobjects = 0;
     initialized = false;
@@ -343,7 +343,7 @@ static void take_snapshot(txn_t *t, snapshot *s, uint32_t action)
 {
     forget_snapshot(s);
     int n = text_len(t);
-    s->text = malloc(n ? (size_t)n : 1);
+    s->text = bb_malloc(n ? (size_t)n : 1, BB_BYTES);
     gget(s->text, text_ptr(t), (uint32_t)n);
     s->len = n;
     s->a = sel_start(t);
@@ -389,11 +389,11 @@ static void replace(txn_t *t, int a, int b, const uint8_t *bytes, int n)
         n = 0;
     if (t->echo) { /* the real text aside, echo characters shown */
         int len = t->shadow_len - (b - a) + n;
-        uint8_t *s = malloc(len ? (size_t)len : 1);
+        uint8_t *s = bb_malloc(len ? (size_t)len : 1, BB_BYTES);
         memcpy(s, t->shadow, (size_t)a);
         memcpy(s + a, bytes, (size_t)n);
         memcpy(s + a + n, t->shadow + b, (size_t)(t->shadow_len - b));
-        free(t->shadow);
+        bb_free(t->shadow);
         t->shadow = s;
         t->shadow_len = len;
     }
@@ -419,7 +419,7 @@ static void replace(txn_t *t, int a, int b, const uint8_t *bytes, int n)
 /* The text of [a, b): the real text in echo mode. */
 static uint8_t *text_bytes(txn_t *t, int a, int b)
 {
-    uint8_t *out = malloc(b > a ? (size_t)(b - a) : 1);
+    uint8_t *out = bb_malloc(b > a ? (size_t)(b - a) : 1, BB_BYTES);
     if (t->echo)
         memcpy(out, t->shadow + a, (size_t)(b - a));
     else
@@ -431,20 +431,20 @@ static uint8_t *text_bytes(txn_t *t, int a, int b)
 static uint8_t *as_macroman(uint32_t type, gaddr p, uint32_t size, int *n)
 {
     if (type == TYPE_TEXT) {
-        uint8_t *b = malloc(size ? size : 1);
+        uint8_t *b = bb_malloc(size ? size : 1, BB_BYTES);
         gget(b, p, size);
         *n = (int)size;
         return b;
     }
     size_t units = size / 2, start = 0;
-    uint16_t *u = malloc(sizeof *u * (units + 1));
+    uint16_t *u = bb_malloc(sizeof *u * (units + 1), BB_BYTES);
     for (size_t i = 0; i < units; i++)
         u[i] = rd16(p + 2 * (uint32_t)i);
     if (units && u[0] == 0xFEFF)
         start = 1; /* a byte order mark */
-    uint8_t *b = malloc(units + 1);
+    uint8_t *b = bb_malloc(units + 1, BB_BYTES);
     *n = (int)svc_utf16_to_macroman(u + start, units - start, b);
-    free(u);
+    bb_free(u);
     return b;
 }
 
@@ -472,7 +472,7 @@ static void tx_TXNSetData(ppc_cpu *c)
     int n;
     uint8_t *bytes = as_macroman(type, data, size, &n);
     replace(t, a, b, bytes, n);
-    free(bytes);
+    bb_free(bytes);
     t->typing = false;
     bump(t, false);
     after_edit(t);
@@ -498,14 +498,14 @@ static int32_t get_data(txn_t *t, uint32_t start, uint32_t end, gaddr out, uint3
         if (h)
             gput(rd32(h), bytes, (uint32_t)(b - a));
     } else {
-        uint16_t *u = malloc(sizeof *u * (size_t)(b - a + 1));
+        uint16_t *u = bb_malloc(sizeof *u * (size_t)(b - a + 1), BB_BYTES);
         size_t k = svc_macroman_to_utf16(bytes, (size_t)(b - a), u);
         h = tb_NewHandle((int32_t)(2 * k), false, true);
         for (size_t i = 0; h && i < k; i++)
             wr16(rd32(h) + 2 * (uint32_t)i, u[i]);
-        free(u);
+        bb_free(u);
     }
-    free(bytes);
+    bb_free(bytes);
     if (!h)
         return memFullErr;
     wr32(out, h);
@@ -555,7 +555,7 @@ static uint8_t *read_file(int16_t ref, uint32_t n, uint32_t *got, int16_t *err)
     if (*err == eofErr)
         *err = noErr;
     *got = rd32(pb + IOParam_ioActCount_off);
-    uint8_t *out = malloc(*got ? *got : 1);
+    uint8_t *out = bb_malloc(*got ? *got : 1, BB_BYTES);
     gget(out, buf, *got);
     tb_DisposePtr(buf);
     tb_DisposePtr(pb);
@@ -573,18 +573,18 @@ static void tx_TXNSetDataFromFile(ppc_cpu *c)
     uint32_t got;
     uint8_t *raw = read_file((int16_t)A(1), A(3), &got, &err);
     if (err) {
-        free(raw);
+        bb_free(raw);
         RET(err);
     }
     gaddr g = tb_NewPtr((int32_t)(got ? got : 1), false, false);
     gput(g, raw, got);
-    free(raw);
+    bb_free(raw);
     int n;
     uint8_t *bytes = as_macroman(type, g, got, &n);
     tb_DisposePtr(g);
     int a = offset(t, A(4), true), b = offset(t, A(5), false);
     replace(t, a < b ? a : b, b, bytes, n);
-    free(bytes);
+    bb_free(bytes);
     bump(t, false);
     after_edit(t);
     RET(noErr);
@@ -620,7 +620,7 @@ static void tx_TXNNewObject(ppc_cpu *c)
     while (i < nobjects && objects[i])
         i++;
     if (i == nobjects) {
-        objects = realloc(objects, sizeof *objects * (size_t)(nobjects + 16));
+        objects = bb_realloc(objects, sizeof *objects * (size_t)(nobjects + 16), BB_TAG(txn_t *));
         memset(objects + nobjects, 0, sizeof *objects * 16);
         nobjects += 16;
     }
@@ -629,7 +629,7 @@ static void tx_TXNNewObject(ppc_cpu *c)
         RET(memFullErr);
     wr32(addr, TXN_TAG);
     wr32(addr + 4, (uint32_t)i);
-    txn_t *t = calloc(1, sizeof *t);
+    txn_t *t = bb_calloc(1, sizeof *t, BB_TAG(txn_t));
     t->addr = addr;
     t->window = window;
     t->is_window = true;
@@ -688,7 +688,7 @@ static void delete_object(txn_t *t)
     leave(p);
     forget_snapshot(&t->undo);
     forget_snapshot(&t->redo);
-    free(t->shadow);
+    bb_free(t->shadow);
     if (t->spec)
         tb_DisposePtr(t->spec);
     objects[rd32(t->addr + 4)] = NULL;
@@ -696,7 +696,7 @@ static void delete_object(txn_t *t)
     tb_DisposePtr(t->addr);
     if (tracking == t)
         tracking = NULL;
-    free(t);
+    bb_free(t);
 }
 
 /* TXNDeleteObject(object) */
@@ -1449,7 +1449,7 @@ static void tx_TXNPaste(ppc_cpu *c)
         int k = 0;
         uint8_t *bytes = n > 0 ? as_macroman(text ? TYPE_TEXT : TYPE_UTXT, rd32(h), (uint32_t)n, &k) : NULL;
         replace(t, sel_start(t), sel_end(t), bytes, k);
-        free(bytes);
+        bb_free(bytes);
         tb_DisposePtr(off);
         tb_DisposeHandle(h);
     }
@@ -1602,7 +1602,7 @@ static int runs(txn_t *t, int **starts)
     gaddr sh = tb_TEGetStyleHandle(t->te);
     gaddr sr = sh ? rd32(sh) : 0;
     int n = sr ? (int16_t)rd16(sr) : 0;
-    *starts = malloc(sizeof **starts * (size_t)(n + 2));
+    *starts = bb_malloc(sizeof **starts * (size_t)(n + 2), BB_BYTES);
     if (!n) {
         (*starts)[0] = 0;
         (*starts)[1] = text_len(t);
@@ -1641,7 +1641,7 @@ static void tx_TXNCountRunsInRange(ppc_cpu *c)
         RET(paramErr);
     int a = offset(t, A(1), true), b = offset(t, A(2), false), first, *starts;
     int k = runs_in(t, a, b, &first, &starts);
-    free(starts);
+    bb_free(starts);
     wr32(A(3), (uint32_t)(k ? k : 1));
     RET(noErr);
 }
@@ -1655,12 +1655,12 @@ static void tx_TXNGetIndexedRunInfoFromRange(ppc_cpu *c)
     int k = runs_in(t, a, b, &first, &starts);
     uint32_t index = A(1);
     if (index >= (uint32_t)(k ? k : 1)) {
-        free(starts);
+        bb_free(starts);
         RET(kTXNRunIndexOutofBoundsErr);
     }
     int run = (first < 0 ? 0 : first) + (int)index;
     int s = starts[run], e = starts[run + 1];
-    free(starts);
+    bb_free(starts);
     if (A(4))
         wr32(A(4), (uint32_t)(s > a ? s : a));
     if (A(5))
@@ -1865,24 +1865,24 @@ static void tx_TXNEchoMode(ppc_cpu *c)
     int n = text_len(t);
     if (on) {
         if (!t->echo) { /* the text so far becomes the real text */
-            free(t->shadow);
-            t->shadow = malloc(n ? (size_t)n : 1);
+            bb_free(t->shadow);
+            t->shadow = bb_malloc(n ? (size_t)n : 1, BB_BYTES);
             gget(t->shadow, text_ptr(t), (uint32_t)n);
             t->shadow_len = n;
         }
         t->echo = true;
         t->echo_char = (uint16_t)A(1);
-        uint8_t *real = malloc(n ? (size_t)n : 1);
+        uint8_t *real = bb_malloc(n ? (size_t)n : 1, BB_BYTES);
         memcpy(real, t->shadow, (size_t)n);
         int len = t->shadow_len;
         t->shadow_len = 0;
-        free(t->shadow);
+        bb_free(t->shadow);
         t->shadow = NULL;
         port_saver p = enter(t);
         tb_TESetText(0, 0, t->te);
         leave(p);
         replace(t, 0, 0, real, len);
-        free(real);
+        bb_free(real);
     } else {
         uint8_t *real = t->shadow;
         int len = t->shadow_len;
@@ -1892,7 +1892,7 @@ static void tx_TXNEchoMode(ppc_cpu *c)
         tb_TESetText(0, 0, t->te);
         leave(p);
         replace(t, 0, 0, real, len);
-        free(real);
+        bb_free(real);
     }
     after_edit(t);
     RET(noErr);
@@ -2043,17 +2043,17 @@ static int32_t load_file(txn_t *t, gaddr spec)
     tb_DisposePtr(pb);
     tb_DisposePtr(ref);
     if (err) {
-        free(raw);
+        bb_free(raw);
         return err;
     }
     gaddr g = tb_NewPtr((int32_t)(got ? got : 1), false, false);
     gput(g, raw, got);
-    free(raw);
+    bb_free(raw);
     int n;
     uint8_t *bytes = as_macroman(type, g, got, &n);
     tb_DisposePtr(g);
     replace(t, 0, text_len(t), bytes, n);
-    free(bytes);
+    bb_free(bytes);
     /* SimpleText's styles, when the file has them. */
     int16_t rf = tb_FSpOpenResFile(spec, 1);
     if (rf > 0) {
@@ -2167,7 +2167,7 @@ static void tx_TXNPrint(ppc_cpu *c)
         uint8_t *bytes = text_bytes(t, 0, text_len(t));
         gaddr buf = tb_NewPtr(text_len(t) ? text_len(t) : 1, false, false);
         gput(buf, bytes, (uint32_t)text_len(t));
-        free(bytes);
+        bb_free(bytes);
         tb_TEStyleInsert(buf, text_len(t), styles, te);
         tb_DisposePtr(buf);
         if (styles)
@@ -2249,7 +2249,7 @@ static void tx_TXNFind(ppc_cpu *c)
         uint8_t *hay = text_bytes(t, 0, text_len(t));
         gaddr text = tb_NewPtr(text_len(t) ? text_len(t) : 1, false, false);
         gput(text, hay, (uint32_t)text_len(t));
-        free(hay);
+        bb_free(hay);
         uint32_t args[11] = { match, TYPE_TEXT, opts, text + (uint32_t)a, 0, (uint32_t)a, (uint32_t)(b - a),
                               gs, gs + 4, gs + 8, A(7) };
         int32_t e = (int32_t)svc_call_upp(proc, uppTXNFindProcInfo, args, 11);
@@ -2260,7 +2260,7 @@ static void tx_TXNFind(ppc_cpu *c)
             wr32(oe, rd32(gs + 4));
         tb_DisposePtr(text);
         tb_DisposePtr(gs);
-        free(needle);
+        bb_free(needle);
         RET(e ? e : found ? noErr : kTXNNoMatchErr);
     }
     uint8_t *hay = text_bytes(t, 0, text_len(t));
@@ -2275,8 +2275,8 @@ static void tx_TXNFind(ppc_cpu *c)
             continue;
         found = i;
     }
-    free(hay);
-    free(needle);
+    bb_free(hay);
+    bb_free(needle);
     if (found < 0)
         RET(kTXNNoMatchErr);
     if (os)
@@ -2419,7 +2419,7 @@ static int32_t text_box(const uint16_t *u, uint32_t n, gaddr box, gaddr style, g
         return paramErr;
     uint32_t opts = options ? rd32(options) : 0;
     int32_t flush = options && (opts & kTXNSetFlushnessMask) ? (int32_t)rd32(options + 4) : 0;
-    uint8_t *b = malloc(n + 1);
+    uint8_t *b = bb_malloc(n + 1, BB_BYTES);
     int len = (int)svc_utf16_to_macroman(u, n, b);
     gaddr port = qd_port();
     int16_t sf = (int16_t)rd16(port + GrafPort_txFont_off), ss = (int16_t)rd16(port + GrafPort_txSize_off);
@@ -2473,7 +2473,7 @@ static int32_t text_box(const uint16_t *u, uint32_t n, gaddr box, gaddr style, g
     tb_TextFace(sface);
     tb_RGBForeColor(fg);
     tb_DisposePtr(fg);
-    free(b);
+    bb_free(b);
     return noErr;
 }
 
@@ -2482,21 +2482,21 @@ static void tx_TXNDrawUnicodeTextBox(ppc_cpu *c)
     uint32_t n = A(1);
     if (n && !A(0))
         RET(paramErr);
-    uint16_t *u = malloc(sizeof *u * (n + 1));
+    uint16_t *u = bb_malloc(sizeof *u * (n + 1), BB_BYTES);
     for (uint32_t i = 0; i < n; i++)
         u[i] = rd16(A(0) + 2 * i);
     int32_t e = text_box(u, n, A(2), A(3), A(4));
-    free(u);
+    bb_free(u);
     RET(e);
 }
 
 static void tx_TXNDrawCFStringTextBox(ppc_cpu *c)
 {
     uint32_t n = svc_cfstring_get(A(0), NULL, 0);
-    uint16_t *u = malloc(sizeof *u * (n + 1));
+    uint16_t *u = bb_malloc(sizeof *u * (n + 1), BB_BYTES);
     svc_cfstring_get(A(0), u, n);
     int32_t e = text_box(u, n, A(1), A(2), A(3));
-    free(u);
+    bb_free(u);
     RET(e);
 }
 
@@ -2529,11 +2529,11 @@ static void tx_TXNDragReceiver(ppc_cpu *c)
     gaddr data = tb_NewPtr(size ? size : 1, false, false);
     tb_GetFlavorData(drag, ref, (int32_t)TYPE_TEXT, data, v, 0);
     size = (int32_t)rd32(v);
-    uint8_t *bytes = malloc(size ? (size_t)size : 1);
+    uint8_t *bytes = bb_malloc(size ? (size_t)size : 1, BB_BYTES);
     gget(bytes, data, (uint32_t)size);
     will_edit(t, kTXNDropAction);
     replace(t, sel_start(t), sel_end(t), bytes, size);
-    free(bytes);
+    bb_free(bytes);
     tb_DisposePtr(data);
     tb_DisposePtr(v);
     t->typing = false;

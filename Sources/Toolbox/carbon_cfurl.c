@@ -109,7 +109,7 @@ static bool unescape(const uint16_t *u, uint32_t n, const uint16_t *keep, uint32
                 text_add_unit(out, ch);
             at += len * 3;
         }
-        free(chars);
+        bb_free(chars);
     }
     return true;
 }
@@ -195,7 +195,7 @@ static void url_finalize(cf_obj *o)
     cf_release(u->base);
 }
 
-static void url_dispose(cf_obj *o) { free(((cf_url *)o)->s); }
+static void url_dispose(cf_obj *o) { bb_free(((cf_url *)o)->s); }
 
 static bool url_equal(cf_obj *a, cf_obj *b)
 {
@@ -227,7 +227,7 @@ gaddr cfurl_new_string(gaddr alloc, gaddr string, gaddr base)
         return 0;
     cf_url *u = cf_new(CFT_URL, sizeof *u, alloc, 0);
     if (!u) {
-        free(s);
+        bb_free(s);
         return 0;
     }
     u->string = cf_retain(string);
@@ -260,13 +260,13 @@ static gaddr part_string(cf_url *u, int from, int to)
 {
     if (from < 0 || to < from)
         return 0;
-    char *t = malloc((size_t)(to - from) + 1);
+    char *t = bb_malloc((size_t)(to - from) + 1, BB_BYTES);
     if (!t)
         return 0;
     memcpy(t, u->s + from, (size_t)(to - from));
     t[to - from] = 0;
     gaddr s = cfstr_from_utf8(t);
-    free(t);
+    bb_free(t);
     return s;
 }
 
@@ -290,21 +290,21 @@ static char *resolve(cf_url *u)
 {
     cf_url *b = url_of(u->base);
     if (!b)
-        return strdup(u->s);
-    char *bs = b->base ? resolve(b) : strdup(b->s);
+        return bb_strdup(u->s);
+    char *bs = b->base ? resolve(b) : bb_strdup(b->s);
     if (!bs)
         return NULL;
     parts rp, bp;
     parse(u->s, &rp);
     parse(bs, &bp);
     size_t cap = strlen(u->s) + strlen(bs) + 8;
-    char *out = calloc(1, cap);
+    char *out = bb_calloc(1, cap, BB_BYTES);
     if (!out) {
-        free(bs);
+        bb_free(bs);
         return NULL;
     }
     if (!u->s[0]) {
-        free(out);
+        bb_free(out);
         return bs;
     }
 #define CAT(str, from, to) strncat(out, (str) + (from), (size_t)((to) - (from)))
@@ -315,7 +315,7 @@ static char *resolve(cf_url *u)
         CAT(u->s, rp.net, (rp.frag >= 0 ? rp.frag - 1 : (int)strlen(u->s)));
         if (rp.frag >= 0)
             CAT(u->s, rp.frag - 1, rp.frag_end);
-        free(bs);
+        bb_free(bs);
         return out;
     }
     if (bp.net >= 0) {
@@ -325,7 +325,7 @@ static char *resolve(cf_url *u)
     char *path = NULL;
     bool rel_path = rp.path < rp.path_end;
     if (rel_path && u->s[rp.path] == '/') {
-        path = malloc((size_t)(rp.path_end - rp.path) + 1);
+        path = bb_malloc((size_t)(rp.path_end - rp.path) + 1, BB_BYTES);
         memcpy(path, u->s + rp.path, (size_t)(rp.path_end - rp.path));
         path[rp.path_end - rp.path] = 0;
     } else if (rel_path) {
@@ -334,7 +334,7 @@ static char *resolve(cf_url *u)
         while (slash > 0 && bs[bp.path + slash - 1] != '/')
             slash--;
         size_t rl = (size_t)(rp.path_end - rp.path);
-        path = malloc((size_t)slash + rl + 2);
+        path = bb_malloc((size_t)slash + rl + 2, BB_BYTES);
         memcpy(path, bs + bp.path, (size_t)slash);
         if (!slash && bp.net >= 0)
             path[slash++] = '/';
@@ -357,7 +357,7 @@ static char *resolve(cf_url *u)
             }
             segs[ns++] = tok;
         }
-        char *np = calloc(1, plen + 4);
+        char *np = bb_calloc(1, plen + 4, BB_BYTES);
         if (lead)
             strcat(np, "/");
         for (int k = 0; k < ns; k++) {
@@ -367,12 +367,12 @@ static char *resolve(cf_url *u)
         }
         if (trail && ns)
             strcat(np, "/");
-        free(path);
+        bb_free(path);
         path = np;
     }
     if (path) {
         strcat(out, path);
-        free(path);
+        bb_free(path);
         if (rp.param >= 0) {
             strcat(out, ";");
             CAT(u->s, rp.param, rp.param_end);
@@ -403,7 +403,7 @@ static char *resolve(cf_url *u)
         CAT(u->s, rp.frag, rp.frag_end);
     }
 #undef CAT
-    free(bs);
+    bb_free(bs);
     return out;
 }
 
@@ -417,7 +417,7 @@ static int path_components(const char *s, const parts *p, char ***out, bool *dir
     *absolute = to > from && s[from] == '/';
     if (from < 0)
         return 0;
-    char **v = calloc((size_t)(to - from) + 1, sizeof *v);
+    char **v = bb_calloc((size_t)(to - from) + 1, sizeof *v, BB_TAG(char *));
     int i = from;
     while (v && i < to) {
         while (i < to && s[i] == '/')
@@ -427,7 +427,7 @@ static int path_components(const char *s, const parts *p, char ***out, bool *dir
             j++;
         if (j > i) {
             /* Unescape the bytes. */
-            char *c = malloc((size_t)(j - i) + 1);
+            char *c = bb_malloc((size_t)(j - i) + 1, BB_BYTES);
             int k = 0;
             for (int x = i; x < j; x++) {
                 if (s[x] == '%' && x + 2 < j && hexval((uint8_t)s[x + 1]) >= 0 && hexval((uint8_t)s[x + 2]) >= 0) {
@@ -449,8 +449,8 @@ static int path_components(const char *s, const parts *p, char ***out, bool *dir
 static void free_components(char **v, int n)
 {
     for (int i = 0; i < n; i++)
-        free(v[i]);
-    free(v);
+        bb_free(v[i]);
+    bb_free(v);
 }
 
 static bool scheme_is(const char *s, const parts *p, const char *name)
@@ -566,7 +566,7 @@ static gaddr url_of_path(gaddr alloc, gaddr path, uint32_t style, bool is_dir, g
         text_add_unit(&t, '/');
     if (!is_dir && t.n > 1 && t.u[t.n - 1] == '/' && !(absolute && t.n == 17))
         t.n--;
-    free(s);
+    bb_free(s);
     gaddr b = absolute ? 0 : base_given ? base : working_directory();
     gaddr u = url_from_text(alloc, &t, b);
     if (!absolute && !base_given)
@@ -604,13 +604,13 @@ bool cfurl_host_path(gaddr ref, char *out, size_t outsize)
     parts p;
     parse(s, &p);
     if (p.scheme < 0 || !scheme_is(s, &p, "file") || !p.decomposable) {
-        free(s);
+        bb_free(s);
         return false;
     }
     char **c;
     bool dir, absolute;
     int n = path_components(s, &p, &c, &dir, &absolute);
-    free(s);
+    bb_free(s);
     bool ok = n > 0;
     char cur[PATH_MAX], next[PATH_MAX];
     if (ok) {
@@ -682,7 +682,7 @@ gaddr cfurl_of_host_path(gaddr alloc, const char *host)
         char utf8[256];
         macroman_to_utf8(mac, len, utf8, sizeof utf8);
         if (n < 256)
-            names[n++] = strdup(utf8);
+            names[n++] = bb_strdup(utf8);
         if (!host_parent(cur, up, sizeof up))
             break;
         snprintf(cur, sizeof cur, "%s", up);
@@ -694,7 +694,7 @@ gaddr cfurl_of_host_path(gaddr alloc, const char *host)
         add_component(&t, names[i], strlen(names[i]));
         if (i || dir)
             text_add_unit(&t, '/');
-        free(names[i]);
+        bb_free(names[i]);
     }
     gaddr u = url_from_text(alloc, &t, 0);
     text_free(&t);
@@ -716,7 +716,7 @@ bool cf_read_host_file(const char *path, uint8_t **bytes, size_t *n)
                                          got == info.data_len));
     fm_close_fork(ref);
     if (ok) {
-        *bytes = malloc(info.data_len ? info.data_len : 1);
+        *bytes = bb_malloc(info.data_len ? info.data_len : 1, BB_BYTES);
         if (*bytes)
             gget(*bytes, buf, info.data_len);
         *n = info.data_len;
@@ -790,7 +790,7 @@ static void cf_CFURLCreateWithBytes(ppc_cpu *c)
     uint32_t len = R(2), enc = R(3);
     if (len > 0x100000 || (!R(1) && len))
         RETURN(0);
-    uint8_t *b = malloc(len + 1);
+    uint8_t *b = bb_malloc(len + 1, BB_BYTES);
     if (!b)
         RETURN(0);
     gget(b, R(1), len);
@@ -802,7 +802,7 @@ static void cf_CFURLCreateWithBytes(ppc_cpu *c)
             text_add_unit(&t, b[i]);
     }
     (void)enc;
-    free(b);
+    bb_free(b);
     gaddr u = url_from_text(R(0), &t, R(4));
     text_free(&t);
     RETURN(u);
@@ -830,7 +830,7 @@ static void cf_CFURLCreateData(ppc_cpu *c)
     gaddr d = 0;
     if (cf_encode(R(2), t.u, t.n, 0, &b, &nb, &used))
         d = cfdata_new(R(0), b, (uint32_t)nb, false);
-    free(b);
+    bb_free(b);
     text_free(&t);
     RETURN(d);
 }
@@ -850,7 +850,7 @@ static void cf_CFURLCreateWithFileSystemPathRelativeToBase(ppc_cpu *c)
 /* The file system's representation: an HFS path in the system's encoding. */
 static gaddr fsrep_path(gaddr buf, uint32_t len)
 {
-    uint8_t *b = malloc(len + 1);
+    uint8_t *b = bb_malloc(len + 1, BB_BYTES);
     uint16_t *u;
     uint32_t n;
     gaddr s = 0;
@@ -862,9 +862,9 @@ static gaddr fsrep_path(gaddr buf, uint32_t len)
         real++;
     if (cf_decode(kCFStringEncodingMacRoman, b, real, &u, &n)) {
         s = cfstr_new(0, u, n, false);
-        free(u);
+        bb_free(u);
     }
-    free(b);
+    bb_free(b);
     return s;
 }
 
@@ -896,7 +896,7 @@ static void cf_CFURLGetFileSystemRepresentation(ppc_cpu *c)
     if ((R(1) & 0xFF) && u->base) {
         char *s = resolve(u);
         abs = s ? url_from_utf8(0, s, 0) : 0;
-        free(s);
+        bb_free(s);
         u = url_of(abs);
     }
     gaddr path = u ? file_system_path(u, kCFURLHFSPathStyle) : 0;
@@ -911,7 +911,7 @@ static void cf_CFURLGetFileSystemRepresentation(ppc_cpu *c)
         gput(R(2), b, (uint32_t)nb);
         wr8(R(2) + (uint32_t)nb, 0);
     }
-    free(b);
+    bb_free(b);
     cf_release(path);
     RETURN(ok);
 }
@@ -925,7 +925,7 @@ static void cf_CFURLCopyAbsoluteURL(ppc_cpu *c)
         RETURN(cf_retain(R(0)));
     char *s = resolve(u);
     gaddr r = s ? url_from_utf8(u->o.alloc, s, 0) : 0;
-    free(s);
+    bb_free(s);
     RETURN(r);
 }
 
@@ -1209,9 +1209,9 @@ static void cf_CFURLCopyPathExtension(ppc_cpu *c)
 static gaddr replace_path(gaddr alloc, cf_url *u, int from, int to, const cf_text *with)
 {
     cf_text t = { 0 };
-    char *head = strndup(u->s, (size_t)from);
+    char *head = bb_strndup(u->s, (size_t)from);
     text_add_utf8(&t, head);
-    free(head);
+    bb_free(head);
     text_add(&t, with->u, with->n);
     text_add_utf8(&t, u->s + to);
     gaddr r = url_from_text(alloc, &t, u->base);
@@ -1226,12 +1226,12 @@ static void cf_CFURLCreateCopyAppendingPathComponent(ppc_cpu *c)
     char *comp = cfstr_utf8(R(2));
     parts p;
     if (!u || !comp) {
-        free(comp);
+        bb_free(comp);
         RETURN(0);
     }
     parse(u->s, &p);
     if (!p.decomposable) {
-        free(comp);
+        bb_free(comp);
         RETURN(0);
     }
     cf_text t = { 0 };
@@ -1251,7 +1251,7 @@ static void cf_CFURLCreateCopyAppendingPathComponent(ppc_cpu *c)
     }
     if ((R(3) & 0xFF) && !(t.n && t.u[t.n - 1] == '/'))
         text_add_unit(&t, '/');
-    free(comp);
+    bb_free(comp);
     gaddr r = replace_path(R(0), u, p.path_end, p.path_end, &t);
     text_free(&t);
     RETURN(r);
@@ -1291,18 +1291,18 @@ static void cf_CFURLCreateCopyAppendingPathExtension(ppc_cpu *c)
     parts p;
     int from, to;
     if (!u || !ext) {
-        free(ext);
+        bb_free(ext);
         RETURN(0);
     }
     parse(u->s, &p);
     if (!last_component(u, &p, &from, &to)) {
-        free(ext);
+        bb_free(ext);
         RETURN(0);
     }
     cf_text t = { 0 };
     text_add_unit(&t, '.');
     add_component(&t, ext, strlen(ext));
-    free(ext);
+    bb_free(ext);
     gaddr r = replace_path(R(0), u, to, to, &t);
     text_free(&t);
     RETURN(r);
@@ -1375,13 +1375,13 @@ static void cf_CFURLCreateStringByAddingPercentEscapes(ppc_cpu *c)
         size_t nb;
         uint32_t used;
         if (!cf_encode(R(4), u + i, units, 0, &b, &nb, &used)) {
-            free(b);
+            bb_free(b);
             text_free(&t);
             RETURN(0);
         }
         for (size_t k = 0; k < nb; k++)
             add_escaped_byte(&t, b[k]);
-        free(b);
+        bb_free(b);
         i += units - 1;
         changed = true;
     }
@@ -1459,9 +1459,9 @@ static gaddr file_properties(gaddr alloc, const char *path, gaddr desired)
                 cfarray_append(a, u);
                 cf_release(u);
             }
-            free(paths[i]);
+            bb_free(paths[i]);
         }
-        free(paths);
+        bb_free(paths);
         put_property(d, "kCFURLFileDirectoryContents", a);
     }
     if (want(desired, "kCFURLFileLength"))
@@ -1485,7 +1485,7 @@ static bool is_file_url(gaddr url)
     parts p;
     parse(s ? s : "", &p);
     bool f = s && scheme_is(s, &p, "file");
-    free(s);
+    bb_free(s);
     return f;
 }
 
@@ -1520,7 +1520,7 @@ static void cf_CFURLCreateDataAndPropertiesFromResource(ppc_cpu *c)
                 size_t n;
                 if (cfurl_read_file(R(1), &b, &n)) {
                     wr32(data_p, cfdata_new(R(0), b, (uint32_t)n, false));
-                    free(b);
+                    bb_free(b);
                 } else {
                     err = kCFURLResourceAccessViolationError;
                 }
@@ -1689,7 +1689,7 @@ static gaddr read_plist_file(const char *path)
     gaddr p = 0;
     if (url && cfurl_read_file(url, &b, &n)) {
         p = cfplist_from_data(0, b, n, 0, NULL);
-        free(b);
+        bb_free(b);
     }
     cf_release(url);
     return p;
@@ -1705,7 +1705,7 @@ static gaddr app_resource(uint32_t type, int16_t id, uint8_t **bytes, size_t *n)
     if (!h || !rd32(h))
         return 0;
     *n = (size_t)tb_GetHandleSize(h);
-    *bytes = malloc(*n ? *n : 1);
+    *bytes = bb_malloc(*n ? *n : 1, BB_BYTES);
     if (*bytes)
         gget(*bytes, rd32(h), (uint32_t)*n);
     return h;
@@ -1721,7 +1721,7 @@ static gaddr bundle_info(cf_bundle *b)
         size_t n;
         if (app_resource(fourcc("plst"), 0, &bytes, &n)) {
             b->info = cfplist_from_data(0, bytes, n, 0, NULL);
-            free(bytes);
+            bb_free(bytes);
         }
     } else {
         static const char *const names[] = { "Contents/Info-macos.plist", "Contents/Info.plist",
@@ -1776,7 +1776,7 @@ static cf_bundle *bundle_make(gaddr alloc, const char *given, bool main_)
     b->url = cfurl_of_host_path(alloc, path);
     if (nbundles == bundles_cap) {
         unsigned cap = bundles_cap * 2 + 8;
-        gaddr *p = realloc(bundles, sizeof *p * cap);
+        gaddr *p = bb_realloc(bundles, sizeof *p * cap, BB_BYTES);
         if (p) {
             bundles = p;
             bundles_cap = cap;
@@ -1855,11 +1855,11 @@ static void cf_CFBundleCreateBundlesFromDirectory(ppc_cpu *c)
                     cf_release(b->o.ref);
                 }
             }
-            free(paths[i]);
+            bb_free(paths[i]);
         }
-        free(paths);
+        bb_free(paths);
     }
-    free(type);
+    bb_free(type);
     RETURN(a);
 }
 
@@ -1941,7 +1941,7 @@ static uint32_t four_of(gaddr str)
     uint32_t v = 0;
     if (s && strlen(s) == 4)
         v = fourcc(s);
-    free(s);
+    bb_free(s);
     return v;
 }
 
@@ -1962,7 +1962,7 @@ static bool package_info(const char *dir, gaddr info, uint32_t *type, uint32_t *
             *creator = (uint32_t)b[4] << 24 | (uint32_t)b[5] << 16 | (uint32_t)b[6] << 8 | b[7];
         }
         if (ok)
-            free(b);
+            bb_free(b);
         if (ok && n >= 8)
             return true;
     }
@@ -2039,7 +2039,7 @@ static uint32_t version_number(gaddr str)
             build = 255;
     }
     bool ok = digits && !*p;
-    free(s);
+    bb_free(s);
     return ok ? major << 24 | minor << 20 | fix << 16 | stage << 8 | build : 0;
 }
 
@@ -2161,17 +2161,17 @@ static gaddr find_resources(cf_bundle *b, gaddr name, gaddr type, gaddr subdir, 
                         cf_release(u);
                     }
                 }
-                free(paths[i]);
+                bb_free(paths[i]);
             }
-            free(paths);
+            bb_free(paths);
         }
         if (l)
             break;
     }
-    free(n);
-    free(t);
-    free(sd);
-    free(l);
+    bb_free(n);
+    bb_free(t);
+    bb_free(sd);
+    bb_free(l);
     return found;
 }
 
@@ -2246,7 +2246,7 @@ static void cf_CFBundleCopyLocalizedString(ppc_cpu *c)
         size_t n;
         if (url && cfurl_read_file(url, &bytes, &n)) {
             gaddr d = cfplist_from_data(0, bytes, n, 0, NULL);
-            free(bytes);
+            bb_free(bytes);
             if (cfdict_get(d, key, &found))
                 cf_retain(found);
             cf_release(d);
@@ -2281,9 +2281,9 @@ static void cf_CFBundleCopyBundleLocalizations(ppc_cpu *c)
             cfarray_append(a, s);
             cf_release(s);
         }
-        free(paths[i]);
+        bb_free(paths[i]);
     }
-    free(paths);
+    bb_free(paths);
     gaddr dev = info_value(b, "CFBundleDevelopmentRegion");
     if (!cfarray_count(a) && cf_type_of(dev) == CFT_STRING)
         cfarray_append(a, dev);
@@ -2330,7 +2330,7 @@ static bool executable_path(cf_bundle *b, const char *name, char *out, size_t n)
             ok = bundle_file(b->path, rel, out, n) && !fm_is_dir(out);
         }
     }
-    free(exe);
+    bb_free(exe);
     return ok;
 }
 
@@ -2346,7 +2346,7 @@ static void cf_CFBundleCopyAuxiliaryExecutableURL(ppc_cpu *c)
     cf_bundle *b = bundle_of(R(0));
     char path[PATH_MAX], *name = cfstr_utf8(R(1));
     gaddr u = b && name && executable_path(b, name, path, sizeof path) ? cfurl_of_host_path(0, path) : 0;
-    free(name);
+    bb_free(name);
     RETURN(u);
 }
 
@@ -2406,7 +2406,7 @@ static gaddr bundle_symbol(cf_bundle *b, gaddr name)
 {
     char *n = cfstr_utf8(name);
     if (!b || !n || !bundle_load(b)) {
-        free(n);
+        bb_free(n);
         return 0;
     }
     void (*find)(ppc_cpu *) = cfm_export_fn("FindSymbol");
@@ -2427,7 +2427,7 @@ static gaddr bundle_symbol(cf_bundle *b, gaddr name)
     }
     if (scratch)
         tb_DisposePtr(scratch);
-    free(n);
+    bb_free(n);
     return addr;
 }
 
@@ -2463,7 +2463,7 @@ static int16_t open_bundle_resources(cf_bundle *b, bool localized)
         snprintf(rel, sizeof rel, "%s.rsrc", exe);
         found = bundle_file(res, rel, path, sizeof path);
     }
-    free(exe);
+    bb_free(exe);
     return found ? rm_open_path(path, 1 /* fsRdPerm */) : -1;
 }
 
@@ -2530,7 +2530,7 @@ static bool add_factory(const uint8_t id[16], gaddr fn, gaddr name, gaddr plugin
         return false;
     if (nfactories == factories_cap) {
         unsigned cap = factories_cap * 2 + 8;
-        factory *p = realloc(factories, sizeof *p * cap);
+        factory *p = bb_realloc(factories, sizeof *p * cap, BB_TAG(factory));
         if (!p)
             return false;
         factories = p;
@@ -2552,7 +2552,7 @@ static bool add_registration(const uint8_t factory_id[16], const uint8_t type[16
             return true;
     if (nregs == regs_cap) {
         unsigned cap = regs_cap * 2 + 8;
-        registration *p = realloc(registrations, sizeof *p * cap);
+        registration *p = bb_realloc(registrations, sizeof *p * cap, BB_TAG(registration));
         if (!p)
             return false;
         registrations = p;
@@ -2581,8 +2581,8 @@ static void register_plugin(cf_bundle *b)
         if (cfuuid_parse(keys[i], id))
             add_factory(id, 0, vals[i], b->o.ref);
     }
-    free(keys);
-    free(vals);
+    bb_free(keys);
+    bb_free(vals);
     n = cfdict_entries(types, &keys, &vals);
     for (uint32_t i = 0; i < n; i++) {
         uint8_t type[16], fid[16];
@@ -2592,13 +2592,13 @@ static void register_plugin(cf_bundle *b)
             if (cfuuid_parse(cfarray_get(vals[i], k), fid))
                 add_registration(fid, type);
     }
-    free(keys);
-    free(vals);
+    bb_free(keys);
+    bb_free(vals);
     bool dynamic = dyn == cfbool(true);
     if (cf_type_of(dyn) == CFT_STRING) {
         char *s = cfstr_utf8(dyn);
         dynamic = s && (!strcasecmp(s, "YES") || !strcasecmp(s, "true"));
-        free(s);
+        bb_free(s);
     }
     if (dynamic) {
         uint32_t name = 0;
@@ -2814,13 +2814,13 @@ static void cf_CFPlugInInstanceGetInstanceData(ppc_cpu *c)
 void cfurl_reset(void)
 {
     main_bundle = all_bundles = 0;
-    free(bundles);
+    bb_free(bundles);
     bundles = NULL;
     nbundles = bundles_cap = 0;
-    free(factories);
+    bb_free(factories);
     factories = NULL;
     nfactories = factories_cap = 0;
-    free(registrations);
+    bb_free(registrations);
     registrations = NULL;
     nregs = regs_cap = 0;
     cf_register_class(CFT_URL, &url_class);

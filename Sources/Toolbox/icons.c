@@ -409,12 +409,12 @@ qrect icon_place(icon_img *img, qrect r, int16_t align)
      * full 16 rows, so it is shown at its own size when what it draws fits,
      * rather than shrunk (which loses rows of detail). */
     if (img->w > rw || img->h > rh) {
-        icon_img *trimmed = malloc(sizeof *trimmed);
+        icon_img *trimmed = bb_malloc(sizeof *trimmed, BB_TAG(icon_img));
         *trimmed = *img;
         crop_to_mask(trimmed);
         if (trimmed->w <= rw && trimmed->h <= rh)
             *img = *trimmed;
-        free(trimmed);
+        bb_free(trimmed);
     }
     int dw = img->w, dh = img->h;
     bool standard = (rw == 32 || rw == 16 || rw == 12) && (rh == 32 || rh == 16 || rh == 12);
@@ -470,7 +470,7 @@ void icon_plot(icon_img *img, qrect r, int16_t align, int16_t transform)
 int16_t tb_PlotIconSuite(gaddr rect, int16_t align, int16_t transform, gaddr suite)
 {
     qrect r = qrect_get(rect);
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     int size = r.right - r.left < r.bottom - r.top ? r.right - r.left : r.bottom - r.top;
     bool ok = suite && suite_image(suite, size, img);
     /* The suite's own label, when the transform names none. */
@@ -478,7 +478,7 @@ int16_t tb_PlotIconSuite(gaddr rect, int16_t align, int16_t transform, gaddr sui
         transform = (int16_t)(transform | (tb_GetSuiteLabel(suite) & 7) << 8);
     if (ok)
         icon_plot(img, r, align, transform);
-    free(img);
+    bb_free(img);
     return ok ? noErr : noMaskFoundErr;
 }
 
@@ -504,10 +504,10 @@ int16_t tb_PlotIconHandle(gaddr rect, int16_t align, int16_t transform, gaddr ic
     if (n < 128)
         return paramErr_;
     gget(d, rd32(icon), n >= 256 ? 256 : 128);
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     icon_render(img, 32, 32, 1, d, n >= 256 ? d + 128 : NULL);
     icon_plot(img, qrect_get(rect), align, transform);
-    free(img);
+    bb_free(img);
     return noErr;
 }
 
@@ -518,13 +518,13 @@ int16_t tb_PlotSICNHandle(gaddr rect, int16_t align, int16_t transform, gaddr ic
         return paramErr_;
     uint8_t d[32];
     gget(d, rd32(icon), 32);
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     icon_render(img, 16, 16, 1, d, NULL);
     for (int i = 0; i < 16 * 16; i++) /* white is transparent */
         if (img->px[i * 4] == 255)
             img->px[i * 4 + 3] = 0;
     icon_plot(img, qrect_get(rect), align, transform);
-    free(img);
+    bb_free(img);
     return noErr;
 }
 
@@ -559,11 +559,11 @@ int16_t tb_LoadIconCache(gaddr rect, int16_t align, int16_t transform, gaddr cac
 {
     if (cache_index(cache) < 0)
         return paramErr_;
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     qrect r = qrect_get(rect);
     int size = r.right - r.left < r.bottom - r.top ? r.right - r.left : r.bottom - r.top;
     bool ok = suite_image(cache, size, img);
-    free(img);
+    bb_free(img);
     return ok ? noErr : noMaskFoundErr;
 }
 
@@ -661,17 +661,17 @@ int16_t tb_ForEachIconDo(gaddr suite, uint32_t selector, gaddr action, gaddr dat
  * the rectangle's coordinates); false when the suite has no mask. */
 static bool suite_mask_rgn(gaddr suite, qrect r, int16_t align, hrgn *out)
 {
-    icon_img *img = malloc(sizeof *img);
+    icon_img *img = bb_malloc(sizeof *img, BB_TAG(icon_img));
     int size = r.right - r.left < r.bottom - r.top ? r.right - r.left : r.bottom - r.top;
     if (!suite || !suite_image(suite, size, img)) {
-        free(img);
+        bb_free(img);
         return false;
     }
     qrect d = icon_place(img, r, align);
     int dw = d.right - d.left, dh = d.bottom - d.top;
     hrgn_init(out);
     if (dw <= 0 || dh <= 0 || dw > ICON_MAX) {
-        free(img);
+        bb_free(img);
         return true;
     }
     int16_t runs[ICON_MAX + 2];
@@ -689,7 +689,7 @@ static bool suite_mask_rgn(gaddr suite, qrect r, int16_t align, hrgn *out)
         }
         hrgn_add_runs(out, d.top + y, runs, n);
     }
-    free(img);
+    bb_free(img);
     return true;
 }
 

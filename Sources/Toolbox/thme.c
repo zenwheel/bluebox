@@ -145,9 +145,9 @@ static const uint8_t *res(uint32_t type, int16_t id, uint32_t *len)
 static void forget(void)
 {
     for (int i = 0; i < T.ncache; i++) {
-        free(T.cache[i].im.rgba);
-        free(T.cache[i].l.c);
-        free(T.cache[i].l.r);
+        bb_free(T.cache[i].im.rgba);
+        bb_free(T.cache[i].l.c);
+        bb_free(T.cache[i].l.r);
     }
     T.ncache = 0;
 }
@@ -179,11 +179,11 @@ static void choose_variation(void);
 bool thme_load(const char *path, const uint8_t *fork, size_t len, char *err, size_t errlen)
 {
     thme_unload();
-    T.fork = malloc(len ? len : 1);
+    T.fork = bb_malloc(len ? len : 1, BB_BYTES);
     memcpy(T.fork, fork, len);
     T.len = len;
     if (!rsrc_parse(T.fork, T.len, &T.idx, err, errlen)) {
-        free(T.fork);
+        bb_free(T.fork);
         T.fork = NULL;
         return false;
     }
@@ -201,7 +201,7 @@ void thme_unload(void)
     forget();
     if (T.fork) {
         rsrc_index_free(&T.idx);
-        free(T.fork);
+        bb_free(T.fork);
     }
     memset(&T, 0, sizeof T);
 }
@@ -310,7 +310,7 @@ static bool decode_pxm(const uint8_t *d, uint32_t len, timg *out)
     out->w = w;
     out->h = h;
     out->n = n;
-    out->rgba = malloc((size_t)w * (size_t)h * 4 * (size_t)n);
+    out->rgba = bb_malloc((size_t)w * (size_t)h * 4 * (size_t)n, BB_BYTES);
     const uint8_t *masks = d + 24, *pix = masks + mrb * (uint32_t)h * (uint32_t)nmasks;
     for (int k = 0; k < n; k++) {
         const uint8_t *m = masks + ((flags & 1) ? 0 : mrb * (uint32_t)h * (uint32_t)k);
@@ -350,7 +350,7 @@ static bool decode_ppat(const uint8_t *d, uint32_t len, timg *out)
             out->w = w;
             out->h = h;
             out->n = 1;
-            out->rgba = malloc((size_t)w * (size_t)h * 4);
+            out->rgba = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
             for (int y = 0; y < h; y++)
                 for (int x = 0; x < w; x++) {
                     uint8_t *p = out->rgba + ((size_t)y * (size_t)w + (size_t)x) * 4;
@@ -362,7 +362,7 @@ static bool decode_ppat(const uint8_t *d, uint32_t len, timg *out)
     }
     out->w = out->h = 8;
     out->n = 1;
-    out->rgba = malloc(8 * 8 * 4);
+    out->rgba = bb_malloc(8 * 8 * 4, BB_BYTES);
     for (int y = 0; y < 8; y++)
         for (int x = 0; x < 8; x++) {
             uint8_t *p = out->rgba + (y * 8 + x) * 4;
@@ -709,8 +709,8 @@ static const tlayo *layout(int16_t id)
                 if (o + 2 + nr * 40 <= len) {
                     c->l.nc = (int)nc;
                     c->l.nr = (int)nr;
-                    c->l.c = calloc(nc + 1, sizeof(tcoord));
-                    c->l.r = calloc(nr + 1, sizeof(trec));
+                    c->l.c = bb_calloc(nc + 1, sizeof(tcoord), BB_TAG(tcoord));
+                    c->l.r = bb_calloc(nr + 1, sizeof(trec), BB_TAG(trec));
                     for (uint32_t i = 0; i < nc; i++) {
                         const uint8_t *e = d + 8 + i * 16;
                         c->l.c[i] = (tcoord){ (int16_t)be16(e), (int16_t)be16(e + 2), (int16_t)be16(e + 4),
@@ -740,7 +740,7 @@ static const tlayo *layout(int16_t id)
 /* The coordinates of a layout for a rectangle and measures. */
 static int *evaluate(const tlayo *l, qrect b, const int *m)
 {
-    int *v = malloc(sizeof(int) * (size_t)(l->nc + 1));
+    int *v = bb_malloc(sizeof(int) * (size_t)(l->nc + 1), BB_BYTES);
 #define REF(i) ((i) == -1 ? b.top : (i) == -2 ? b.left : (i) == -3 ? b.bottom : (i) == -4 ? b.right : \
                 (i) >= 1 && (i) <= l->nc ? v[i] : 0)
     for (int i = 0; i < l->nc; i++) {
@@ -815,7 +815,7 @@ static bool draw_part_on(int id, qrect b, uint32_t state, const int *m, uint32_t
             draw_frame(t->id, r);
         }
     }
-    free(v);
+    bb_free(v);
     return true;
 }
 
@@ -863,7 +863,7 @@ bool thme_part_rect(int id, qrect b, uint32_t state, const int *m, uint32_t whic
         *out = r;
         found = true;
     }
-    free(v);
+    bb_free(v);
     return found;
 }
 
@@ -892,7 +892,7 @@ uint32_t thme_part_hit(int id, qrect b, uint32_t state, const int *m, uint32_t w
         if (h >= r.left && h < r.right && vv >= r.top && vv < r.bottom)
             hit |= t->flags & which;
     }
-    free(v);
+    bb_free(v);
     return hit;
 }
 
@@ -936,10 +936,10 @@ bool thme_part_region(int id, qrect b, uint32_t state, const int *m, uint32_t al
     int w = bb.right - bb.left, hgt = bb.bottom - bb.top;
     hrgn_init(out);
     if (w <= 0 || hgt <= 0 || (size_t)w * (size_t)hgt > 16u << 20) {
-        free(v);
+        bb_free(v);
         return false;
     }
-    surface s = { .kind = 2, .bounds = bb, .buf = calloc((size_t)w * (size_t)hgt, 1) };
+    surface s = { .kind = 2, .bounds = bb, .buf = bb_calloc((size_t)w * (size_t)hgt, 1, BB_BYTES) };
     surface *old = S;
     S = &s;
     draw_part_on(id, b, state, m, 0, 0);
@@ -961,7 +961,7 @@ bool thme_part_region(int id, qrect b, uint32_t state, const int *m, uint32_t al
                    (size_t)imax(0, imin(r.right, bb.right) - imax(r.left, bb.left)));
     }
     S = old;
-    int16_t *runs = malloc(sizeof(int16_t) * (size_t)(w + 2));
+    int16_t *runs = bb_malloc(sizeof(int16_t) * (size_t)(w + 2), BB_BYTES);
     for (int y = 0; y < hgt; y++) {
         int n = 0;
         const uint8_t *row = s.buf + (size_t)y * (size_t)w;
@@ -979,9 +979,9 @@ bool thme_part_region(int id, qrect b, uint32_t state, const int *m, uint32_t al
         if (n)
             hrgn_add_runs(out, bb.top + y, runs, n);
     }
-    free(runs);
-    free(s.buf);
-    free(v);
+    bb_free(runs);
+    bb_free(s.buf);
+    bb_free(v);
     return true;
 }
 
@@ -2076,7 +2076,7 @@ bool thme_load_sounds(const char *path, const uint8_t *fork, size_t len, char *e
         snprintf(err, errlen, "%s is not a sound set (no snd#)", path);
         return false;
     }
-    SND.fork = malloc(len);
+    SND.fork = bb_malloc(len, BB_BYTES);
     memcpy(SND.fork, fork, len);
     rsrc_index_free(&idx);
     rsrc_parse(SND.fork, len, &SND.idx, err, errlen);
@@ -2089,7 +2089,7 @@ void thme_unload_sounds(void)
 {
     if (SND.fork) {
         rsrc_index_free(&SND.idx);
-        free(SND.fork);
+        bb_free(SND.fork);
     }
     memset(&SND, 0, sizeof SND);
 }
@@ -2306,7 +2306,7 @@ bool machine_theme_render(const char *path, const char *png, int part, int pw, i
     if (!open_file(path, err, errlen))
         return false;
     int w = 800, h = part ? 680 : 900;
-    uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
+    uint8_t *rgba = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
     if (part)
         render_states(rgba, w, h, part, pw, ph);
     else
@@ -2314,7 +2314,7 @@ bool machine_theme_render(const char *path, const char *png, int part, int pw, i
     bool ok = machine_write_png(png, rgba, w, h);
     if (!ok)
         snprintf(err, errlen, "could not write %s", png);
-    free(rgba);
+    bb_free(rgba);
     thme_unload();
     return ok;
 }

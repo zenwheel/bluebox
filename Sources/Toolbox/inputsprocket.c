@@ -85,7 +85,7 @@ static const uint32_t spare_buttons[] = { MACHINE_PAD_X, MACHINE_PAD_Y, MACHINE_
 
 /* ---- The controllers, as the host last set them ---- */
 
-static pthread_mutex_t pad_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t pad_lock = PTHREAD_MUTEX_INITIALIZER;
 static machine_gamepad host_pads[MACHINE_PADS];
 
 void machine_set_gamepad(int index, const machine_gamepad *pad)

@@ -36,7 +36,7 @@ bool machine_add_init(const char *path)
 {
     if (ninits == 16)
         return false;
-    init_paths[ninits++] = strdup(path);
+    init_paths[ninits++] = bb_strdup(path);
     return true;
 }
 
@@ -117,7 +117,7 @@ void startup_run_inits(void)
 void startup_reset(void)
 {
     for (int i = 0; i < ninits; i++)
-        free(init_paths[i]);
+        bb_free(init_paths[i]);
     ninits = 0;
 }
 

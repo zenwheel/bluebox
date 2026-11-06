@@ -12,8 +12,8 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 
-static machine_control_fn control_fn;
-static void *control_ctx;
+BB_HOST static machine_control_fn control_fn;
+BB_HOST static void *control_ctx;
 
 void machine_set_control_renderer(machine_control_fn fn, void *ctx)
 {
@@ -30,9 +30,9 @@ static bool show(machine_control_request *rq, qrect r)
     rq->height = r.bottom - r.top;
     if (rq->width <= 0 || rq->height <= 0 || rq->width > 4096 || rq->height > 4096)
         return false;
-    uint8_t *rgba = calloc((size_t)rq->width * (size_t)rq->height, 4);
+    uint8_t *rgba = bb_calloc((size_t)rq->width * (size_t)rq->height, 4, BB_BYTES);
     if (!control_fn(rq, rgba, control_ctx)) {
-        free(rgba);
+        bb_free(rgba);
         return false;
     }
     gaddr port = qd_port();
@@ -71,7 +71,7 @@ static bool show(machine_control_request *rq, qrect r)
         }
     }
     hrgn_free(&clip);
-    free(rgba);
+    bb_free(rgba);
     return true;
 }
 

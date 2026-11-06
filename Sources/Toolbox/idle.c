@@ -802,7 +802,7 @@ void idle_native(uint32_t index, const char *name)
     calls++;
     if (index >= nkind) {
         uint32_t n = index + 256;
-        uint8_t *k = realloc(kind, n);
+        uint8_t *k = bb_realloc(kind, n, BB_BYTES);
         if (!k) {
             st.busy = true;
             return;

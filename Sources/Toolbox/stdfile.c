@@ -41,8 +41,8 @@ static struct {
 /* Or another package's filter (Navigation Services'): true hides. */
 static bool (*filter_fn)(const char *path);
 
-static machine_file_fn file_fn;
-static void *file_ctx;
+BB_HOST static machine_file_fn file_fn;
+BB_HOST static void *file_ctx;
 static char last_dir[PATH_MAX]; /* where the last panel was left */
 
 void machine_set_file_handler(machine_file_fn fn, void *ctx)
@@ -94,7 +94,7 @@ static uint8_t *cutouts[16];
 
 static void draw_offscreen(gaddr d)
 {
-    free(drawn);
+    bb_free(drawn);
     drawn = NULL;
     qrect pr = qrect_get(d + GrafPort_portRect_off);
     int w = pr.right - pr.left, h = pr.bottom - pr.top;
@@ -144,7 +144,7 @@ static void draw_offscreen(gaddr d)
     tb_DisposeRgn(vis);
     tb_DisposeRgn(clip);
     /* To RGBA, white clear: xRGB big-endian, or bits set for black. */
-    drawn = malloc((size_t)w * (size_t)h * 4);
+    drawn = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             uint32_t px;
@@ -168,12 +168,12 @@ static void draw_offscreen(gaddr d)
 /* A user item's part of the drawing; NULL if it drew nothing there. */
 static uint8_t *cutout(int slot, qrect q, qrect port)
 {
-    free(cutouts[slot]);
+    bb_free(cutouts[slot]);
     cutouts[slot] = NULL;
     int x0 = q.left - port.left, y0 = q.top - port.top, w = q.right - q.left, h = q.bottom - q.top;
     if (!drawn || w <= 0 || h <= 0 || x0 < 0 || y0 < 0 || x0 + w > drawn_w || y0 + h > drawn_h)
         return NULL;
-    uint8_t *c = malloc((size_t)w * (size_t)h * 4);
+    uint8_t *c = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
     bool any = false;
     for (int y = 0; y < h; y++) {
         memcpy(c + (size_t)y * (size_t)w * 4, drawn + ((size_t)(y0 + y) * (size_t)drawn_w + (size_t)x0) * 4,
@@ -182,7 +182,7 @@ static uint8_t *cutout(int slot, qrect q, qrect port)
             any = c[((size_t)y * (size_t)w + (size_t)x) * 4 + 3] != 0;
     }
     if (!any) {
-        free(c);
+        bb_free(c);
         return NULL;
     }
     cutouts[slot] = c;

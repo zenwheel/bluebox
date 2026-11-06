@@ -315,13 +315,13 @@ func loadMacFile(_ path: String) -> mac_file {
     var buf: UnsafeMutablePointer<UInt8>?
     var len = 0
     if read_file(path, &buf, &len), let buf, macbinary_detect(buf, len) {
-        defer { free(buf) }
+        defer { bb_free(buf) }
         if !macbinary_parse(buf, len, &mf, &err, err.count) {
             fail(str(err))
         }
         return mf
     }
-    free(buf)
+    bb_free(buf)
     if !appledouble_read(path, &mf, &err, err.count) {
         fail(str(err))
     }

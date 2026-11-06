@@ -279,7 +279,7 @@ static uint8_t *container_bytes(gaddr h, uint32_t *len)
     if (!h || !rd32(h))
         return NULL;
     *len = (uint32_t)tb_GetHandleSize(h);
-    uint8_t *b = malloc(*len ? *len : 1);
+    uint8_t *b = bb_malloc(*len ? *len : 1, BB_BYTES);
     gget(b, rd32(h), *len);
     return b;
 }
@@ -311,7 +311,7 @@ int16_t vr_original(vr *v, uint32_t sel, const uint32_t *p)
         uint32_t len = 0;
         uint8_t *b = container_bytes(p[1], &len);
         int16_t err = vr_trigger(v, p[0], b, len, b ? p[2] : 0);
-        free(b);
+        bb_free(b);
         return err;
     }
     case SEL_HOTTYPE:
@@ -1383,12 +1383,12 @@ static void QTVRSetBackBufferImagingProc(ppc_cpu *c)
     }
     uint16_t n = (uint16_t)R(2);
     gaddr areas = R(3);
-    free(v->areas);
+    bb_free(v->areas);
     v->areas = NULL;
     v->nareas = 0;
     v->backbuf = (vr_proc){ R(1), (int32_t)R(4), 0 };
     if (v->backbuf.proc && n && areas) {
-        v->areas = calloc(n, sizeof *v->areas);
+        v->areas = bb_calloc(n, sizeof *v->areas, BB_TAG(vr_area));
         for (uint16_t i = 0; i < n; i++) {
             gaddr a = areas + 20u * i;
             v->areas[i] = (vr_area){ in_deg(v, getf(a)), in_deg(v, getf(a + 4)), in_deg(v, getf(a + 8)),

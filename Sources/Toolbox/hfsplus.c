@@ -585,8 +585,8 @@ static struct {
 static void close_iter(int i)
 {
     for (int k = 0; k < iters[i].count; k++)
-        free(iters[i].list[k]);
-    free(iters[i].list);
+        bb_free(iters[i].list[k]);
+    bb_free(iters[i].list);
     memset(&iters[i], 0, sizeof iters[i]);
 }
 
@@ -806,9 +806,9 @@ static bool search_under(search *s, const char *dir, int depth)
             if (go_on && depth < 64 && fm_is_dir(paths[i]))
                 go_on = search_under(s, paths[i], depth + 1);
         }
-        free(paths[i]);
+        bb_free(paths[i]);
     }
-    free(paths);
+    bb_free(paths);
     return go_on;
 }
 

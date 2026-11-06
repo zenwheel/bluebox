@@ -141,9 +141,9 @@ static uint8_t *read_host_file(const char *path, size_t *n)
     fseek(f, 0, SEEK_END);
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
-    uint8_t *b = malloc(len > 0 ? (size_t)len : 1);
+    uint8_t *b = bb_malloc(len > 0 ? (size_t)len : 1, BB_BYTES);
     if (b && len > 0 && fread(b, 1, (size_t)len, f) != (size_t)len) {
-        free(b);
+        bb_free(b);
         b = NULL;
     }
     fclose(f);
@@ -198,7 +198,7 @@ static bool source_handle(source *s, gaddr h, uint32_t type)
     if (!h || !rd32(h))
         return false;
     s->n = (size_t)tb_GetHandleSize(h);
-    s->b = malloc(s->n ? s->n : 1);
+    s->b = bb_malloc(s->n ? s->n : 1, BB_BYTES);
     gget(s->b, rd32(h), (uint32_t)s->n);
     s->type = type;
     return true;
@@ -221,19 +221,19 @@ static bool source_dataref(source *s, gaddr dataRef, uint32_t type)
         qt_src src;
         if (qt_src_open(type, 0, ref, rn, NULL, false, &src)) {
             int64_t n = qt_src_size(&src);
-            s->b = malloc(n > 0 ? (size_t)n : 1);
+            s->b = bb_malloc(n > 0 ? (size_t)n : 1, BB_BYTES);
             ok = s->b && n >= 0 && qt_src_read(&src, 0, s->b, (uint32_t)n);
             s->n = ok ? (size_t)n : 0;
             qt_src_close(&src);
         }
     }
-    free(ref);
+    bb_free(ref);
     return ok;
 }
 
 static void source_free(source *s, bool own_spec)
 {
-    free(s->b);
+    bb_free(s->b);
     if (own_spec && s->spec)
         tb_DisposePtr(s->spec);
     memset(s, 0, sizeof *s);
@@ -266,7 +266,7 @@ static gaddr track_for(dest *d, uint32_t mtype, int32_t w, int32_t h, int16_t vo
                 uint32_t n;
                 uint8_t *b = qt_dref_bytes(dref, &n);
                 md->default_dref = (int16_t)qtm_add_dref(md, dref_type, 0, b, n);
-                free(b);
+                bb_free(b);
             }
         } else if (d->flags & movieImportMustUseTrack) {
             return 0;
@@ -393,7 +393,7 @@ static bool to_pcm(sound *s, const uint8_t *d, size_t n, bool little)
                  : s->format == fourcc("in24") ? 3 : (size_t)(s->bits + 7) / 8;
     size_t count = n / per;
     count -= count % (size_t)s->channels;
-    s->pcm = malloc((count ? count : 1) * sizeof *s->pcm);
+    s->pcm = bb_malloc((count ? count : 1) * sizeof *s->pcm, BB_BYTES);
     if (!s->pcm)
         return false;
     for (size_t i = 0; i < count; i++) {
@@ -465,7 +465,7 @@ static bool ms_ima(sound *s, const uint8_t *d, size_t n, size_t align)
     if (align < 4 * ch + 4)
         return false;
     size_t per_block = (align - 4 * ch) * 2 / ch + 1, blocks = n / align;
-    s->pcm = malloc((blocks * per_block * ch + 1) * sizeof *s->pcm);
+    s->pcm = bb_malloc((blocks * per_block * ch + 1) * sizeof *s->pcm, BB_BYTES);
     if (!s->pcm)
         return false;
     size_t out = 0;
@@ -500,7 +500,7 @@ static bool ms_adpcm(sound *s, const uint8_t *d, size_t n, size_t align)
     if (align < 7 * ch)
         return false;
     size_t per_block = (align - 7 * ch) * 2 / ch + 2, blocks = n / align;
-    s->pcm = malloc((blocks * per_block * ch + 1) * sizeof *s->pcm);
+    s->pcm = bb_malloc((blocks * per_block * ch + 1) * sizeof *s->pcm, BB_BYTES);
     if (!s->pcm)
         return false;
     size_t out = 0;
@@ -756,13 +756,13 @@ static int16_t import_sound(dest *d, const source *src, sound *s)
     size_t nbytes = converted ? (size_t)s->frames * (size_t)s->channels * 2 : s->bytes;
     uint8_t *copy = NULL;
     if (converted) {
-        copy = malloc(nbytes ? nbytes : 1);
+        copy = bb_malloc(nbytes ? nbytes : 1, BB_BYTES);
         for (size_t i = 0; i < (size_t)s->frames * (size_t)s->channels; i++)
             put16(copy + 2 * i, (uint16_t)s->pcm[i]);
     }
     uint32_t dtype;
     gaddr dref = dref_for(src, !converted, converted ? copy : src->b + s->offset, nbytes, &dtype);
-    free(copy);
+    bb_free(copy);
     int32_t scale = (int32_t)lround(s->rate);
     gaddr media;
     gaddr track = track_for(d, fourcc("soun"), 0, 0, 0x100, scale > 0 ? scale : 22050, dref, dtype, &media);
@@ -843,7 +843,7 @@ static uint8_t *picture_rgba(gaddr pic, int *w, int *h)
         gaddr pm = rd32(pmh);
         gaddr base = rd32(pm);
         uint32_t rb = rd16(pm + 4) & 0x3FFF;
-        rgba = malloc((size_t)*w * (size_t)*h * 4);
+        rgba = bb_malloc((size_t)*w * (size_t)*h * 4, BB_BYTES);
         for (int y = 0; rgba && y < *h; y++)
             for (int x = 0; x < *w; x++) {
                 uint32_t v = rd32(base + (uint32_t)y * rb + (uint32_t)x * 4);
@@ -883,7 +883,7 @@ static int32_t frame_duration(const importer *im, const dest *d, int32_t fallbac
 static int16_t import_frames(dest *d, const importer *im, uint8_t **frames, int nframes, int w, int h, int32_t dur)
 {
     size_t fb = (size_t)w * (size_t)h * 4, total = fb * (size_t)nframes;
-    uint8_t *all = malloc(total ? total : 1);
+    uint8_t *all = bb_malloc(total ? total : 1, BB_BYTES);
     if (!all)
         return memFullErr;
     for (int f = 0; f < nframes; f++)
@@ -895,7 +895,7 @@ static int16_t import_frames(dest *d, const importer *im, uint8_t **frames, int 
     source none = { 0 };
     uint32_t dtype;
     gaddr dref = dref_for(&none, false, all, total, &dtype);
-    free(all);
+    bb_free(all);
     int32_t fw = im && im->width ? im->width : w << 16, fh = im && im->height ? im->height : h << 16;
     gaddr media;
     gaddr track = track_for(d, fourcc("vide"), fw, fh, 0, 600, dref, dtype, &media);
@@ -924,7 +924,7 @@ static int16_t import_jpeg(dest *d, const importer *im, const source *src)
     int w, h;
     if (!qt_decode_image(src->b, src->n, &rgba, &w, &h))
         return noMovieFound;
-    free(rgba);
+    bb_free(rgba);
     uint32_t dtype;
     gaddr dref = dref_for(src, true, src->b, src->n, &dtype);
     int32_t fw = im && im->width ? im->width : w << 16, fh = im && im->height ? im->height : h << 16;
@@ -970,7 +970,7 @@ static int16_t import_image(dest *d, const importer *im, const source *src, int 
     if (!rgba)
         return noMovieFound;
     int16_t err = import_frames(d, im, &rgba, 1, w, h, frame_duration(im, d, 600));
-    free(rgba);
+    bb_free(rgba);
     return err;
 }
 
@@ -985,8 +985,8 @@ static int16_t import_pics(dest *d, const importer *im, const source *src)
         return noMovieFound;
     tb_UseResFile(rn);
     int count = tb_Count1Resources((int32_t)fourcc("PICT"));
-    uint8_t **frames = calloc((size_t)(count > 0 ? count : 1), sizeof *frames);
-    int16_t *ids = calloc((size_t)(count > 0 ? count : 1), sizeof *ids);
+    uint8_t **frames = bb_calloc((size_t)(count > 0 ? count : 1), sizeof *frames, BB_TAG(uint8_t *));
+    int16_t *ids = bb_calloc((size_t)(count > 0 ? count : 1), sizeof *ids, BB_BYTES);
     int n = 0, w = 0, h = 0;
     for (int i = 1; i <= count; i++) {
         gaddr pic = tb_Get1IndResource((int32_t)fourcc("PICT"), (int16_t)i);
@@ -999,7 +999,7 @@ static int16_t import_pics(dest *d, const importer *im, const source *src)
         int fw, fh;
         uint8_t *rgba = picture_rgba(pic, &fw, &fh);
         if (!rgba || (n && (fw != w || fh != h))) {
-            free(rgba);
+            bb_free(rgba);
             continue;
         }
         w = fw, h = fh;
@@ -1016,9 +1016,9 @@ static int16_t import_pics(dest *d, const importer *im, const source *src)
     tb_UseResFile(saved);
     int16_t err = n ? import_frames(d, im, frames, n, w, h, frame_duration(im, d, 40)) : noMovieFound;
     for (int i = 0; i < n; i++)
-        free(frames[i]);
-    free(frames);
-    free(ids);
+        bb_free(frames[i]);
+    bb_free(frames);
+    bb_free(ids);
     return err;
 }
 
@@ -1040,7 +1040,7 @@ static void word(words *v, uint32_t x)
 {
     if (v->n == v->cap) {
         size_t cap = v->cap ? v->cap * 2 : 256;
-        uint32_t *nw = realloc(v->w, cap * sizeof *nw);
+        uint32_t *nw = bb_realloc(v->w, cap * sizeof *nw, BB_BYTES);
         if (!nw)
             return;
         v->w = nw;
@@ -1135,7 +1135,7 @@ static int16_t import_midi(dest *d, const source *src)
                 if (type == 0x51 && ml == 3 && p + 3 <= end) {
                     if (nev == cap) {
                         cap = cap ? cap * 2 : 1024;
-                        ev = realloc(ev, cap * sizeof *ev);
+                        ev = bb_realloc(ev, cap * sizeof *ev, BB_TAG(smf_event));
                     }
                     ev[nev++] = (smf_event){ tick, 0xFF, 0, 0, order++,
                                              (uint32_t)b[p] << 16 | (uint32_t)b[p + 1] << 8 | b[p + 2] };
@@ -1159,20 +1159,20 @@ static int16_t import_midi(dest *d, const source *src)
             p += (size_t)nd;
             if (nev == cap) {
                 cap = cap ? cap * 2 : 1024;
-                ev = realloc(ev, cap * sizeof *ev);
+                ev = bb_realloc(ev, cap * sizeof *ev, BB_TAG(smf_event));
             }
             ev[nev++] = (smf_event){ tick, st, d1, d2, order++, 0 };
         }
         at += 8 + len;
     }
     if (!nev) {
-        free(ev);
+        bb_free(ev);
         return noMovieFound;
     }
     qsort(ev, nev, sizeof *ev, cmp_event);
     /* ticks to media time (600 per second) through the tempo map */
     const int scale = 600;
-    uint64_t *when = malloc(nev * sizeof *when);
+    uint64_t *when = bb_malloc(nev * sizeof *when, BB_BYTES);
     double us_per_tick = 500000.0 / division, now_us = 0;
     uint64_t last_tick = 0;
     for (size_t i = 0; i < nev; i++) {
@@ -1244,21 +1244,21 @@ static int16_t import_midi(dest *d, const source *src)
             end_time = when[i];
     rest(&body, end_time - at_time + 1);
     word(&body, 0x60000000);
-    free(when);
-    free(ev);
+    bb_free(when);
+    bb_free(ev);
     /* the description: size, 'musi', reserved, data reference, flags, header */
     uint32_t dlen = 20 + (uint32_t)header.n * 4;
-    uint8_t *desc = calloc(1, dlen);
+    uint8_t *desc = bb_calloc(1, dlen, BB_BYTES);
     put32b(desc, dlen);
     put32b(desc + 4, fourcc("musi"));
     for (size_t i = 0; i < header.n; i++)
         put32b(desc + 20 + i * 4, header.w[i]);
     size_t sl = body.n * 4;
-    uint8_t *sample = malloc(sl ? sl : 1);
+    uint8_t *sample = bb_malloc(sl ? sl : 1, BB_BYTES);
     for (size_t i = 0; i < body.n; i++)
         put32b(sample + i * 4, body.w[i]);
-    free(header.w);
-    free(body.w);
+    bb_free(header.w);
+    bb_free(body.w);
     uint32_t dtype;
     source none = { 0 };
     gaddr dref = dref_for(&none, false, sample, sl, &dtype);
@@ -1283,8 +1283,8 @@ static int16_t import_midi(dest *d, const source *src)
         qtm_add_samples(md, base, sl, 1, (uint32_t)sl, (uint32_t)(end_time + 1), (uint32_t)di, true, true);
         err = insert(d, track, media, start);
     }
-    free(desc);
-    free(sample);
+    bb_free(desc);
+    bb_free(sample);
     return err;
 }
 
@@ -1340,7 +1340,7 @@ static int16_t import_text(dest *d, const importer *im, const source *src)
                 if (acc || pending >= 0) {
                     if (nl == cap) {
                         cap = cap ? cap * 2 : 64;
-                        lines = realloc(lines, cap * sizeof *lines);
+                        lines = bb_realloc(lines, cap * sizeof *lines, BB_TAG(text_line));
                     }
                     lines[nl++] = (text_line){ acc, acc_len, pending };
                     acc = NULL, acc_len = 0;
@@ -1350,7 +1350,7 @@ static int16_t import_text(dest *d, const importer *im, const source *src)
         } else if (qttext) {
             if (!len && !acc) /* blank lines between stamps */
                 goto next_line;
-            acc = realloc(acc, acc_len + len + 2);
+            acc = bb_realloc(acc, acc_len + len + 2, BB_BYTES);
             if (acc_len)
                 acc[acc_len++] = '\r';
             memcpy(acc + acc_len, line, len);
@@ -1358,9 +1358,9 @@ static int16_t import_text(dest *d, const importer *im, const source *src)
         } else if (len) {
             if (nl == cap) {
                 cap = cap ? cap * 2 : 64;
-                lines = realloc(lines, cap * sizeof *lines);
+                lines = bb_realloc(lines, cap * sizeof *lines, BB_TAG(text_line));
             }
-            char *t = malloc(len);
+            char *t = bb_malloc(len, BB_BYTES);
             memcpy(t, line, len);
             lines[nl++] = (text_line){ t, len, -1 };
         }
@@ -1372,14 +1372,14 @@ static int16_t import_text(dest *d, const importer *im, const source *src)
     if (qttext && (acc || pending >= 0)) {
         if (nl == cap) {
             cap = cap ? cap * 2 : 64;
-            lines = realloc(lines, cap * sizeof *lines);
+            lines = bb_realloc(lines, cap * sizeof *lines, BB_TAG(text_line));
         }
         lines[nl++] = (text_line){ acc, acc_len, pending };
         acc = NULL;
     }
-    free(acc);
+    bb_free(acc);
     if (!nl) {
-        free(lines);
+        bb_free(lines);
         return noMovieFound;
     }
     int32_t each = frame_duration(im, d, 0);
@@ -1433,8 +1433,8 @@ static int16_t import_text(dest *d, const importer *im, const source *src)
             err = insert(d, track, media, start);
     }
     for (size_t i = 0; i < nl; i++)
-        free(lines[i].text);
-    free(lines);
+        bb_free(lines[i].text);
+    bb_free(lines);
     return err;
 }
 
@@ -1486,7 +1486,7 @@ static int16_t import_source(importer *im, source *src, int kind, dest *d)
     case F_PICS: err = import_pics(d, im, src); break;
     case F_TEXT: err = import_text(d, im, src); break;
     }
-    free(s.pcm);
+    bb_free(s.pcm);
     return err;
 }
 
@@ -1804,7 +1804,7 @@ int16_t qt_import_file_as_movie(const char *path, gaddr moviep, int16_t flags)
 int16_t qt_import_bytes(const uint8_t *bytes, size_t len, uint32_t type, gaddr movie, int32_t at, gaddr *used)
 {
     source src = { 0 };
-    src.b = malloc(len ? len : 1);
+    src.b = bb_malloc(len ? len : 1, BB_BYTES);
     memcpy(src.b, bytes, len);
     src.n = len;
     src.type = type;

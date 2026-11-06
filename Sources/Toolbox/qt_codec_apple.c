@@ -74,7 +74,7 @@ typedef struct {
 
 static state *new_state(const qt_video_format *f)
 {
-    state *s = calloc(1, sizeof *s);
+    state *s = bb_calloc(1, sizeof *s, BB_TAG(state));
     if (s) {
         s->bw = (f->width + 3) / 4;
         s->bh = (f->height + 3) / 4;
@@ -86,9 +86,9 @@ static void close_(void *s)
 {
     state *st = s;
     if (st) {
-        free(st->index);
-        free(st->rgb);
-        free(st);
+        bb_free(st->index);
+        bb_free(st->rgb);
+        bb_free(st);
     }
 }
 
@@ -295,8 +295,8 @@ static bool smc_supports(int depth) { return depth == 8; }
 static void *smc_open(const qt_video_format *f)
 {
     state *s = new_state(f);
-    if (s && !(s->index = calloc((size_t)s->bw * 16, (size_t)s->bh))) {
-        free(s);
+    if (s && !(s->index = bb_calloc((size_t)s->bw * 16, (size_t)s->bh, BB_BYTES))) {
+        bb_free(s);
         return NULL;
     }
     return s;
@@ -465,8 +465,8 @@ static bool rpza_supports(int depth) { return depth == 16; }
 static void *rpza_open(const qt_video_format *f)
 {
     state *s = new_state(f);
-    if (s && !(s->rgb = calloc((size_t)s->bw * 16 * (size_t)s->bh, sizeof *s->rgb))) {
-        free(s);
+    if (s && !(s->rgb = bb_calloc((size_t)s->bw * 16 * (size_t)s->bh, sizeof *s->rgb, BB_BYTES))) {
+        bb_free(s);
         return NULL;
     }
     return s;

@@ -447,19 +447,19 @@ static int session(afp_session *s, char *err, size_t errlen)
 static afp_session *connect_to(bool tcp, const char *where, const char *user, const char *password, char *err,
                                size_t errlen)
 {
-    afp_session *s = calloc(1, sizeof *s);
+    afp_session *s = bb_calloc(1, sizeof *s, BB_TAG(afp_session));
     if (!s)
         return NULL;
     s->tcp = tcp;
     s->fd = -1;
     s->bufcap = MAX_CHUNK + 4096;
-    s->buf = malloc((size_t)s->bufcap);
+    s->buf = bb_malloc((size_t)s->bufcap, BB_BYTES);
     snprintf(s->where, sizeof s->where, "%s", where);
     snprintf(s->user, sizeof s->user, "%s", user ? user : "");
     snprintf(s->password, sizeof s->password, "%s", password ? password : "");
     if (!s->buf || session(s, err, errlen) != 0) {
-        free(s->buf);
-        free(s);
+        bb_free(s->buf);
+        bb_free(s);
         return NULL;
     }
     return s;
@@ -487,8 +487,8 @@ void afp_close(afp_session *s)
         call(s, &k, NULL);
     }
     hang_up(s);
-    free(s->buf);
-    free(s);
+    bb_free(s->buf);
+    bb_free(s);
 }
 
 void afp_idle(afp_session *s)
@@ -555,7 +555,7 @@ static int volumes(afp_session *s, char (**names)[28], int *count)
     if (n < 5)
         return kFPMiscErr;
     int nv = s->buf[4];
-    char (*v)[28] = calloc((size_t)(nv ? nv : 1), sizeof *v);
+    char (*v)[28] = bb_calloc((size_t)(nv ? nv : 1), sizeof *v, BB_BYTES);
     if (!v)
         return kFPMiscErr;
     int got = 0;
@@ -712,7 +712,7 @@ static int list(afp_session *s, uint16_t vol, uint32_t dir, afp_entry **entries,
         if (r == kFPObjectNotFound)
             break;
         if (r != 0 || n < 6) {
-            free(v);
+            bb_free(v);
             return r ? r : kFPMiscErr;
         }
         uint16_t fb = g16(s->buf), db = g16(s->buf + 2);
@@ -726,9 +726,9 @@ static int list(afp_session *s, uint16_t vol, uint32_t dir, afp_entry **entries,
                 break;
             if (got == cap) {
                 cap = cap ? cap * 2 : 64;
-                afp_entry *nv = realloc(v, sizeof *v * (size_t)cap);
+                afp_entry *nv = bb_realloc(v, sizeof *v * (size_t)cap, BB_TAG(afp_entry));
                 if (!nv) {
-                    free(v);
+                    bb_free(v);
                     return kFPMiscErr;
                 }
                 v = nv;
@@ -821,7 +821,7 @@ static int read_fork(afp_session *s, uint16_t vol, uint32_t dir, const char *nam
     int r = open_fork(s, vol, dir, name, rsrc, 0x01, &ref, &size);
     if (r != 0)
         return r;
-    uint8_t *out = malloc(size ? size : 1);
+    uint8_t *out = bb_malloc(size ? size : 1, BB_BYTES);
     if (!out) {
         close_fork(s, ref);
         return kFPMiscErr;
@@ -853,14 +853,14 @@ static int read_fork(afp_session *s, uint16_t vol, uint32_t dir, const char *nam
         }
     }
     if (r == kFPSessClosed) {
-        free(out);
+        bb_free(out);
         return r;
     }
     int c = close_fork(s, ref);
     if (r == 0)
         r = c;
     if (r != 0) {
-        free(out);
+        bb_free(out);
         return r;
     }
     *data = out;

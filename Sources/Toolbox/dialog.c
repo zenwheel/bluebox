@@ -16,8 +16,8 @@
 enum { itemButton = 4, itemStatText = 8, itemDisabled = 0x80 };
 
 static gaddr resume_proc;
-static machine_alert_fn alert_fn;
-static void *alert_ctx;
+BB_HOST static machine_alert_fn alert_fn;
+BB_HOST static void *alert_ctx;
 static bool depth_alerts;
 static int wanted_depth;
 /* The last alert answered headless, and how often it came straight back. */

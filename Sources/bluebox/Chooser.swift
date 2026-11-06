@@ -4,6 +4,7 @@
 
 import Foundation
 import BlueBoxHost
+import CCore
 import ForkStore
 import Toolbox
 #if canImport(AppKit)
@@ -125,7 +126,7 @@ func chooserCommand(_ args: [String]) {
             return rsrc_build(&spec, 1, &fork, &len)
         }
         guard ok, let fork else { fail("could not make \(path)") }
-        defer { free(fork) }
+        defer { bb_free(fork) }
         var f = mac_file()
         var empty: [UInt8] = []
         var err = [CChar](repeating: 0, count: 256)

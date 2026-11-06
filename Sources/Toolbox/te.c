@@ -190,7 +190,7 @@ static int width_of(gaddr teh, int from, int n)
 {
     if (n <= 0)
         return 0;
-    uint8_t *buf = malloc((size_t)n);
+    uint8_t *buf = bb_malloc((size_t)n, BB_BYTES);
     gget(buf, text_ptr(teh) + (uint32_t)from, (uint32_t)n);
     int w = 0;
     if (!styled(teh)) {
@@ -208,7 +208,7 @@ static int width_of(gaddr teh, int from, int n)
             i = end;
         }
     }
-    free(buf);
+    bb_free(buf);
     return w;
 }
 
@@ -324,10 +324,10 @@ void tb_TECalText(gaddr teh)
     qrect dest = qrect_get(te(teh) + TERec_destRect_off);
     int width = dest.right - dest.left;
     bool cr_only = te16(teh, TERec_crOnly_off) < 0;
-    uint8_t *t = malloc(len ? (size_t)len : 1);
+    uint8_t *t = bb_malloc(len ? (size_t)len : 1, BB_BYTES);
     gget(t, text_ptr(teh), (uint32_t)len);
     /* Every character's width, in its run's style. */
-    int *cw = malloc(((size_t)len + 1) * sizeof *cw);
+    int *cw = bb_malloc(((size_t)len + 1) * sizeof *cw, BB_BYTES);
     for (int i = 0; i < len;) {
         int r = run_of(teh, i), end = run_start(teh, r + 1);
         if (end > len)
@@ -338,7 +338,7 @@ void tb_TECalText(gaddr teh)
         for (; i < end; i++)
             cw[i] = qd_text_width(qd_port(), t + i, 1);
     }
-    int *starts = malloc(((size_t)len + 2) * sizeof *starts);
+    int *starts = bb_malloc(((size_t)len + 2) * sizeof *starts, BB_BYTES);
     int n = 0, pos = 0;
     starts[n++] = 0;
     while (pos < len) {
@@ -375,9 +375,9 @@ void tb_TECalText(gaddr teh)
     set16(teh, TERec_lineStarts_off + (uint32_t)lines * 2, (int16_t)len);
     if (styled(teh))
         set_line_heights(teh);
-    free(starts);
-    free(cw);
-    free(t);
+    bb_free(starts);
+    bb_free(cw);
+    bb_free(t);
     leave(teh, s);
 }
 
@@ -601,7 +601,7 @@ static void draw_runs(gaddr teh, int ls, int le)
 {
     if (le <= ls)
         return;
-    uint8_t *buf = malloc((size_t)(le - ls));
+    uint8_t *buf = bb_malloc((size_t)(le - ls), BB_BYTES);
     gget(buf, text_ptr(teh) + (uint32_t)ls, (uint32_t)(le - ls));
     if (!styled(teh)) {
         qd_draw_text(qd_port(), buf, le - ls);
@@ -622,7 +622,7 @@ static void draw_runs(gaddr teh, int ls, int le)
         tb_RGBForeColor(saved);
         tb_DisposePtr(saved);
     }
-    free(buf);
+    bb_free(buf);
 }
 
 static void draw_lines(gaddr teh, qrect area)
@@ -1222,7 +1222,7 @@ void tb_TEInsert(gaddr p, int32_t ln, gaddr teh)
 {
     if (!te_ok(teh))
         return;
-    uint8_t *buf = malloc(ln > 0 ? (size_t)ln : 1);
+    uint8_t *buf = bb_malloc(ln > 0 ? (size_t)ln : 1, BB_BYTES);
     gget(buf, p, (uint32_t)(ln > 0 ? ln : 0));
     int a, b;
     selection(teh, &a, &b);
@@ -1230,7 +1230,7 @@ void tb_TEInsert(gaddr p, int32_t ln, gaddr teh)
     edit(teh, buf, ln > 0 ? ln : 0);
     set16(teh, TERec_selStart_off, (int16_t)(b + ln));
     set16(teh, TERec_selEnd_off, (int16_t)(b + ln));
-    free(buf);
+    bb_free(buf);
 }
 
 void tb_TEDelete(gaddr teh)
@@ -1298,10 +1298,10 @@ void tb_TEPaste(gaddr teh)
         return;
     gaddr h = scrap_handle();
     int n = (int16_t)rd16(LM_TEScrpLength);
-    uint8_t *buf = malloc(n > 0 ? (size_t)n : 1);
+    uint8_t *buf = bb_malloc(n > 0 ? (size_t)n : 1, BB_BYTES);
     gget(buf, rd32(h), (uint32_t)(n > 0 ? n : 0));
     edit(teh, buf, n > 0 ? n : 0);
-    free(buf);
+    bb_free(buf);
 }
 
 gaddr tb_TEScrapHandle(void) { return scrap_handle(); }
@@ -1820,10 +1820,10 @@ void tb_TEStylePaste(gaddr teh)
     } else {
         int a = te16(teh, TERec_selStart_off);
         tb_HLock(text);
-        uint8_t *buf = malloc(n > 0 ? (size_t)n : 1);
+        uint8_t *buf = bb_malloc(n > 0 ? (size_t)n : 1, BB_BYTES);
         gget(buf, rd32(text), (uint32_t)n);
         replace(teh, buf, n);
-        free(buf);
+        bb_free(buf);
         if (ns > 0)
             tb_TEUseStyleScrap(a, a + n, st, false, teh);
         wr8(te(teh) + TERec_caretState_off, 0xFF);

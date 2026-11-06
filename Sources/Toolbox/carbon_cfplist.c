@@ -53,7 +53,7 @@ static bool text_of_bytes(const uint8_t *b, size_t n, uint16_t **u, uint32_t *nu
     if (n >= 2 && ((b[0] == 0xFE && b[1] == 0xFF) || (b[0] == 0xFF && b[1] == 0xFE))) {
         bool le = b[0] == 0xFF;
         *nu = (uint32_t)(n / 2 - 1);
-        *u = malloc(sizeof **u * (*nu + 1));
+        *u = bb_malloc(sizeof **u * (*nu + 1), BB_BYTES);
         if (!*u)
             return false;
         for (uint32_t i = 0; i < *nu; i++)
@@ -113,17 +113,17 @@ static void xnode_free(xnode *x)
         text_free(&x->an[i]);
         text_free(&x->av[i]);
     }
-    free(x->an);
-    free(x->av);
+    bb_free(x->an);
+    bb_free(x->av);
     for (uint32_t i = 0; i < x->nkids; i++)
         xnode_free(x->kids[i]);
-    free(x->kids);
-    free(x);
+    bb_free(x->kids);
+    bb_free(x);
 }
 
 static xnode *xnode_add(xnode *parent, int type, uint32_t pos)
 {
-    xnode *x = calloc(1, sizeof *x);
+    xnode *x = bb_calloc(1, sizeof *x, BB_TAG(xnode));
     if (!x)
         return NULL;
     x->type = type;
@@ -132,9 +132,9 @@ static xnode *xnode_add(xnode *parent, int type, uint32_t pos)
     if (parent) {
         if (parent->nkids == parent->cap) {
             uint32_t cap = parent->cap * 2 + 4;
-            xnode **p = realloc(parent->kids, sizeof *p * cap);
+            xnode **p = bb_realloc(parent->kids, sizeof *p * cap, BB_TAG(xnode *));
             if (!p) {
-                free(x);
+                bb_free(x);
                 return NULL;
             }
             parent->kids = p;
@@ -328,7 +328,7 @@ static bool read_element(xreader *r, xnode *parent, int depth)
             text_free(&av);
             return false;
         }
-        cf_text *pa = realloc(e->an, sizeof *pa * (e->nattr + 1)), *pv = pa ? realloc(e->av, sizeof *pv * (e->nattr + 1)) : NULL;
+        cf_text *pa = bb_realloc(e->an, sizeof *pa * (e->nattr + 1), BB_TAG(cf_text)), *pv = pa ? bb_realloc(e->av, sizeof *pv * (e->nattr + 1), BB_TAG(cf_text)) : NULL;
         if (pa)
             e->an = pa;
         if (!pa || !pv) {
@@ -588,7 +588,7 @@ static void element_text(const xnode *x, cf_text *t)
 
 static char *text_ascii(const cf_text *t)
 {
-    char *s = malloc(t->n + 1);
+    char *s = bb_malloc(t->n + 1, BB_BYTES);
     if (!s)
         return NULL;
     for (uint32_t i = 0; i < t->n; i++)
@@ -604,7 +604,7 @@ static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0
 
 static uint8_t *base64_decode(const cf_text *t, size_t *n)
 {
-    uint8_t *out = malloc(t->n * 3 / 4 + 4);
+    uint8_t *out = bb_malloc(t->n * 3 / 4 + 4, BB_BYTES);
     uint32_t acc = 0;
     int bits = 0;
     size_t k = 0;
@@ -725,11 +725,11 @@ static gaddr plist_of_element(gaddr alloc, xnode *x, uint32_t mut, gaddr *error)
             cf_release(v);
         }
         if (!containers) { /* an immutable copy */
-            uint32_t n = cfarray_count(r), *v = malloc(sizeof *v * (n ? n : 1));
+            uint32_t n = cfarray_count(r), *v = bb_malloc(sizeof *v * (n ? n : 1), BB_BYTES);
             for (uint32_t i = 0; v && i < n; i++)
                 v[i] = cfarray_get(r, i);
             gaddr im = cfarray_new(alloc, v, n, false);
-            free(v);
+            bb_free(v);
             cf_release(r);
             r = im;
         }
@@ -743,21 +743,21 @@ static gaddr plist_of_element(gaddr alloc, xnode *x, uint32_t mut, gaddr *error)
     } else if (name_is(x, "integer")) {
         char *s = text_ascii(&t);
         r = s ? cfnum_new_int(alloc, strtoll(s, NULL, 0)) : 0;
-        free(s);
+        bb_free(s);
     } else if (name_is(x, "real")) {
         char *s = text_ascii(&t);
         r = s ? cfnum_new_double(alloc, strtod(s, NULL)) : 0;
-        free(s);
+        bb_free(s);
     } else if (name_is(x, "date")) {
         char *s = text_ascii(&t);
         double at;
         r = s && parse_date(s, &at) ? cfdate_new(alloc, at) : 0;
-        free(s);
+        bb_free(s);
     } else if (name_is(x, "data")) {
         size_t n;
         uint8_t *b = base64_decode(&t, &n);
         r = b ? cfdata_new(alloc, b, (uint32_t)n, leaves) : 0;
-        free(b);
+        bb_free(b);
     }
     text_free(&t);
     if (!r && error && !*error)
@@ -944,7 +944,7 @@ static gaddr a_value(gaddr alloc, areader *r, uint32_t mut, int depth)
     }
     if (ch == '<') {
         r->i++;
-        uint8_t *b = malloc(r->n);
+        uint8_t *b = bb_malloc(r->n, BB_BYTES);
         size_t k = 0;
         int half = -1;
         while (b && r->i < r->n && r->u[r->i] != '>') {
@@ -961,7 +961,7 @@ static gaddr a_value(gaddr alloc, areader *r, uint32_t mut, int depth)
         }
         r->i++;
         gaddr data = b ? cfdata_new(alloc, b, (uint32_t)k, mut == kCFPropertyListMutableContainersAndLeaves) : 0;
-        free(b);
+        bb_free(b);
         return data;
     }
     return a_string(alloc, r, mut);
@@ -1011,7 +1011,7 @@ gaddr cfplist_from_data(gaddr alloc, const uint8_t *b, size_t n, uint32_t mut, g
         if (!r && error)
             *error = cfstr_from_utf8("Unexpected character in the property list");
     }
-    free(u);
+    bb_free(u);
     return r;
 }
 
@@ -1033,8 +1033,8 @@ static bool is_plist(gaddr v, int depth)
         bool ok = depth <= 256;
         for (uint32_t i = 0; ok && i < n; i++)
             ok = cf_type_of(k[i]) == CFT_STRING && is_plist(vals[i], depth + 1);
-        free(k);
-        free(vals);
+        bb_free(k);
+        bb_free(vals);
         return ok;
     }
     default:
@@ -1106,13 +1106,13 @@ static void xml_value(cf_text *t, gaddr v, int depth)
     case CFT_DATA: {
         uint32_t n;
         gaddr p = cfdata_bytes(v, &n);
-        uint8_t *b = malloc(n ? n : 1);
+        uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
         if (b && n)
             gget(b, p, n);
         text_add_utf8(t, "<data>\n");
         if (b)
             base64_encode(b, n, t, indent);
-        free(b);
+        bb_free(b);
         text_add_utf8(t, indent);
         text_add_utf8(t, "</data>\n");
         break;
@@ -1149,8 +1149,8 @@ static void xml_value(cf_text *t, gaddr v, int depth)
             text_add_utf8(t, indent);
             text_add_utf8(t, "</dict>\n");
         }
-        free(k);
-        free(vals);
+        bb_free(k);
+        bb_free(vals);
         break;
     }
     }
@@ -1184,11 +1184,11 @@ static void cf_CFPropertyListCreateFromXMLData(ppc_cpu *c)
     gaddr err = 0;
     gaddr r = 0;
     if (cf_type_of(R(1)) == CFT_DATA) {
-        uint8_t *b = malloc(n ? n : 1);
+        uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
         if (b) {
             gget(b, p, n);
             r = cfplist_from_data(R(0), b, n, R(2), &err);
-            free(b);
+            bb_free(b);
         }
     } else {
         err = cfstr_from_utf8("No property list data");
@@ -1205,7 +1205,7 @@ static void cf_CFPropertyListCreateXMLData(ppc_cpu *c)
     size_t n;
     char *x = cfplist_to_xml(R(1), &n);
     gaddr d = x ? cfdata_new(R(0), (const uint8_t *)x, (uint32_t)n, false) : 0;
-    free(x);
+    bb_free(x);
     RETURN(d);
 }
 
@@ -1223,24 +1223,24 @@ static gaddr deep_copy(gaddr alloc, gaddr v, uint32_t mut, int depth)
     case CFT_DATA: {
         uint32_t n;
         gaddr p = cfdata_bytes(v, &n);
-        uint8_t *b = malloc(n ? n : 1);
+        uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
         if (!b)
             return 0;
         gget(b, p, n);
         gaddr r = cfdata_new(alloc, b, n, leaves);
-        free(b);
+        bb_free(b);
         return r;
     }
     case CFT_NUMBER: case CFT_BOOLEAN: case CFT_DATE:
         return cf_retain(v);
     case CFT_ARRAY: {
-        uint32_t n = cfarray_count(v), *vals = malloc(sizeof *vals * (n ? n : 1));
+        uint32_t n = cfarray_count(v), *vals = bb_malloc(sizeof *vals * (n ? n : 1), BB_BYTES);
         for (uint32_t i = 0; vals && i < n; i++)
             vals[i] = deep_copy(alloc, cfarray_get(v, i), mut, depth + 1);
         gaddr r = vals ? cfarray_new(alloc, vals, n, containers) : 0;
         for (uint32_t i = 0; vals && i < n; i++)
             cf_release(vals[i]);
-        free(vals);
+        bb_free(vals);
         return r;
     }
     case CFT_DICTIONARY: {
@@ -1251,8 +1251,8 @@ static gaddr deep_copy(gaddr alloc, gaddr v, uint32_t mut, int depth)
             cfdict_set(r, k[i], cv);
             cf_release(cv);
         }
-        free(k);
-        free(vals);
+        bb_free(k);
+        bb_free(vals);
         return r;
     }
     default:
@@ -1290,30 +1290,30 @@ static char *app_name(gaddr id)
     if (!s)
         return NULL;
     if (!strcmp(s, "kCFPreferencesAnyApplication")) {
-        free(s);
-        return strdup(".GlobalPreferences");
+        bb_free(s);
+        return bb_strdup(".GlobalPreferences");
     }
     if (strcmp(s, "kCFPreferencesCurrentApplication"))
         return s;
-    free(s);
+    bb_free(s);
     char *name = cfstr_utf8(cfbundle_main_identifier());
     if (name && name[0])
         return name;
-    free(name);
+    bb_free(name);
     uint8_t len = rd8(LM_CurApName);
     char mac[64], utf8[256];
     if (len > 31)
         len = 31;
     gget(mac, LM_CurApName + 1, len);
     macroman_to_utf8((const uint8_t *)mac, len, utf8, sizeof utf8);
-    return strdup(utf8[0] ? utf8 : "Application");
+    return bb_strdup(utf8[0] ? utf8 : "Application");
 }
 
 static bool is_current_host(gaddr host)
 {
     char *s = cfstr_utf8(host);
     bool r = s && !strcmp(s, "kCFPreferencesCurrentHost");
-    free(s);
+    bb_free(s);
     return r;
 }
 
@@ -1368,7 +1368,7 @@ static void domain_load(domain *d)
     gaddr dict = 0;
     if (domain_path(d, path, sizeof path) && cf_read_host_file(path, &b, &n)) {
         dict = cfplist_from_data(cf_allocator_system(), b, n, kCFPropertyListMutableContainers, NULL);
-        free(b);
+        bb_free(b);
     }
     if (cf_type_of(dict) != CFT_DICTIONARY) {
         cf_release(dict);
@@ -1385,7 +1385,7 @@ static bool domain_save(domain *d)
     size_t n;
     char *x = cfplist_to_xml(d->dict, &n);
     bool ok = x && domain_path(d, path, sizeof path) && cf_write_host_file(path, (const uint8_t *)x, n);
-    free(x);
+    bb_free(x);
     return ok;
 }
 
@@ -1399,7 +1399,7 @@ static domain *domain_named(const char *app, bool by_host)
         }
     if (ndomains == domains_cap) {
         unsigned cap = domains_cap * 2 + 8;
-        domain *p = realloc(domains, sizeof *p * cap);
+        domain *p = bb_realloc(domains, sizeof *p * cap, BB_TAG(domain));
         if (!p)
             return NULL;
         domains = p;
@@ -1407,7 +1407,7 @@ static domain *domain_named(const char *app, bool by_host)
     }
     domain *d = &domains[ndomains++];
     memset(d, 0, sizeof *d);
-    d->app = strdup(app);
+    d->app = bb_strdup(app);
     d->by_host = by_host;
     domain_load(d);
     return d;
@@ -1417,7 +1417,7 @@ static domain *domain_of(gaddr app, gaddr host)
 {
     char *name = app_name(app);
     domain *d = name ? domain_named(name, is_current_host(host)) : NULL;
-    free(name);
+    bb_free(name);
     return d;
 }
 
@@ -1444,7 +1444,7 @@ static unsigned search_list(gaddr app, domain **out, unsigned max)
         if (d)
             out[n++] = d;
     }
-    free(name);
+    bb_free(name);
     return n;
 }
 
@@ -1486,7 +1486,7 @@ static void cf_CFPreferencesGetAppBooleanValue(ppc_cpu *c)
             valid = value = true;
         else if (s && (!strcasecmp(s, "NO") || !strcasecmp(s, "false") || !strcmp(s, "0")))
             valid = true;
-        free(s);
+        bb_free(s);
     }
     if (R(2))
         wr8(R(2), valid);
@@ -1510,7 +1510,7 @@ static void cf_CFPreferencesGetAppIntegerValue(ppc_cpu *c)
             if (!valid)
                 value = 0;
         }
-        free(s);
+        bb_free(s);
     }
     if (R(2))
         wr8(R(2), valid);
@@ -1542,14 +1542,14 @@ static void cf_CFPreferencesAddSuitePreferencesToApp(ppc_cpu *c)
     bool have = false;
     for (unsigned i = 0; app && suite && i < nsuites; i++)
         have |= !strcmp(suites[i].app, app) && !strcmp(suites[i].suite, suite);
-    suite_link *p = app && suite && !have ? realloc(suites, sizeof *p * (nsuites + 1)) : NULL;
+    suite_link *p = app && suite && !have ? bb_realloc(suites, sizeof *p * (nsuites + 1), BB_TAG(suite_link)) : NULL;
     if (p) {
         suites = p;
         suites[nsuites].app = app;
         suites[nsuites++].suite = suite;
     } else {
-        free(app);
-        free(suite);
+        bb_free(app);
+        bb_free(suite);
     }
     RETURN_VOID();
 }
@@ -1559,13 +1559,13 @@ static void cf_CFPreferencesRemoveSuitePreferencesFromApp(ppc_cpu *c)
     char *app = app_name(R(0)), *suite = app_name(R(1));
     for (unsigned i = 0; app && suite && i < nsuites; i++)
         if (!strcmp(suites[i].app, app) && !strcmp(suites[i].suite, suite)) {
-            free(suites[i].app);
-            free(suites[i].suite);
+            bb_free(suites[i].app);
+            bb_free(suites[i].suite);
             suites[i] = suites[--nsuites];
             break;
         }
-    free(app);
-    free(suite);
+    bb_free(app);
+    bb_free(suite);
     RETURN_VOID();
 }
 
@@ -1612,8 +1612,8 @@ static void cf_CFPreferencesCopyMultiple(ppc_cpu *c)
         uint32_t *k, *v, n = cfdict_entries(d->dict, &k, &v);
         for (uint32_t i = 0; i < n; i++)
             cfdict_set(r, k[i], v[i]);
-        free(k);
-        free(v);
+        bb_free(k);
+        bb_free(v);
     } else {
         for (uint32_t i = 0; i < cfarray_count(R(0)); i++) {
             uint32_t v;
@@ -1640,8 +1640,8 @@ static void cf_CFPreferencesSetMultiple(ppc_cpu *c)
     uint32_t *k, *v, n = cfdict_entries(R(0), &k, &v);
     for (uint32_t i = 0; i < n; i++)
         cfdict_set(d->dict, k[i], v[i]);
-    free(k);
-    free(v);
+    bb_free(k);
+    bb_free(v);
     for (uint32_t i = 0; i < cfarray_count(R(1)); i++)
         cfdict_remove(d->dict, cfarray_get(R(1), i));
     domain_save(d);
@@ -1679,10 +1679,10 @@ static void cf_CFPreferencesCopyApplicationList(ppc_cpu *c)
             cfarray_append(a, s);
             cf_release(s);
         }
-        free(paths[i]);
+        bb_free(paths[i]);
     }
     if (n)
-        free(paths);
+        bb_free(paths);
     RETURN(a);
 }
 
@@ -1695,8 +1695,8 @@ static void cf_CFPreferencesCopyKeyList(ppc_cpu *c)
     gaddr a = 0;
     if (d) {
         a = n ? cfarray_new(0, k, n, false) : 0;
-        free(k);
-        free(v);
+        bb_free(k);
+        bb_free(v);
     }
     RETURN(a);
 }
@@ -2007,7 +2007,7 @@ static void cf_CFXMLParserCreateWithDataFromURL(ppc_cpu *c)
     if (!R(4) || !cfurl_read_file(R(1), &b, &n))
         RETURN(0);
     gaddr data = cfdata_new(R(0), b, (uint32_t)n, false);
-    free(b);
+    bb_free(b);
     gaddr p = parser_new(R(0), data, R(1), R(2), (int32_t)R(3), R(4), R(5));
     cf_release(data);
     RETURN(p);
@@ -2169,14 +2169,14 @@ static void cf_CFXMLParserParse(ppc_cpu *c)
         RETURN(false);
     uint32_t n;
     gaddr bytes = cfdata_bytes(p->data, &n);
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     uint16_t *u = NULL;
     uint32_t nu = 0;
     if (b)
         gget(b, bytes, n);
     p->status = kCFXMLStatusParseInProgress;
     bool decoded = b && text_of_bytes(b, n, &u, &nu);
-    free(b);
+    bb_free(b);
     int status = decoded ? 0 : kCFXMLErrorEncodingConversionFailure;
     uint32_t where = 0;
     xnode *doc = decoded ? xml_parse(u, nu, p->options, &status, &where) : NULL;
@@ -2205,7 +2205,7 @@ static void cf_CFXMLParserParse(ppc_cpu *c)
     }
     p->text = NULL;
     xnode_free(doc);
-    free(u);
+    bb_free(u);
     RETURN(p->status == kCFXMLStatusParseSuccessful);
 }
 
@@ -2227,7 +2227,7 @@ static gaddr tree_from_bytes(gaddr alloc, const uint8_t *b, size_t n, gaddr url,
         return 0;
     int status;
     xnode *doc = xml_parse(u, nu, options, &status, NULL);
-    free(u);
+    bb_free(u);
     gaddr tree = 0;
     if (doc && !status) {
         walker w = { tree_create, tree_add_child, tree_end, tree_stop, NULL, alloc, url, version, options };
@@ -2247,12 +2247,12 @@ static void cf_CFXMLTreeCreateFromData(ppc_cpu *c)
     gaddr bytes = cfdata_bytes(R(1), &n);
     if (cf_type_of(R(1)) != CFT_DATA)
         RETURN(0);
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     if (!b)
         RETURN(0);
     gget(b, bytes, n);
     gaddr t = tree_from_bytes(R(0), b, n, R(2), R(3), (int32_t)R(4));
-    free(b);
+    bb_free(b);
     RETURN(t);
 }
 
@@ -2264,7 +2264,7 @@ static void cf_CFXMLTreeCreateWithDataFromURL(ppc_cpu *c)
     if (!cfurl_read_file(R(1), &b, &n))
         RETURN(0);
     gaddr t = tree_from_bytes(R(0), b, n, R(1), R(2), (int32_t)R(3));
-    free(b);
+    bb_free(b);
     RETURN(t);
 }
 
@@ -2286,7 +2286,7 @@ static void xml_of_tree(cf_text *t, gaddr tree, int depth)
     gaddr *kids;
     uint32_t nk = cftree_children(tree, &kids);
     if (!x || depth > 512) {
-        free(kids);
+        bb_free(kids);
         return;
     }
     gaddr info = x->o.ref + CF_HEADER;
@@ -2384,7 +2384,7 @@ static void xml_of_tree(cf_text *t, gaddr tree, int depth)
     default:
         break;
     }
-    free(kids);
+    bb_free(kids);
 }
 
 /* CFXMLTreeCreateXMLData(allocator, xmlTree) */
@@ -2400,7 +2400,7 @@ static void cf_CFXMLTreeCreateXMLData(ppc_cpu *c)
     cf_encode(kCFStringEncodingUTF8, t.u, t.n, '?', &b, &n, &used);
     text_free(&t);
     gaddr d = cfdata_new(R(0), b, (uint32_t)n, false);
-    free(b);
+    bb_free(b);
     RETURN(d);
 }
 
@@ -2409,15 +2409,15 @@ static void cf_CFXMLTreeCreateXMLData(ppc_cpu *c)
 void cfplist_reset(void)
 {
     for (unsigned i = 0; i < ndomains; i++)
-        free(domains[i].app);
-    free(domains);
+        bb_free(domains[i].app);
+    bb_free(domains);
     domains = NULL;
     ndomains = domains_cap = 0;
     for (unsigned i = 0; i < nsuites; i++) {
-        free(suites[i].app);
-        free(suites[i].suite);
+        bb_free(suites[i].app);
+        bb_free(suites[i].suite);
     }
-    free(suites);
+    bb_free(suites);
     suites = NULL;
     nsuites = 0;
     cf_register_class(CFT_XML_NODE, &node_class);

@@ -573,7 +573,7 @@ static void emit(out_buf *o, const char *s, size_t n)
 {
     if (o->n + n + 1 > o->cap) {
         size_t cap = (o->n + n + 1) * 2;
-        char *q = realloc(o->p, cap);
+        char *q = bb_realloc(o->p, cap, BB_BYTES);
         if (!q)
             return;
         o->p = q;
@@ -689,13 +689,13 @@ static void format(gaddr fmt, args *a, out_buf *o)
             char *str = NULL;
             if (s && conv == 'P') { /* a Pascal string */
                 n = rd8(s);
-                str = malloc(n + 1);
+                str = bb_malloc(n + 1, BB_BYTES);
                 if (str)
                     gget(str, s + 1, (uint32_t)n);
             } else if (s) {
                 while (n < cap && rd8(s + (gaddr)n))
                     n++;
-                str = malloc(n + 1);
+                str = bb_malloc(n + 1, BB_BYTES);
                 if (str)
                     gget(str, s, (uint32_t)n);
             }
@@ -705,10 +705,10 @@ static void format(gaddr fmt, args *a, out_buf *o)
             }
             snprintf(spec + sl, sizeof spec - (size_t)sl, "s");
             int len = snprintf(NULL, 0, spec, src);
-            big = malloc((size_t)len + 1);
+            big = bb_malloc((size_t)len + 1, BB_BYTES);
             if (big)
                 snprintf(big, (size_t)len + 1, spec, src);
-            free(str);
+            bb_free(str);
             break;
         }
         case 'f': case 'F': case 'e': case 'E': case 'g': case 'G': case 'a': case 'A': {
@@ -717,7 +717,7 @@ static void format(gaddr fmt, args *a, out_buf *o)
                 d += next_double(a);
             snprintf(spec + sl, sizeof spec - (size_t)sl, "%c", conv);
             int len = snprintf(NULL, 0, spec, d);
-            big = malloc((size_t)len + 1);
+            big = bb_malloc((size_t)len + 1, BB_BYTES);
             if (big)
                 snprintf(big, (size_t)len + 1, spec, d);
             break;
@@ -747,7 +747,7 @@ static void format(gaddr fmt, args *a, out_buf *o)
         }
         if (big) {
             emit(o, big, strlen(big));
-            free(big);
+            bb_free(big);
         } else {
             emit(o, piece, strlen(piece));
         }
@@ -761,7 +761,7 @@ static int32_t print_to(gaddr f, gaddr fmt, args *a)
     format(fmt, a, &o);
     uint32_t w = o.p ? sc_fwrite_host(o.p, (uint32_t)o.n, f) : 0;
     int32_t r = w == o.n ? (int32_t)o.n : -1;
-    free(o.p);
+    bb_free(o.p);
     return r;
 }
 
@@ -772,7 +772,7 @@ static int32_t print_to_string(gaddr s, gaddr fmt, args *a)
     if (o.p)
         gput(s, o.p, (uint32_t)o.n + 1);
     int32_t n = (int32_t)o.n;
-    free(o.p);
+    bb_free(o.p);
     return n;
 }
 

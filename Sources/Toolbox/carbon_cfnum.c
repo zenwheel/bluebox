@@ -630,7 +630,7 @@ gaddr cfuuid_new(gaddr alloc, const uint8_t b[16], bool constant)
         cf_make_constant(&u->o);
     if (nuuids == uuids_cap) {
         unsigned cap = uuids_cap * 2 + 16;
-        gaddr *p = realloc(uuids, sizeof *p * cap);
+        gaddr *p = bb_realloc(uuids, sizeof *p * cap, BB_BYTES);
         if (p) {
             uuids = p;
             uuids_cap = cap;
@@ -914,7 +914,7 @@ static void m64_Same64(ppc_cpu *c) { cf_return64(c, u64(c, 0)); }
 void cfnum_reset(void)
 {
     booleans[0] = booleans[1] = 0;
-    free(uuids);
+    bb_free(uuids);
     uuids = NULL;
     nuuids = uuids_cap = 0;
     cf_register_class(CFT_NUMBER, &number_class);

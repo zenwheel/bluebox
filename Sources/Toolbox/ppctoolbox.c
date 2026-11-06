@@ -94,7 +94,7 @@ static port ports[MAX_PORTS];
 static session sessions[MAX_SESSIONS];
 static waiting waits[MAX_WAIT];
 static int nwaits;
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static uint16_t next_port = 1;
 static uint32_t next_sess = 1;
 /* completions to run at interrupt time */
@@ -163,7 +163,7 @@ static void receive(session *s)
     for (;;) {
         if (s->cap - s->nin < 4096) {
             size_t cap = s->cap ? s->cap * 2 : 8192;
-            uint8_t *p = realloc(s->in, cap);
+            uint8_t *p = bb_realloc(s->in, cap, BB_BYTES);
             if (!p)
                 return;
             s->in = p;
@@ -364,7 +364,7 @@ static void end_session(session *s)
 {
     if (s->fd >= 0)
         close(s->fd);
-    free(s->in);
+    bb_free(s->in);
     memset(s, 0, sizeof *s);
 }
 
@@ -728,7 +728,7 @@ static int16_t write_block(gaddr pb)
     if (s->closed)
         return sessClosedErr;
     uint32_t n = rd32(pb + P_LEN);
-    uint8_t *msg = malloc(13 + (size_t)n);
+    uint8_t *msg = bb_malloc(13 + (size_t)n, BB_BYTES);
     if (!msg)
         return memFullErr;
     msg[0] = rd8(pb + P_MORE) ? 1 : 0;
@@ -738,7 +738,7 @@ static int16_t write_block(gaddr pb)
     if (n)
         gget(msg + 13, rd32(pb + P_BUF), n);
     bool ok = send_msg(s->fd, 'D', msg, 13 + n);
-    free(msg);
+    bb_free(msg);
     if (!ok) {
         s->closed = true;
         return sessClosedErr;

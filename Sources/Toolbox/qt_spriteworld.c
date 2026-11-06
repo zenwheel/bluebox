@@ -115,13 +115,13 @@ static bool load_image(sprite_rec *sp)
     }
     if (size > 0x4000000)
         return false;
-    uint8_t *b = malloc(dlen + size);
+    uint8_t *b = bb_malloc(dlen + size, BB_BYTES);
     if (!b)
         return false;
     gget(b, d, dlen);
     gget(b + dlen, sp->data, size);
     bool ok = qt_sprite_set_image(sp->w->scene, sp->id, b, dlen + size);
-    free(b);
+    bb_free(b);
     return ok;
 }
 
@@ -154,7 +154,7 @@ static void port_pixels(gaddr port, qrect r, uint8_t *rgba, int w, int h)
 static void draw_world(world *w, bool to_dest)
 {
     size_t n = (size_t)w->width * (size_t)w->height;
-    uint8_t *rgba = malloc(n * 4);
+    uint8_t *rgba = bb_malloc(n * 4, BB_BYTES);
     if (!rgba)
         return;
     if (w->background) {
@@ -170,7 +170,7 @@ static void draw_world(world *w, bool to_dest)
     tb_GetGWorld(saved, saved + 4);
     tb_SetGWorld(w->layer, 0);
     qd_draw_rgba(rgba, w->width, w->height, w->bounds);
-    free(rgba);
+    bb_free(rgba);
     if (to_dest && !(w->flags & kSpriteWorldInvisible) && w->dest) {
         tb_SetGWorld(w->dest, 0);
         gaddr src = tb_NewPtr(8, false, true), dst = tb_NewPtr(8, false, true);

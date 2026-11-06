@@ -63,8 +63,8 @@ static importer *importer_of(uint32_t ci)
 
 static void forget_data(importer *g)
 {
-    free(g->data);
-    free(g->rgba);
+    bb_free(g->data);
+    bb_free(g->rgba);
     g->data = g->rgba = NULL;
     g->len = 0;
     g->kind = KIND_NONE;
@@ -139,9 +139,9 @@ static uint8_t *read_spec(gaddr spec, size_t *len)
     uint8_t *d = NULL;
     if (!fseek(f, 0, SEEK_END)) {
         long n = ftell(f);
-        if (n > 0 && n < 64L * 1024 * 1024 && !fseek(f, 0, SEEK_SET) && (d = malloc((size_t)n)) != NULL &&
+        if (n > 0 && n < 64L * 1024 * 1024 && !fseek(f, 0, SEEK_SET) && (d = bb_malloc((size_t)n, BB_BYTES)) != NULL &&
             fread(d, 1, (size_t)n, f) != (size_t)n) {
-            free(d);
+            bb_free(d);
             d = NULL;
         }
         *len = d ? (size_t)n : 0;
@@ -172,7 +172,7 @@ static int16_t set_handle(importer *g, gaddr h)
     int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
     if (n <= 0)
         return paramErr;
-    uint8_t *d = malloc((size_t)n);
+    uint8_t *d = bb_malloc((size_t)n, BB_BYTES);
     if (!d)
         return memFullErr;
     gget(d, rd32(h), (uint32_t)n);
@@ -207,7 +207,7 @@ static uint8_t *cropped(importer *g, int *w, int *h)
     *h = s.bottom - s.top;
     if (*w <= 0 || *h <= 0)
         return NULL;
-    uint8_t *out = malloc((size_t)*w * (size_t)*h * 4);
+    uint8_t *out = bb_malloc((size_t)*w * (size_t)*h * 4, BB_BYTES);
     for (int y = 0; out && y < *h; y++)
         memcpy(out + (size_t)y * (size_t)*w * 4, g->rgba + ((size_t)(s.top + y) * (size_t)g->w + (size_t)s.left) * 4,
                (size_t)*w * 4);
@@ -244,7 +244,7 @@ static int16_t draw(importer *g)
             uint8_t *part = cropped(g, &w, &h);
             if (part)
                 qd_draw_rgba(part, w, h, g->bounds);
-            free(part);
+            bb_free(part);
         }
         tb_DisposePtr(r);
     }
@@ -574,7 +574,7 @@ bool qt_gimport_image(uint32_t ci, uint8_t **rgba, int *w, int *h, gaddr *pict)
         *pict = pict_handle(g);
         return *pict != 0;
     }
-    *rgba = malloc((size_t)g->w * (size_t)g->h * 4);
+    *rgba = bb_malloc((size_t)g->w * (size_t)g->h * 4, BB_BYTES);
     if (*rgba)
         memcpy(*rgba, g->rgba, (size_t)g->w * (size_t)g->h * 4);
     return *rgba != NULL;
@@ -584,8 +584,8 @@ bool qt_gimport_image(uint32_t ci, uint8_t **rgba, int *w, int *h, gaddr *pict)
 void qt_gimport_register(void)
 {
     for (int i = 0; i < MAX_IMPORTERS; i++) {
-        free(importers[i].data);
-        free(importers[i].rgba);
+        bb_free(importers[i].data);
+        bb_free(importers[i].rgba);
     }
     memset(importers, 0, sizeof importers);
     grip_component = components_register_native(0x67726970 /* 'grip' */, 0, 0x6170706C /* 'appl' */,

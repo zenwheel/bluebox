@@ -52,13 +52,13 @@ static void st_dispose(q3obj *o)
         tb_DisposePtr(s->buffer);
     if (o->type == FSSPEC && s->opens > 0)
         fm_close_fork(s->refnum);
-    free(s);
+    bb_free(s);
 }
 
 static bool st_duplicate(q3obj *to, const q3obj *from)
 {
     const q3storage *f = from->data;
-    q3storage *s = calloc(1, sizeof *s);
+    q3storage *s = bb_calloc(1, sizeof *s, BB_TAG(q3storage));
     if (!s)
         return false;
     *s = *f;
@@ -68,7 +68,7 @@ static bool st_duplicate(q3obj *to, const q3obj *from)
         s->size = f->valid ? f->valid : 4;
         s->buffer = tb_NewPtr((int32_t)s->size, false, false);
         if (!s->buffer) {
-            free(s);
+            bb_free(s);
             return false;
         }
         gmemcpy(s->buffer, f->buffer, f->valid);
@@ -289,7 +289,7 @@ uint8_t *q3_storage_bytes(gaddr storage, uint32_t *size)
     if (!q3_get(storage))
         return NULL;
     uint32_t n = q3_storage_size(storage);
-    uint8_t *b = malloc(n ? n : 1);
+    uint8_t *b = bb_malloc(n ? n : 1, BB_BYTES);
     if (!b)
         return NULL;
     *size = q3_storage_read(storage, 0, n, b);
@@ -305,7 +305,7 @@ static gaddr new_storage(uint32_t type, q3storage *s)
     if (!o) {
         if (s->own && s->buffer)
             tb_DisposePtr(s->buffer);
-        free(s);
+        bb_free(s);
         return 0;
     }
     return o->g;
@@ -328,9 +328,9 @@ static bool copy_in(q3storage *s, gaddr buffer, uint32_t valid)
 /* A memory storage of its own with these bytes (the 3DMF reader's images). */
 gaddr q3_memory_storage_new(const uint8_t *b, uint32_t n)
 {
-    q3storage *s = calloc(1, sizeof *s);
+    q3storage *s = bb_calloc(1, sizeof *s, BB_TAG(q3storage));
     if (!s || !copy_in(s, 0, n)) {
-        free(s);
+        bb_free(s);
         return 0;
     }
     if (n)
@@ -358,11 +358,11 @@ static void Q3Storage_GetData(ppc_cpu *c)
     q3obj *o = q3_of(Q3R(0), Q3_STORAGE);
     uint32_t off = Q3R(1), n = Q3R(2);
     gaddr data = Q3R(3), out = Q3R(4);
-    uint8_t *tmp = o && data ? malloc(n ? n : 1) : NULL;
+    uint8_t *tmp = o && data ? bb_malloc(n ? n : 1, BB_BYTES) : NULL;
     uint32_t got = tmp ? q3_storage_read(o->g, off, n, tmp) : 0;
     if (tmp && got)
         gput(data, tmp, got);
-    free(tmp);
+    bb_free(tmp);
     if (out)
         wr32(out, got);
     Q3RETURN(o && data ? kQ3Success : kQ3Failure);
@@ -373,11 +373,11 @@ static void Q3Storage_SetData(ppc_cpu *c)
     q3obj *o = q3_of(Q3R(0), Q3_STORAGE);
     uint32_t off = Q3R(1), n = Q3R(2);
     gaddr data = Q3R(3), out = Q3R(4);
-    uint8_t *tmp = o && data ? malloc(n ? n : 1) : NULL;
+    uint8_t *tmp = o && data ? bb_malloc(n ? n : 1, BB_BYTES) : NULL;
     if (tmp && n)
         gget(tmp, data, n);
     uint32_t put = tmp ? q3_storage_write(o->g, off, n, tmp) : 0;
-    free(tmp);
+    bb_free(tmp);
     if (out)
         wr32(out, put);
     Q3RETURN(o && data && put == n ? kQ3Success : kQ3Failure);
@@ -391,9 +391,9 @@ static void Q3MemoryStorage_GetType(ppc_cpu *c)
 
 static void Q3MemoryStorage_New(ppc_cpu *c)
 {
-    q3storage *s = calloc(1, sizeof *s);
+    q3storage *s = bb_calloc(1, sizeof *s, BB_TAG(q3storage));
     if (!s || !copy_in(s, Q3R(0), Q3R(1))) {
-        free(s);
+        bb_free(s);
         Q3RETURN(0);
         return;
     }
@@ -421,7 +421,7 @@ static bool use_buffer(q3storage *s, gaddr buffer, uint32_t valid, uint32_t size
 
 static void Q3MemoryStorage_NewBuffer(ppc_cpu *c)
 {
-    q3storage *s = calloc(1, sizeof *s);
+    q3storage *s = bb_calloc(1, sizeof *s, BB_TAG(q3storage));
     if (!s) {
         Q3RETURN(0);
         return;
@@ -434,7 +434,7 @@ static void Q3MemoryStorage_NewBuffer(ppc_cpu *c)
     } else {
         use_buffer(s, Q3R(0), Q3R(1), Q3R(2));
     }
-    Q3RETURN(s->buffer ? new_storage(MEMORY, s) : (free(s), 0));
+    Q3RETURN(s->buffer ? new_storage(MEMORY, s) : (bb_free(s), 0));
 }
 
 static void Q3MemoryStorage_SetBuffer(ppc_cpu *c)
@@ -483,14 +483,14 @@ static void Q3MemoryStorage_GetBuffer(ppc_cpu *c)
 
 static void Q3HandleStorage_New(ppc_cpu *c)
 {
-    q3storage *s = calloc(1, sizeof *s);
+    q3storage *s = bb_calloc(1, sizeof *s, BB_TAG(q3storage));
     if (!s) {
         Q3RETURN(0);
         return;
     }
     s->handle = Q3R(0) ? Q3R(0) : tb_NewHandle(0, false, false);
     s->valid = Q3R(0) ? Q3R(1) : 0;
-    Q3RETURN(s->handle ? new_storage(HANDLE, s) : (free(s), 0));
+    Q3RETURN(s->handle ? new_storage(HANDLE, s) : (bb_free(s), 0));
 }
 
 static void Q3HandleStorage_Set(ppc_cpu *c)
@@ -515,7 +515,7 @@ static void Q3HandleStorage_Get(ppc_cpu *c)
 
 static void Q3MacintoshStorage_New(ppc_cpu *c)
 {
-    q3storage *s = calloc(1, sizeof *s);
+    q3storage *s = bb_calloc(1, sizeof *s, BB_TAG(q3storage));
     if (!s) {
         Q3RETURN(0);
         return;
@@ -548,7 +548,7 @@ static void Q3MacintoshStorage_GetType(ppc_cpu *c)
 
 static void Q3FSSpecStorage_New(ppc_cpu *c)
 {
-    q3storage *s = Q3R(0) ? calloc(1, sizeof *s) : NULL;
+    q3storage *s = Q3R(0) ? bb_calloc(1, sizeof *s, BB_TAG(q3storage)) : NULL;
     if (!s) {
         Q3RETURN(0);
         return;

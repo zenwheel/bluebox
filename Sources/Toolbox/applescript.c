@@ -39,7 +39,7 @@ static as_obj *s_undef, *s_null, *s_missing, *s_true, *s_false;
 
 as_obj *as_new(as_kind k)
 {
-    as_obj *o = calloc(1, sizeof *o);
+    as_obj *o = bb_calloc(1, sizeof *o, BB_TAG(as_obj));
     o->kind = (uint8_t)k;
     o->gc_next = heap;
     heap = o;
@@ -88,7 +88,7 @@ as_obj *as_number(double v)
 
 static void set_bytes(as_obj *o, const void *s, size_t n)
 {
-    o->bytes = malloc(n + 1);
+    o->bytes = bb_malloc(n + 1, BB_BYTES);
     if (n)
         memcpy(o->bytes, s, n);
     o->bytes[n] = 0;
@@ -134,9 +134,9 @@ static void reserve(as_obj *l, uint32_t need, bool keys)
     uint32_t cap = l->cap ? l->cap : 4;
     while (cap < need)
         cap *= 2;
-    l->items = realloc(l->items, cap * sizeof *l->items);
+    l->items = bb_realloc(l->items, cap * sizeof *l->items, BB_TAG(as_obj *));
     if (keys)
-        l->keys = realloc(l->keys, cap * sizeof *l->keys);
+        l->keys = bb_realloc(l->keys, cap * sizeof *l->keys, BB_TAG(as_obj *));
     l->cap = cap;
 }
 
@@ -171,7 +171,7 @@ void as_text_append(as_obj *t, const void *s, size_t n)
         uint32_t cap = t->cap ? t->cap : 16;
         while (cap < t->n + n + 1)
             cap *= 2;
-        t->bytes = realloc(t->bytes, cap);
+        t->bytes = bb_realloc(t->bytes, cap, BB_BYTES);
         t->cap = cap;
     }
     memcpy(t->bytes + t->n, s, n);
@@ -303,7 +303,7 @@ void as_pin(as_obj *v)
         return;
     if (npinned == pinned_cap) {
         pinned_cap = pinned_cap ? pinned_cap * 2 : 32;
-        pinned = realloc(pinned, pinned_cap * sizeof *pinned);
+        pinned = bb_realloc(pinned, pinned_cap * sizeof *pinned, BB_TAG(as_obj *));
     }
     pinned[npinned++] = v;
 }
@@ -336,10 +336,10 @@ static void mark(as_obj *o)
 
 static void free_obj(as_obj *o)
 {
-    free(o->bytes);
-    free(o->items);
-    free(o->keys);
-    free(o);
+    bb_free(o->bytes);
+    bb_free(o->items);
+    bb_free(o->keys);
+    bb_free(o);
 }
 
 void as_collect(void)
@@ -533,7 +533,7 @@ static void fas_register(fas *f, int ref, as_obj *v)
         return;
     if ((uint32_t)ref >= f->ntable) {
         uint32_t n = (uint32_t)ref + 32;
-        f->table = realloc(f->table, n * sizeof *f->table);
+        f->table = bb_realloc(f->table, n * sizeof *f->table, BB_TAG(as_obj *));
         memset(f->table + f->ntable, 0, (n - f->ntable) * sizeof *f->table);
         f->ntable = n;
     }
@@ -595,7 +595,7 @@ static as_obj *fas_find(fas *f, int num)
 /* Resolve n references read first, then loaded in order. */
 static as_obj *fas_vector(fas *f, int btype, int n)
 {
-    int16_t *refs = malloc((size_t)(n ? n : 1) * sizeof *refs);
+    int16_t *refs = bb_malloc((size_t)(n ? n : 1) * sizeof *refs, BB_BYTES);
     for (int i = 0; i < n; i++)
         refs[i] = (int16_t)fas_s16(f);
     as_obj *v = as_new(V_VECTOR);
@@ -603,7 +603,7 @@ static as_obj *fas_vector(fas *f, int btype, int n)
     reserve(v, (uint32_t)n, false);
     for (int i = 0; i < n && !f->bad; i++)
         v->items[v->n++] = fas_find(f, refs[i]);
-    free(refs);
+    bb_free(refs);
     return v;
 }
 
@@ -864,7 +864,7 @@ static as_obj *make_handler(as_obj *blk)
         h->b = as_list(0);
     }
     uint32_t nl = locals && (locals->kind == V_VECTOR || locals->kind == V_LIST) ? locals->n : 0;
-    h->items = calloc(nl ? nl : 1, sizeof *h->items);
+    h->items = bb_calloc(nl ? nl : 1, sizeof *h->items, BB_TAG(as_obj *));
     for (uint32_t k = 0; k < nl; k++)
         h->items[k] = locals->items[k];
     h->n = nl;
@@ -923,7 +923,7 @@ as_obj *as_fasload(const uint8_t *data, size_t len, char *err, size_t errlen)
         return NULL;
     }
     as_obj *root = fas_load(&f, 0);
-    free(f.table);
+    bb_free(f.table);
     if (f.bad) {
         snprintf(err, errlen, "%s", f.why);
         return NULL;
@@ -1711,14 +1711,14 @@ static bool word_char(uint8_t c) { return isalnum(c) || c >= 0x80; }
 static uint32_t text_elements(as_obj *t, uint32_t cls, uint32_t **starts, uint32_t **lens)
 {
     uint32_t n = 0, cap = 16;
-    *starts = malloc(cap * sizeof **starts);
-    *lens = malloc(cap * sizeof **lens);
+    *starts = bb_malloc(cap * sizeof **starts, BB_BYTES);
+    *lens = bb_malloc(cap * sizeof **lens, BB_BYTES);
 #define ADD(s, l)                                                     \
     do {                                                              \
         if (n == cap) {                                               \
             cap *= 2;                                                 \
-            *starts = realloc(*starts, cap * sizeof **starts);        \
-            *lens = realloc(*lens, cap * sizeof **lens);              \
+            *starts = bb_realloc(*starts, cap * sizeof **starts, BB_BYTES); \
+            *lens = bb_realloc(*lens, cap * sizeof **lens, BB_BYTES);       \
         }                                                             \
         (*starts)[n] = (s);                                           \
         (*lens)[n++] = (l);                                           \
@@ -1831,8 +1831,8 @@ static as_obj *elements(as_obj *container, uint32_t cls)
         as_obj *l = as_list(n);
         for (uint32_t i = 0; i < n; i++)
             as_list_push(l, as_text(container->bytes + st[i], ln[i]));
-        free(st);
-        free(ln);
+        bb_free(st);
+        bb_free(ln);
         return l;
     }
     return NULL;
@@ -2095,7 +2095,7 @@ static void push(as_obj *v)
 {
     if (sp == stack_cap) {
         stack_cap = stack_cap ? stack_cap * 2 : 256;
-        stack = realloc(stack, stack_cap * sizeof *stack);
+        stack = bb_realloc(stack, stack_cap * sizeof *stack, BB_TAG(as_obj *));
     }
     stack[sp++] = v ? v : as_undef();
 }
@@ -2114,7 +2114,7 @@ static block *push_block(int kind)
 {
     if (nblocks == blocks_cap) {
         blocks_cap = blocks_cap ? blocks_cap * 2 : 32;
-        blocks = realloc(blocks, blocks_cap * sizeof *blocks);
+        blocks = bb_realloc(blocks, blocks_cap * sizeof *blocks, BB_TAG(block));
     }
     block *b = &blocks[nblocks++];
     memset(b, 0, sizeof *b);
@@ -2248,7 +2248,7 @@ static bool enter(as_obj *script, as_obj *h, as_obj **args, uint32_t nargs)
     }
     if (nframes == frames_cap) {
         frames_cap = frames_cap ? frames_cap * 2 : 16;
-        frames = realloc(frames, frames_cap * sizeof *frames);
+        frames = bb_realloc(frames, frames_cap * sizeof *frames, BB_TAG(frame));
     }
     if (nframes > 400) {
         as_raise(-2706, NULL, "Stack overflow.");
@@ -2259,7 +2259,7 @@ static bool enter(as_obj *script, as_obj *h, as_obj **args, uint32_t nargs)
     f->handler = h;
     f->script = script;
     f->nlocals = h->n > nparams ? h->n : nparams;
-    f->locals = calloc(f->nlocals ? f->nlocals : 1, sizeof *f->locals);
+    f->locals = bb_calloc(f->nlocals ? f->nlocals : 1, sizeof *f->locals, BB_TAG(as_obj *));
     for (uint32_t i = 0; i < f->nlocals; i++)
         f->locals[i] = NULL;
     for (uint32_t i = 0; i < nargs && i < f->nlocals; i++)
@@ -2278,7 +2278,7 @@ static void leave(void)
     frame *f = top();
     sp = f->sp;
     nblocks = f->blk;
-    free(f->locals);
+    bb_free(f->locals);
     nframes--;
 }
 
@@ -3294,7 +3294,7 @@ static uint32_t new_id(as_obj *v)
             as_pin(v);
             return i + 1;
         }
-    ids = realloc(ids, (nids + 1) * sizeof *ids);
+    ids = bb_realloc(ids, (nids + 1) * sizeof *ids, BB_TAG(id_slot));
     ids[nids] = (id_slot){ v, NULL, 0 };
     as_pin(v);
     return ++nids;
@@ -3305,8 +3305,8 @@ static as_obj *of_id(uint32_t id) { return id && id <= nids ? ids[id - 1].v : NU
 void as_reset(void)
 {
     for (uint32_t i = 0; i < nids; i++)
-        free(ids[i].data);
-    free(ids);
+        bb_free(ids[i].data);
+    bb_free(ids);
     ids = NULL;
     nids = 0;
     while (nframes)
@@ -3334,7 +3334,7 @@ int32_t as_load_script(const uint8_t *data, size_t len, uint32_t *id_out)
         return asErrCorruptData;
     }
     *id_out = new_id(s);
-    ids[*id_out - 1].data = malloc(len ? len : 1);
+    ids[*id_out - 1].data = bb_malloc(len ? len : 1, BB_BYTES);
     memcpy(ids[*id_out - 1].data, data, len);
     ids[*id_out - 1].len = len;
     return 0;
@@ -3420,7 +3420,7 @@ void as_dispose(uint32_t id)
         return;
     as_unpin(ids[id - 1].v);
     ids[id - 1].v = NULL;
-    free(ids[id - 1].data);
+    bb_free(ids[id - 1].data);
     ids[id - 1].data = NULL;
 }
 
@@ -3433,7 +3433,7 @@ uint32_t as_copy_id(uint32_t id)
     size_t len;
     const uint8_t *d = as_script_data(id, &len);
     if (d) {
-        ids[n - 1].data = malloc(len);
+        ids[n - 1].data = bb_malloc(len, BB_BYTES);
         memcpy(ids[n - 1].data, d, len);
         ids[n - 1].len = len;
     }
@@ -3491,12 +3491,12 @@ int32_t as_context_get(uint32_t ctx, const uint8_t *name, size_t n, bool handler
         return ctxInvalidID;
     as_obj *key = as_new(V_IDENT);
     key->n = (uint32_t)n;
-    key->bytes = malloc(n ? n : 1);
+    key->bytes = bb_malloc(n ? n : 1, BB_BYTES);
     memcpy(key->bytes, name, n);
     as_obj *v = script_property(s, key);
     if (!v && !handler)
         v = as_record_get(s->c, key);
-    free(key->bytes);
+    bb_free(key->bytes);
     key->bytes = NULL;
     if (!v || (v->kind == V_HANDLER) != handler)
         return ctxNoSuchObject;
@@ -3514,9 +3514,9 @@ int32_t as_context_set(uint32_t ctx, const uint8_t *name, size_t n, bool handler
     if (handler != (v->kind == V_HANDLER))
         return -1700; /* errAECoercionFail: not a handler / a handler where a value goes */
     as_obj *key = as_ident("");
-    free(key->bytes);
+    bb_free(key->bytes);
     key->n = (uint32_t)n;
-    key->bytes = malloc(n ? n : 1);
+    key->bytes = bb_malloc(n ? n : 1, BB_BYTES);
     memcpy(key->bytes, name, n);
     for (uint32_t i = 0; i < s->a->n; i++)
         if (s->a->items[i]->kind == V_IDENT && key_eq(s->a->items[i], key)) {
@@ -3573,7 +3573,7 @@ uint32_t as_copy_script(uint32_t id)
     size_t len;
     const uint8_t *d = as_script_data(id, &len);
     if (d) {
-        ids[out - 1].data = malloc(len);
+        ids[out - 1].data = bb_malloc(len, BB_BYTES);
         memcpy(ids[out - 1].data, d, len);
         ids[out - 1].len = len;
     }

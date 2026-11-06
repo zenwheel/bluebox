@@ -377,8 +377,8 @@ int16_t tb_GetFrontProcess(gaddr psn, int32_t dummy)
  * unless the caller is the Finder, which goes on beside it. */
 
 int aem_launch_documents(gaddr params, char ***paths_out);
-static machine_launch_fn launch_fn;
-static void *launch_ctx;
+BB_HOST static machine_launch_fn launch_fn;
+BB_HOST static void *launch_ctx;
 
 void machine_set_launch_handler(machine_launch_fn fn, void *ctx)
 {
@@ -399,8 +399,8 @@ bool process_launch(const char *app, const char *const *docs, int ndocs)
     return true;
 }
 
-static machine_url_fn url_fn;
-static void *url_ctx;
+BB_HOST static machine_url_fn url_fn;
+BB_HOST static void *url_ctx;
 
 void machine_set_url_handler(machine_url_fn fn, void *ctx)
 {
@@ -438,8 +438,8 @@ int16_t tb_LaunchApplication(gaddr pb)
     int ndocs = aem_launch_documents(LaunchParamBlockRec_launchAppParameters(pb), &docs);
     bool ok = process_launch(path, (const char *const *)docs, ndocs);
     for (int i = 0; i < ndocs; i++)
-        free(docs[i]);
-    free(docs);
+        bb_free(docs[i]);
+    bb_free(docs);
     if (!ok)
         return -600; /* procNotFound: nothing could be started */
     /* The new run's serial number, as the other runs are listed ({1, its

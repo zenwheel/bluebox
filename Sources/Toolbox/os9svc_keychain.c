@@ -66,8 +66,8 @@ static bool interaction_allowed = true;
 static void item_free(kcitem *it)
 {
     for (int i = 0; i < it->nattrs; i++)
-        free(it->attrs[i].data);
-    free(it->data);
+        bb_free(it->attrs[i].data);
+    bb_free(it->data);
     memset(it, 0, sizeof *it);
 }
 
@@ -116,12 +116,12 @@ static int item_set_attr(kcitem *it, uint32_t tag, const uint8_t *data, uint32_t
         a = &it->attrs[it->nattrs++];
         a->tag = tag;
     }
-    uint8_t *copy = len ? malloc(len) : NULL;
+    uint8_t *copy = len ? bb_malloc(len, BB_BYTES) : NULL;
     if (len && !copy)
         return memFullErr;
     if (len)
         memcpy(copy, data, len);
-    free(a->data);
+    bb_free(a->data);
     a->data = copy;
     a->length = len;
     return noErr;
@@ -155,7 +155,7 @@ static void kc_NewItem(ppc_cpu *c)
             it->used = true;
             it->refs = 1;
             it->cls = cls;
-            it->data = length ? malloc(length) : NULL;
+            it->data = length ? bb_malloc(length, BB_BYTES) : NULL;
             if (length && !it->data) {
                 it->used = false;
                 RETURN(memFullErr);
@@ -192,15 +192,15 @@ static void kc_SetAttribute(ppc_cpu *c)
         RETURN(errKCReadOnlyAttr);
     if (len > MAX_DATA)
         RETURN(errKCDataTooLarge);
-    uint8_t *buf = len ? malloc(len) : NULL;
+    uint8_t *buf = len ? bb_malloc(len, BB_BYTES) : NULL;
     if (len && (!buf || !data)) {
-        free(buf);
+        bb_free(buf);
         RETURN(data ? memFullErr : paramErr);
     }
     for (uint32_t i = 0; i < len; i++)
         buf[i] = rd8(data + i);
     int err = item_set_attr(it, tag, buf, len);
-    free(buf);
+    bb_free(buf);
     RETURN(err);
 }
 
@@ -238,12 +238,12 @@ static void kc_SetData(ppc_cpu *c)
         RETURN(errKCDataTooLarge);
     if (len && !R(2))
         RETURN(paramErr);
-    uint8_t *buf = len ? malloc(len) : NULL;
+    uint8_t *buf = len ? bb_malloc(len, BB_BYTES) : NULL;
     if (len && !buf)
         RETURN(memFullErr);
     for (uint32_t i = 0; i < len; i++)
         buf[i] = rd8(R(2) + i);
-    free(it->data);
+    bb_free(it->data);
     it->data = buf;
     it->length = len;
     RETURN(noErr);

@@ -53,8 +53,8 @@ enum { uppSICompletionProcInfo = 0xC0, uppModalFilterProcInfo = 0xFD0 };
 
 /* ---- The host ---- */
 
-static machine_sound_input_fn host_fn;
-static void *host_ctx;
+BB_HOST static machine_sound_input_fn host_fn;
+BB_HOST static void *host_ctx;
 static bool capturing; /* the host said it is capturing */
 
 void machine_set_sound_input_handler(machine_sound_input_fn fn, void *ctx)
@@ -65,7 +65,7 @@ void machine_set_sound_input_handler(machine_sound_input_fn fn, void *ctx)
 
 /* Captured samples at the device's rate, mono, waiting for a recording. */
 #define RING (1 << 18)
-static pthread_mutex_t ring_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t ring_lock = PTHREAD_MUTEX_INITIALIZER;
 static int16_t ring[RING];
 static uint32_t ring_head, ring_count;
 static double ring_rate = 22254.54545; /* the rate the ring holds */
@@ -341,11 +341,11 @@ static void record_pump(void)
     if (take > (uint64_t)hz * 4)
         take = (uint64_t)hz * 4;
     if (take) {
-        int16_t *mono = calloc((size_t)take, sizeof *mono);
-        uint8_t *bytes = malloc((size_t)take * fb);
+        int16_t *mono = bb_calloc((size_t)take, sizeof *mono, BB_BYTES);
+        uint8_t *bytes = bb_malloc((size_t)take * fb, BB_BYTES);
         if (!mono || !bytes) {
-            free(mono);
-            free(bytes);
+            bb_free(mono);
+            bb_free(bytes);
             return;
         }
         if (capturing)
@@ -365,15 +365,15 @@ static void record_pump(void)
         } else if (!rec.pb) {
             if (rec.done + n > rec.host_size) {
                 uint32_t size = (rec.done + n) * 2;
-                uint8_t *grown = realloc(rec.host_buffer, size);
+                uint8_t *grown = bb_realloc(rec.host_buffer, size, BB_BYTES);
                 if (grown)
                     rec.host_buffer = grown, rec.host_size = size;
             }
             if (rec.done + n <= rec.host_size)
                 memcpy(rec.host_buffer + rec.done, bytes, n);
         }
-        free(mono);
-        free(bytes);
+        bb_free(mono);
+        bb_free(bytes);
         rec.done += n;
         rec.frames += take;
         gaddr ir = rec.pb ? rd32(rec.pb + SPB_interruptRoutine) : 0;
@@ -867,7 +867,7 @@ static bool record_dialog_run(gaddr filter, uint32_t corner, uint32_t limit)
         tb_ModalDialog(filter_stub, hit);
         n = (int16_t)rd16(hit);
         if (n == itemRecord && !rec.active) {
-            free(rec.host_buffer);
+            bb_free(rec.host_buffer);
             memset(&rec, 0, sizeof rec);
             rec.active = true;
             rec.total = limit;
@@ -949,7 +949,7 @@ int16_t tb_SndRecord(gaddr filterp, uint32_t corner, int32_t quality, gaddr sndh
     } else {
         err = userCanceledErr;
     }
-    free(rec.host_buffer);
+    bb_free(rec.host_buffer);
     memset(&rec, 0, sizeof rec);
     tb_SPBCloseDevice(refnum);
     return err;
@@ -983,7 +983,7 @@ int16_t tb_SndRecordToFile(gaddr filterp, uint32_t corner, int32_t quality, int1
     } else {
         err = userCanceledErr;
     }
-    free(rec.host_buffer);
+    bb_free(rec.host_buffer);
     memset(&rec, 0, sizeof rec);
     tb_SPBCloseDevice(dref);
     return err;
@@ -993,7 +993,7 @@ void sound_input_reset(void)
 {
     if (dev.opens)
         host_capture(false);
-    free(rec.host_buffer);
+    bb_free(rec.host_buffer);
     memset(&rec, 0, sizeof rec);
     memset(&dev, 0, sizeof dev);
     device_defaults();

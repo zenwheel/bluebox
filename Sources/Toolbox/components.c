@@ -809,8 +809,8 @@ static void ic_store(const uint8_t *key, const uint8_t *data, int32_t len)
         memcpy(ic_prefs[i].key, key, (size_t)key[0] + 1);
         ic_prefs[i].data = NULL;
     }
-    free(ic_prefs[i].data);
-    ic_prefs[i].data = malloc(len > 0 ? (size_t)len : 1);
+    bb_free(ic_prefs[i].data);
+    ic_prefs[i].data = bb_malloc(len > 0 ? (size_t)len : 1, BB_BYTES);
     if (len > 0)
         memcpy(ic_prefs[i].data, data, (size_t)len);
     ic_prefs[i].len = len;
@@ -845,9 +845,9 @@ void machine_set_internet_pref(const char *key, const uint8_t *data, int32_t len
     if (i == ic_ndefault && ic_ndefault < IC_MAX_PREFS)
         ic_ndefault++;
     if (i < ic_ndefault) {
-        free(ic_defaults[i].data);
+        bb_free(ic_defaults[i].data);
         memcpy(ic_defaults[i].key, k, n + 1);
-        ic_defaults[i].data = malloc(len > 0 ? (size_t)len : 1);
+        ic_defaults[i].data = bb_malloc(len > 0 ? (size_t)len : 1, BB_BYTES);
         if (len > 0)
             memcpy(ic_defaults[i].data, data, (size_t)len);
         ic_defaults[i].len = len;
@@ -939,10 +939,10 @@ static int ic_profile_find(int32_t id)
 
 static struct ic_pref *ic_copy_prefs(const struct ic_pref *p, int n)
 {
-    struct ic_pref *c = calloc(n ? (size_t)n : 1, sizeof *c);
+    struct ic_pref *c = bb_calloc(n ? (size_t)n : 1, sizeof *c, BB_TAG(struct ic_pref));
     for (int i = 0; i < n; i++) {
         c[i] = p[i];
-        c[i].data = malloc(p[i].len > 0 ? (size_t)p[i].len : 1);
+        c[i].data = bb_malloc(p[i].len > 0 ? (size_t)p[i].len : 1, BB_BYTES);
         if (p[i].len > 0)
             memcpy(c[i].data, p[i].data, (size_t)p[i].len);
     }
@@ -952,8 +952,8 @@ static struct ic_pref *ic_copy_prefs(const struct ic_pref *p, int n)
 static void ic_free_prefs(struct ic_pref *p, int n)
 {
     for (int i = 0; i < n; i++)
-        free(p[i].data);
-    free(p);
+        bb_free(p[i].data);
+    bb_free(p);
 }
 
 int16_t ic_get_current_profile(gaddr out)
@@ -977,14 +977,14 @@ int16_t ic_set_current_profile(int32_t id)
     from->saved = ic_copy_prefs(ic_prefs, ic_npref);
     from->nsaved = ic_npref;
     for (int i = 0; i < ic_npref; i++)
-        free(ic_prefs[i].data);
+        bb_free(ic_prefs[i].data);
     struct ic_profile *dst = &ic_profiles[to];
     ic_npref = dst->nsaved;
     for (int i = 0; i < ic_npref; i++) {
         ic_prefs[i] = dst->saved[i];
         dst->saved[i].data = NULL; /* moved into the working set */
     }
-    free(dst->saved);
+    bb_free(dst->saved);
     dst->saved = NULL;
     dst->nsaved = 0;
     ic_current_profile = to;
@@ -1175,11 +1175,11 @@ int16_t ic_set_pref(gaddr key, gaddr buf, int32_t len)
     ic_key(key, k);
     if (!k[0] || len < 0)
         return paramErr;
-    uint8_t *d = malloc(len > 0 ? (size_t)len : 1);
+    uint8_t *d = bb_malloc(len > 0 ? (size_t)len : 1, BB_BYTES);
     if (len > 0)
         gget(d, buf, (uint32_t)len);
     ic_store(k, d, len);
-    free(d);
+    bb_free(d);
     return noErr;
 }
 
@@ -1190,7 +1190,7 @@ int16_t ic_delete_pref(gaddr key)
     int i = ic_find(k);
     if (i < 0)
         return icPrefNotFoundErr;
-    free(ic_prefs[i].data);
+    bb_free(ic_prefs[i].data);
     ic_prefs[i] = ic_prefs[--ic_npref];
     ic_seed++;
     return noErr;
@@ -1435,7 +1435,7 @@ void components_reset(void)
     memset(ic_profiles, 0, sizeof ic_profiles);
     ic_nprofile = ic_current_profile = 0;
     for (int i = 0; i < ic_ndefault; i++)
-        free(ic_defaults[i].data);
+        bb_free(ic_defaults[i].data);
     memset(ic_defaults, 0, sizeof ic_defaults);
     ic_ndefault = 0;
     memset(comps, 0, sizeof comps);

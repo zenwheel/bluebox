@@ -937,7 +937,7 @@ static void tabs_init(gaddr ch, ap_ctl *a)
         gaddr p = rd32(h);
         uint32_t len = (uint32_t)tb_GetHandleSize(h);
         int n = len >= 4 ? (int16_t)rd16(p + 2) : 0;
-        a->tabs = calloc((size_t)(n > 0 ? n : 1), sizeof *a->tabs);
+        a->tabs = bb_calloc((size_t)(n > 0 ? n : 1), sizeof *a->tabs, BB_TAG(tab_info));
         uint32_t o = 4;
         for (int i = 0; i < n && o + 3 <= len; i++) {
             a->tabs[i].icon = (int16_t)rd16(p + o);
@@ -957,7 +957,7 @@ static void tabs_fit(gaddr ch, ap_ctl *a)
 {
     int want = cmax(ch);
     if (want > a->ntabs && want < 256) {
-        a->tabs = realloc(a->tabs, (size_t)want * sizeof *a->tabs);
+        a->tabs = bb_realloc(a->tabs, (size_t)want * sizeof *a->tabs, BB_TAG(tab_info));
         memset(a->tabs + a->ntabs, 0, (size_t)(want - a->ntabs) * sizeof *a->tabs);
         a->ntabs = want;
     } else if (want >= 0 && want < a->ntabs) {
@@ -1328,12 +1328,12 @@ static int32_t edit_key(gaddr ch, ap_ctl *a, gaddr rec)
             if (del && s0 == s1 && s0 > 0)
                 s0--;
             int add = printable ? 1 : 0;
-            uint8_t *n = malloc((size_t)(a->clear_len - (s1 - s0) + add + 1));
+            uint8_t *n = bb_malloc((size_t)(a->clear_len - (s1 - s0) + add + 1), BB_BYTES);
             memcpy(n, a->clear, (size_t)s0);
             if (add)
                 n[s0] = c;
             memcpy(n + s0 + add, a->clear + s1, (size_t)(a->clear_len - s1));
-            free(a->clear);
+            bb_free(a->clear);
             a->clear = n;
             a->clear_len = a->clear_len - (s1 - s0) + add;
             tb_TEKey(printable ? (int16_t)0xA5 : chr, te);
@@ -1401,11 +1401,11 @@ static int32_t edit_data(gaddr ch, ap_ctl *a, const access *x, bool set)
                 tb_DisposePtr(ih);
             }
             int32_t n = h && rd32(h) ? tb_GetHandleSize(h) : 0;
-            uint8_t *buf = malloc((size_t)(n ? n : 1));
+            uint8_t *buf = bb_malloc((size_t)(n ? n : 1), BB_BYTES);
             if (n)
                 gget(buf, rd32(h), (uint32_t)n);
             give(x, buf, n);
-            free(buf);
+            bb_free(buf);
             return 0;
         }
         int32_t n = x->size > 0 ? x->size : 0;
@@ -1424,8 +1424,8 @@ static int32_t edit_data(gaddr ch, ap_ctl *a, const access *x, bool set)
             tb_DisposePtr(t);
             tb_DisposePtr(ih);
         } else if (pass) {
-            free(a->clear);
-            a->clear = malloc((size_t)(n ? n : 1));
+            bb_free(a->clear);
+            a->clear = bb_malloc((size_t)(n ? n : 1), BB_BYTES);
             if (n)
                 gget(a->clear, x->data, (uint32_t)n);
             a->clear_len = n;
@@ -1546,11 +1546,11 @@ static int32_t static_data(gaddr ch, ap_ctl *a, const access *x, bool set)
                 return errDataNotSupported;
             if (!set) {
                 int32_t n = rd32(h) ? tb_GetHandleSize(h) : 0;
-                uint8_t *buf = malloc((size_t)(n ? n : 1));
+                uint8_t *buf = bb_malloc((size_t)(n ? n : 1), BB_BYTES);
                 if (n)
                     gget(buf, rd32(h), (uint32_t)n);
                 give(x, buf, n);
-                free(buf);
+                bb_free(buf);
                 return 0;
             }
             tb_SetHandleSize(h, x->size);
@@ -1560,9 +1560,9 @@ static int32_t static_data(gaddr ch, ap_ctl *a, const access *x, bool set)
         }
         if (!set)
             return give(x, a->text, a->text_len);
-        free(a->text);
+        bb_free(a->text);
         a->text_len = x->size > 0 ? x->size : 0;
-        a->text = malloc((size_t)(a->text_len ? a->text_len : 1));
+        a->text = bb_malloc((size_t)(a->text_len ? a->text_len : 1), BB_BYTES);
         if (a->text_len)
             gget(a->text, x->data, (uint32_t)a->text_len);
         break;
@@ -1895,7 +1895,7 @@ static void st_load(gaddr ch, ap_ctl *a, int16_t id)
 
 static void st_init(gaddr ch, ap_ctl *a)
 {
-    scroll_text *t = calloc(1, sizeof *t);
+    scroll_text *t = bb_calloc(1, sizeof *t, BB_TAG(scroll_text));
     a->scroll_text = t;
     t->delay_before = (uint32_t)(uint16_t)cmin(ch);
     t->delay_between = (uint32_t)(uint16_t)cmax(ch);
@@ -2012,7 +2012,7 @@ static void st_dispose(gaddr ch, ap_ctl *a)
         tb_TEDispose(t->te);
     if (t->bar && ctl_find(t->bar))
         tb_DisposeControl(t->bar);
-    free(t);
+    bb_free(t);
     a->scroll_text = NULL;
 }
 
@@ -2537,9 +2537,9 @@ static void dispose(gaddr ch, ap_ctl *a)
         tb_TEDispose(a->te);
     if (a->list)
         tb_LDispose(a->list);
-    free(a->text);
-    free(a->clear);
-    free(a->tabs);
+    bb_free(a->text);
+    bb_free(a->clear);
+    bb_free(a->tabs);
 }
 
 /* A list box's list and an edit text's TERec are made for the control's
@@ -2595,7 +2595,7 @@ static void entry(cpu68k *c, int id)
     int32_t result = 0;
     ctl_info *ci = ctl_find(ch);
     if (ci && !ci->ap && msg == initCntl) {
-        ap_ctl *a = calloc(1, sizeof *a);
+        ap_ctl *a = bb_calloc(1, sizeof *a, BB_TAG(ap_ctl));
         a->id = id;
         ci->ap = a;
     }

@@ -45,7 +45,7 @@ bool rsrc_parse(const uint8_t *f, size_t len, rsrc_index *out, char *err, size_t
         }
         total += (size_t)be16(m + te + 4) + 1;
     }
-    out->entries = calloc(total ? total : 1, sizeof(rsrc_entry));
+    out->entries = bb_calloc(total ? total : 1, sizeof(rsrc_entry), BB_TAG(rsrc_entry));
     if (!out->entries) {
         snprintf(err, errlen, "out of memory");
         return false;
@@ -96,7 +96,7 @@ bool rsrc_parse(const uint8_t *f, size_t len, rsrc_index *out, char *err, size_t
 
 void rsrc_index_free(rsrc_index *idx)
 {
-    free(idx->entries);
+    bb_free(idx->entries);
     idx->entries = NULL;
     idx->count = 0;
 }
@@ -115,7 +115,7 @@ static void put16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (ui
 bool rsrc_build(const rsrc_spec *specs, size_t n, uint8_t **out, size_t *out_len)
 {
     /* Distinct types in first-seen order. */
-    uint32_t *types = malloc((n ? n : 1) * sizeof *types);
+    uint32_t *types = bb_malloc((n ? n : 1) * sizeof *types, BB_BYTES);
     size_t ntypes = 0, data_len = 0, names_len = 0;
     for (size_t i = 0; i < n; i++) {
         bool seen = false;
@@ -132,9 +132,9 @@ bool rsrc_build(const rsrc_spec *specs, size_t n, uint8_t **out, size_t *out_len
     size_t names_at = 28 + tl + n * 12;
     size_t map_len = names_at + names_len;
     size_t total = 256 + data_len + map_len;
-    uint8_t *b = calloc(1, total);
+    uint8_t *b = bb_calloc(1, total, BB_BYTES);
     if (!b) {
-        free(types);
+        bb_free(types);
         return false;
     }
     uint8_t *data = b + 256, *map = b + 256 + data_len;
@@ -180,7 +180,7 @@ bool rsrc_build(const rsrc_spec *specs, size_t n, uint8_t **out, size_t *out_len
         put16(te + 4, (uint16_t)(count - 1));
         put16(te + 6, (uint16_t)(tl + first_ref * 12));
     }
-    free(types);
+    bb_free(types);
     *out = b;
     *out_len = total;
     return true;
@@ -192,7 +192,7 @@ bool rsrc_filter(const uint8_t *fork, size_t len, const uint32_t *types, size_t 
     rsrc_index idx;
     if (!rsrc_parse(fork, len, &idx, err, errlen))
         return false;
-    rsrc_spec *specs = malloc((idx.count ? idx.count : 1) * sizeof *specs);
+    rsrc_spec *specs = bb_malloc((idx.count ? idx.count : 1) * sizeof *specs, BB_TAG(rsrc_spec));
     size_t n = 0;
     for (size_t t = 0; t < ntypes; t++)
         for (size_t i = 0; i < idx.count; i++)
@@ -202,7 +202,7 @@ bool rsrc_filter(const uint8_t *fork, size_t len, const uint32_t *types, size_t 
     bool ok = rsrc_build(specs, n, out, out_len);
     if (!ok)
         snprintf(err, errlen, "out of memory");
-    free(specs);
+    bb_free(specs);
     rsrc_index_free(&idx);
     return ok;
 }

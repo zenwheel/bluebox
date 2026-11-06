@@ -507,11 +507,11 @@ static void loc_OpCountLocales(ppc_cpu *c)
 {
     if (!R(1))
         RETURN(paramErr);
-    char (*ids)[32] = malloc(512 * 32);
+    char (*ids)[32] = bb_malloc(512 * 32, BB_BYTES);
     if (!ids)
         RETURN(memFullErr);
     wr32(R(1), (uint32_t)op_locales(R(0), ids, 512));
-    free(ids);
+    bb_free(ids);
     RETURN(noErr);
 }
 
@@ -521,7 +521,7 @@ static void loc_OpGetLocales(ppc_cpu *c)
 {
     if (!R(2))
         RETURN(paramErr);
-    char (*ids)[32] = malloc(512 * 32);
+    char (*ids)[32] = bb_malloc(512 * 32, BB_BYTES);
     if (!ids)
         RETURN(memFullErr);
     size_t n = op_locales(R(0), ids, 512);
@@ -537,7 +537,7 @@ static void loc_OpGetLocales(ppc_cpu *c)
         wr32(R(3) + 8 * k + 4, 0);
         k++;
     }
-    free(ids);
+    bb_free(ids);
     wr32(R(2), R(3) ? k : (uint32_t)n);
     RETURN(noErr);
 }

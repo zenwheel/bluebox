@@ -151,9 +151,9 @@ gaddr ref_new(int kind, void *obj)
             if (b == MAX_REF_BLOCKS)
                 return 0;
             gaddr base = tb_NewPtr(REFS_PER_BLOCK * 4, true, true);
-            ref_slot *tab = calloc(REFS_PER_BLOCK, sizeof *tab);
+            ref_slot *tab = bb_calloc(REFS_PER_BLOCK, sizeof *tab, BB_TAG(ref_slot));
             if (!base || !tab) {
-                free(tab);
+                bb_free(tab);
                 return 0;
             }
             ref_base[b] = base;
@@ -246,12 +246,12 @@ static double now_secs(void) { return (double)machine_time_ns() / 1e9; }
 
 static cevent *event_new(uint32_t cls, uint32_t kind, double when)
 {
-    cevent *e = calloc(1, sizeof *e);
+    cevent *e = bb_calloc(1, sizeof *e, BB_TAG(cevent));
     if (!e)
         return NULL;
     e->ref = ref_new(REF_EVENT, e);
     if (!e->ref) {
-        free(e);
+        bb_free(e);
         return NULL;
     }
     e->cls = cls;
@@ -264,10 +264,10 @@ static cevent *event_new(uint32_t cls, uint32_t kind, double when)
 static void event_free(cevent *e)
 {
     for (int i = 0; i < e->nparams; i++)
-        free(e->params[i].data);
-    free(e->params);
+        bb_free(e->params[i].data);
+    bb_free(e->params);
     ref_free(e->ref);
-    free(e);
+    bb_free(e);
 }
 
 static void event_release(cevent *e)
@@ -290,7 +290,7 @@ static bool set_param(cevent *e, uint32_t name, uint32_t type, uint32_t size, co
     if (!p) {
         if (e->nparams == e->cap) {
             int cap = e->cap ? e->cap * 2 : 8;
-            param *np = realloc(e->params, sizeof *np * (size_t)cap);
+            param *np = bb_realloc(e->params, sizeof *np * (size_t)cap, BB_TAG(param));
             if (!np)
                 return false;
             e->params = np;
@@ -300,10 +300,10 @@ static bool set_param(cevent *e, uint32_t name, uint32_t type, uint32_t size, co
         p->name = name;
         p->data = NULL;
     }
-    free(p->data);
+    bb_free(p->data);
     p->type = type;
     p->size = size;
-    p->data = malloc(size ? size : 1);
+    p->data = bb_malloc(size ? size : 1, BB_BYTES);
     if (size && data)
         memcpy(p->data, data, size);
     return true;
@@ -418,7 +418,7 @@ static target *dead_targets;
 
 static target *target_new(int kind, gaddr object)
 {
-    target *t = calloc(1, sizeof *t);
+    target *t = bb_calloc(1, sizeof *t, BB_TAG(target));
     if (!t)
         return NULL;
     t->ref = ref_new(REF_TARGET, t);
@@ -447,8 +447,8 @@ static target *application(void)
 static void free_handler(handler *h)
 {
     ref_free(h->ref);
-    free(h->types);
-    free(h);
+    bb_free(h->types);
+    bb_free(h);
 }
 
 /* Dead handlers and targets wait for the sends under way to finish. */
@@ -465,7 +465,7 @@ static void collect(void)
         target *t = dead_targets;
         dead_targets = t->dead_next;
         ref_free(t->ref);
-        free(t);
+        bb_free(t);
     }
 }
 
@@ -515,7 +515,7 @@ static void target_kill(target *t)
         dead_targets = t;
     } else {
         ref_free(t->ref);
-        free(t);
+        bb_free(t);
     }
 }
 
@@ -1615,7 +1615,7 @@ static void fire_timers(void)
         if (t->dead && !t->busy) {
             *p = t->next;
             ref_free(t->ref);
-            free(t);
+            bb_free(t);
         } else {
             p = &t->next;
         }
@@ -1822,13 +1822,13 @@ static void ce_SetEventParameter(ppc_cpu *c)
     cevent *e = ref_get(R(0), REF_EVENT);
     if (!e || (R(3) && !R(4)))
         RETURN(paramErr);
-    uint8_t *buf = malloc(R(3) ? R(3) : 1);
+    uint8_t *buf = bb_malloc(R(3) ? R(3) : 1, BB_BYTES);
     if (!buf)
         RETURN(memFullErr);
     if (R(3))
         gget(buf, R(4), R(3));
     bool ok = set_param(e, R(1), R(2), R(3), buf);
-    free(buf);
+    bb_free(buf);
     RETURN(ok ? noErr : memFullErr);
 }
 
@@ -2204,10 +2204,10 @@ static void ce_InstallEventHandler(ppc_cpu *c)
         wr32(out, 0);
     if (!t || !upp || (n && !list) || n > 4096)
         RETURN(paramErr);
-    handler *h = calloc(1, sizeof *h);
+    handler *h = bb_calloc(1, sizeof *h, BB_TAG(handler));
     if (!h)
         RETURN(memFullErr);
-    h->types = calloc(n ? n : 1, sizeof *h->types);
+    h->types = bb_calloc(n ? n : 1, sizeof *h->types, BB_BYTES);
     for (uint32_t i = 0; i < n; i++) {
         h->types[i][0] = rd32(list + 8 * i);
         h->types[i][1] = rd32(list + 8 * i + 4);
@@ -2262,7 +2262,7 @@ static void ce_AddEventTypesToHandler(ppc_cpu *c)
     gaddr list = R(2);
     if (!h || (n && !list) || n > 4096)
         RETURN(paramErr);
-    uint32_t (*types)[2] = realloc(h->types, sizeof *types * (size_t)(h->ntypes + (int)n + 1));
+    uint32_t (*types)[2] = bb_realloc(h->types, sizeof *types * (size_t)(h->ntypes + (int)n + 1), BB_BYTES);
     if (!types)
         RETURN(memFullErr);
     h->types = types;
@@ -2348,7 +2348,7 @@ static void ce_RegisterToolboxObjectClass(ppc_cpu *c)
     gaddr out = R(6);
     if (!R(0) || !R(4) || (R(2) && !R(3)))
         RETURN(paramErr);
-    object_class *k = calloc(1, sizeof *k);
+    object_class *k = bb_calloc(1, sizeof *k, BB_TAG(object_class));
     if (!k)
         RETURN(memFullErr);
     k->id = R(0);
@@ -2356,7 +2356,7 @@ static void ce_RegisterToolboxObjectClass(ppc_cpu *c)
     k->upp = R(4);
     k->data = R(5);
     k->ntypes = R(2) < 4096 ? R(2) : 4096;
-    k->types = calloc(k->ntypes ? k->ntypes : 1, sizeof *k->types);
+    k->types = bb_calloc(k->ntypes ? k->ntypes : 1, sizeof *k->types, BB_BYTES);
     for (uint32_t i = 0; i < k->ntypes; i++) {
         k->types[i][0] = rd32(R(3) + 8 * i);
         k->types[i][1] = rd32(R(3) + 8 * i + 4);
@@ -2373,8 +2373,8 @@ static void ce_UnregisterToolboxObjectClass(ppc_cpu *c)
     if (!k)
         RETURN(paramErr);
     ref_free(k->ref);
-    free(k->types);
-    free(k);
+    bb_free(k->types);
+    bb_free(k);
     RETURN(noErr);
 }
 
@@ -2451,7 +2451,7 @@ static void ce_InstallEventLoopTimer(ppc_cpu *c)
         wr32(out, 0);
     if (!upp)
         RETURN(paramErr);
-    ltimer *t = calloc(1, sizeof *t);
+    ltimer *t = bb_calloc(1, sizeof *t, BB_TAG(ltimer));
     if (!t)
         RETURN(memFullErr);
     t->ref = ref_new(REF_TIMER, t);
@@ -2479,7 +2479,7 @@ static void ce_RemoveEventLoopTimer(ppc_cpu *c)
                 break;
             }
         ref_free(t->ref);
-        free(t);
+        bb_free(t);
     }
     RETURN(noErr);
 }
@@ -2595,7 +2595,7 @@ static void ce_RegisterEventHotKey(ppc_cpu *c)
     for (hotkey *h = hotkeys; h; h = h->next)
         if (h->code == R(0) && h->mods == R(1))
             RETURN(eventHotKeyExistsErr);
-    hotkey *h = calloc(1, sizeof *h);
+    hotkey *h = bb_calloc(1, sizeof *h, BB_TAG(hotkey));
     if (!h)
         RETURN(memFullErr);
     *h = (hotkey){ ref_new(REF_HOTKEY, h), R(0), R(1), R(2), R(3), t, hotkeys };
@@ -2617,7 +2617,7 @@ static void ce_UnregisterEventHotKey(ppc_cpu *c)
             break;
         }
     ref_free(h->ref);
-    free(h);
+    bb_free(h);
     RETURN(noErr);
 }
 
@@ -2765,23 +2765,23 @@ void carbon_events_reset(void)
         while (t->handlers) {
             handler *h = t->handlers;
             t->handlers = h->next;
-            free(h->types);
-            free(h);
+            bb_free(h->types);
+            bb_free(h);
         }
-        free(t);
+        bb_free(t);
     }
     while (timers) {
         ltimer *t = timers;
         timers = t->next;
-        free(t);
+        bb_free(t);
     }
     while (hotkeys) {
         hotkey *h = hotkeys;
         hotkeys = h->next;
-        free(h);
+        bb_free(h);
     }
     for (int b = 0; b < ref_blocks; b++)
-        free(ref_tab[b]);
+        bb_free(ref_tab[b]);
     ref_blocks = 0;
     app_target = dispatcher_target = focus_target = NULL;
     dead_handlers = NULL;

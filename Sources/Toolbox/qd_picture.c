@@ -167,9 +167,9 @@ static void read_poly(reader *r, const mapping *m, poly *out)
     int size = (uint16_t)r16(r);
     rrect(r); /* bounding box */
     int n = (size - 10) / 4;
-    free(out->pts);
+    bb_free(out->pts);
     out->n = n > 0 ? n : 0;
-    out->pts = malloc(sizeof *out->pts * (size_t)(out->n ? out->n : 1));
+    out->pts = bb_malloc(sizeof *out->pts * (size_t)(out->n ? out->n : 1), BB_BYTES);
     for (int i = 0; i < out->n; i++) {
         int v = r16(r), h = r16(r);
         out->pts[i][0] = (int16_t)map_h(m, h);
@@ -185,7 +185,7 @@ static void poly_region(const poly *pl, hrgn *out)
     hrgn_init(out);
     if (pl->n < 3)
         return;
-    int (*e)[4] = malloc((size_t)pl->n * sizeof *e);
+    int (*e)[4] = bb_malloc((size_t)pl->n * sizeof *e, BB_BYTES);
     for (int i = 0; i < pl->n; i++) {
         int j = (i + 1) % pl->n;
         e[i][0] = pl->pts[i][0];
@@ -194,7 +194,7 @@ static void poly_region(const poly *pl, hrgn *out)
         e[i][3] = pl->pts[j][1];
     }
     hrgn_even_odd(out, (const int (*)[4])e, pl->n);
-    free(e);
+    bb_free(e);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -287,9 +287,9 @@ static void decode_pixels(reader *r, const pixinfo *pi, bool packed, image *img)
     int w = pi->bounds.right - pi->bounds.left, h = pi->bounds.bottom - pi->bounds.top;
     img->w = w > 0 ? w : 0;
     img->h = h > 0 ? h : 0;
-    img->rgba = calloc((size_t)img->w * (size_t)img->h * 4 + 4, 1);
+    img->rgba = bb_calloc((size_t)img->w * (size_t)img->h * 4 + 4, 1, BB_BYTES);
     int rb = pi->row_bytes;
-    uint8_t *row = calloc((size_t)rb + 16, 1);
+    uint8_t *row = bb_calloc((size_t)rb + 16, 1, BB_BYTES);
     for (int y = 0; y < img->h; y++) {
         uint8_t *px = img->rgba + (size_t)y * (size_t)img->w * 4;
         if (pi->is_pixmap && pi->pixel_size == 32) {
@@ -300,7 +300,7 @@ static void decode_pixels(reader *r, const pixinfo *pi, bool packed, image *img)
                     int count = rb > 250 ? (uint16_t)r16(r) : r8(r);
                     need(r, (uint32_t)count);
                     reader sub = { r->p, r->p + (uint32_t)count, r->v2, 0, 0, 0 };
-                    uint8_t *buf = calloc((size_t)n + 1, 1);
+                    uint8_t *buf = bb_calloc((size_t)n + 1, 1, BB_BYTES);
                     unpack_bits(&sub, buf, n, 1);
                     skip(r, (uint32_t)count);
                     for (int x = 0; x < img->w; x++) {
@@ -310,7 +310,7 @@ static void decode_pixels(reader *r, const pixinfo *pi, bool packed, image *img)
                         px[x * 4 + 2] = buf[(o + 2) * img->w + x];
                         px[x * 4 + 3] = 255;
                     }
-                    free(buf);
+                    bb_free(buf);
                     continue;
                 }
             }
@@ -352,7 +352,7 @@ static void decode_pixels(reader *r, const pixinfo *pi, bool packed, image *img)
             px[x * 4 + 3] = 255;
         }
     }
-    free(row);
+    bb_free(row);
 }
 
 /* Show an image: dithered to 1 bit through CopyBits (so clipping, scaling
@@ -448,7 +448,7 @@ static void bits_op(reader *r, const mapping *m, int op)
     decode_pixels(r, &pi, packed || direct, &img);
     if (qd_survey) {
         survey_image(qd_survey, pi.is_pixmap, pi.is_pixmap ? pi.pixel_size : 1, img.rgba, img.w, img.h);
-        free(img.rgba);
+        bb_free(img.rgba);
         hrgn_free(&mask);
         return;
     }
@@ -456,7 +456,7 @@ static void bits_op(reader *r, const mapping *m, int op)
     src = (qrect){ (int16_t)(src.top - pi.bounds.top), (int16_t)(src.left - pi.bounds.left),
                    (int16_t)(src.bottom - pi.bounds.top), (int16_t)(src.right - pi.bounds.left) };
     show_image(&img, src, map_rect(m, dst), mode, rgn ? &mask : NULL);
-    free(img.rgba);
+    bb_free(img.rgba);
     hrgn_free(&mask);
 }
 
@@ -514,7 +514,7 @@ static gaddr pixpat(reader *r, uint8_t pat[8])
             wr32(rd32(data) + (uint32_t)i * 4,
                  (uint32_t)img.rgba[i * 4] << 16 | (uint32_t)img.rgba[i * 4 + 1] << 8 | img.rgba[i * 4 + 2]);
     }
-    free(img.rgba);
+    bb_free(img.rgba);
     return pp;
 }
 
@@ -916,7 +916,7 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
             skip(r, 1);
     }
     qd_fill_pixpat = 0;
-    free(ls.pl.pts);
+    bb_free(ls.pl.pts);
     hrgn_free(&ls.rgn);
 }
 
@@ -1083,7 +1083,7 @@ bool machine_picture_rgba(const uint8_t *pict, size_t len, uint8_t **rgba, int *
         gaddr pm = rd32(rd32(port + CGrafPort_portPixMap_off));
         gaddr base = qd_pixmap_base(pm, true);
         uint32_t row_bytes = (uint16_t)PixMap_rowBytes(pm) & 0x3FFF;
-        *rgba = malloc((size_t)width * (size_t)height * 4);
+        *rgba = bb_malloc((size_t)width * (size_t)height * 4, BB_BYTES);
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++) {
                 uint32_t v = rd32(base + (uint32_t)y * row_bytes + (uint32_t)x * 4);

@@ -47,7 +47,7 @@ size_t sc_cstr(gaddr s, char *out, size_t outsize)
 static char *host_string(gaddr s)
 {
     size_t n = s ? sc_strlen(s) : 0;
-    char *p = malloc(n + 1);
+    char *p = bb_malloc(n + 1, BB_BYTES);
     if (p) {
         if (n)
             gget(p, s, (uint32_t)n);

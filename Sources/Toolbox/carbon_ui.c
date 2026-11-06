@@ -82,7 +82,7 @@ void hi_cf_to_pstr(gaddr cf, gaddr out)
     args[2] = len;
     args[3] = units;
     hi_call("CFStringGetCharacters", args, 4, NULL);
-    char *utf8 = malloc(len * 3 + 1);
+    char *utf8 = bb_malloc(len * 3 + 1, BB_BYTES);
     size_t k = 0;
     for (uint32_t i = 0; i < len; i++) {
         uint32_t u = rd16(units + 2 * i);
@@ -112,7 +112,7 @@ void hi_cf_to_pstr(gaddr cf, gaddr out)
         n = 255;
     wr8(out, (uint8_t)n);
     gput(out + 1, roman, (uint32_t)n);
-    free(utf8);
+    bb_free(utf8);
     tb_DisposePtr(units);
 }
 
@@ -1177,7 +1177,7 @@ static help_tag *tag_for(gaddr object, int item, bool create)
         return NULL;
     if (ntags == maxtags) {
         int n = maxtags ? maxtags * 2 : 16;
-        help_tag *more = realloc(tags, sizeof *tags * (size_t)n);
+        help_tag *more = bb_realloc(tags, sizeof *tags * (size_t)n, BB_TAG(help_tag));
         if (!more)
             return NULL;
         tags = more;
@@ -1436,7 +1436,7 @@ void carbonui_reset(void)
     find_word_hook = 0;
     generation = 1;
     memset(active_files, 0, sizeof active_files);
-    free(tags);
+    bb_free(tags);
     tags = NULL;
     ntags = maxtags = 0;
     tags_displayed = true;

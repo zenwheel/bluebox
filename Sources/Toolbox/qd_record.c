@@ -45,10 +45,10 @@ bool qd_rec_active(gaddr port) { return port && port == rec_port && page_open; }
 
 static void free_op(machine_print_op *op)
 {
-    free(op->clip);
-    free(op->rects);
-    free(op->text);
-    free(op->image);
+    bb_free(op->clip);
+    bb_free(op->rects);
+    bb_free(op->text);
+    bb_free(op->image);
 }
 
 void qd_rec_end(void)
@@ -56,9 +56,9 @@ void qd_rec_end(void)
     for (int p = 0; p < npages; p++) {
         for (int i = 0; i < pages[p].nops; i++)
             free_op(&pages[p].ops[i]);
-        free(pages[p].ops);
+        bb_free(pages[p].ops);
     }
-    free(pages);
+    bb_free(pages);
     pages = NULL;
     npages = cap_pages = 0;
     memset(&cm, 0, sizeof cm);
@@ -70,7 +70,7 @@ void qd_rec_open_page(void)
 {
     if (npages == cap_pages) {
         cap_pages = cap_pages ? cap_pages * 2 : 8;
-        pages = realloc(pages, (size_t)cap_pages * sizeof *pages);
+        pages = bb_realloc(pages, (size_t)cap_pages * sizeof *pages, BB_TAG(machine_print_page));
     }
     memset(&pages[npages++], 0, sizeof *pages);
     page_open = true;
@@ -106,7 +106,7 @@ static int region_rects(const hrgn *r, int dh, int dv, mprect **out)
         for (int i = 0; i + 1 < band->n; i += 2) {
             if (n == cap) {
                 cap = cap ? cap * 2 : 8;
-                rects = realloc(rects, (size_t)cap * sizeof *rects);
+                rects = bb_realloc(rects, (size_t)cap * sizeof *rects, BB_TAG(mprect));
             }
             rects[n++] = dev_rect((qrect){ band->top, band->x[i], band->bottom, band->x[i + 1] }, dh, dv);
         }
@@ -118,7 +118,7 @@ static int region_rects(const hrgn *r, int dh, int dv, mprect **out)
 static machine_print_op *new_op(gaddr port, int kind)
 {
     machine_print_page *pg = &pages[npages - 1];
-    pg->ops = realloc(pg->ops, (size_t)(pg->nops + 1) * sizeof *pg->ops);
+    pg->ops = bb_realloc(pg->ops, (size_t)(pg->nops + 1) * sizeof *pg->ops, BB_TAG(machine_print_op));
     machine_print_op *op = &pg->ops[pg->nops++];
     memset(op, 0, sizeof *op);
     op->kind = kind;
@@ -191,7 +191,7 @@ void qd_rec_text(gaddr port, int family, int size, int face, int x, int y, const
     op->v0 = (int16_t)(y + dv);
     op->width = (int16_t)width;
     op->len = len;
-    op->text = malloc(len ? (size_t)len : 1);
+    op->text = bb_malloc(len ? (size_t)len : 1, BB_BYTES);
     memcpy(op->text, text, (size_t)len);
     if (cm.text && (cm.angle != 0 || cm.flip_h || cm.flip_v)) {
         if (!cm.placed) {
@@ -289,7 +289,7 @@ void qd_rec_image(gaddr port, int w, int h, const uint8_t *rgba, qrect src, qrec
     op->r = dev_rect(dst, dh, dv);
     op->image_w = x1 - x0;
     op->image_h = y1 - y0;
-    op->image = malloc((size_t)op->image_w * (size_t)op->image_h * 4);
+    op->image = bb_malloc((size_t)op->image_w * (size_t)op->image_h * 4, BB_BYTES);
     for (int y = y0; y < y1; y++)
         memcpy(op->image + (size_t)(y - y0) * (size_t)op->image_w * 4, rgba + ((size_t)y * (size_t)w + (size_t)x0) * 4,
                (size_t)op->image_w * 4);

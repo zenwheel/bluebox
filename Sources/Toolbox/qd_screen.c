@@ -483,12 +483,12 @@ bool machine_screen_changed(int x, int y, int w, int h, uint8_t *shadow, size_t 
 bool machine_screenshot(const char *path)
 {
     int w = g_screen_width, h = g_screen_height;
-    uint8_t *rgba = malloc((size_t)w * (size_t)h * 4);
+    uint8_t *rgba = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
     if (!rgba)
         return false;
     machine_screen_rgba(0, 0, w, h, rgba);
     bool ok = machine_write_png(path, rgba, w, h);
-    free(rgba);
+    bb_free(rgba);
     return ok;
 }
 
@@ -498,7 +498,7 @@ static bool write_png(const char *path, const uint8_t *rgba, int w, int h, bool 
     size_t bpp = alpha ? 4 : 3;
     size_t raw_row = (size_t)w * bpp + 1; /* filter byte + pixels */
     size_t raw_len = raw_row * (size_t)h;
-    uint8_t *raw = malloc(raw_len);
+    uint8_t *raw = bb_malloc(raw_len, BB_BYTES);
     for (int y = 0; y < h; y++) {
         uint8_t *row = raw + (size_t)y * raw_row;
         row[0] = 0;
@@ -508,7 +508,7 @@ static bool write_png(const char *path, const uint8_t *rgba, int w, int h, bool 
     /* zlib stream of stored blocks. */
     size_t nblocks = raw_len / 65535 + 1;
     size_t zlen = 2 + raw_len + nblocks * 5 + 4;
-    uint8_t *z = malloc(zlen);
+    uint8_t *z = bb_malloc(zlen, BB_BYTES);
     size_t o = 0;
     z[o++] = 0x78;
     z[o++] = 0x01;
@@ -549,8 +549,8 @@ static bool write_png(const char *path, const uint8_t *rgba, int w, int h, bool 
              chunk(fp, "IEND", NULL, 0);
         ok = (fclose(fp) == 0) && ok;
     }
-    free(z);
-    free(raw);
+    bb_free(z);
+    bb_free(raw);
     return ok;
 }
 

@@ -109,13 +109,13 @@ static void free_drag(drag *d)
 {
     for (int i = 0; i < d->nitems; i++) {
         for (int j = 0; j < d->items[i].nflavors; j++)
-            free(d->items[i].flavors[j].data);
-        free(d->items[i].flavors);
+            bb_free(d->items[i].flavors[j].data);
+        bb_free(d->items[i].flavors);
     }
-    free(d->items);
+    bb_free(d->items);
     if (d->hilite)
         hrgn_free(&d->hilite_rgn);
-    free(d->drop_folder);
+    bb_free(d->drop_folder);
     memset(d, 0, sizeof *d);
 }
 
@@ -265,7 +265,7 @@ static int16_t put_data(flavor *f, gaddr dataPtr, int32_t dataSize, uint32_t off
         return paramErr;
     uint32_t end = offset + (uint32_t)dataSize;
     if (end > (uint32_t)f->size) {
-        uint8_t *p = realloc(f->data, end ? end : 1);
+        uint8_t *p = bb_realloc(f->data, end ? end : 1, BB_BYTES);
         if (!p)
             return memFullErr;
         memset(p + f->size, 0, end - (uint32_t)f->size);
@@ -286,7 +286,7 @@ int16_t tb_AddDragItemFlavor(uint32_t theDrag, uint32_t theItemRef, int32_t theT
         return badDragRefErr;
     item *it = get_item(d, theItemRef);
     if (!it) {
-        item *grown = realloc(d->items, (size_t)(d->nitems + 1) * sizeof *grown);
+        item *grown = bb_realloc(d->items, (size_t)(d->nitems + 1) * sizeof *grown, BB_TAG(item));
         if (!grown)
             return memFullErr;
         d->items = grown;
@@ -296,7 +296,7 @@ int16_t tb_AddDragItemFlavor(uint32_t theDrag, uint32_t theItemRef, int32_t theT
     }
     if (get_flavor(it, theType))
         return duplicateFlavorErr;
-    flavor *grown = realloc(it->flavors, (size_t)(it->nflavors + 1) * sizeof *grown);
+    flavor *grown = bb_realloc(it->flavors, (size_t)(it->nflavors + 1) * sizeof *grown, BB_TAG(flavor));
     if (!grown)
         return memFullErr;
     it->flavors = grown;
@@ -804,7 +804,7 @@ static int16_t drop(uint32_t ref, gaddr w)
  * program's icon did. */
 
 enum { MAX_HOST_MSGS = 64 };
-static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct { int kind, h, v; } host_msgs[MAX_HOST_MSGS];
 static int nhost_msgs;
 static char **pending_files, *pending_text; /* the next drag's items */
@@ -814,9 +814,9 @@ static int nhost_files;
 static void free_items(char ***files, int *n, char **text)
 {
     for (int i = 0; i < *n; i++)
-        free((*files)[i]);
-    free(*files);
-    free(*text);
+        bb_free((*files)[i]);
+    bb_free(*files);
+    bb_free(*text);
     *files = NULL;
     *n = 0;
     *text = NULL;
@@ -827,11 +827,11 @@ void machine_host_drag(int kind, int x, int y, const char *const *files, int nfi
     pthread_mutex_lock(&host_lock);
     if (kind == MACHINE_DRAG_ENTER) {
         free_items(&pending_files, &npending_files, &pending_text);
-        pending_files = nfiles ? calloc((size_t)nfiles, sizeof *pending_files) : NULL;
+        pending_files = nfiles ? bb_calloc((size_t)nfiles, sizeof *pending_files, BB_TAG(char *)) : NULL;
         for (int i = 0; i < nfiles; i++)
-            pending_files[i] = strdup(files[i]);
+            pending_files[i] = bb_strdup(files[i]);
         npending_files = nfiles;
-        pending_text = text ? strdup(text) : NULL;
+        pending_text = text ? bb_strdup(text) : NULL;
     }
     if (nhost_msgs < MAX_HOST_MSGS) {
         host_msgs[nhost_msgs].kind = kind;
@@ -845,17 +845,17 @@ static void add_flavor(drag *d, uint32_t item_ref, uint32_t type, const uint8_t 
 {
     item *it = get_item(d, item_ref);
     if (!it) {
-        d->items = realloc(d->items, sizeof *d->items * (size_t)(d->nitems + 1));
+        d->items = bb_realloc(d->items, sizeof *d->items * (size_t)(d->nitems + 1), BB_TAG(item));
         it = &d->items[d->nitems++];
         memset(it, 0, sizeof *it);
         it->ref = item_ref;
     }
-    it->flavors = realloc(it->flavors, sizeof *it->flavors * (size_t)(it->nflavors + 1));
+    it->flavors = bb_realloc(it->flavors, sizeof *it->flavors * (size_t)(it->nflavors + 1), BB_TAG(flavor));
     flavor *f = &it->flavors[it->nflavors++];
     memset(f, 0, sizeof *f);
     f->type = type;
     f->size = size;
-    f->data = malloc(size ? (size_t)size : 1);
+    f->data = bb_malloc(size ? (size_t)size : 1, BB_BYTES);
     memcpy(f->data, data, (size_t)size);
 }
 
@@ -886,13 +886,13 @@ static uint32_t host_drag_new(void)
     tb_DisposePtr(info);
     if (host_text) {
         size_t n = strlen(host_text);
-        uint8_t *mac = malloc(n + 1);
+        uint8_t *mac = bb_malloc(n + 1, BB_BYTES);
         size_t m = utf8_to_macroman(host_text, mac, n + 1);
         for (size_t k = 0; k < m; k++)
             if (mac[k] == '\n')
                 mac[k] = '\r';
         add_flavor(d, (uint32_t)nhost_files + 1, fourcc("TEXT"), mac, (int32_t)m);
-        free(mac);
+        bb_free(mac);
     }
     return ref;
 }
@@ -973,11 +973,11 @@ enum { OUT_OVER, OUT_END };
 
 void ev_wake(void);
 
-static pthread_mutex_t out_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t out_cond = PTHREAD_COND_INITIALIZER;
-static pthread_mutex_t out_request_lock = PTHREAD_MUTEX_INITIALIZER; /* one request at a time */
-static machine_drag_out_fn out_fn;
-static void *out_ctx;
+BB_HOST static pthread_mutex_t out_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_cond_t out_cond = PTHREAD_COND_INITIALIZER;
+BB_HOST static pthread_mutex_t out_request_lock = PTHREAD_MUTEX_INITIALIZER; /* one request at a time */
+BB_HOST static machine_drag_out_fn out_fn;
+BB_HOST static void *out_ctx;
 static bool out_tracking, out_outside, out_refused;
 static uint32_t out_ref;    /* the drag the host has, or 0 */
 typedef struct {
@@ -1021,7 +1021,7 @@ static void drag_out_reset(void)
     out_tracking = out_outside = out_refused = false;
     out_ref = 0;
     for (int i = 0; i < nout_msgs; i++)
-        free(out_msgs[i].folder);
+        bb_free(out_msgs[i].folder);
     nout_msgs = 0;
     pthread_mutex_unlock(&out_lock);
 }
@@ -1041,7 +1041,7 @@ static void out_post(int kind, int how, bool inside, int x, int y, const char *f
 {
     pthread_mutex_lock(&out_lock);
     if (out_ref && nout_msgs < MAX_HOST_MSGS)
-        out_msgs[nout_msgs++] = (out_msg){ kind, how, x, y, inside, folder ? strdup(folder) : NULL };
+        out_msgs[nout_msgs++] = (out_msg){ kind, how, x, y, inside, folder ? bb_strdup(folder) : NULL };
     pthread_mutex_unlock(&out_lock);
     ev_wake();
 }
@@ -1060,7 +1060,7 @@ static void sb_put(sbuf *b, const char *s, size_t n)
 {
     if (b->n + n + 1 > b->cap) {
         b->cap = (b->n + n + 1) * 2;
-        b->p = realloc(b->p, b->cap);
+        b->p = bb_realloc(b->p, b->cap, BB_BYTES);
     }
     memcpy(b->p + b->n, s, n);
     b->n += n;
@@ -1190,7 +1190,7 @@ static char *text_rtf(const uint8_t *text, size_t n, const uint8_t *styl, size_t
 /* MacRoman text as UTF-8, with the host's line ends. */
 static char *text_utf8(const uint8_t *text, size_t n, size_t *len)
 {
-    char *out = malloc(n * 3 + 1);
+    char *out = bb_malloc(n * 3 + 1, BB_BYTES);
     size_t m = macroman_to_utf8(text, n, out, n * 3 + 1);
     for (size_t i = 0; i < m; i++)
         if (out[i] == '\r')
@@ -1210,7 +1210,7 @@ static char *spec_path(const uint8_t *spec, size_t *len)
     if (!ok)
         return NULL;
     *len = strlen(path);
-    return strdup(path);
+    return bb_strdup(path);
 }
 
 static flavor *find(drag *d, int i, uint32_t type)
@@ -1262,8 +1262,8 @@ static bool convert(uint32_t ref, int i, int kind, const char *folder, machine_d
         if (!d || !folder || !(f = find(d, i, fourcc("phfs"))) || f->size < 14)
             return false;
         uint32_t promised = be32_at(f->data + 10);
-        free(d->drop_folder);
-        d->drop_folder = strdup(folder);
+        bb_free(d->drop_folder);
+        d->drop_folder = bb_strdup(folder);
         if (!(f = fetch_at(ref, i, promised)))
             return false;
         if (f->size >= (int32_t)(10 + FSSpec_SIZEOF) && promised == fourcc("hfs "))
@@ -1312,9 +1312,9 @@ static void export_build(out_export *e, uint32_t ref)
     int max = 0;
     for (int i = 0; i < d->nitems; i++)
         max += 5;
-    e->items = calloc((size_t)d->nitems + 1, sizeof *e->items);
-    e->reps = calloc((size_t)max + 1, sizeof *e->reps);
-    e->data = calloc((size_t)max + 1, sizeof *e->data);
+    e->items = bb_calloc((size_t)d->nitems + 1, sizeof *e->items, BB_TAG(machine_drag_item));
+    e->reps = bb_calloc((size_t)max + 1, sizeof *e->reps, BB_TAG(machine_drag_rep));
+    e->data = bb_calloc((size_t)max + 1, sizeof *e->data, BB_TAG(machine_drag_data));
     for (int i = 0; i < d->nitems; i++) {
         e->items[i].reps = e->reps + e->nreps;
         d = get_drag(ref);
@@ -1346,10 +1346,10 @@ static void export_build(out_export *e, uint32_t ref)
 static void export_free(out_export *e)
 {
     for (int k = 0; k < e->nreps; k++)
-        free(e->data[k].data);
-    free(e->items);
-    free(e->reps);
-    free(e->data);
+        bb_free(e->data[k].data);
+    bb_free(e->items);
+    bb_free(e->reps);
+    bb_free(e->data);
 }
 
 /* From TrackDrag's loop: the pointer has left the machine's windows, so
@@ -1389,13 +1389,13 @@ static void out_serve(uint32_t ref)
     }
     out_req.taken = true;
     int item = out_req.item, kind = out_req.kind;
-    char *folder = out_req.folder ? strdup(out_req.folder) : NULL;
+    char *folder = out_req.folder ? bb_strdup(out_req.folder) : NULL;
     pthread_mutex_unlock(&out_lock);
     machine_drag_data result;
     gaddr saved = qd_port();
     bool ok = convert(ref, item, kind, folder, &result);
     tb_SetPort(saved);
-    free(folder);
+    bb_free(folder);
     pthread_mutex_lock(&out_lock);
     out_req.result = result;
     out_req.ok = ok;
@@ -1415,7 +1415,7 @@ bool machine_drag_out_data(int item, int kind, const char *folder, machine_drag_
         out_req.pending = true;
         out_req.item = item;
         out_req.kind = kind;
-        out_req.folder = folder ? strdup(folder) : NULL;
+        out_req.folder = folder ? bb_strdup(folder) : NULL;
         pthread_mutex_unlock(&out_lock);
         ev_wake();
         pthread_mutex_lock(&out_lock);
@@ -1441,7 +1441,7 @@ bool machine_drag_out_data(int item, int kind, const char *folder, machine_drag_
             ok = out_req.ok;
             *out = out_req.result;
         }
-        free(out_req.folder);
+        bb_free(out_req.folder);
         memset(&out_req, 0, sizeof out_req);
     }
     pthread_mutex_unlock(&out_lock);
@@ -1473,7 +1473,7 @@ static int16_t out_follow(uint32_t ref, gaddr sender)
         }
         d = get_drag(ref);
         if (!d) {
-            free(msg.folder);
+            bb_free(msg.folder);
             break;
         }
         uint32_t pt = make_pt((int16_t)msg.v, (int16_t)msg.h);
@@ -1501,20 +1501,20 @@ static int16_t out_follow(uint32_t ref, gaddr sender)
             change_window(over, 0, ref);
             drop(ref, 0);
             if ((d = get_drag(ref)) && msg.folder) {
-                free(d->drop_folder);
+                bb_free(d->drop_folder);
                 d->drop_folder = msg.folder;
                 msg.folder = NULL;
             }
             result = msg.how == MACHINE_DRAG_OUT_DROPPED ? noErr : userCanceledErr;
         }
-        free(msg.folder);
+        bb_free(msg.folder);
         break;
     }
     tb_SetPort(saved);
     pthread_mutex_lock(&out_lock);
     out_ref = 0;
     for (int i = 0; i < nout_msgs; i++)
-        free(out_msgs[i].folder);
+        bb_free(out_msgs[i].folder);
     nout_msgs = 0;
     pthread_cond_broadcast(&out_cond);
     pthread_mutex_unlock(&out_lock);

@@ -111,7 +111,7 @@ static bool decode_cicn(const uint8_t *d, uint32_t len, image *out)
     const uint8_t *pix = d + o;
     out->w = w;
     out->h = h;
-    out->rgba = malloc((size_t)w * (size_t)h * 4);
+    out->rgba = bb_malloc((size_t)w * (size_t)h * 4, BB_BYTES);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             int bit = x * psize;
@@ -162,7 +162,7 @@ static const image *ics(int16_t id)
     if (!d || !m || len < 256 || mlen < 64)
         return NULL;
     im->w = im->h = 16;
-    im->rgba = malloc(16 * 16 * 4);
+    im->rgba = bb_malloc(16 * 16 * 4, BB_BYTES);
     for (int i = 0; i < 256; i++) {
         uint16_t c[3];
         qd_std_rgb8(d[i], c);
@@ -244,8 +244,8 @@ bool machine_load_theme(const char *path, char *err, size_t errlen)
         return true;
     }
     thme_unload();
-    free(scheme_fork);
-    scheme_fork = malloc(mf.rsrc_len);
+    bb_free(scheme_fork);
+    scheme_fork = bb_malloc(mf.rsrc_len, BB_BYTES);
     memcpy(scheme_fork, mf.rsrc, mf.rsrc_len);
     scheme_len = mf.rsrc_len;
     mac_file_free(&mf);
@@ -254,7 +254,7 @@ bool machine_load_theme(const char *path, char *err, size_t errlen)
     if (!rsrc_parse(scheme_fork, scheme_len, &scheme_idx, err, errlen))
         return false;
     for (int i = 0; i < nimages; i++)
-        free(images[i].rgba);
+        bb_free(images[i].rgba);
     nimages = 0;
     loaded = true;
     const char *base = strrchr(path, '/');

@@ -117,9 +117,9 @@ static bool read_message(int fd, int timeout_ms, uint32_t *word, uint8_t **data,
         return false;
     *word = be32(head + 4);
     *len = n - 4;
-    *data = malloc(*len ? *len : 1);
+    *data = bb_malloc(*len ? *len : 1, BB_BYTES);
     if (*len && !read_all(fd, *data, *len, timeout_ms)) {
-        free(*data);
+        bb_free(*data);
         return false;
     }
     return true;
@@ -202,7 +202,7 @@ static void *listener(void *arg)
             close(fd);
         } else
             aem_queue_flat(data, len, reply_to_connection, (void *)(intptr_t)fd);
-        free(data);
+        bb_free(data);
     }
 }
 
@@ -325,7 +325,7 @@ int16_t machine_ae_send(int pid, uint32_t sig, const uint8_t *event, uint32_t le
     if (!ok)
         return errAETimeout;
     if (!*reply_len) {
-        free(*reply);
+        bb_free(*reply);
         *reply = NULL;
     }
     return (int16_t)err;
@@ -347,9 +347,9 @@ static void *await_reply(void *arg)
     uint32_t len;
     if (machine_ae_send(q->pid, q->sig, q->event, q->len, kAEQueueReply, -1, &reply, &len) == noErr && reply)
         aem_queue_flat(reply, len, NULL, NULL);
-    free(reply);
-    free(q->event);
-    free(q);
+    bb_free(reply);
+    bb_free(q->event);
+    bb_free(q);
     return NULL;
 }
 
@@ -398,8 +398,8 @@ int16_t aem_remote_send(const uint8_t *addr, uint32_t addr_type, uint32_t addr_l
     if (!find_target(addr, addr_type, addr_len, &p))
         return procNotFound;
     if (mode == kAEQueueReply) {
-        queued_send *q = malloc(sizeof *q);
-        *q = (queued_send){ p.pid, p.signature, malloc(len), len };
+        queued_send *q = bb_malloc(sizeof *q, BB_TAG(queued_send));
+        *q = (queued_send){ p.pid, p.signature, bb_malloc(len, BB_BYTES), len };
         memcpy(q->event, event, len);
         pthread_t t;
         pthread_create(&t, NULL, await_reply, q);
@@ -480,12 +480,12 @@ int16_t machine_ae_send_to(int pid, uint32_t sig, uint32_t cls, uint32_t id, con
     uint32_t len, rlen;
     uint8_t *event = aem_build_flat(cls, id, files, nfiles, text, wait, &len), *reply;
     int16_t err = machine_ae_send(pid, sig, event, len, wait ? kAEWaitReply : kAENoReply, 120000, &reply, &rlen);
-    free(event);
+    bb_free(event);
     *errn = 0;
     if (size)
         result[0] = 0;
     if (reply)
         machine_ae_reply_result(reply, rlen, result, size, errn);
-    free(reply);
+    bb_free(reply);
     return err;
 }

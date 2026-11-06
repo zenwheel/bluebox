@@ -46,7 +46,7 @@ public struct ResourceFork {
                 var outLen = 0
                 if rsrc_decompress(p, Int(e.data_len), &out, &outLen, &err, err.count), let out {
                     bytes = Array(UnsafeBufferPointer(start: out, count: outLen))
-                    free(out)
+                    bb_free(out)
                 }
             }
             table[e.type, default: [:]][e.id] = bytes

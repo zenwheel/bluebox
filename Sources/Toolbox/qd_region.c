@@ -21,15 +21,15 @@ void hrgn_init(hrgn *r) { memset(r, 0, sizeof *r); }
 void hrgn_free(hrgn *r)
 {
     for (int i = 0; i < r->nbands; i++)
-        free(r->bands[i].x);
-    free(r->bands);
+        bb_free(r->bands[i].x);
+    bb_free(r->bands);
     memset(r, 0, sizeof *r);
 }
 
 static void clear(hrgn *r)
 {
     for (int i = 0; i < r->nbands; i++)
-        free(r->bands[i].x);
+        bb_free(r->bands[i].x);
     r->nbands = 0;
 }
 
@@ -52,13 +52,13 @@ static void add_band(hrgn *r, int top, int bottom, const int16_t *x, int n)
     }
     if (r->nbands == r->cap) {
         r->cap = r->cap ? r->cap * 2 : 8;
-        r->bands = realloc(r->bands, (size_t)r->cap * sizeof *r->bands);
+        r->bands = bb_realloc(r->bands, (size_t)r->cap * sizeof *r->bands, BB_TAG(rband));
     }
     rband *b = &r->bands[r->nbands++];
     b->top = (int16_t)top;
     b->bottom = (int16_t)bottom;
     b->n = n;
-    b->x = malloc((size_t)n * sizeof *b->x);
+    b->x = bb_malloc((size_t)n * sizeof *b->x, BB_BYTES);
     memcpy(b->x, x, (size_t)n * sizeof *b->x);
 }
 
@@ -146,7 +146,7 @@ void hrgn_op(hrgn *dst, const hrgn *a, const hrgn *b, int op)
     hrgn_init(&out);
     /* All band boundaries, in order. */
     int ny = 0;
-    int16_t *ys = malloc((size_t)(2 * (a->nbands + b->nbands) + 1) * sizeof *ys);
+    int16_t *ys = bb_malloc((size_t)(2 * (a->nbands + b->nbands) + 1) * sizeof *ys, BB_BYTES);
     for (int i = 0; i < a->nbands; i++) {
         ys[ny++] = a->bands[i].top;
         ys[ny++] = a->bands[i].bottom;
@@ -170,7 +170,7 @@ void hrgn_op(hrgn *dst, const hrgn *a, const hrgn *b, int op)
     int maxb = 0;
     for (int i = 0; i < b->nbands; i++)
         maxb = b->bands[i].n > maxb ? b->bands[i].n : maxb;
-    int16_t *xs = malloc((size_t)(maxx + maxb + 2) * sizeof *xs);
+    int16_t *xs = bb_malloc((size_t)(maxx + maxb + 2) * sizeof *xs, BB_BYTES);
     int ia = 0, ib = 0;
     for (int k = 0; k + 1 < ny; k++) {
         int y0 = ys[k], y1 = ys[k + 1];
@@ -185,8 +185,8 @@ void hrgn_op(hrgn *dst, const hrgn *a, const hrgn *b, int op)
         int n = op_1d(ba ? ba->x : NULL, ba ? ba->n : 0, bb ? bb->x : NULL, bb ? bb->n : 0, op, xs);
         add_band(&out, y0, y1, xs, n);
     }
-    free(xs);
-    free(ys);
+    bb_free(xs);
+    bb_free(ys);
     hrgn_free(dst);
     *dst = out;
 }
@@ -199,7 +199,7 @@ void hrgn_inset(hrgn *r, int dh, int dv)
         hrgn_init(&out);
         for (int i = 0; i < r->nbands; i++) {
             rband *b = &r->bands[i];
-            int16_t *x = malloc((size_t)b->n * sizeof *x);
+            int16_t *x = bb_malloc((size_t)b->n * sizeof *x, BB_BYTES);
             int n = 0;
             for (int k = 0; k < b->n; k += 2) {
                 int x0 = b->x[k] + dh, x1 = b->x[k + 1] - dh;
@@ -214,7 +214,7 @@ void hrgn_inset(hrgn *r, int dh, int dv)
                 x[n++] = (int16_t)x1;
             }
             add_band(&out, b->top, b->bottom, x, n);
-            free(x);
+            bb_free(x);
         }
         hrgn_free(r);
         *r = out;
@@ -391,8 +391,8 @@ void rgn_write(gaddr rh, const hrgn *r)
         maxn = r->bands[i].n > maxn ? r->bands[i].n : maxn;
     /* Per band at most a gap line and a top line, each "y, xs, 0x7FFF". */
     size_t words = 4 + (size_t)(r->nbands + 1) * (size_t)(4 + 2 * maxn);
-    int16_t *buf = malloc(words * sizeof *buf);
-    int16_t *diff = malloc((size_t)(2 * maxn + 2) * sizeof *diff);
+    int16_t *buf = bb_malloc(words * sizeof *buf, BB_BYTES);
+    int16_t *diff = bb_malloc((size_t)(2 * maxn + 2) * sizeof *diff, BB_BYTES);
     size_t w = 0;
     const int16_t *prev = NULL;
     int prevn = 0;
@@ -436,8 +436,8 @@ void rgn_write(gaddr rh, const hrgn *r)
             wr16(p, 10);
             qrect_put(p + 2, bbox);
         }
-        free(diff);
-        free(buf);
+        bb_free(diff);
+        bb_free(buf);
         return;
     }
     gaddr p = rd32(rh);
@@ -445,8 +445,8 @@ void rgn_write(gaddr rh, const hrgn *r)
     qrect_put(p + 2, bbox);
     for (size_t k = 0; k < w && 10 + k * 2 + 2 <= size; k++)
         wr16(p + 10 + (uint32_t)k * 2, (uint16_t)buf[k]);
-    free(diff);
-    free(buf);
+    bb_free(diff);
+    bb_free(buf);
 }
 
 gaddr rgn_new_rect(qrect q)
@@ -654,7 +654,7 @@ void hrgn_even_odd(hrgn *out, const int (*e)[4], int n)
             if (e[i][k] > bottom)
                 bottom = e[i][k];
         }
-    double *xs = malloc((size_t)n * sizeof *xs);
+    double *xs = bb_malloc((size_t)n * sizeof *xs, BB_BYTES);
     for (int y = top; y < bottom; y++) {
         double ys = y + 0.5;
         int k = 0;
@@ -685,7 +685,7 @@ void hrgn_even_odd(hrgn *out, const int (*e)[4], int n)
         }
         hrgn_add_runs(out, y, runs, nr);
     }
-    free(xs);
+    bb_free(xs);
 }
 
 /* OpenRgn/CloseRgn record drawing into a region, as QuickDraw did: the
@@ -710,7 +710,7 @@ void qd_region_record_line(int h0, int v0, int h1, int v1)
         return;
     if (rec_nedges == rec_cap) {
         rec_cap = rec_cap ? rec_cap * 2 : 64;
-        rec_edges = realloc(rec_edges, (size_t)rec_cap * sizeof *rec_edges);
+        rec_edges = bb_realloc(rec_edges, (size_t)rec_cap * sizeof *rec_edges, BB_BYTES);
     }
     int *e = rec_edges[rec_nedges++];
     e[0] = h0;
@@ -778,7 +778,7 @@ int16_t tb_BitMapToRegion(gaddr rgn, gaddr bm)
     hrgn acc;
     hrgn_init(&acc);
     hrgn_rect(&acc, (qrect){ 0, 0, 0, 0 });
-    int *prev = malloc((size_t)(w + 2) * sizeof *prev), *cur = malloc((size_t)(w + 2) * sizeof *cur);
+    int *prev = bb_malloc((size_t)(w + 2) * sizeof *prev, BB_BYTES), *cur = bb_malloc((size_t)(w + 2) * sizeof *cur, BB_BYTES);
     int np = 0, band_top = b.top;
     for (int y = b.top; y <= b.bottom; y++) {
         int nc = 0;
@@ -806,8 +806,8 @@ int16_t tb_BitMapToRegion(gaddr rgn, gaddr bm)
             band_top = y;
         }
     }
-    free(prev);
-    free(cur);
+    bb_free(prev);
+    bb_free(cur);
     rgn_write(rgn, &acc);
     hrgn_free(&acc);
     return noErr;

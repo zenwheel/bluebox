@@ -1,5 +1,6 @@
 import AudioToolbox
 import BlueBoxHost
+import CCore
 import CoreMedia
 import CoreVideo
 import ImageIO
@@ -348,7 +349,7 @@ extension BlueBox {
             var peak: Int16 = 0
             for i in 0..<Int(got) { peak = max(peak, out![i]) }
             #expect(peak > 5000)
-            free(out)
+            bb_free(out)
             hostaudio_close(dec)
         }
 
@@ -360,7 +361,7 @@ extension BlueBox {
                 #expect(qt_adec_supported(&fmt), "\(f)")
                 var out: UnsafeMutablePointer<Int16>?
                 let n = qt_adec_decode(&fmt, bytes, bytes.count, &out)
-                defer { free(out) }
+                defer { bb_free(out) }
                 return (0..<Int(n)).map { out![$0] }
             }
             #expect(decode("ulaw", [0xFF, 0x80, 0x00]) == [0, 32124, -32124])
@@ -416,7 +417,7 @@ extension BlueBox {
             var w: Int32 = 0, h: Int32 = 0
             #expect(qt_decode_image(bytes, bytes.count, &rgba, &w, &h) && w == 8 && h == 6)
             #expect(rgba![0] == 0 && rgba![1] == 255 && rgba![2] == 0)
-            free(rgba)
+            bb_free(rgba)
             let ext = tb_NewPtr(4, false, true)
             #expect(qtCall("GraphicsExportGetDefaultFileNameExtension", [ex, ext]) == 0 && rd32(ext) == fourCC("png\0"))
             components_close(ex)
@@ -449,7 +450,7 @@ extension BlueBox {
                     var w: Int32 = 0, h: Int32 = 0
                     #expect(qt_decode_image(b, b.count, &rgba, &w, &h) && w == 4 && h == 4, "\(type)")
                     #expect(rgba != nil && rgba![0] > 200 && rgba![1] < 50, "\(type)")
-                    free(rgba)
+                    bb_free(rgba)
                 }
                 components_close(ex)
             }

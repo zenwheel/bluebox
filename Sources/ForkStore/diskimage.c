@@ -113,7 +113,7 @@ static bool decode_ndif(const mac_file *f, uint8_t **vol, size_t *len, char *err
         return false;
     }
     size_t total = (size_t)sectors * 512;
-    uint8_t *out = calloc(1, total);
+    uint8_t *out = bb_calloc(1, total, BB_BYTES);
     if (!out) {
         snprintf(err, errlen, "out of memory");
         return false;
@@ -128,7 +128,7 @@ static bool decode_ndif(const mac_file *f, uint8_t **vol, size_t *len, char *err
         uint32_t next = i + 1 < nchunks ? be32(e + 12) >> 8 : sectors;
         if (next < start || next > sectors || (uint64_t)off + clen > f->data_len) {
             snprintf(err, errlen, "NDIF chunk %u out of range", i);
-            free(out);
+            bb_free(out);
             return false;
         }
         size_t want = (size_t)(next - start) * 512;
@@ -143,13 +143,13 @@ static bool decode_ndif(const mac_file *f, uint8_t **vol, size_t *len, char *err
         case 0x83: /* ADC */
             if (adc_decompress(f->data + off, clen, dst, want) < 0) {
                 snprintf(err, errlen, "NDIF chunk %u: corrupt ADC data", i);
-                free(out);
+                bb_free(out);
                 return false;
             }
             break;
         default:
             snprintf(err, errlen, "NDIF chunk type 0x%02X is not supported", type);
-            free(out);
+            bb_free(out);
             return false;
         }
     }
@@ -233,7 +233,7 @@ bool diskimage_decode(const mac_file *f, uint8_t **vol, size_t *len, char *err, 
     }
     if (off + plen > n)
         plen = n - off;
-    *vol = malloc(plen ? plen : 1);
+    *vol = bb_malloc(plen ? plen : 1, BB_BYTES);
     if (!*vol) {
         snprintf(err, errlen, "out of memory");
         return false;

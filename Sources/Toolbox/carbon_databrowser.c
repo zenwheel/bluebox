@@ -341,8 +341,8 @@ static void add_rows(databrowser *b, uint32_t parent, int depth)
         if (b->items[i].parent != parent)
             continue;
         if (b->nrows % 64 == 0) {
-            b->rows = realloc(b->rows, (size_t)(b->nrows + 64) * sizeof *b->rows);
-            b->depth = realloc(b->depth, (size_t)(b->nrows + 64));
+            b->rows = bb_realloc(b->rows, (size_t)(b->nrows + 64) * sizeof *b->rows, BB_BYTES);
+            b->depth = bb_realloc(b->depth, (size_t)(b->nrows + 64), BB_BYTES);
         }
         uint32_t id = b->items[i].id, state = b->items[i].state;
         b->rows[b->nrows] = id;
@@ -827,7 +827,7 @@ static void sort_container(databrowser *b, uint32_t container, uint32_t prop, bo
         return;
     }
     notify(b, container, kDataBrowserContainerSorting);
-    uint32_t *ids = malloc((size_t)n * sizeof *ids);
+    uint32_t *ids = bb_malloc((size_t)n * sizeof *ids, BB_BYTES);
     children(b, container, ids, n);
     sort_prop_now = prop;
     for (int i = 1; i < n; i++) /* insertion sort: stable, and few compares for sorted input */
@@ -843,17 +843,17 @@ static void sort_container(databrowser *b, uint32_t container, uint32_t prop, bo
         }
     /* The container's items back in that order, where they were. */
     int k = 0;
-    db_item *copy = malloc((size_t)n * sizeof *copy);
+    db_item *copy = bb_malloc((size_t)n * sizeof *copy, BB_TAG(db_item));
     for (int i = 0; i < n; i++)
         copy[i] = *find_item(b, ids[i]);
     for (int i = 0; i < b->nitems; i++)
         if (b->items[i].parent == container)
             b->items[i] = copy[k++];
-    free(copy);
+    bb_free(copy);
     if (recurse)
         for (int i = 0; i < n; i++)
             sort_container(b, ids[i], prop, true);
-    free(ids);
+    bb_free(ids);
     changed(b);
     notify(b, container, kDataBrowserContainerSorted);
 }
@@ -1217,7 +1217,7 @@ static void click_columns(databrowser *b, uint32_t pt, uint16_t mods)
             b->last_item = id;
             select_items(b, &id, 1, kDataBrowserItemsAssign);
             if (is_container(b, id)) {
-                b->path = realloc(b->path, (size_t)(b->path_len + 1) * sizeof *b->path);
+                b->path = bb_realloc(b->path, (size_t)(b->path_len + 1) * sizeof *b->path, BB_BYTES);
                 b->path[b->path_len++] = id;
                 db_item *it = find_item(b, id);
                 if (it && !(it->state & kDataBrowserContainerIsOpen)) {
@@ -1402,13 +1402,13 @@ static void dispose_browser(databrowser *b)
     for (int i = 0; i < MAX_BROWSERS; i++)
         if (browsers[i] == b)
             browsers[i] = NULL;
-    free(b->items);
-    free(b->cols);
-    free(b->pflags);
-    free(b->rows);
-    free(b->depth);
-    free(b->path);
-    free(b);
+    bb_free(b->items);
+    bb_free(b->cols);
+    bb_free(b->pflags);
+    bb_free(b->rows);
+    bb_free(b->depth);
+    bb_free(b->path);
+    bb_free(b);
 }
 
 static int32_t data_access(databrowser *b, gaddr rec, bool set)
@@ -1580,7 +1580,7 @@ int32_t tb_CreateDataBrowserControl(gaddr w, gaddr bounds, int32_t style_in, gad
         slot++;
     if (slot == MAX_BROWSERS)
         return memFullErr;
-    databrowser *b = calloc(1, sizeof *b);
+    databrowser *b = bb_calloc(1, sizeof *b, BB_TAG(databrowser));
     b->style = style;
     b->row_height = 18;
     b->col_width = 150;
@@ -1601,7 +1601,7 @@ int32_t tb_CreateDataBrowserControl(gaddr w, gaddr bounds, int32_t style_in, gad
     if (!ch) {
         browsers[slot] = NULL;
         tb_DisposePtr(b->item_data);
-        free(b);
+        bb_free(b);
         return memFullErr;
     }
     b->ch = ch;
@@ -1641,7 +1641,7 @@ int32_t tb_AddDataBrowserItems(gaddr ch, uint32_t container, uint32_t n, gaddr i
             continue;
         if (b->nitems == b->cap_items) {
             b->cap_items = b->cap_items ? b->cap_items * 2 : 64;
-            b->items = realloc(b->items, (size_t)b->cap_items * sizeof *b->items);
+            b->items = bb_realloc(b->items, (size_t)b->cap_items * sizeof *b->items, BB_TAG(db_item));
         }
         b->items[b->nitems++] = (db_item){ id, container, 0, 0 };
         notify(b, id, kDataBrowserItemAdded);
@@ -1805,16 +1805,16 @@ int32_t tb_GetDataBrowserItems(gaddr ch, uint32_t container, int8_t recurse, uin
     if (!h)
         return paramErr;
     int n = matching(b, container, recurse != 0, state, NULL, 0, 0);
-    uint32_t *ids = malloc((size_t)(n ? n : 1) * sizeof *ids);
+    uint32_t *ids = bb_malloc((size_t)(n ? n : 1) * sizeof *ids, BB_BYTES);
     matching(b, container, recurse != 0, state, ids, n, 0);
     tb_SetHandleSize(h, n * 4);
     if (rd16(LM_MemErr)) {
-        free(ids);
+        bb_free(ids);
         return memFullErr;
     }
     for (int i = 0; i < n; i++)
         wr32(rd32(h) + 4 * (uint32_t)i, ids[i]);
-    free(ids);
+    bb_free(ids);
     return noErr;
 }
 
@@ -1832,14 +1832,14 @@ int32_t tb_ForEachDataBrowserItem(gaddr ch, uint32_t container, int8_t recurse, 
     if (!proc)
         return paramErr;
     int n = matching(b, container, recurse != 0, state, NULL, 0, 0);
-    uint32_t *ids = malloc((size_t)(n ? n : 1) * sizeof *ids);
+    uint32_t *ids = bb_malloc((size_t)(n ? n : 1) * sizeof *ids, BB_BYTES);
     matching(b, container, recurse != 0, state, ids, n, 0);
     for (int i = 0; i < n; i++) {
         db_item *it = find_item(b, ids[i]);
         if (it)
             mm_call(proc, piItem, (uint32_t[]){ ids[i], it->state, client }, 3);
     }
-    free(ids);
+    bb_free(ids);
     return noErr;
 }
 
@@ -1874,11 +1874,11 @@ int32_t tb_RevealDataBrowserItem(gaddr ch, uint32_t item, uint32_t prop, uint8_t
 int32_t tb_SetDataBrowserSelectedItems(gaddr ch, uint32_t n, gaddr ids, uint32_t op)
 {
     BROWSER(ch);
-    uint32_t *list = malloc((size_t)(n ? n : 1) * sizeof *list);
+    uint32_t *list = bb_malloc((size_t)(n ? n : 1) * sizeof *list, BB_BYTES);
     for (uint32_t i = 0; i < n; i++)
         list[i] = ids ? rd32(ids + 4 * i) : 0;
     select_items(b, list, (int)n, op);
-    free(list);
+    bb_free(list);
     redraw(b);
     return noErr;
 }
@@ -2080,7 +2080,7 @@ int32_t tb_SetDataBrowserPropertyFlags(gaddr ch, uint32_t prop, uint32_t flags)
             b->pflags[i].flags = flags;
             return noErr;
         }
-    b->pflags = realloc(b->pflags, (size_t)(b->npflags + 1) * sizeof *b->pflags);
+    b->pflags = bb_realloc(b->pflags, (size_t)(b->npflags + 1) * sizeof *b->pflags, BB_TAG(db_flags));
     b->pflags[b->npflags++] = (db_flags){ prop, flags };
     return noErr;
 }
@@ -2678,7 +2678,7 @@ int32_t tb_AddDataBrowserListViewColumn(gaddr ch, gaddr desc, uint32_t position)
         c.width = c.min_width;
     if (c.max_width && c.width > c.max_width)
         c.width = c.max_width;
-    b->cols = realloc(b->cols, (size_t)(b->ncols + 1) * sizeof *b->cols);
+    b->cols = bb_realloc(b->cols, (size_t)(b->ncols + 1) * sizeof *b->cols, BB_TAG(db_column));
     int at = position >= (uint32_t)b->ncols ? b->ncols : (int)position;
     memmove(&b->cols[at + 1], &b->cols[at], (size_t)(b->ncols - at) * sizeof c);
     b->cols[at] = c;
@@ -2774,7 +2774,7 @@ int32_t tb_SetDataBrowserColumnViewPath(gaddr ch, uint32_t n, gaddr path)
     BROWSER(ch);
     if (n > 256 || (n && !path))
         return paramErr;
-    b->path = realloc(b->path, (size_t)(n ? n : 1) * sizeof *b->path);
+    b->path = bb_realloc(b->path, (size_t)(n ? n : 1) * sizeof *b->path, BB_BYTES);
     for (uint32_t i = 0; i < n; i++)
         b->path[i] = rd32(path + 4 * i);
     b->path_len = (int)n;

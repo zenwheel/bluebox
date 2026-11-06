@@ -65,7 +65,7 @@ static win_extra *extra_of(gaddr w, bool create)
         return NULL;
     if (nextras == maxextras) {
         int n = maxextras ? maxextras * 2 : 16;
-        win_extra *more = realloc(extras, sizeof *extras * (size_t)n);
+        win_extra *more = bb_realloc(extras, sizeof *extras * (size_t)n, BB_TAG(win_extra));
         if (!more)
             return NULL;
         extras = more;
@@ -996,7 +996,7 @@ static void wm_ChangeWindowPropertyAttributes(ppc_cpu *c)
     if (!p) {
         if (npattrs == maxpattrs) {
             int n = maxpattrs ? maxpattrs * 2 : 16;
-            prop_attr *more = realloc(pattrs, sizeof *pattrs * (size_t)n);
+            prop_attr *more = bb_realloc(pattrs, sizeof *pattrs * (size_t)n, BB_TAG(prop_attr));
             if (!more) {
                 RETURN((uint32_t)memFullErr);
                 return;
@@ -1674,10 +1674,10 @@ static void wm_GetWindowStructurePort(ppc_cpu *c)
 
 void carbonwm_reset(void)
 {
-    free(extras);
+    bb_free(extras);
     extras = NULL;
     nextras = maxextras = 0;
-    free(pattrs);
+    bb_free(pattrs);
     pattrs = NULL;
     npattrs = maxpattrs = 0;
     memset(registered, 0, sizeof registered);

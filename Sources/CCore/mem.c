@@ -19,8 +19,8 @@ bool g_hw_jit_off;
 uint32_t (*g_hw_read)(gaddr a, int size);
 void (*g_hw_write)(gaddr a, int size, uint32_t v);
 
-uint8_t *g_code_map;
-void (*g_code_written[3])(gaddr lo, gaddr hi);
+BB_HOST uint8_t *g_code_map;
+BB_HOST void (*g_code_written[3])(gaddr lo, gaddr hi);
 
 /* 4 GB plus slack so a multi-byte access at the very top cannot run off. */
 #define ARENA_SIZE ((size_t)1 << 32)
@@ -105,6 +105,16 @@ void mem_copy_wrapping(gaddr dst, gaddr src, uint32_t n)
     }
 }
 
+/* 24-bit mode's one 16 MB space and its mirrors. */
+#define SPACE_24 ((size_t)1 << 24)
+
+/* What a snapshot saves of the arena: in 24-bit mode the one space (the
+ * rest mirrors it). */
+static size_t arena_extent(void)
+{
+    return g_mem_24bit ? SPACE_24 : ARENA_SIZE;
+}
+
 bool mem_init(void)
 {
     if (g_mem)
@@ -116,12 +126,10 @@ bool mem_init(void)
         return false;
     }
     g_mem = p;
+    bb_region_add("guest", g_mem, ARENA_SIZE + ARENA_SLACK, arena_extent);
     return true;
 }
-
-/* 24-bit mode's one 16 MB space and its mirrors. */
-#define SPACE_24 ((size_t)1 << 24)
-static int space_fd = -1;
+BB_HOST static int space_fd = -1;
 
 /* A fresh (zeroed) space mapped at every 16 MB of the arena, and over the
  * slack too, so an access running off the top wraps to address 0 as it

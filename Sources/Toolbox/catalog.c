@@ -16,7 +16,7 @@
 
 #include "catalog.h"
 
-static sqlite3 *db;
+BB_HOST static sqlite3 *db;
 static bool tried;
 static char db_path[4096];
 

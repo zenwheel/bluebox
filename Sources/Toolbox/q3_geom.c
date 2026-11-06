@@ -320,7 +320,7 @@ static bool push_tri(q3ptri **t, uint32_t *nt, uint32_t *cap, uint32_t a, uint32
 {
     if (*nt == *cap) {
         uint32_t ncap = *cap ? *cap * 2 : 16;
-        q3ptri *n = realloc(*t, ncap * sizeof *n);
+        q3ptri *n = bb_realloc(*t, ncap * sizeof *n, BB_TAG(q3ptri));
         if (!n)
             return false;
         *t = n;
@@ -362,7 +362,7 @@ uint32_t q3_triangulate(const float (*pts)[3], const uint32_t *const *contours, 
     uint32_t total = 0;
     for (uint32_t k = 0; k < ncontours; k++)
         total += ncontour[k];
-    p2 *poly = malloc((total + 2 * ncontours + 4) * sizeof *poly);
+    p2 *poly = bb_malloc((total + 2 * ncontours + 4) * sizeof *poly, BB_TAG(p2));
     if (!poly)
         return 0;
     uint32_t n = 0, first = *nt;
@@ -379,12 +379,12 @@ uint32_t q3_triangulate(const float (*pts)[3], const uint32_t *const *contours, 
         for (uint32_t i = 1; i + 1 < n; i++)
             push_tri(t, nt, cap, poly[0].idx, poly[i].idx, poly[i + 1].idx,
                      (uint8_t)((i == 1 ? 1 : 0) | 2 | (i + 2 == n ? 4 : 0)));
-        free(poly);
+        bb_free(poly);
         return *nt - first;
     }
     /* Holes, rightmost first, bridged into the outside from their
      * rightmost vertex to the nearest outside vertex it sees along +x. */
-    bool *done = calloc(ncontours, 1);
+    bool *done = bb_calloc(ncontours, 1, BB_BYTES);
     for (uint32_t h = 1; done && h < ncontours; h++) {
         uint32_t best = 0, bi = 0;
         float bx = -INFINITY;
@@ -421,7 +421,7 @@ uint32_t q3_triangulate(const float (*pts)[3], const uint32_t *const *contours, 
         /* The hole, clockwise, from bi round to bi, then back to the
          * bridging vertex. */
         uint32_t hn = ncontour[best];
-        p2 *hole = malloc((hn + 2) * sizeof *hole);
+        p2 *hole = bb_malloc((hn + 2) * sizeof *hole, BB_TAG(p2));
         if (!hole)
             break;
         float hnrm[3];
@@ -440,9 +440,9 @@ uint32_t q3_triangulate(const float (*pts)[3], const uint32_t *const *contours, 
         memcpy(&poly[to + 1], hole, (hn + 1) * sizeof *hole);
         poly[to + 1 + hn + 1] = back;
         n += hn + 2;
-        free(hole);
+        bb_free(hole);
     }
-    free(done);
+    bb_free(done);
     /* Ear clipping. */
     uint32_t guard = 0;
     while (n > 3 && guard++ < total * total + 16) {
@@ -476,7 +476,7 @@ uint32_t q3_triangulate(const float (*pts)[3], const uint32_t *const *contours, 
     if (n == 3)
         push_tri(t, nt, cap, poly[0].idx, poly[1].idx, poly[2].idx,
                  (uint8_t)((poly[0].real_next ? 1 : 0) | (poly[1].real_next ? 2 : 0) | (poly[2].real_next ? 4 : 0)));
-    free(poly);
+    bb_free(poly);
     return *nt - first;
 }
 
@@ -495,7 +495,7 @@ static q3pv *vertices_of(const q3node *vs)
 {
     if (!vs || !vs->n)
         return NULL;
-    q3pv *pv = calloc(vs->n, sizeof *pv);
+    q3pv *pv = bb_calloc(vs->n, sizeof *pv, BB_TAG(q3pv));
     for (uint32_t i = 0; pv && i < vs->n; i++)
         vtx_from(&pv[i], vs->w + i * 4);
     return pv;
@@ -518,8 +518,8 @@ static void polygon_of(q3view *v, const q3pv *pv, uint32_t n, gaddr set)
 {
     if (n < 3)
         return;
-    float (*pts)[3] = malloc(n * sizeof *pts);
-    uint32_t *idx = malloc(n * sizeof *idx);
+    float (*pts)[3] = bb_malloc(n * sizeof *pts, BB_BYTES);
+    uint32_t *idx = bb_malloc(n * sizeof *idx, BB_BYTES);
     q3ptri *t = NULL;
     uint32_t nt = 0, cap = 0;
     if (pts && idx) {
@@ -531,9 +531,9 @@ static void polygon_of(q3view *v, const q3pv *pv, uint32_t n, gaddr set)
         q3_triangulate((const float (*)[3])pts, cs, &n, 1, &t, &nt, &cap);
         q3v_triangles(v, pv, n, t, nt, set);
     }
-    free(t);
-    free(pts);
-    free(idx);
+    bb_free(t);
+    bb_free(pts);
+    bb_free(idx);
 }
 
 static void tess_polygon(q3view *v, const q3node *d)
@@ -542,7 +542,7 @@ static void tess_polygon(q3view *v, const q3node *d)
     q3pv *pv = vertices_of(vs);
     if (pv)
         polygon_of(v, pv, vs->n, d->w[2]);
-    free(pv);
+    bb_free(pv);
 }
 
 static void tess_gpoly(q3view *v, const q3node *d)
@@ -555,14 +555,14 @@ static void tess_gpoly(q3view *v, const q3node *d)
         q3node *vs = q3d_kid(cs, &contour_s, k, 0);
         total += vs ? vs->n : 0;
     }
-    q3pv *pv = calloc(total + 1, sizeof *pv);
-    float (*pts)[3] = calloc(total + 1, sizeof *pts);
-    uint32_t **cidx = calloc(cs->n, sizeof *cidx), *cn = calloc(cs->n, sizeof *cn);
+    q3pv *pv = bb_calloc(total + 1, sizeof *pv, BB_TAG(q3pv));
+    float (*pts)[3] = bb_calloc(total + 1, sizeof *pts, BB_BYTES);
+    uint32_t **cidx = bb_calloc(cs->n, sizeof *cidx, BB_TAG(uint32_t *)), *cn = bb_calloc(cs->n, sizeof *cn, BB_BYTES);
     uint32_t at = 0;
     for (uint32_t k = 0; pv && pts && cidx && cn && k < cs->n; k++) {
         q3node *vs = q3d_kid(cs, &contour_s, k, 0);
         cn[k] = vs ? vs->n : 0;
-        cidx[k] = calloc(cn[k] + 1, sizeof **cidx);
+        cidx[k] = bb_calloc(cn[k] + 1, sizeof **cidx, BB_BYTES);
         for (uint32_t i = 0; cidx[k] && i < cn[k]; i++) {
             vtx_from(&pv[at], vs->w + i * 4);
             memcpy(pts[at], pv[at].p, sizeof pts[at]);
@@ -576,12 +576,12 @@ static void tess_gpoly(q3view *v, const q3node *d)
         q3v_triangles(v, pv, at, t, nt, d->w[3]);
     }
     for (uint32_t k = 0; cidx && k < cs->n; k++)
-        free(cidx[k]);
-    free(cidx);
-    free(cn);
-    free(t);
-    free(pts);
-    free(pv);
+        bb_free(cidx[k]);
+    bb_free(cidx);
+    bb_free(cn);
+    bb_free(t);
+    bb_free(pts);
+    bb_free(pv);
 }
 
 static void tess_point(q3view *v, const q3node *d)
@@ -604,7 +604,7 @@ static void tess_polyline(q3view *v, const q3node *d)
     q3node *vs = q3d_kid(d, &polyline_s, 0, 0), *segs = q3d_kid(d, &polyline_s, 0, 1);
     if (!vs || vs->n < 2)
         return;
-    q3pv *pv = calloc(2 * (vs->n - 1), sizeof *pv);
+    q3pv *pv = bb_calloc(2 * (vs->n - 1), sizeof *pv, BB_TAG(q3pv));
     for (uint32_t i = 0; pv && i + 1 < vs->n; i++) {
         vtx_from(&pv[2 * i], vs->w + i * 4);
         vtx_from(&pv[2 * i + 1], vs->w + (i + 1) * 4);
@@ -615,7 +615,7 @@ static void tess_polyline(q3view *v, const q3node *d)
     }
     if (pv)
         q3v_lines(v, pv, vs->n - 1, d->w[3]);
-    free(pv);
+    bb_free(pv);
 }
 
 static void tess_trigrid(q3view *v, const q3node *d)
@@ -625,7 +625,7 @@ static void tess_trigrid(q3view *v, const q3node *d)
     if (!vs || rows < 2 || cols < 2 || vs->n < rows * cols)
         return;
     q3pv *pv = vertices_of(vs);
-    q3ptri *t = calloc(2 * (rows - 1) * (cols - 1), sizeof *t);
+    q3ptri *t = bb_calloc(2 * (rows - 1) * (cols - 1), sizeof *t, BB_TAG(q3ptri));
     uint32_t nt = 0;
     for (uint32_t r = 0; pv && t && r + 1 < rows; r++)
         for (uint32_t c = 0; c + 1 < cols; c++) {
@@ -651,8 +651,8 @@ static void tess_trigrid(q3view *v, const q3node *d)
         }
     if (pv && t)
         q3v_triangles(v, pv, vs->n, t, nt, d->w[4]);
-    free(pv);
-    free(t);
+    bb_free(pv);
+    bb_free(t);
 }
 
 static void tess_polyhedron(q3view *v, const q3node *d)
@@ -661,7 +661,7 @@ static void tess_polyhedron(q3view *v, const q3node *d)
     if (!vs || !ts || !ts->n)
         return;
     q3pv *pv = vertices_of(vs);
-    q3ptri *t = calloc(ts->n, sizeof *t);
+    q3ptri *t = bb_calloc(ts->n, sizeof *t, BB_TAG(q3ptri));
     uint32_t nt = 0;
     for (uint32_t i = 0; pv && t && i < ts->n; i++) {
         const uint32_t *w = ts->w + i * 5;
@@ -674,8 +674,8 @@ static void tess_polyhedron(q3view *v, const q3node *d)
     }
     if (pv && t)
         q3v_triangles(v, pv, vs->n, t, nt, d->w[6]);
-    free(pv);
-    free(t);
+    bb_free(pv);
+    bb_free(t);
 }
 
 /* A trimesh attribute array's element i into a. */
@@ -732,8 +732,8 @@ static void tess_trimesh(q3view *v, const q3node *d)
            *pts = q3d_kid(d, &trimesh_s, 0, 5), *vattr = q3d_kid(d, &trimesh_s, 0, 6);
     if (!tris || !pts || !tris->n || !pts->n)
         return;
-    q3pv *pv = calloc(pts->n, sizeof *pv);
-    q3ptri *t = calloc(tris->n, sizeof *t);
+    q3pv *pv = bb_calloc(pts->n, sizeof *pv, BB_TAG(q3pv));
+    q3ptri *t = bb_calloc(tris->n, sizeof *t, BB_TAG(q3ptri));
     uint32_t nt = 0;
     for (uint32_t i = 0; pv && i < pts->n; i++) {
         for (int k = 0; k < 3; k++)
@@ -751,8 +751,8 @@ static void tess_trimesh(q3view *v, const q3node *d)
     }
     if (pv && t)
         q3v_triangles(v, pv, pts->n, t, nt, d->w[0]);
-    free(pv);
-    free(t);
+    bb_free(pv);
+    bb_free(t);
 }
 
 static void add3(float *o, const float *a, float s, const float *b)
@@ -831,11 +831,11 @@ static void surface(q3view *v, const q3node *d, surf_fn fn, int nu, int nv, floa
     if (nu < 1 || nv < 1)
         return;
     uint32_t np = (uint32_t)((nu + 1) * (nv + 1));
-    q3pv *pv = calloc(np, sizeof *pv);
-    q3ptri *t = calloc((size_t)nu * (size_t)nv * 2, sizeof *t);
+    q3pv *pv = bb_calloc(np, sizeof *pv, BB_TAG(q3pv));
+    q3ptri *t = bb_calloc((size_t)nu * (size_t)nv * 2, sizeof *t, BB_TAG(q3ptri));
     if (!pv || !t) {
-        free(pv);
-        free(t);
+        bb_free(pv);
+        bb_free(t);
         return;
     }
     for (int j = 0; j <= nv; j++)
@@ -874,8 +874,8 @@ static void surface(q3view *v, const q3node *d, surf_fn fn, int nu, int nv, floa
             nt += 2;
         }
     q3v_triangles(v, pv, np, t, nt, geom_set);
-    free(pv);
-    free(t);
+    bb_free(pv);
+    bb_free(t);
 }
 
 static float len3(const float *a) { return sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); }
@@ -976,11 +976,11 @@ static void side_at(const q3node *d, float u, float vv, float p[3], float n[3])
 static void cap(q3view *v, const float *center, const float *maj, const float *min, const float *axis, int n,
                 float u0, float u1, gaddr face_set, gaddr geom_set)
 {
-    q3pv *pv = calloc((size_t)n + 2, sizeof *pv);
-    q3ptri *t = calloc((size_t)n, sizeof *t);
+    q3pv *pv = bb_calloc((size_t)n + 2, sizeof *pv, BB_TAG(q3pv));
+    q3ptri *t = bb_calloc((size_t)n, sizeof *t, BB_TAG(q3ptri));
     if (!pv || !t) {
-        free(pv);
-        free(t);
+        bb_free(pv);
+        bb_free(t);
         return;
     }
     float nrm[3];
@@ -1012,8 +1012,8 @@ static void cap(q3view *v, const float *center, const float *maj, const float *m
         t[i] = flipped ? (q3ptri){ { 0, (uint32_t)i + 2, (uint32_t)i + 1 }, 2, fa }
                        : (q3ptri){ { 0, (uint32_t)i + 1, (uint32_t)i + 2 }, 2, fa };
     q3v_triangles(v, pv, (uint32_t)n + 2, t, (uint32_t)n, geom_set);
-    free(pv);
-    free(t);
+    bb_free(pv);
+    bb_free(t);
 }
 
 enum { kQ3EndCapMaskTop = 1, kQ3EndCapMaskBottom = 2 };
@@ -1075,7 +1075,7 @@ static void tess_ellipse(q3view *v, const q3node *d)
     vec(d, 6, min);
     int n = steps(v, 2 * (float)M_PI * len3(maj), 32);
     float u0 = q3d_f(d->w, 9), u1 = q3d_f(d->w, 10);
-    q3pv *pv = calloc((size_t)n * 2, sizeof *pv);
+    q3pv *pv = bb_calloc((size_t)n * 2, sizeof *pv, BB_TAG(q3pv));
     for (int i = 0; pv && i < n; i++)
         for (int e = 0; e < 2; e++) {
             float th = (u0 + (u1 - u0) * (float)(i + e) / (float)n) * 2 * (float)M_PI;
@@ -1084,7 +1084,7 @@ static void tess_ellipse(q3view *v, const q3node *d)
         }
     if (pv)
         q3v_lines(v, pv, (uint32_t)n, d->w[11]);
-    free(pv);
+    bb_free(pv);
 }
 
 /* NURBS: the basis functions by Cox-de Boor. */
@@ -1120,13 +1120,13 @@ static void tess_ncurve(q3view *v, const q3node *d)
     q3node *cp = q3d_kid(d, &ncurve_s, 0, 0), *kn = q3d_kid(d, &ncurve_s, 0, 1);
     if (order < 1 || n < order || !cp || !kn || cp->n < (uint32_t)n || kn->n < (uint32_t)(order + n))
         return;
-    float *knots = malloc((size_t)(order + n) * sizeof *knots);
+    float *knots = bb_malloc((size_t)(order + n) * sizeof *knots, BB_BYTES);
     if (!knots)
         return;
     for (int i = 0; i < order + n; i++)
         knots[i] = q3d_f(kn->w, i);
     int seg = q3v_segments(v, 0, 8 * n);
-    q3pv *pv = calloc((size_t)seg * 2, sizeof *pv);
+    q3pv *pv = bb_calloc((size_t)seg * 2, sizeof *pv, BB_TAG(q3pv));
     float prev[3] = { 0 };
     for (int s = 0; pv && s <= seg; s++) {
         float t = clamp_t(knots, order, n, knots[order - 1] + (knots[n] - knots[order - 1]) * (float)s / (float)seg);
@@ -1145,8 +1145,8 @@ static void tess_ncurve(q3view *v, const q3node *d)
     }
     if (pv)
         q3v_lines(v, pv, (uint32_t)seg, d->w[4]);
-    free(pv);
-    free(knots);
+    bb_free(pv);
+    bb_free(knots);
 }
 
 static const q3node *patch_d;
@@ -1241,7 +1241,7 @@ static void trim_loops(const q3node *d)
     float ulo = patch_uk[(int)d->w[0] - 1], uhi = patch_uk[d->w[3]], vlo = patch_vk[(int)d->w[1] - 1], vhi = patch_vk[d->w[2]];
     if (!loops || uhi <= ulo || vhi <= vlo)
         return;
-    trims = calloc(loops->n, sizeof *trims);
+    trims = bb_calloc(loops->n, sizeof *trims, BB_TAG(trimpoly));
     for (uint32_t l = 0; trims && l < loops->n; l++) {
         q3node *curves = q3d_kid(loops, &trimloop_s, l, 0);
         trimpoly *t = &trims[ntrims];
@@ -1252,7 +1252,7 @@ static void trim_loops(const q3node *d)
             q3node *cp = q3d_kid(curves, &trimcurve_s, c, 0), *kn = q3d_kid(curves, &trimcurve_s, c, 1);
             if (order < 1 || n < order || !cp || !kn || cp->n < (uint32_t)n || kn->n < (uint32_t)(order + n))
                 continue;
-            float *knots = malloc((size_t)(order + n) * sizeof *knots);
+            float *knots = bb_malloc((size_t)(order + n) * sizeof *knots, BB_BYTES);
             if (!knots)
                 continue;
             for (int i = 0; i < order + n; i++)
@@ -1268,7 +1268,7 @@ static void trim_loops(const q3node *d)
                 }
                 if (t->n == cap) {
                     cap = cap ? cap * 2 : 64;
-                    float(*np)[2] = realloc(t->p, (size_t)cap * sizeof *np);
+                    float(*np)[2] = bb_realloc(t->p, (size_t)cap * sizeof *np, BB_BYTES);
                     if (!np)
                         break;
                     t->p = np;
@@ -1278,14 +1278,14 @@ static void trim_loops(const q3node *d)
                 t->p[t->n][1] = (p[1] / w - vlo) / (vhi - vlo);
                 t->n++;
             }
-            free(knots);
+            bb_free(knots);
         }
         if (t->n >= 3) {
             if (poly_area(t) > 0)
                 trims_bounding = true;
             ntrims++;
         } else {
-            free(t->p);
+            bb_free(t->p);
             t->p = NULL;
             t->n = 0;
         }
@@ -1299,8 +1299,8 @@ static void tess_npatch(q3view *v, const q3node *d)
     if (uo < 1 || vo < 1 || cols < uo || rows < vo || !cp || !uk || !vk || cp->n < (uint32_t)(rows * cols) ||
         uk->n < (uint32_t)(uo + cols) || vk->n < (uint32_t)(vo + rows))
         return;
-    patch_uk = malloc((size_t)(uo + cols) * sizeof(float));
-    patch_vk = malloc((size_t)(vo + rows) * sizeof(float));
+    patch_uk = bb_malloc((size_t)(uo + cols) * sizeof(float), BB_BYTES);
+    patch_vk = bb_malloc((size_t)(vo + rows) * sizeof(float), BB_BYTES);
     if (patch_uk && patch_vk) {
         for (int i = 0; i < uo + cols; i++)
             patch_uk[i] = q3d_f(uk->w, i);
@@ -1319,13 +1319,13 @@ static void tess_npatch(q3view *v, const q3node *d)
         surface(v, d, patch_at, nu, nv, 0, 1, 0, 1, 0, d->w[9]);
         surface_keep = NULL;
         for (int i = 0; i < ntrims; i++)
-            free(trims[i].p);
-        free(trims);
+            bb_free(trims[i].p);
+        bb_free(trims);
         trims = NULL;
         ntrims = 0;
     }
-    free(patch_uk);
-    free(patch_vk);
+    bb_free(patch_uk);
+    bb_free(patch_vk);
     patch_uk = patch_vk = NULL;
 }
 
@@ -1335,7 +1335,7 @@ static void tess_marker(q3view *v, const q3node *d)
     q3node *img = q3d_kid(d, &marker_s, 0, 0);
     if (!img || !w || !h || w > 4096 || h > 4096 || img->nbytes < rb * h)
         return;
-    uint32_t *px = malloc((size_t)w * h * 4);
+    uint32_t *px = bb_malloc((size_t)w * h * 4, BB_BYTES);
     if (!px)
         return;
     /* The bitmap's set bits in the marker's diffuse colour (white without). */
@@ -1355,7 +1355,7 @@ static void tess_marker(q3view *v, const q3node *d)
         }
     float p[3] = { q3d_f(d->w, 0), q3d_f(d->w, 1), q3d_f(d->w, 2) };
     q3v_image(v, p, (int32_t)d->w[3], (int32_t)d->w[4], (int)w, (int)h, px, d->w[10]);
-    free(px);
+    bb_free(px);
 }
 
 /* A storage object's bytes (q3_file.c). */
@@ -1371,15 +1371,15 @@ uint32_t *q3_storage_pixmap_argb(const uint32_t *w, gaddr storage)
     uint32_t size = 0;
     uint8_t *bytes = q3_storage_bytes(storage, &size);
     if (!bytes || !width || !height || width > 8192 || height > 8192 || type > 5) {
-        free(bytes);
+        bb_free(bytes);
         return NULL;
     }
     int bpp = q3_pixel_bytes((int)type);
     if ((uint64_t)rb * (height - 1) + (uint64_t)width * (uint32_t)bpp > size) {
-        free(bytes);
+        bb_free(bytes);
         return NULL;
     }
-    uint32_t *px = malloc((size_t)width * height * 4);
+    uint32_t *px = bb_malloc((size_t)width * height * 4, BB_BYTES);
     for (uint32_t y = 0; px && y < height; y++)
         for (uint32_t x = 0; x < width; x++) {
             const uint8_t *s = bytes + y * rb + x * (uint32_t)bpp;
@@ -1406,7 +1406,7 @@ uint32_t *q3_storage_pixmap_argb(const uint32_t *w, gaddr storage)
             }
             px[y * width + x] = v;
         }
-    free(bytes);
+    bb_free(bytes);
     return px;
 }
 
@@ -1417,7 +1417,7 @@ static void tess_pmarker(q3view *v, const q3node *d)
         return;
     float p[3] = { q3d_f(d->w, 0), q3d_f(d->w, 1), q3d_f(d->w, 2) };
     q3v_image(v, p, (int32_t)d->w[3], (int32_t)d->w[4], (int)d->w[6], (int)d->w[7], px, d->w[13]);
-    free(px);
+    bb_free(px);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1704,9 +1704,9 @@ static void Q3Marker_SetBitmap(ppc_cpu *c)
     for (int k = 1; k < 5; k++)
         d->w[5 + k] = rd32(in + 4 * (uint32_t)k);
     uint32_t n = d->w[7] * d->w[8];
-    q3node *img = calloc(1, sizeof *img);
+    q3node *img = bb_calloc(1, sizeof *img, BB_TAG(q3node));
     if (img) {
-        img->bytes = malloc(n ? n : 1);
+        img->bytes = bb_malloc(n ? n : 1, BB_BYTES);
         img->nbytes = n;
         if (img->bytes && n && rd32(in))
             gget(img->bytes, rd32(in), n);

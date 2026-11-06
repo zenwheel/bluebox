@@ -73,7 +73,7 @@ public func inspectResources(fork: UnsafePointer<UInt8>?, length: Int) throws ->
             var decLen = 0
             if rsrc_decompress(p, Int(e.data_len), &dec, &decLen, &err, err.count), let dec {
                 bytes = Array(UnsafeBufferPointer(start: dec, count: decLen))
-                free(dec)
+                bb_free(dec)
             }
         }
         let name = withUnsafeBytes(of: e.name) { resourceName($0) }
@@ -501,7 +501,7 @@ public final class ResourceExporter {
         guard machine_picture_rgba(r.data, r.data.count, &px, &w, &h), let px else {
             throw InspectError("\(r.typeText) \(r.id): not a picture QuickDraw can draw", undecodable: true)
         }
-        defer { free(px) }
+        defer { bb_free(px) }
         return try writePNG(r, Array(UnsafeBufferPointer(start: px, count: Int(w) * Int(h) * 4)), Int(w), Int(h),
                             alpha: false)
     }
@@ -515,7 +515,7 @@ public final class ResourceExporter {
         guard machine_snd_pcm(r.data, r.data.count, &pcm, &frames, &channels, &rate, &bits), let pcm else {
             throw InspectError("\(r.typeText) \(r.id): no sampled sound Blue Box can decode", undecodable: true)
         }
-        defer { free(pcm) }
+        defer { bb_free(pcm) }
         let samples = UnsafeBufferPointer(start: pcm, count: Int(frames) * Int(channels))
         return try write(r, "wav", wavData(pcm: samples, channels: Int(channels), rate: Int(rate.rounded()),
                                             bits: Int(bits)))

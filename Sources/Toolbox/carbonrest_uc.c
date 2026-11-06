@@ -280,7 +280,7 @@ static breaker *breaker_of(uint32_t ref)
 /* UTF-16 text from guest memory (malloc'd). */
 static uint16_t *get_units(gaddr p, uint32_t n)
 {
-    uint16_t *u = malloc(((size_t)n + 1) * 2);
+    uint16_t *u = bb_malloc(((size_t)n + 1) * 2, BB_BYTES);
     for (uint32_t i = 0; i < n; i++)
         u[i] = rd16(p + 2 * i);
     return u;
@@ -326,17 +326,17 @@ static void uc_UCGetCollationKey(ppc_cpu *c)
         RET(rest_paramErr);
     uint16_t *u = get_units(A(1), A(2));
     uint32_t cap = A(3);
-    uint32_t *key = malloc(((size_t)cap + 1) * 4);
+    uint32_t *key = bb_malloc(((size_t)cap + 1) * 4, BB_BYTES);
     size_t n = hu_collation_key(u, A(2), k->options, key, cap);
-    free(u);
+    bb_free(u);
     wr32(A(4), (uint32_t)n);
     if (n > cap || !A(5)) {
-        free(key);
+        bb_free(key);
         RET(A(5) ? kUCOutputBufferTooSmall : noErr);
     }
     for (size_t i = 0; i < n; i++)
         wr32(A(5) + 4 * (uint32_t)i, key[i]);
-    free(key);
+    bb_free(key);
     RET(noErr);
 }
 
@@ -370,8 +370,8 @@ static int16_t compare_texts(uint32_t options, const char *locale, bool use_loca
     uint16_t *a = get_units(t1, n1), *b = get_units(t2, n2);
     int o = 0;
     bool ok = hu_compare_text(a, n1, b, n2, options, locale, use_locale, &o);
-    free(a);
-    free(b);
+    bb_free(a);
+    bb_free(b);
     if (!ok)
         return rest_paramErr;
     if (equivalent)
@@ -448,9 +448,9 @@ static void uc_UCFindTextBreak(ppc_cpu *c)
     int unit = type == kUCTextBreakCharMask ? 0 : type == kUCTextBreakClusterMask ? 1 : type == kUCTextBreakWordMask ? 2 : 3;
     uint16_t *u = get_units(A(3), n);
     size_t cap = (size_t)n * 2 + 8;
-    uint32_t *offs = malloc(cap * 4);
+    uint32_t *offs = bb_malloc(cap * 4, BB_BYTES);
     size_t k = hu_text_breaks(u, n, unit, b->has_locale ? b->locale : NULL, offs, cap);
-    free(u);
+    bb_free(u);
     if (k > cap)
         k = cap;
     bool back = opts & kUCTextBreakGoBackwardsMask, iterate = opts & kUCTextBreakIterateMask,
@@ -473,7 +473,7 @@ static void uc_UCFindTextBreak(ppc_cpu *c)
             }
         }
     }
-    free(offs);
+    bb_free(offs);
     wr32(A(6), result);
     RET(noErr);
 }

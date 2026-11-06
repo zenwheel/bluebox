@@ -39,9 +39,9 @@ enum {
 
 static void forget(gaddr pic)
 {
-    free(st.clip);
+    bb_free(st.clip);
     for (int i = 0; i < 3; i++)
-        free(st.pixpat[i]);
+        bb_free(st.pixpat[i]);
     memset(&st, 0, sizeof st);
     st.pic = pic;
     st.open_clip = true;
@@ -104,10 +104,10 @@ static qrect pic_frame(gaddr h) { return qrect_get(rd32(h) + 2); }
 
 static void put_handle_data(gaddr h, gaddr data, uint32_t len)
 {
-    uint8_t *buf = malloc(len ? len : 1);
+    uint8_t *buf = bb_malloc(len ? len : 1, BB_BYTES);
     gget(buf, rd32(data), len);
     put(h, buf, len);
-    free(buf);
+    bb_free(buf);
 }
 
 static void write_clip(gaddr h, gaddr port)
@@ -124,20 +124,20 @@ static void write_clip(gaddr h, gaddr port)
         if (st.open_clip)
             return;
         st.open_clip = true;
-        free(st.clip);
+        bb_free(st.clip);
         st.clip = NULL;
         op(h, 0x0001);
         put16(h, 10);
         put_rect(h, f);
         return;
     }
-    uint8_t *bytes = malloc(len);
+    uint8_t *bytes = bb_malloc(len, BB_BYTES);
     gget(bytes, rd32(rh), len);
     if (!st.open_clip && st.clip_len == len && !memcmp(st.clip, bytes, len)) {
-        free(bytes);
+        bb_free(bytes);
         return;
     }
-    free(st.clip);
+    bb_free(st.clip);
     st.clip = bytes;
     st.clip_len = len;
     st.open_clip = false;
@@ -214,7 +214,7 @@ static uint8_t *pixpat_bytes(gaddr pp, uint32_t *len)
     uint8_t pat1[8];
     gget(pat1, rd32(pp) + PixPat_pat1Data_off, 8);
     if (type == 2) {
-        uint8_t *b = malloc(16);
+        uint8_t *b = bb_malloc(16, BB_BYTES);
         b[0] = 0;
         b[1] = 2;
         memcpy(b + 2, pat1, 8);
@@ -222,36 +222,36 @@ static uint8_t *pixpat_bytes(gaddr pp, uint32_t *len)
             b[10 + i * 2] = (uint8_t)(rgb[0][i] >> 8);
             b[11 + i * 2] = (uint8_t)rgb[0][i];
         }
-        free(rgb);
+        bb_free(rgb);
         *len = 16;
         return b;
     }
     int rb = (w + 1) & ~1;
     if (rb > 128) {
-        free(rgb);
+        bb_free(rgb);
         return NULL;
     }
     /* The distinct colours, as the colour table. */
     uint16_t table[256][3];
     int n = 0;
-    uint8_t *idx = malloc((size_t)w * (size_t)hh);
+    uint8_t *idx = bb_malloc((size_t)w * (size_t)hh, BB_BYTES);
     for (int i = 0; i < w * hh; i++) {
         int k = 0;
         while (k < n && memcmp(table[k], rgb[i], 6))
             k++;
         if (k == n) {
             if (n == 256) {
-                free(idx);
-                free(rgb);
+                bb_free(idx);
+                bb_free(rgb);
                 return NULL;
             }
             memcpy(table[n++], rgb[i], 6);
         }
         idx[i] = (uint8_t)k;
     }
-    free(rgb);
+    bb_free(rgb);
     size_t cap = 10 + 4 + 2 + 8 + 2 + 36 + 8 + (size_t)n * 8 + (size_t)hh * ((size_t)rb + 2);
-    uint8_t *b = calloc(cap, 1), *o = b;
+    uint8_t *b = bb_calloc(cap, 1, BB_BYTES), *o = b;
 #define P16(v) (o[0] = (uint8_t)((v) >> 8), o[1] = (uint8_t)(v), o += 2)
 #define P32(v) (P16((uint32_t)(v) >> 16), P16((uint32_t)(v) & 0xFFFF))
     P16(1);
@@ -284,7 +284,7 @@ static uint8_t *pixpat_bytes(gaddr pp, uint32_t *len)
     }
 #undef P16
 #undef P32
-    free(idx);
+    bb_free(idx);
     *len = (uint32_t)(o - b);
     return b;
 }
@@ -298,16 +298,16 @@ static bool write_pixpat(gaddr h, int slot, gaddr pp)
     uint32_t len;
     uint8_t *b = pixpat_bytes(pp, &len);
     if (!b) {
-        free(st.pixpat[slot]);
+        bb_free(st.pixpat[slot]);
         st.pixpat[slot] = NULL;
         return false;
     }
     st.have &= ~old_bits[slot]; /* an old-style pattern after this is written again */
     if (st.pixpat[slot] && st.pixpat_len[slot] == len && !memcmp(st.pixpat[slot], b, len)) {
-        free(b);
+        bb_free(b);
         return true;
     }
-    free(st.pixpat[slot]);
+    bb_free(st.pixpat[slot]);
     st.pixpat[slot] = b;
     st.pixpat_len[slot] = len;
     op(h, codes[slot]);

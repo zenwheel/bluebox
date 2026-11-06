@@ -124,12 +124,12 @@ static int host_in = -1, host_out = -1;
 static parser out_parser, in_parser;
 
 /* From the host's MIDI sources, on any thread. */
-static pthread_mutex_t in_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t in_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t in_bytes[8192];
 static int in_len;
 
-static machine_midi_out_fn out_fn;
-static void *out_ctx;
+BB_HOST static machine_midi_out_fn out_fn;
+BB_HOST static void *out_ctx;
 
 void machine_set_midi_out_handler(machine_midi_out_fn fn, void *ctx)
 {

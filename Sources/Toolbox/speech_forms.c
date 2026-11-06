@@ -498,11 +498,11 @@ static void piece(sink *s, const char *t, int n, bool period)
             w[i] = (char)lower(t[i]);
     }
     if (n > (int)sizeof w) { /* longer than any word: the letter rules, in pieces */
-        char *big = malloc((size_t)n);
+        char *big = bb_malloc((size_t)n, BB_BYTES);
         for (int i = 0; i < n; i++)
             big[i] = (char)lower(t[i]);
         letters(s, big, n);
-        free(big);
+        bb_free(big);
         return;
     }
     if (period)
@@ -614,7 +614,7 @@ int speech_spoken_phonemes(const uint8_t *text, int len, const uint8_t *prev, in
     sink s = { out, 0, max };
     if (len <= 0 || max <= 0)
         return 0;
-    char *t = malloc((size_t)len + 1);
+    char *t = bb_malloc((size_t)len + 1, BB_BYTES);
     int n = 0;
     for (int i = 0; i < len; i++)
         t[n++] = (char)plain(text[i]);
@@ -705,6 +705,6 @@ int speech_spoken_phonemes(const uint8_t *text, int len, const uint8_t *prev, in
             say_words(&s, name);
         i++;
     }
-    free(t);
+    bb_free(t);
     return s.n;
 }

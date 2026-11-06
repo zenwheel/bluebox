@@ -232,7 +232,7 @@ extension BlueBox {
                 var len = 0
                 guard let job, let p = machine_postscript(job, &len) else { return false }
                 ctx!.assumingMemoryBound(to: String.self).pointee = String(decoding: UnsafeRawBufferPointer(start: p, count: len), as: UTF8.self)
-                free(p)
+                bb_free(p)
                 return true
             }, nil, ps)
             defer { machine_set_print_handlers(nil, nil, nil) }

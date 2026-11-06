@@ -104,7 +104,7 @@ static void free_area(area *a)
     else if (a->raw)
         tb_DisposePtr(a->raw);
     ref_free(a->id);
-    free(a);
+    bb_free(a);
 }
 
 static uint32_t round_page(uint32_t n) { return (n + PAGE - 1) & ~(uint32_t)(PAGE - 1); }
@@ -127,13 +127,13 @@ static void mp_MPCreateArea(ppc_cpu *c)
     if (rd32(basep))
         RETURN(kMPInsufficientResourcesErr);
     uint32_t pad = (align > 12 ? 1u << align : PAGE);
-    area *a = calloc(1, sizeof *a);
+    area *a = bb_calloc(1, sizeof *a, BB_TAG(area));
     if (!a)
         RETURN(memFullErr);
     a->size = round_page(size);
     a->raw = tb_NewPtr((int32_t)(a->size + pad), false, (attrs & 1) != 0);
     if (!a->raw) {
-        free(a);
+        bb_free(a);
         RETURN(memFullErr);
     }
     a->base = (a->raw + pad - 1) & ~(pad - 1);
@@ -154,7 +154,7 @@ static void mp_MPCreateAliasArea(ppc_cpu *c)
         RETURN(!out ? paramErr : kMPInvalidIDErr);
     if (!space_ok(R(0)) || !size || off >= src->size || size > src->size - off)
         RETURN(paramErr);
-    area *a = calloc(1, sizeof *a);
+    area *a = bb_calloc(1, sizeof *a, BB_TAG(area));
     if (!a)
         RETURN(memFullErr);
     while (src->source) { /* an alias of an alias is one of the original */
@@ -226,11 +226,11 @@ static void mp_MPSetAreaSize(ppc_cpu *c)
         RETURN(memFullErr);
     gaddr base = (raw + PAGE - 1) & ~(uint32_t)(PAGE - 1);
     uint32_t keep = size < a->size ? size : a->size;
-    uint8_t *tmp = malloc(keep);
+    uint8_t *tmp = bb_malloc(keep, BB_BYTES);
     if (tmp) {
         gget(tmp, a->base, keep);
         gput(base, tmp, keep);
-        free(tmp);
+        bb_free(tmp);
     }
     tb_DisposePtr(a->raw);
     a->raw = raw;
@@ -376,7 +376,7 @@ static pageinfo *page_find(uint32_t page, bool make)
         return NULL;
     if (npages == cap_pages) {
         cap_pages = cap_pages ? cap_pages * 2 : 64;
-        pages = realloc(pages, cap_pages * sizeof *pages);
+        pages = bb_realloc(pages, cap_pages * sizeof *pages, BB_TAG(pageinfo));
         if (!pages) {
             npages = cap_pages = 0;
             return NULL;
@@ -524,7 +524,7 @@ static void mp_MPPutFreePage(ppc_cpu *c)
         RETURN(paramErr);
     if (nfree == cap_free) {
         cap_free = cap_free ? cap_free * 2 : 16;
-        free_pages = realloc(free_pages, cap_free * sizeof *free_pages);
+        free_pages = bb_realloc(free_pages, cap_free * sizeof *free_pages, BB_BYTES);
         if (!free_pages) {
             nfree = cap_free = 0;
             RETURN(memFullErr);
@@ -615,7 +615,7 @@ static void mp_MPCreatePool(ppc_cpu *c)
 {
     if (!R(2))
         RETURN(paramErr);
-    pool *p = calloc(1, sizeof *p);
+    pool *p = bb_calloc(1, sizeof *p, BB_TAG(pool));
     if (!p)
         RETURN(memFullErr);
     p->id = ref_new(REF_POOL, p);
@@ -633,7 +633,7 @@ static void pool_empty(pool *p)
         block *b = p->blocks;
         p->blocks = b->next;
         block_dispose(b->p);
-        free(b);
+        bb_free(b);
     }
     p->count = p->bytes = 0;
 }
@@ -649,7 +649,7 @@ void os9left_mp_freed(gaddr p)
                 *b = dead->next;
                 pl->count--;
                 pl->bytes -= dead->size;
-                free(dead);
+                bb_free(dead);
                 return;
             }
     }
@@ -664,7 +664,7 @@ static void mp_MPDeletePool(ppc_cpu *c)
         RETURN(kMPInsufficientResourcesErr);
     pool_empty(p);
     ref_free(p->id);
-    free(p);
+    bb_free(p);
     RETURN(noErr);
 }
 
@@ -679,7 +679,7 @@ static void mp_MPAllocateFromPool(ppc_cpu *c)
     gaddr m = os9rest_call(c, "MPAllocateAligned", args, 3);
     if (!m)
         RETURN(0);
-    block *b = calloc(1, sizeof *b);
+    block *b = bb_calloc(1, sizeof *b, BB_TAG(block));
     if (!b) {
         block_dispose(m);
         RETURN(0);
@@ -727,7 +727,7 @@ static void mp_MPGetPoolStatistics(ppc_cpu *c)
 static void mp_MPGetStandardPoolRef(ppc_cpu *c)
 {
     if (!standard_pool) {
-        standard_pool = calloc(1, sizeof *standard_pool);
+        standard_pool = bb_calloc(1, sizeof *standard_pool, BB_TAG(pool));
         if (!standard_pool)
             RETURN(0);
         standard_pool->id = ref_new(REF_POOL, standard_pool);
@@ -757,7 +757,7 @@ static void mp_OIDCreateTable(ppc_cpu *c)
 {
     if (!R(2) || R(0) > 15 || R(1) > 0xFFFF)
         RETURN(paramErr);
-    oid_table *t = calloc(1, sizeof *t);
+    oid_table *t = bb_calloc(1, sizeof *t, BB_TAG(oid_table));
     if (!t)
         RETURN(memFullErr);
     t->cls = R(0);
@@ -775,8 +775,8 @@ static void mp_OIDDeleteTable(ppc_cpu *c)
     if (t->locks)
         RETURN(kMPInsufficientResourcesErr);
     ref_free(t->id);
-    free(t->slot);
-    free(t);
+    bb_free(t->slot);
+    bb_free(t);
     RETURN(noErr);
 }
 
@@ -810,7 +810,7 @@ static void mp_OIDAssignID(ppc_cpu *c)
         uint32_t n = t->nslots ? t->nslots * 2 : 16;
         if (n > t->capacity)
             n = t->capacity;
-        oid_slot *grown = realloc(t->slot, n * sizeof *t->slot);
+        oid_slot *grown = bb_realloc(t->slot, n * sizeof *t->slot, BB_TAG(oid_slot));
         if (!grown)
             RETURN(memFullErr);
         t->slot = grown;
@@ -1068,10 +1068,10 @@ static void mp_MPDoPendingRemoteCalls(ppc_cpu *c)
 void os9left_mp_reset(void)
 {
     areas = NULL; /* their memory went with the heap */
-    free(pages);
+    bb_free(pages);
     pages = NULL;
     npages = cap_pages = 0;
-    free(free_pages);
+    bb_free(free_pages);
     free_pages = NULL;
     nfree = cap_free = 0;
     ager = ager_refcon = 0;

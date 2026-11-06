@@ -228,7 +228,7 @@ bool pap_print(const machine_print_job *job, const char *nbp)
     size_t len = print_postscript(job, &ps);
     char err[256] = "";
     bool ok = len && pap_send(nbp, ps, len, err, sizeof err);
-    free(ps);
+    bb_free(ps);
     if (!ok) {
         LOGF(LOG_UNIMPL, "PAP: %d page(s) not printed: %s\n", job->npages, err);
         char text[400];

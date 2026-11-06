@@ -53,7 +53,7 @@ static uint32_t device_list;
 void rest_ica_reset(void)
 {
     for (int i = 0; i < MAX_PROPERTIES; i++)
-        free(props[i].data);
+        bb_free(props[i].data);
     memset(objects, 0, sizeof objects);
     memset(props, 0, sizeof props);
     memset(notifies, 0, sizeof notifies);
@@ -331,7 +331,7 @@ static void ica_SetPropertyData(ppc_cpu *c)
             err = start > p->size ? kICAIndexOutOfRangeErr : paramErr;
         else {
             if (start + n > p->size) {
-                p->data = realloc(p->data, start + n ? start + n : 1);
+                p->data = bb_realloc(p->data, start + n ? start + n : 1, BB_BYTES);
                 p->size = start + n;
             }
             if (n)
@@ -448,7 +448,7 @@ static void dispose_object(uint32_t ref)
             dispose_object(OBJ_TAG + i);
     for (uint32_t i = 1; i < MAX_PROPERTIES; i++)
         if (props[i].used && props[i].object == ref) {
-            free(props[i].data);
+            bb_free(props[i].data);
             memset(&props[i], 0, sizeof props[i]);
         }
     notify(T("eobr"), ref);
@@ -485,7 +485,7 @@ static void icd_NewProperty(ppc_cpu *c)
                 if (size > (16u << 20))
                     break;
                 props[i] = (ica_property){ true, object, rd32(PB + 10), rd32(PB + 14), rd32(PB + 22), 0, NULL, size };
-                props[i].data = calloc(size ? size : 1, 1);
+                props[i].data = bb_calloc(size ? size : 1, 1, BB_BYTES);
                 ref = PROP_TAG + i;
                 err = noErr;
                 break;
@@ -503,7 +503,7 @@ static void icd_DisposeProperty(ppc_cpu *c)
     ica_property *p = prop_of(rd32(PB + 6));
     if (p) {
         uint32_t object = p->object;
-        free(p->data);
+        bb_free(p->data);
         memset(p, 0, sizeof *p);
         notify(T("eoic"), object);
     }

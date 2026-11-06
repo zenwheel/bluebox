@@ -77,9 +77,9 @@ static uint8_t *find_moov(reader_fn rd, void *ctx, uint64_t offset, uint64_t lim
         if (!memcmp(h + 4, "moov", 4)) {
             if (n > 64u << 20)
                 return NULL;
-            uint8_t *b = malloc((size_t)n);
+            uint8_t *b = bb_malloc((size_t)n, BB_BYTES);
             if (!rd(ctx, at, b, (uint32_t)n)) {
-                free(b);
+                bb_free(b);
                 return NULL;
             }
             *len = (uint32_t)n;
@@ -101,8 +101,8 @@ static void self_refs_to(qtm_movie *mv, uint32_t type, const uint8_t *data, uint
             qtm_dref *d = &md->drefs[k];
             if (!(d->flags & 1))
                 continue;
-            free(d->data);
-            d->data = malloc(len ? len : 1);
+            bb_free(d->data);
+            d->data = bb_malloc(len ? len : 1, BB_BYTES);
             memcpy(d->data, data, len);
             d->len = len;
             d->type = type;
@@ -120,7 +120,7 @@ static int16_t movie_for_ref(uint8_t *moov, uint32_t len, uint32_t type, const u
     if (!moov)
         return qt_set_error(invalidMovie);
     qtm_movie *mv = qtm_parse(moov, len);
-    free(moov);
+    bb_free(moov);
     if (!mv)
         return qt_set_error(invalidMovie);
     char path[PATH_MAX];
@@ -162,7 +162,7 @@ int16_t tb_NewMovieFromDataRef(gaddr m, int16_t flags, gaddr id, int32_t dataRef
     } else {
         qt_src src;
         if (!qt_src_open((uint32_t)dataRefType, 0, ref, n, NULL, false, &src)) {
-            free(ref);
+            bb_free(ref);
             return qt_set_error(couldNotResolveDataRef);
         }
         uint32_t len;
@@ -170,7 +170,7 @@ int16_t tb_NewMovieFromDataRef(gaddr m, int16_t flags, gaddr id, int32_t dataRef
         qt_src_close(&src);
         err = moov ? movie_for_ref(moov, len, (uint32_t)dataRefType, ref, n, m, flags) : qt_set_error(noMovieFound);
     }
-    free(ref);
+    bb_free(ref);
     return qt_set_error(err);
 }
 
@@ -184,7 +184,7 @@ int16_t tb_NewMovieForDataRefFromHandle(gaddr theMovie, int32_t h, int16_t newMo
     if (!theMovie || !h || !rd32((gaddr)h))
         return qt_set_error(invalidMovie);
     uint32_t len = (uint32_t)tb_GetHandleSize((gaddr)h), rn;
-    uint8_t *b = malloc(len + 8);
+    uint8_t *b = bb_malloc(len + 8, BB_BYTES);
     gget(b + 8, rd32((gaddr)h), len);
     uint8_t *moov = b;
     if (len >= 8 && !memcmp(b + 12, "moov", 4)) {
@@ -196,7 +196,7 @@ int16_t tb_NewMovieForDataRefFromHandle(gaddr theMovie, int32_t h, int16_t newMo
     }
     uint8_t *ref = qt_dref_bytes((gaddr)dataRef, &rn);
     int16_t err = movie_for_ref(moov, len, dataRef ? (uint32_t)dataRefType : 0, ref, rn, theMovie, newMovieFlags);
-    free(ref);
+    bb_free(ref);
     return err;
 }
 
@@ -258,7 +258,7 @@ int16_t tb_NewMovieFromUserProc(gaddr m, int16_t flags, gaddr dataRefWasChanged,
     uint32_t rn;
     uint8_t *ref = qt_dref_bytes((gaddr)defaultDataRef, &rn);
     int16_t err = movie_for_ref(moov, len, defaultDataRef ? (uint32_t)dataRefType : 0, ref, rn, m, flags);
-    free(ref);
+    bb_free(ref);
     return err;
 }
 
@@ -306,7 +306,7 @@ int16_t tb_NewMovieFromStorageOffset(gaddr theMovie, int32_t dh, gaddr fileOffse
         t = st; /* its type is the handler's subtype */
     uint8_t *rb = qt_dref_bytes(ref, &rn);
     int16_t err = movie_for_ref(moov, len, t, rb, rn, theMovie, newMovieFlags);
-    free(rb);
+    bb_free(rb);
     if (ref)
         tb_DisposeHandle(ref);
     return err;
@@ -376,7 +376,7 @@ int16_t tb_RemoveMovieResource(int16_t resRefNum, int16_t resId)
 
 static void set_ref(uint8_t **data, uint32_t *len, int32_t dataRef)
 {
-    free(*data);
+    bb_free(*data);
     *data = dataRef ? qt_dref_bytes((gaddr)dataRef, len) : NULL;
     if (!dataRef)
         *len = 0;
@@ -462,15 +462,15 @@ static uint8_t *description_for(qtm_movie *mv, const char *path, uint32_t *len)
             char p[PATH_MAX];
             if (d->flags & 1) {
                 if (ab) {
-                    free(d->data);
-                    d->data = malloc(an);
+                    bb_free(d->data);
+                    d->data = bb_malloc(an, BB_BYTES);
                     memcpy(d->data, ab, an);
                     d->len = an;
                     d->type = fourcc("alis");
                     d->flags = 0;
                 }
             } else if (qt_dref_path(d->type, d->data, d->len, NULL, p, sizeof p) && !strcmp(p, path)) {
-                free(d->data);
+                bb_free(d->data);
                 d->data = NULL;
                 d->len = 0;
                 d->type = fourcc("alis");
@@ -480,7 +480,7 @@ static uint8_t *description_for(qtm_movie *mv, const char *path, uint32_t *len)
     }
     uint8_t *out = qtm_serialize(c, false, len);
     qtm_free(c);
-    free(ab);
+    bb_free(ab);
     if (own_alias)
         tb_DisposeHandle(own_alias);
     return out;
@@ -506,7 +506,7 @@ int16_t tb_PutMovieIntoHandle(int32_t theMovie, int32_t publicMovie)
     uint32_t n;
     uint8_t *b = qtm_serialize(mv, false, &n);
     int16_t err = into_handle(b, n, (gaddr)publicMovie);
-    free(b);
+    bb_free(b);
     return qt_set_error(err);
 }
 
@@ -519,11 +519,11 @@ int16_t tb_PutMovieForDataRefIntoHandle(int32_t theMovie, int32_t dataRef, int32
     uint8_t *ref = qt_dref_bytes((gaddr)dataRef, &rn);
     char path[PATH_MAX];
     bool file = qt_dref_path((uint32_t)dataRefType, ref, rn, NULL, path, sizeof path);
-    free(ref);
+    bb_free(ref);
     qtm_update_duration(mv);
     uint8_t *b = description_for(mv, file ? path : NULL, &n);
     int16_t err = b ? into_handle(b, n, (gaddr)publicMovie) : memFullErr;
-    free(b);
+    bb_free(b);
     return qt_set_error(err);
 }
 
@@ -542,24 +542,24 @@ static int16_t into_fork(qtm_movie *mv, int16_t refnum, uint64_t offset, int32_t
     if (!b)
         return memFullErr;
     if (maxSize > 0 && n > (uint32_t)maxSize) {
-        free(b);
+        bb_free(b);
         return paramErr;
     }
     uint32_t total = n;
     if (maxSize > 0 && (uint32_t)maxSize - n >= 8) { /* the rest marked free */
         total = (uint32_t)maxSize;
-        b = realloc(b, total);
+        b = bb_realloc(b, total, BB_BYTES);
         memset(b + n, 0, total - n);
         put32(b + n, total - n);
         memcpy(b + n + 4, "free", 4);
     }
     gaddr g = tb_NewPtr((int32_t)total, false, false);
     if (!g) {
-        free(b);
+        bb_free(b);
         return memFullErr;
     }
     gput(g, b, total);
-    free(b);
+    bb_free(b);
     uint32_t actual;
     int16_t err = fm_fork_io(refnum, true, fsFromStart, (int64_t)offset, total, g, &actual);
     tb_DisposePtr(g);
@@ -633,7 +633,7 @@ static int16_t write_flattened(qtm_movie *mv, qtm_movie *copy, const char *dst_p
         if (copy->tracks[t]->media)
             for (int i = 0; i < copy->tracks[t]->media->nruns; i++)
                 nchunks += i == 0 || copy->tracks[t]->media->runs[i].chunk;
-    chunk_ref *cr = malloc((size_t)(nchunks ? nchunks : 1) * sizeof *cr);
+    chunk_ref *cr = bb_malloc((size_t)(nchunks ? nchunks : 1) * sizeof *cr, BB_TAG(chunk_ref));
     int k = 0;
     for (int t = 0; t < copy->ntracks; t++) {
         qtm_media *md = copy->tracks[t]->media;
@@ -658,7 +658,7 @@ static int16_t write_flattened(qtm_movie *mv, qtm_movie *copy, const char *dst_p
     uint64_t data_at = 16, pos = 16; /* a 64-bit 'mdat' header, sized at the end */
     gaddr buf = tb_NewPtr(65536, false, false);
     if (!buf) {
-        free(cr);
+        bb_free(cr);
         return memFullErr;
     }
     uint64_t total = 0, done = 0;
@@ -700,7 +700,7 @@ static int16_t write_flattened(qtm_movie *mv, qtm_movie *copy, const char *dst_p
         }
     }
     tb_DisposePtr(buf);
-    free(cr);
+    bb_free(cr);
     if (err)
         return err;
     /* the 'mdat' header, now its size is known */
@@ -719,8 +719,8 @@ static int16_t write_flattened(qtm_movie *mv, qtm_movie *copy, const char *dst_p
         if (!md)
             continue;
         for (int i = 0; i < md->ndrefs; i++)
-            free(md->drefs[i].data);
-        free(md->drefs);
+            bb_free(md->drefs[i].data);
+        bb_free(md->drefs);
         md->drefs = NULL;
         md->ndrefs = 0;
         qtm_add_dref(md, fourcc("alis"), 1, NULL, 0);
@@ -761,7 +761,7 @@ static int16_t flatten_into(qtm_movie *mv, gaddr movie, int32_t flags, const cha
         uint32_t an;
         uint8_t *ab = qt_dref_bytes(a, &an);
         self_refs_to(src, fourcc("alis"), ab, an);
-        free(ab);
+        bb_free(ab);
         if (a)
             tb_DisposeHandle(a);
     }
@@ -794,7 +794,7 @@ static int16_t flatten_into(qtm_movie *mv, gaddr movie, int32_t flags, const cha
         } else {
             err = memFullErr;
         }
-        free(b);
+        bb_free(b);
     }
     fm_close_fork(refnum);
     tell(&pr, movieProgressClose, 0x10000);
@@ -835,7 +835,7 @@ int32_t tb_FlattenMovieData(int32_t theMovie, int32_t movieFlattenFlags, gaddr t
         uint32_t rn;
         uint8_t *ref = qt_dref_bytes(rd32(theFile + 4), &rn);
         bool ok = qt_dref_path(rd32(theFile), ref, rn, NULL, path, sizeof path);
-        free(ref);
+        bb_free(ref);
         if (!ok) {
             qt_set_error(couldNotResolveDataRef);
             return 0;
@@ -919,7 +919,7 @@ int16_t tb_CreateShortcutMovieFile(gaddr fileSpec, int32_t creator, int16_t scri
     uint32_t rn;
     uint8_t *ref = qt_dref_bytes((gaddr)targetDataRef, &rn);
     uint32_t rdrf = 8 + 12 + rn, rmda = 8 + rdrf, rmra = 8 + rmda, moov = 8 + rmra;
-    uint8_t *b = calloc(1, moov);
+    uint8_t *b = bb_calloc(1, moov, BB_BYTES);
     put32(b, moov);
     memcpy(b + 4, "moov", 4);
     put32(b + 8, rmra);
@@ -932,7 +932,7 @@ int16_t tb_CreateShortcutMovieFile(gaddr fileSpec, int32_t creator, int16_t scri
     put32(b + 36, (uint32_t)targetDataRefType);
     put32(b + 40, rn);
     memcpy(b + 44, ref, rn);
-    free(ref);
+    bb_free(ref);
     int16_t refnum = 0;
     err = fm_open_fork(path, false, fsRdWrPerm, &refnum);
     if (!err) {
@@ -943,7 +943,7 @@ int16_t tb_CreateShortcutMovieFile(gaddr fileSpec, int32_t creator, int16_t scri
         tb_DisposePtr(g);
         fm_close_fork(refnum);
     }
-    free(b);
+    bb_free(b);
     return qt_set_error(err);
 }
 
@@ -964,7 +964,7 @@ bool qt_reference_movie_target(const uint8_t *moov, uint32_t len, uint32_t *type
                 *rn = be32(p + 16);
                 if (20 + *rn > n)
                     return false;
-                *ref = malloc(*rn ? *rn : 1);
+                *ref = bb_malloc(*rn ? *rn : 1, BB_BYTES);
                 memcpy(*ref, p + 20, *rn);
                 return true;
             }
@@ -1015,11 +1015,11 @@ static int32_t picture_at(qtm_movie *mv, int64_t time)
     uint8_t *rgba = NULL;
     int w = 0, h = 0;
     if (!qt_movie_frame_at(mv, time, &rgba, &w, &h) || !w || !h) {
-        free(rgba);
+        bb_free(rgba);
         return 0;
     }
     gaddr pic = qt_picture_of_rgba(rgba, w, h);
-    free(rgba);
+    bb_free(rgba);
     return (int32_t)pic;
 }
 
@@ -1267,7 +1267,7 @@ int16_t tb_GetMovieImporterForDataRef(int32_t dataRefType, int32_t dataRef, int3
         type = file_type(spec);
         tb_DisposePtr(spec);
     }
-    free(ref);
+    bb_free(ref);
     uint32_t c = type ? component_for(fourcc("eat "), type) : 0;
     if (importer)
         wr32(importer, c);
@@ -1328,7 +1328,7 @@ int16_t tb_CanQuickTimeOpenDataRef(int32_t dataRef, int32_t dataRefType, gaddr o
     uint8_t *ref = qt_dref_bytes((gaddr)dataRef, &rn);
     char path[PATH_MAX];
     bool have = qt_dref_path((uint32_t)dataRefType, ref, rn, NULL, path, sizeof path);
-    free(ref);
+    bb_free(ref);
     uint32_t type = 0;
     if (have) {
         gaddr spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
@@ -1369,7 +1369,7 @@ int16_t tb_MovieSearchText(int32_t theMovie, int32_t text, int32_t size, int32_t
         return qt_set_error(invalidMovie);
     if (!text || size <= 0)
         return qt_set_error(paramErr);
-    uint8_t *needle = malloc((size_t)size);
+    uint8_t *needle = bb_malloc((size_t)size, BB_BYTES);
     gget(needle, (gaddr)text, (uint32_t)size);
     bool cased = searchFlags & 2, back = searchFlags & 4, wrap = searchFlags & 8, use_offset = searchFlags & 16;
     bool one = searchFlags & (1 << 18), enabled_only = searchFlags & (1 << 19);
@@ -1406,7 +1406,7 @@ int16_t tb_MovieSearchText(int32_t theMovie, int32_t text, int32_t size, int32_t
                 const qtm_dref *d = &md->drefs[di - 1];
                 if (!qt_src_open(d->type, d->flags, d->data, d->len, qt_movie_path(mv), false, &src))
                     continue;
-                uint8_t *b = malloc((size_t)bytes);
+                uint8_t *b = bb_malloc((size_t)bytes, BB_BYTES);
                 bool ok = qt_src_read(&src, off, b, (uint32_t)bytes);
                 qt_src_close(&src);
                 uint32_t n = ok ? (uint32_t)(b[0] << 8 | b[1]) : 0;
@@ -1438,11 +1438,11 @@ int16_t tb_MovieSearchText(int32_t theMovie, int32_t text, int32_t size, int32_t
                         tb_SetMovieTimeValue(theMovie, (int32_t)movie_t);
                     err = noErr;
                 }
-                free(b);
+                bb_free(b);
             }
         }
     }
-    free(needle);
+    bb_free(needle);
     return qt_set_error(err);
 }
 
@@ -1483,7 +1483,7 @@ int16_t tb_CreateMovieStorage(int32_t dataRef, int32_t dataRefType, int32_t crea
             mv->default_dref_type = (uint32_t)dataRefType;
             ref = NULL;
         }
-        free(ref);
+        bb_free(ref);
         gaddr m = qt_new_movie_for(mv, file ? path : NULL);
         if (m && (createMovieFileFlags & newMovieActive))
             tb_SetMovieActive(m, 1);
@@ -1521,7 +1521,7 @@ int16_t tb_DeleteMovieStorage(int32_t dataRef, int32_t dataRefType)
     uint8_t *ref = qt_dref_bytes((gaddr)dataRef, &rn);
     char path[PATH_MAX];
     bool file = qt_dref_path((uint32_t)dataRefType, ref, rn, NULL, path, sizeof path);
-    free(ref);
+    bb_free(ref);
     if (!file)
         return qt_set_error(paramErr);
     gaddr spec = tb_NewPtr(FSSpec_SIZEOF, false, true);
@@ -1559,12 +1559,12 @@ int16_t tb_PutMovieIntoStorage(int32_t theMovie, int32_t dh, gaddr offset, int32
     uint32_t n;
     uint8_t *b = qtm_serialize(mv, false, &n);
     if (maxSize > 0 && n > (uint32_t)maxSize) {
-        free(b);
+        bb_free(b);
         return qt_set_error(paramErr);
     }
     gaddr g = tb_NewPtr((int32_t)n, false, false);
     gput(g, b, n);
-    free(b);
+    bb_free(b);
     uint32_t args[] = { g, offset, n, 0, 0 };
     int32_t r = qtc_call_named((uint32_t)dh, "DataHWrite64", args);
     tb_DisposePtr(g);

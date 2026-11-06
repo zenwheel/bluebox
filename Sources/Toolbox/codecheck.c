@@ -46,7 +46,7 @@ void code_check_add(gaddr base, uint32_t size, const char *what)
     if (!enabled() || !base || !size)
         return;
     code_check_remove(base);
-    if (nregions >= MAX_CODE_REGIONS || !(regions[nregions].copy = malloc(size)))
+    if (nregions >= MAX_CODE_REGIONS || !(regions[nregions].copy = bb_malloc(size, BB_BYTES)))
         return;
     code_region *r = &regions[nregions++];
     r->base = base;
@@ -59,7 +59,7 @@ void code_check_remove(gaddr base)
 {
     for (int i = 0; i < nregions; i++)
         if (regions[i].base == base) {
-            free(regions[i].copy);
+            bb_free(regions[i].copy);
             regions[i] = regions[--nregions];
             return;
         }
@@ -68,7 +68,7 @@ void code_check_remove(gaddr base)
 void code_check_reset(void)
 {
     while (nregions)
-        free(regions[--nregions].copy);
+        bb_free(regions[--nregions].copy);
 }
 
 static const char *checked_after; /* the call the last check followed */

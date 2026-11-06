@@ -166,16 +166,16 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
     size_t nrec = 2;
     for (size_t i = 0; i < count; i++)
         nrec += entries[i].is_dir ? 2 : 1;
-    record *recs = calloc(nrec, sizeof *recs);
+    record *recs = bb_calloc(nrec, sizeof *recs, BB_TAG(record));
     uint32_t *valence = NULL;
     uint32_t max_id = 15;
     for (size_t i = 0; i < count; i++)
         if (entries[i].cnid > max_id)
             max_id = entries[i].cnid;
-    valence = calloc((size_t)max_id + 1, sizeof *valence);
+    valence = bb_calloc((size_t)max_id + 1, sizeof *valence, BB_BYTES);
     if (!recs || !valence) {
-        free(recs);
-        free(valence);
+        bb_free(recs);
+        bb_free(valence);
         snprintf(err, errlen, "out of memory");
         return false;
     }
@@ -237,12 +237,12 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
     uint32_t cat_start = next;
     next += cat_bytes / bs;
     /* Each fork, one extent. */
-    uint32_t *dstart = calloc(count ? count : 1, sizeof *dstart), *rstart = calloc(count ? count : 1, sizeof *rstart);
+    uint32_t *dstart = bb_calloc(count ? count : 1, sizeof *dstart, BB_BYTES), *rstart = bb_calloc(count ? count : 1, sizeof *rstart, BB_BYTES);
     if (!dstart || !rstart) {
-        free(recs);
-        free(valence);
-        free(dstart);
-        free(rstart);
+        bb_free(recs);
+        bb_free(valence);
+        bb_free(dstart);
+        bb_free(rstart);
         snprintf(err, errlen, "out of memory");
         return false;
     }
@@ -256,10 +256,10 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
     }
     if (next > nb) {
         snprintf(err, errlen, "the files need %u allocation blocks of %u bytes; the disk has %u", next, bs, nb);
-        free(recs);
-        free(valence);
-        free(dstart);
-        free(rstart);
+        bb_free(recs);
+        bb_free(valence);
+        bb_free(dstart);
+        bb_free(rstart);
         return false;
     }
 
@@ -323,18 +323,18 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
 
     /* The catalog file. */
     uint32_t total = cat_bytes / NODE;
-    uint8_t *cat = calloc(1, cat_bytes);
+    uint8_t *cat = bb_calloc(1, cat_bytes, BB_BYTES);
     /* Leaf and index nodes, level by level: each level's first keys. */
-    uint32_t *first = malloc((nrec + 1) * sizeof *first); /* record index starting each node */
-    uint32_t *nodes = malloc((nrec + 1) * sizeof *nodes);
+    uint32_t *first = bb_malloc((nrec + 1) * sizeof *first, BB_BYTES); /* record index starting each node */
+    uint32_t *nodes = bb_malloc((nrec + 1) * sizeof *nodes, BB_BYTES);
     if (!cat || !first || !nodes) {
-        free(cat);
-        free(first);
-        free(nodes);
-        free(recs);
-        free(valence);
-        free(dstart);
-        free(rstart);
+        bb_free(cat);
+        bb_free(first);
+        bb_free(nodes);
+        bb_free(recs);
+        bb_free(valence);
+        bb_free(dstart);
+        bb_free(rstart);
         snprintf(err, errlen, "out of memory");
         return false;
     }
@@ -369,7 +369,7 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
     while (!full && level_n > 1) {
         height++;
         uint32_t up_n = 0;
-        uint32_t *ufirst = malloc((level_n + 1) * sizeof *ufirst), *unodes = malloc((level_n + 1) * sizeof *unodes);
+        uint32_t *ufirst = bb_malloc((level_n + 1) * sizeof *ufirst, BB_BYTES), *unodes = bb_malloc((level_n + 1) * sizeof *unodes, BB_BYTES);
         for (uint32_t i = 0; i < level_n;) {
             if (node >= total) {
                 full = true;
@@ -393,8 +393,8 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
             node++;
         }
         if (lfirst != first) {
-            free(lfirst);
-            free(lnodes);
+            bb_free(lfirst);
+            bb_free(lnodes);
         }
         lfirst = ufirst;
         lnodes = unodes;
@@ -402,21 +402,21 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
         rootnode = unodes[0];
     }
     if (lfirst != first) {
-        free(lfirst);
-        free(lnodes);
+        bb_free(lfirst);
+        bb_free(lnodes);
     }
     uint32_t maps = map_nodes(total);
     if (node + maps > total)
         full = true;
     if (full) {
         snprintf(err, errlen, "the catalog doesn't fit");
-        free(cat);
-        free(first);
-        free(nodes);
-        free(recs);
-        free(valence);
-        free(dstart);
-        free(rstart);
+        bb_free(cat);
+        bb_free(first);
+        bb_free(nodes);
+        bb_free(recs);
+        bb_free(valence);
+        bb_free(dstart);
+        bb_free(rstart);
         return false;
     }
     /* Map nodes at the end of the file, chained from the header. */
@@ -441,15 +441,15 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
     put32(cat + 14 + 26, total - used_nodes);
 
     /* The disk. */
-    uint8_t *disk = calloc(1, p->size);
+    uint8_t *disk = bb_calloc(1, p->size, BB_BYTES);
     if (!disk) {
-        free(cat);
-        free(first);
-        free(nodes);
-        free(recs);
-        free(valence);
-        free(dstart);
-        free(rstart);
+        bb_free(cat);
+        bb_free(first);
+        bb_free(nodes);
+        bb_free(recs);
+        bb_free(valence);
+        bb_free(dstart);
+        bb_free(rstart);
         snprintf(err, errlen, "out of memory");
         return false;
     }
@@ -502,13 +502,13 @@ bool hfs_build(const hfs_build_params *p, const hfs_build_entry *entries, size_t
     put16(m + 150, (uint16_t)cat_start);
     put16(m + 152, (uint16_t)(cat_bytes / bs));
     memcpy(disk + (size_t)(sectors - 2) * SECTOR, m, SECTOR);
-    free(cat);
-    free(first);
-    free(nodes);
-    free(recs);
-    free(valence);
-    free(dstart);
-    free(rstart);
+    bb_free(cat);
+    bb_free(first);
+    bb_free(nodes);
+    bb_free(recs);
+    bb_free(valence);
+    bb_free(dstart);
+    bb_free(rstart);
     *out = disk;
     return true;
 }

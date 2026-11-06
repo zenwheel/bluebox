@@ -86,7 +86,7 @@ static uint32_t value_of(const uint16_t rgb[3], int depth, gaddr ctab)
 static uint32_t *read_values(const source *s, int depth, gaddr ctab)
 {
     int w = width_of(s->r), h = height_of(s->r), sd = s->d.depth;
-    uint32_t *px = malloc((size_t)w * (size_t)h * sizeof *px);
+    uint32_t *px = bb_malloc((size_t)w * (size_t)h * sizeof *px, BB_BYTES);
     if (!px)
         return NULL;
     bool same = (sd == 16 && depth == 16) || (sd == 32 && (depth == 24 || depth == 32)) ||
@@ -188,7 +188,7 @@ static int16_t compress_values(const qt_venc_format *f, const uint32_t *px, cons
         return codecErr;
     if (data)
         gput(data, out, (uint32_t)len);
-    free(out);
+    bb_free(out);
     *size = (uint32_t)len;
     return noErr;
 }
@@ -210,7 +210,7 @@ int16_t tb_FCompressImage(int32_t src, gaddr srcRect, int16_t colorDepth, int32_
     qt_venc_format f = { (uint32_t)cType, width_of(s.r), height_of(s.r), depth, quality };
     uint32_t size = 0;
     int16_t err = compress_values(&f, px, NULL, (gaddr)data, &size);
-    free(px);
+    bb_free(px);
     if (!err && !write_desc((gaddr)desc, (uint32_t)cType, f.width, f.height, depth, ctab, quality, 0, size))
         err = memFullErr;
     return err;
@@ -277,7 +277,7 @@ static cseq *cseq_of(int32_t id)
 
 static void cseq_free(cseq *s)
 {
-    free(s->prev);
+    bb_free(s->prev);
     if (s->prev_gw)
         tb_DisposeGWorld(s->prev_gw);
     memset(s, 0, sizeof *s);
@@ -286,7 +286,7 @@ static void cseq_free(cseq *s)
 void icm_compress_reset(void)
 {
     for (int i = 0; i < MAX_CSEQS; i++)
-        free(cseqs[i].prev); /* the GWorlds went with the heap */
+        bb_free(cseqs[i].prev); /* the GWorlds went with the heap */
     memset(cseqs, 0, sizeof cseqs);
 }
 
@@ -384,12 +384,12 @@ int16_t tb_CompressSequenceFrame(int32_t seqID, int32_t src, gaddr srcRect, int1
             wr8(similarity, key ? 0 : (uint8_t)(1 + same * 254 / (n ? n : 1)));
         if (q->desc && rd32(q->desc) && tb_GetHandleSize(q->desc) >= 86)
             wr32(rd32(q->desc) + 44, size);
-        free(q->prev);
+        bb_free(q->prev);
         q->prev = px;
         q->since_key = key ? 1 : q->since_key + 1;
         q->frame++;
     } else {
-        free(px);
+        bb_free(px);
     }
     complete((gaddr)asyncCompletionProc, err);
     return err;
@@ -406,7 +406,7 @@ int16_t tb_SetCSequencePrev(int32_t seqID, int32_t prev, gaddr prevRect)
     uint32_t *px = read_values(&s, q->f.depth, q->ctab);
     if (!px)
         return memFullErr;
-    free(q->prev);
+    bb_free(q->prev);
     q->prev = px;
     return noErr;
 }
@@ -581,12 +581,12 @@ int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colo
     qt_venc_format f = { (uint32_t)cType, w, h, depth, quality };
     uint8_t *data = NULL;
     size_t len = qt_venc_encode(&f, px, NULL, &data);
-    free(px);
+    bb_free(px);
     if (!len)
         return codecErr;
     gaddr desc = write_desc(0, (uint32_t)cType, w, h, depth, ctab, quality, 0, (uint32_t)len);
     if (!desc) {
-        free(data);
+        bb_free(data);
         return memFullErr;
     }
     uint32_t dsize = rd32(rd32(desc));
@@ -597,13 +597,13 @@ int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colo
     tb_SetHandleSize(dst, (int32_t)total);
     if ((uint32_t)tb_GetHandleSize(dst) < total) {
         tb_DisposeHandle(desc);
-        free(data);
+        bb_free(data);
         return memFullErr;
     }
-    uint8_t *p = calloc(1, total);
+    uint8_t *p = bb_calloc(1, total, BB_BYTES);
     if (!p) {
         tb_DisposeHandle(desc);
-        free(data);
+        bb_free(data);
         return memFullErr;
     }
     be16(p, total & 0xFFFF);
@@ -639,8 +639,8 @@ int16_t tb_FCompressPicture(int32_t srcPicture, int32_t dstPicture, int16_t colo
     memcpy(b + 68 + dsize, data, len);
     be16(b + body + (body & 1), 0x00FF);
     gput(rd32(dst), p, total);
-    free(p);
-    free(data);
+    bb_free(p);
+    bb_free(data);
     tb_DisposeHandle(desc);
     return noErr;
 }

@@ -328,7 +328,7 @@ static void connect_server(const char *shown, const char *spec_prefix, bool atal
     afp_close(s);
     if (r != 0 || count == 0) {
         chooser_message("The file server has no volumes you can use.");
-        free(names);
+        bb_free(names);
         return;
     }
     bool chosen[16] = { false };
@@ -349,7 +349,7 @@ static void connect_server(const char *shown, const char *spec_prefix, bool atal
             }
         }
     }
-    free(names);
+    bb_free(names);
 }
 
 void chooser_afp_connect_found(int row)
