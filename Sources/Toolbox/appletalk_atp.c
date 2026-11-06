@@ -456,6 +456,7 @@ static int16_t atp_control(gaddr pb, bool async)
 {
     if (!async && at_sync_again(pb)) /* made again after giving up for a drain: the request goes on */
         return at_sync_wait(pb);
+    at_use(); /* .MPP open under it, as the system had it */
     int code = (int16_t)rd16(pb + CntrlParam_csCode_off);
     switch (code) {
     case openATPSkt: {

@@ -1142,6 +1142,7 @@ static int16_t mpp_control(gaddr pb, bool async)
 {
     if (!async && at_sync_again(pb)) /* made again after giving up for a drain */
         return at_sync_wait(pb);
+    at_use();
     switch ((int16_t)rd16(pb + CntrlParam_csCode_off)) {
     case attachPH: { /* a handler for an LLAP type other than DDP's */
         uint8_t t = rd8(pb + PB_SOCKET);
@@ -1241,6 +1242,18 @@ static int16_t mpp_control(gaddr pb, bool async)
 
 static int16_t mpp_open(gaddr pb);
 int16_t at_open(void) { return mpp_open(0); }
+
+/* The system opened .MPP at startup when AppleTalk was active, and
+ * programs of the time (Chatter) call the drivers without opening them:
+ * the first call opens it, as the driver it reached was already (once:
+ * a link that cannot be opened is not tried at every call). */
+static bool use_failed;
+
+void at_use(void)
+{
+    if (!opened && mode && !use_failed && at_open() != noErr)
+        use_failed = true;
+}
 
 static int16_t mpp_open(gaddr pb)
 {
@@ -1458,7 +1471,7 @@ const char *appletalk_set_active(bool on)
         if (mode == 3)
             et_close();
         fd = -1;
-        opened = selfsend = false;
+        opened = selfsend = use_failed = false;
         node = 0;
         nnames = 0;
         memset(sockets, 0, sizeof sockets);
@@ -1488,7 +1501,7 @@ void appletalk_reset(void)
         et_close();
     booted = true;
     fd = -1;
-    opened = selfsend = false;
+    opened = selfsend = use_failed = false;
     node = 0;
     nnames = nself = 0;
     memset(sockets, 0, sizeof sockets);

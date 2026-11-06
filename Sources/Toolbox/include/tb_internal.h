@@ -844,6 +844,7 @@ void adsp_reset(void);
 /* For ATP (appletalk_atp.c): DDP on the node appletalk.c runs. */
 typedef void (*at_handler)(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len);
 int16_t at_open(void); /* .MPP's open: the link and a node */
+void at_use(void);     /* a driver called: .MPP opened if it is not yet, as the system had it */
 bool at_opened(void);
 uint8_t at_node(void);
 int at_open_socket(int want, at_handler h);
