@@ -68,7 +68,7 @@ static struct {
  * that in a resumed process it goes on from where it stopped, as the
  * machine's clock does, and a retry due a second after the snapshot comes
  * a second after resuming. */
-static int64_t host_clock_offset;
+BB_HOST static int64_t host_clock_offset; /* (made again at each restore from saved.host_ns) */
 
 static uint64_t host_mono_ns(void)
 {

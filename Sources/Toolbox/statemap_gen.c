@@ -2413,7 +2413,6 @@ const hb_static hb_statics[] = {
     { "Toolbox/rave.c", "ctxs", 512, 10 },
     { "Toolbox/rave.c", "engines", 8, 0 },
     { "Toolbox/rave.c", "texs", 32768, 123 },
-    { "Toolbox/reattach.c", "host_clock_offset", 8, 12 },
     { "Toolbox/reattach.c", "saved", 32, 124 },
     { "Toolbox/rsrcmgr.c", "files", 4608, 125 },
     { "Toolbox/rsrcmgr.c", "guest_decompress.depth", 4, 0 },
@@ -2678,7 +2677,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1688;
+const unsigned hb_nstatics = 1687;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
