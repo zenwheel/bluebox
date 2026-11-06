@@ -1574,6 +1574,8 @@ void tb_ModalDialog(gaddr filter, gaddr itemp)
          * or those SetModalDialogEventMask asked for. */
         uint16_t mask = x >= 0 && extras[x].has_mask ? extras[x].event_mask : (uint16_t)(0xFFFF & ~0x0400);
         bool got = tb_WaitNextEvent((int16_t)mask, evt, 6, 0) != 0;
+        if (!got && drain_abandon()) /* draining: ModalDialog made again after resuming */
+            break;
         if (x >= 0 && extras[x].timeout_secs) {
             int what = (int16_t)rd16(evt);
             if (got && (what == mouseDown || what == keyDown || what == autoKey)) /* the user is there: start again */

@@ -156,10 +156,11 @@ bool drain_at_trap(cpu68k *c, uint16_t op)
 
 bool drain_abandon(void)
 {
-    if (atomic_load(&state) != MACHINE_DRAIN_GOING)
+    /* Only at the program's own level: a routine of its own the Toolbox
+     * called would see the call return as if it had been answered. */
+    if (atomic_load(&state) != MACHINE_DRAIN_GOING || trap_call_depth() != 0)
         return false;
-    if (trap_call_depth() == 0)
-        rewind_wanted = true;
+    rewind_wanted = true;
     return true;
 }
 

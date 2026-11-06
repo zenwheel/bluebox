@@ -73,6 +73,11 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     saved.wall = (int64_t)time(NULL);
     saved.layout = g_mem_layout;
     files_before_hibernate();
+    /* BLUEBOX_HIBERNATE_SCAN=1: what the snapshot holds of the host's memory
+     * (and any pointer the map misses), listed first. */
+    const char *scan = getenv("BLUEBOX_HIBERNATE_SCAN");
+    if (scan && *scan == '1')
+        hb_scan(stderr, 200, 0);
     hb_stats st;
     bool ok = hb_save_file_extra(path, record, record ? strlen(record) : 0, &st, err, errlen);
     if (ok && bytes)

@@ -263,6 +263,8 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
 void machine_script_add(uint64_t at, int kind, int a, int b, int c);
 /* A scripted screenshot at an instruction count (snap:F.png, headless). */
 void machine_script_add_snap(uint64_t at, const char *path);
+/* The scripted input dropped (a hibernated run's is its own). */
+void machine_script_clear(void);
 /* Tell the Event Manager a host is attached (it may then sleep for input). */
 void machine_attach_host(bool attached);
 

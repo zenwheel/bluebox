@@ -1036,6 +1036,8 @@ func runCommand(_ args: [String], resume: String? = nil) {
         let saved = hibernateRun(app: app, runArgs: args, to: hibernateTo, startedAt: start)
         machine_drain_end()
         if saved != nil, let more = thenRun {
+            // As a resumed run goes on: without this run's scripted input.
+            machine_script_clear()
             machine_set_instruction_limit(machine_instruction_count() + more)
             status = machine_run(more)
             thenRun = nil

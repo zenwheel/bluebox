@@ -318,6 +318,8 @@ static int16_t run_alert(int16_t id, int kind)
         int r = alert_fn(&a, alert_ctx);
         if (r > 0)
             result = (int16_t)r;
+        else if (drain_abandon()) /* the host closed it for a drain: shown again after resuming */
+            return result;
     } else {
         LOGF(LOG_UNIMPL, "alert %d: %s\n", id, a.message);
         result = headless_answer(id, &a, default_item);

@@ -74,6 +74,10 @@ void tb_Delay(int32_t n, uint32_t *ftp)
         machine_advance_ticks();
         uint32_t until = rd32(LM_Ticks) + (uint32_t)n;
         while ((int32_t)(rd32(LM_Ticks) - until) < 0 && !g_cpu->halted) {
+            if (drain_wanted()) {
+                drain_abandon(); /* at the program's level: Delay again after resuming */
+                break;
+            }
             struct timespec ts = { 0, 5000000 };
             nanosleep(&ts, NULL);
             machine_advance_ticks();
