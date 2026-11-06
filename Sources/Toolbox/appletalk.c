@@ -67,7 +67,7 @@ static uint64_t router_ticks;
 static uint16_t net;  /* this network's number: 0 on LocalTalk, from AARP and RTMP on EtherTalk */
 static char ifname[16]; /* the network interface for mode 2, or "" for the system's choice */
 BB_HOST static int fd = -1;
-static uint32_t sender;
+static bb_host_value32 sender; /* from the process's ID: made again after a resume */
 static uint8_t node;
 static bool opened, selfsend, booted;
 static int selfsend_holds; /* Open Transport's endpoints: always to ourselves too */
@@ -856,7 +856,7 @@ void appletalk_poll(void)
     if (polling || !opened || !g_cpu)
         return;
     /* at most once a millisecond: programs poll in tight loops */
-    static uint64_t last;
+    BB_HOST static uint64_t last; /* the host's clock */
     uint64_t t = now_ms();
     if (t == last && !nself)
         return;

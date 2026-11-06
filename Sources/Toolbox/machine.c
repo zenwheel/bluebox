@@ -56,7 +56,7 @@ static uint32_t input_timing[4] = { 30, 32, 16, 4 }; /* DoubleTime, CaretTime, K
 uint32_t mac_now(void);
 
 /* The date at boot: Time follows the machine's clock from it. */
-static uint32_t boot_time;
+static bb_host_value32 boot_time; /* the date at boot, by the host's clock: a resume moves it on */
 
 static uint16_t hilite_rgb[3] = { 0xCCCC, 0xCCCC, 0xFFFF };
 

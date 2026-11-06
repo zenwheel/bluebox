@@ -155,6 +155,23 @@ extension BlueBox {
             #expect(rd32(out) > 0)
         }
 
+        /// The host's own values (the date by the host's clock, which a
+        /// resume moves on, and the guest's Time from it) are left out of a
+        /// comparison with the host's pointers: two processes' snapshots
+        /// differ there by nature.  Without leaving them out they differ.
+        @Test func hostValuesAreLeftOutOfAComparison() {
+            _ = setUp()
+            _ = machine_run(100_000)
+            let a = save()
+            machine_set_time(rd32(UInt32(LM_Time)) + 7) // as a resume's date catching up
+            let b = save()
+            #expect(differences(a, b) == 0)
+            let all = a.withUnsafeBufferPointer { pa in
+                b.withUnsafeBufferPointer { pb in hb_compare(pa.baseAddress, pa.count, pb.baseAddress, pb.count, 0, nil, 0) }
+            }
+            #expect(all >= 2) // boot_time and the guest's Time
+        }
+
         /// A snapshot another build wrote is refused, and nothing changes.
         @Test func anotherBuildIsRefused() {
             let out = setUp()

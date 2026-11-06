@@ -8,7 +8,9 @@
 
 /* Fields of one kind at off + i*stride + j*stride2, i < count, j < count2.
  * kind: 'P' pointer, 'F' function pointer, 'U' a pointer in a union,
- * 'H' a library's handle, 'Y' a lock, 'D' a file descriptor. */
+ * 'H' a library's handle, 'Y' a lock, 'D' a file descriptor, 'X' and
+ * 'x' a value of the host's (8 and 4 bytes, bbstate.h), 'I' an integer
+ * as wide as a pointer. */
 typedef struct hb_run {
     uint32_t off;
     char kind;
