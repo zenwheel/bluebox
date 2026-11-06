@@ -538,10 +538,14 @@ void as_idle(void)
 }
 
 /* A volume with its session to the server live. */
-bool as_sessions_live(void)
+/* Resumed: each volume's session is opened again on its next use
+ * (afp_after_resume); its cache folder is the host's and is still there. */
+void appleshare_after_resume(void)
 {
     for (int i = 0; i < MAX_SHARES; i++)
-        if (shares[i].used && shares[i].s)
-            return true;
-    return false;
+        if (shares[i].used && shares[i].s) {
+            afp_after_resume(shares[i].s);
+            LOGF(LOG_IDLE, "resume: AppleShare: %s/%s is opened again on its next use\n", shares[i].server,
+                 shares[i].volume);
+        }
 }

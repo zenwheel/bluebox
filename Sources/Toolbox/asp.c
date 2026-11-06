@@ -269,6 +269,14 @@ void asp_tickle(asp_session *s)
 
 bool asp_alive(asp_session *s) { return s && s->open; }
 
+void asp_lost(asp_session *s)
+{
+    if (!s || !s->open)
+        return;
+    atp_host_send_once(s->wss, s->node, s->sss, user_bytes(CLOSE_SESS, s->sid, 0), NULL, 0);
+    s->open = s->writing = false;
+}
+
 void asp_close(asp_session *s)
 {
     if (!s)

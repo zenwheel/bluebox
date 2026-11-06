@@ -910,6 +910,12 @@ static int16_t queue_read(conn *c, gaddr buf, uint32_t want, bool async, gaddr c
         if (until > cap)
             until = cap;
         while (r.have < r.want && ctb_now_ms() < until && (c->state == ST_OPEN || c->inlen)) {
+            /* Nothing read yet: at the program's level the wait gives up
+             * for a drain, and the call is made again. */
+            if (!r.have && drain_give_up()) {
+                *got = 0;
+                return cmNoErr;
+            }
             int fd = c->tool == T_TCP ? c->fd : serial_port_fd(c->port);
             struct pollfd pf = { fd, POLLIN, 0 };
             poll(&pf, fd >= 0 ? 1 : 0, 10);
@@ -1163,10 +1169,37 @@ void cm_reset_all(void)
 }
 
 /* A connection open, opening or listening (CMNew alone opens none). */
-bool ctb_connections_open(void)
+/* Resumed (reattach.c): a TCP Tool connection is the old process's and
+ * is over (closed, as when the other end goes); one listening listens
+ * again on its port; one being opened times out at the next poll.  The
+ * serial and modem tools' connections are on the ports (serial.c), whose
+ * modem's call is over as well. */
+void ctb_after_resume(void)
+{
+    for (int i = 0; i < MAX_CONNS; i++) {
+        conn *c = &conns[i];
+        if (!c->used || c->tool != T_TCP)
+            continue;
+        c->fd = c->lfd = -1;
+        if (c->state == ST_OPEN || c->state == ST_INCOMING) {
+            c->state = ST_CLOSED;
+        } else if (c->state == ST_LISTENING) {
+            gaddr k = cfg(c);
+            int port = (int)rd32(k + C_LOCALPORT);
+            c->lfd = tcp_listen(port ? port : (int)rd32(k + C_TCPPORT));
+            if (c->lfd < 0)
+                c->open_until = 0;
+        } else if (c->state == ST_OPENING) {
+            c->open_until = 0; /* cmTimeOut at the next poll */
+        }
+    }
+}
+
+void ctb_close_sockets(void)
 {
     for (int i = 0; i < MAX_CONNS; i++)
-        if (conns[i].used && conns[i].state != ST_CLOSED)
-            return true;
-    return false;
+        if (conns[i].used) {
+            close_fd(&conns[i].fd);
+            close_fd(&conns[i].lfd);
+        }
 }

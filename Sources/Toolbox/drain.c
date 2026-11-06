@@ -240,6 +240,8 @@ bool drain_abandon(void)
     return true;
 }
 
+bool drain_give_up(void) { return drain_wanted() && drain_abandon(); }
+
 bool drain_at_native(ppc_cpu *c, gaddr at, bool idle, const char *name)
 {
     if (!idle || atomic_load(&state) != MACHINE_DRAIN_GOING || !drain_program_level())
@@ -271,7 +273,7 @@ bool drain_take_rewind_ppc(ppc_cpu *c, const char *name)
  * never where the program would take the closing as its answer. */
 bool machine_drain_abandonable(void) { return atomic_load(&state) == MACHINE_DRAIN_GOING && abandon_level(); }
 
-bool drain_take_rewind(cpu68k *c, uint16_t op)
+bool drain_take_rewind_named(cpu68k *c, const char *name)
 {
     if (!rewind_wanted)
         return false;
@@ -280,9 +282,11 @@ bool drain_take_rewind(cpu68k *c, uint16_t op)
         return false;
     c->stopped = true;
     stopped_here = true;
-    snprintf(stopped_at, sizeof stopped_at, "%s (abandoned)", trap_name(op));
+    snprintf(stopped_at, sizeof stopped_at, "%s (abandoned)", name);
     return true;
 }
+
+bool drain_take_rewind(cpu68k *c, uint16_t op) { return drain_take_rewind_named(c, trap_name(op)); }
 
 /* What a snapshot cannot carry: the reason, or NULL. */
 const char *machine_hibernate_blocker(void)

@@ -28,6 +28,10 @@ void afp_close(afp_session *s);
  * again by the next call anyway (its volumes too, by name), but not its
  * open forks, which no call here leaves open. */
 void afp_idle(afp_session *s);
+/* After resuming: the session's connection is the old process's; it is
+ * opened again, logged in and its volumes opened again, on its next call,
+ * as for a server's restart. */
+void afp_after_resume(afp_session *s);
 
 /* The server's volumes (MacRoman Pascal-less names, NUL-terminated). */
 int afp_volumes(afp_session *s, char (**names)[28], int *count);

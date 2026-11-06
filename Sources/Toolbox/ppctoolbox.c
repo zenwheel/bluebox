@@ -104,6 +104,8 @@ typedef struct {
 } completion;
 static completion done[MAX_WAIT];
 static int ndone;
+/* A synchronous PPCStart that gave up waiting for a drain (waitable). */
+static gaddr gave_start;
 
 static const char *folder(void)
 {
@@ -306,6 +308,39 @@ static int list_ports(port_entry *out, int max)
     return n;
 }
 
+/* The port's socket ("p<pid>.<refnum>"), its name beside it, and the
+ * thread that takes its connections; false if it could not be made. */
+static bool listen_port(int i)
+{
+    port *p = &ports[i];
+    struct sockaddr_un sa = { .sun_family = AF_UNIX };
+    snprintf(p->path, sizeof p->path, "%s/p%d.%u", folder(), (int)getpid(), p->refnum);
+    if (strlen(p->path) >= sizeof sa.sun_path)
+        return false;
+    strcpy(sa.sun_path, p->path);
+    unlink(p->path);
+    p->sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (p->sock < 0 || bind(p->sock, (struct sockaddr *)&sa, sizeof sa) != 0 || listen(p->sock, 8) != 0) {
+        if (p->sock >= 0)
+            close(p->sock);
+        p->sock = -1;
+        return false;
+    }
+    char npath[620];
+    snprintf(npath, sizeof npath, "%s.name", p->path);
+    FILE *f = fopen(npath, "wb");
+    if (f) {
+        fwrite(p->name, 1, NAME, f);
+        fclose(f);
+    }
+    signal(SIGPIPE, SIG_IGN);
+    p->used = true;
+    pthread_t t;
+    pthread_create(&t, NULL, listener, (void *)(intptr_t)i);
+    pthread_detach(t);
+    return true;
+}
+
 static int16_t open_port(gaddr pb)
 {
     gaddr namep = rd32(pb + P_NAME);
@@ -331,30 +366,8 @@ static int16_t open_port(gaddr pb)
     memset(p, 0, sizeof *p);
     p->refnum = next_port++;
     memcpy(p->name, name, NAME);
-    struct sockaddr_un sa = { .sun_family = AF_UNIX };
-    snprintf(p->path, sizeof p->path, "%s/p%d.%u", folder(), (int)getpid(), p->refnum);
-    if (strlen(p->path) >= sizeof sa.sun_path)
+    if (!listen_port(i))
         return noPortErr;
-    strcpy(sa.sun_path, p->path);
-    unlink(p->path);
-    p->sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (p->sock < 0 || bind(p->sock, (struct sockaddr *)&sa, sizeof sa) != 0 || listen(p->sock, 8) != 0) {
-        if (p->sock >= 0)
-            close(p->sock);
-        return noPortErr;
-    }
-    char npath[620];
-    snprintf(npath, sizeof npath, "%s.name", p->path);
-    FILE *f = fopen(npath, "wb");
-    if (f) {
-        fwrite(name, 1, NAME, f);
-        fclose(f);
-    }
-    signal(SIGPIPE, SIG_IGN);
-    p->used = true;
-    pthread_t t;
-    pthread_create(&t, NULL, listener, (void *)(intptr_t)i);
-    pthread_detach(t);
     wr16(pb + P_PORT, p->refnum);
     wr8(pb + P_REGISTERED, 0); /* not on the network */
     return noErr;
@@ -649,6 +662,14 @@ static int16_t waitable(gaddr pb, wait_kind kind, bool async)
         return ioInProgress;
     }
     while ((r = try_wait(&w)) == ioInProgress && g_cpu && !g_cpu->halted) {
+        /* At the program's level the wait gives up for a drain, as Delay
+         * does, and the call is made again when the machine goes on; a
+         * PPCStart made again waits for the session it asked for. */
+        if (drain_give_up()) {
+            if (kind == W_START)
+                gave_start = pb;
+            return ioInProgress;
+        }
         usleep(1000);
         ppc_toolbox_poll(); /* this run's own other calls */
         machine_advance_ticks();
@@ -664,6 +685,11 @@ static int16_t start(gaddr pb, bool async)
 {
     if (!port_of(rd16(pb + P_PORT)))
         return noPortErr;
+    if (!async && pb == gave_start) { /* made again after giving up for a drain */
+        gave_start = 0;
+        if (session_of(rd32(pb + P_SESS)))
+            return waitable(pb, W_START, false);
+    }
     gaddr namep = rd32(pb + P_NAME), loc = rd32(pb + P_LOCATION);
     if (!namep)
         return badPortNameErr;
@@ -878,14 +904,49 @@ int16_t tb_StartSecureSession(gaddr pb, gaddr userName, int8_t useDefault, int8_
     return ppctb_call(2, pb, false);
 }
 
-/* A port open, or a session. */
-bool ppc_toolbox_open(void)
+/* ---------------------------------------------------------------------- */
+/* Resuming (reattach.c) */
+
+/* The sockets closed, as when the process ends (the tests). */
+void ppc_toolbox_close_sockets(void)
 {
+    pthread_mutex_lock(&lock);
     for (int i = 0; i < MAX_PORTS; i++)
-        if (ports[i].used)
-            return true;
+        if (ports[i].used && ports[i].sock >= 0) {
+            shutdown(ports[i].sock, SHUT_RDWR);
+            close(ports[i].sock);
+            for (int k = 0; k < ports[i].npending; k++)
+                close(ports[i].pending[k]);
+        }
     for (int i = 0; i < MAX_SESSIONS; i++)
-        if (sessions[i].used)
-            return true;
-    return false;
+        if (sessions[i].used && sessions[i].fd >= 0)
+            close(sessions[i].fd);
+    pthread_mutex_unlock(&lock);
+}
+
+/* The sockets are the old process's (forgotten, never closed).  Each port
+ * listens again under this process's name for it, a PPCInform waiting on
+ * it waits on; a session is over: the calls waiting on it end with
+ * sessClosedErr at the next poll, and its next calls find it closed. */
+void ppc_toolbox_after_resume(void)
+{
+    for (int i = 0; i < MAX_SESSIONS; i++) {
+        session *s = &sessions[i];
+        if (!s->used)
+            continue;
+        s->fd = -1;
+        s->closed = true;
+        fail_waits(0, s->refnum, sessClosedErr);
+    }
+    for (int i = 0; i < MAX_PORTS; i++) {
+        port *p = &ports[i];
+        if (!p->used)
+            continue;
+        p->sock = -1;
+        p->npending = 0;
+        if (!listen_port(i)) {
+            LOGF(LOG_IDLE, "resume: the PPC Toolbox: port %u cannot listen again\n", p->refnum);
+            p->used = true; /* still the program's to close; nothing reaches it */
+        }
+    }
 }

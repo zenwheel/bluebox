@@ -844,12 +844,21 @@ void adsp_reset(void);
 /* For ATP (appletalk_atp.c): DDP on the node appletalk.c runs. */
 typedef void (*at_handler)(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len);
 int16_t at_open(void); /* .MPP's open: the link and a node */
+void at_use(void);     /* a driver called: .MPP opened if it is not yet, as the system had it */
 bool at_opened(void);
 uint8_t at_node(void);
 int at_open_socket(int want, at_handler h);
 void at_close_socket(int s);
 void at_send_ddp(uint8_t dnode, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n);
 void at_complete(gaddr pb, int16_t r);
+/* A driver's synchronous wait for its call (ATP's, ADSP's): what the
+ * poll finishes it with; at the program's own level it gives up for a
+ * drain, and the call made again (at_sync_again: the same block) only
+ * waits for the one under way. */
+int16_t at_sync_wait(gaddr pb);
+bool at_sync_again(gaddr pb);
+void adsp_after_resume(void);
+const char *appletalk_unresumable(void);
 void atp_poll(void);
 /* For host code (ASP, asp.c): an NBP lookup, and ATP from C. */
 int16_t at_nbp_lookup(const char *obj, const char *type, const char *zone, int tries, int interval_ms,
@@ -1079,6 +1088,11 @@ int trap_call_depth(void);
 bool drain_wanted(void);
 bool drain_abandon(void);
 bool drain_take_rewind(cpu68k *c, uint16_t op);
+bool drain_take_rewind_named(cpu68k *c, const char *name);
+/* A Toolbox wait gives its call up for a drain (drain_abandon, when one
+ * is wanted): true when it should return at once, the call to be made
+ * again when the machine goes on, here or resumed. */
+bool drain_give_up(void);
 bool drain_at_trap(cpu68k *c, uint16_t op);
 bool drain_slice_point(void);
 bool drain_exits(void);
@@ -1119,6 +1133,29 @@ void cfm_after_resume(void);
 void sound_after_resume(void);
 void speech_after_resume(void);
 void sound_input_after_resume(void);
+/* The network after resuming (reattach.c, network_after_resume): each
+ * part's own; and for the tests, the end of the process that hibernated
+ * (network_close_sockets: its sockets closed, as when it ends). */
+void network_after_resume(void);
+void network_close_sockets(void);
+void appletalk_after_resume(void);
+void xpp_after_resume(void);
+void appleshare_after_resume(void);
+void mactcp_after_resume(void);
+void mactcp_close_sockets(void);
+void ot_before_hibernate(void);
+void ot_after_resume(void);
+void ot_close_sockets(void);
+void ppc_toolbox_after_resume(void);
+void ppc_toolbox_close_sockets(void);
+void serial_after_resume(void);
+void serial_close_sockets(void);
+void ctb_after_resume(void);
+void ctb_close_sockets(void);
+/* The host's monotonic clock, going on after resuming from where it
+ * stopped (the network's timers). */
+uint64_t host_clock_ns(void);
+uint64_t host_clock_ms(void);
 void sound_record_note(const char *what);
 void qt_movies_replay_sound(void);
 void speech_record_note(const char *what);
@@ -1126,13 +1163,7 @@ void speech_record_note(const char *what);
  * (reattach.c): the reason, or NULL. */
 const char *hibernate_io_blocker(void);
 const char *network_io_open(void);
-const char *serial_io_open(void);
 const char *print_job_open(void);
-bool mactcp_any_open(void);
-bool ot_endpoints_open(void);
-bool as_sessions_live(void);
-bool ctb_connections_open(void);
-bool ppc_toolbox_open(void);
 bool print_job_in_progress(void);
 bool qt_streams_open(void);
 /* Hibernating and resuming (reattach.c): the open files stamped as they
