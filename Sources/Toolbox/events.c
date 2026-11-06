@@ -127,7 +127,7 @@ void machine_attach_host(bool attached)
 typedef struct {
     uint64_t at;
     int kind; /* 0 key, 1 mouse, 2 menu, 3 key down, 4 key up, 5 screenshot (a: its path's index),
-               * 6 suspend or resume, 7 and 8 the scroll wheel */
+               * 6 suspend or resume, 7 and 8 the scroll wheel, 9 the host's Suspend for a: ms */
     int a, b, c;
 } script_step;
 
@@ -189,6 +189,7 @@ void events_script_pump(uint64_t now)
         case 6: machine_post_suspend_resume(s.a != 0, false); break; /* a: resume */
         case 7: machine_post_wheel(s.a, s.b, 0, s.c); break; /* the scroll wheel, c lines (up) */
         case 8: machine_post_wheel(s.a, s.b, s.c, 0); break; /* sideways, c columns (left) */
+        case 9: machine_pause_for((uint32_t)s.a); break; /* held still from the next pause point */
         }
     }
 }

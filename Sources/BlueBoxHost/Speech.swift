@@ -29,6 +29,10 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
     private var replaced: Set<ObjectIdentifier> = []
     /// The host voices channels were given by name (nil: the system voice).
     private var hostVoices: [Int32: NSSpeechSynthesizer.VoiceName?] = [:]
+    /// Channels the program paused (PauseSpeechAt), and those the host's
+    /// Suspend paused, which its Resume continues.
+    private var programPaused: Set<Int32> = []
+    private var suspendPaused: Set<Int32> = []
 
     /// AVSpeechSynthesizer instead (--speech avspeech, or no NSSpeechSynthesizer voices):
     /// decided when the program first speaks, as listing the voices takes a
@@ -122,17 +126,35 @@ public final class ClassicSpeech: NSObject, NSSpeechSynthesizerDelegate, @unchec
                 s.stopSpeaking()
             }
         case Int(MACHINE_SPEECH_PAUSE):
+            programPaused.insert(channel)
             synths[channel]?.pauseSpeaking(at: .immediateBoundary)
         case Int(MACHINE_SPEECH_CONTINUE):
+            programPaused.remove(channel)
             synths[channel]?.continueSpeaking()
         case Int(MACHINE_SPEECH_DISPOSE):
             if let s = synths.removeValue(forKey: channel) {
                 s.stopSpeaking()
                 channelOf[ObjectIdentifier(s)] = nil
                 hostVoices[channel] = nil
+                programPaused.remove(channel)
+                suspendPaused.remove(channel)
             }
         default:
             break
+        }
+    }
+
+    /// Hold the voices still while the program is suspended, and go on.
+    @MainActor public func setSuspended(_ on: Bool) {
+        if useAV { av.setSuspended(on) }
+        if on {
+            for (channel, s) in synths where s.isSpeaking && !programPaused.contains(channel) {
+                s.pauseSpeaking(at: .immediateBoundary)
+                suspendPaused.insert(channel)
+            }
+        } else {
+            for channel in suspendPaused { synths[channel]?.continueSpeaking() }
+            suspendPaused = []
         }
     }
 
@@ -244,6 +266,20 @@ final class AVSpeech: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable
         }
         flush(u.count)
         return out
+    }
+
+    private var suspendPaused: [AVSpeechSynthesizer] = []
+
+    @MainActor func setSuspended(_ on: Bool) {
+        if on {
+            for s in synths.values where s.isSpeaking && !s.isPaused {
+                s.pauseSpeaking(at: .immediate)
+                suspendPaused.append(s)
+            }
+        } else {
+            suspendPaused.forEach { $0.continueSpeaking() }
+            suspendPaused = []
+        }
     }
 
     @MainActor func perform(op: Int, channel: Int32, text: String?, voice name: String?, hostVoice: String?,

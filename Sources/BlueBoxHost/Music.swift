@@ -18,6 +18,15 @@ public final class ClassicMusic: @unchecked Sendable {
     private var synths: [Int32: AVAudioUnitMIDIInstrument] = [:]
     private var generation: [Int32: Int] = [:]
 
+    /// Hold the music still while the program is suspended (its notes
+    /// sound on when it goes on), and go on.
+    public func setSuspended(_ on: Bool) {
+        queue.async {
+            guard !self.synths.isEmpty else { return }
+            if on { self.engine.pause() } else if !self.engine.isRunning { try? self.engine.start() }
+        }
+    }
+
     public func install() {
         machine_set_midi_handler({ id, events, n, _ in
             let list = (0..<Int(n)).compactMap { events?[$0] }

@@ -124,17 +124,18 @@ final class MacWindowView: NSView, MacScreenView {
     override var wantsUpdateLayer: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: CursorSync.shared.cursor) }
 
+    // A suspended program takes no drops.
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        FileDrops.send(Int32(MACHINE_DRAG_ENTER), sender, at: mac(sender))
+        Suspender.shared.suspended ? [] : FileDrops.send(Int32(MACHINE_DRAG_ENTER), sender, at: mac(sender))
     }
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        FileDrops.send(Int32(MACHINE_DRAG_MOVE), sender, at: mac(sender))
+        Suspender.shared.suspended ? [] : FileDrops.send(Int32(MACHINE_DRAG_MOVE), sender, at: mac(sender))
     }
     override func draggingExited(_ sender: NSDraggingInfo?) {
-        if let sender { _ = FileDrops.send(Int32(MACHINE_DRAG_LEAVE), sender, at: mac(sender)) }
+        if let sender, !Suspender.shared.suspended { _ = FileDrops.send(Int32(MACHINE_DRAG_LEAVE), sender, at: mac(sender)) }
     }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        FileDrops.send(Int32(MACHINE_DRAG_DROP), sender, at: mac(sender)) != []
+        !Suspender.shared.suspended && FileDrops.send(Int32(MACHINE_DRAG_DROP), sender, at: mac(sender)) != []
     }
 
     /// A drag's point on the Mac screen.
@@ -396,6 +397,8 @@ final class TransientView: NSView {
             NSApp.activate(ignoringOtherApps: true)
         }
         installKeyMonitor()
+        Suspender.shared.changed = { [weak self] on in self?.showSuspended(on) }
+        Suspender.shared.listen()
         let script = self.script
         Thread.detachNewThread {
             while !machine_halted() { _ = machine_run(1_000_000) }
@@ -423,6 +426,7 @@ final class TransientView: NSView {
             NSApp.terminate(nil)
             return
         }
+        if Suspender.shared.suspended { return } // the machine still: nothing to show or send
         updateCapture()
         let mouse = NSEvent.mouseLocation
         if !captured && mouse != lastMouse {
@@ -620,6 +624,8 @@ final class TransientView: NSView {
     }
 
     var openMenus = 0
+    /// Whether the open menus are a classic menu session (not while suspended).
+    var menusTrack = true
     var applyingFrame = false
 
     // MARK: Native window frames
@@ -629,7 +635,7 @@ final class TransientView: NSView {
     // host's answer, so its own code moves, sizes and closes the window.
 
     private func action(_ window: NSWindow, _ kind: Int32, _ a: Int32, _ b: Int32) {
-        guard let w = window as? MacWindow, w.native else { return }
+        guard let w = window as? MacWindow, w.native, !Suspender.shared.suspended else { return }
         // Where the click lands matters to some apps (a grow click inside the
         // grow box); use the window's current Mac position.
         guard let view = w.contentView as? MacWindowView else { return }
@@ -740,16 +746,12 @@ final class TransientView: NSView {
             for ni in hostItems(&m) { target.addItem(ni) }
         }
         if appMenu.numberOfItems > 0 { appMenu.addItem(.separator()) }
-        // Quit asks the classic app to quit; with Option held, Force Quit
-        // ends it at once.  (Command keys themselves go to the app.)
-        let quit = NSMenuItem(title: "Quit \(title)", action: #selector(quitApp(_:)), keyEquivalent: "q")
-        quit.target = self
-        appMenu.addItem(quit)
-        let force = NSMenuItem(title: "Force Quit \(title)", action: #selector(NSApplication.terminate(_:)),
-                               keyEquivalent: "q")
-        force.keyEquivalentModifierMask = [.command, .option]
-        force.isAlternate = true
-        appMenu.addItem(force)
+        // Hide, Hide Others and Show All; Suspend, and Quit, which asks the
+        // classic app to quit; with Option held Suspend, with Control-Option
+        // Force Quit, which ends it at once.  (Command keys themselves go to
+        // the app, Command-H and Command-Q too: the key monitor keeps the
+        // host's.)
+        Suspender.shared.applicationMenuItems(title: title).forEach { appMenu.addItem($0) }
         NSApp.mainMenu = bar
     }
 
@@ -760,7 +762,14 @@ final class TransientView: NSView {
     // which waits until the host menu closes.
 
     func menuWillOpen(_ menu: NSMenu) {
+        // A suspended program's menus are only looked at: no click in its
+        // menu bar for it to find when it goes on, and its items dimmed.
+        if openMenus == 0 { menusTrack = !Suspender.shared.suspended }
         openMenus += 1
+        guard menusTrack else {
+            for item in menu.items where item.representedObject is [Int] { item.isEnabled = false }
+            return
+        }
         machine_menu_tracking_begin() // the first menu starts the session; later ones just wait for it
         refreshItems(of: menu)
     }
@@ -776,7 +785,7 @@ final class TransientView: NSView {
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 self.openMenus = max(0, self.openMenus - 1)
-                if self.openMenus == 0 { machine_menu_tracking_end() }
+                if self.openMenus == 0 && self.menusTrack { machine_menu_tracking_end() }
             }
         }
     }
@@ -800,8 +809,6 @@ final class TransientView: NSView {
         }
     }
 
-    @objc func quitApp(_ sender: NSMenuItem) { machine_request_quit() }
-
     @objc func chooseMenu(_ sender: NSMenuItem) {
         guard let pair = sender.representedObject as? [Int], pair.count == 2 else { return }
         machine_choose_menu(Int16(pair[0]), Int16(pair[1]))
@@ -814,12 +821,16 @@ final class TransientView: NSView {
             let forClassic = MainActor.assumeIsolated { () -> Bool in
                 // Native panels and alerts (Standard File, Alert) keep their keys.
                 if let w = event.window ?? NSApp.keyWindow, !(w is MacWindow) { return false }
-                // Command-Option-Q is the host's Force Quit, for a program
-                // that ignores Command-Q (which it gets, as on a Mac).  The
-                // menus leave command keys to this monitor, so it acts here.
-                if event.type == .keyDown, event.modifierFlags.contains([.command, .option]),
-                   event.charactersIgnoringModifiers == "q" {
-                    NSApp.terminate(nil)
+                // Command-Option-Q is the host's Suspend (Resume) and
+                // Control-Option-Command-Q its Force Quit, for a program that
+                // ignores Command-Q (which it gets, as on a Mac).  The menus
+                // leave command keys to this monitor, so it acts here.  A
+                // suspended program gets no keys: Command-Q quits it.
+                let suspended = Suspender.shared.suspended
+                if event.type == .keyDown {
+                    let key = HostKey.classify(event.modifierFlags, event.charactersIgnoringModifiers, suspended: suspended)
+                    if Suspender.shared.handle(key) { return true }
+                } else if suspended {
                     return true
                 }
                 let mods = ScreenView.modifiers(event.modifierFlags)
@@ -851,6 +862,10 @@ func postScriptLive(_ script: [String]) {
         }
         if step.hasPrefix("snap:") {
             _ = machine_screenshot(String(step.dropFirst(5)))
+            continue
+        }
+        if step.hasPrefix("pause:"), let ms = UInt32(step.dropFirst(6)) {
+            machine_pause_for(ms)
             continue
         }
         if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {

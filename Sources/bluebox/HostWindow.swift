@@ -32,17 +32,18 @@ final class ScreenView: NSView, MacScreenView {
     override var acceptsFirstResponder: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: CursorSync.shared.cursor) }
 
+    // A suspended program takes no drops.
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        FileDrops.send(Int32(MACHINE_DRAG_ENTER), sender, at: mac(sender))
+        Suspender.shared.suspended ? [] : FileDrops.send(Int32(MACHINE_DRAG_ENTER), sender, at: mac(sender))
     }
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        FileDrops.send(Int32(MACHINE_DRAG_MOVE), sender, at: mac(sender))
+        Suspender.shared.suspended ? [] : FileDrops.send(Int32(MACHINE_DRAG_MOVE), sender, at: mac(sender))
     }
     override func draggingExited(_ sender: NSDraggingInfo?) {
-        if let sender { _ = FileDrops.send(Int32(MACHINE_DRAG_LEAVE), sender, at: mac(sender)) }
+        if let sender, !Suspender.shared.suspended { _ = FileDrops.send(Int32(MACHINE_DRAG_LEAVE), sender, at: mac(sender)) }
     }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        FileDrops.send(Int32(MACHINE_DRAG_DROP), sender, at: mac(sender)) != []
+        !Suspender.shared.suspended && FileDrops.send(Int32(MACHINE_DRAG_DROP), sender, at: mac(sender)) != []
     }
 
     /// A drag's point on the Mac screen.
@@ -63,6 +64,10 @@ final class ScreenView: NSView, MacScreenView {
         registerForDraggedTypes(FileDrops.types)
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
+                if Suspender.shared.suspended { // the machine still: nothing to show, the mouse let go
+                    self?.setCaptured(false)
+                    return
+                }
                 self?.refreshIfChanged()
                 self?.updateCapture()
                 CursorSync.shared.tick()
@@ -195,6 +200,7 @@ final class ScreenView: NSView, MacScreenView {
     }
 
     private func post(_ event: NSEvent, button: Int32) {
+        guard !Suspender.shared.suspended else { return }
         if captured { /* the pointer is still: the button only, where the Mac's mouse is */
             guard button >= 0 else { return }
             var x: Int32 = 0, y: Int32 = 0, relative = false
@@ -261,15 +267,21 @@ final class ScreenView: NSView, MacScreenView {
     }
 
     override func keyDown(with event: NSEvent) {
+        let key = HostKey.classify(event.modifierFlags, event.charactersIgnoringModifiers,
+                                   suspended: Suspender.shared.suspended)
+        if Suspender.shared.handle(key) { return }
         machine_post_key(Self.charCode(event), Int32(event.keyCode), Self.modifiers(event.modifierFlags), 1,
                          event.isARepeat ? 1 : 0)
     }
 
     override func keyUp(with event: NSEvent) {
+        guard !Suspender.shared.suspended else { return }
         machine_post_key(Self.charCode(event), Int32(event.keyCode), Self.modifiers(event.modifierFlags), 0, 0)
     }
 
-    override func flagsChanged(with event: NSEvent) { Self.postModifier(event) }
+    override func flagsChanged(with event: NSEvent) {
+        if !Suspender.shared.suspended { Self.postModifier(event) }
+    }
 
     /// A modifier key pressed or released (flagsChanged says only that its
     /// state changed): down while its flag is set.  The right-hand keys are
@@ -289,10 +301,10 @@ final class ScreenView: NSView, MacScreenView {
         // Command-Q too, the keystroke a Mac delivered, which a program's
         // MenuKey turns into its Quit item and a Director projector (Total
         // Distortion) quits on itself; the Quit Apple Event the host menu's
-        // item sends went unread.  Command-Option-Q is the host's Force
-        // Quit, for a program that ignores it.
-        if event.modifierFlags.contains(.command)
-            && !(event.charactersIgnoringModifiers == "q" && event.modifierFlags.contains(.option)) {
+        // item sends went unread.  Command-Option-Q is the host's Suspend
+        // and Control-Option-Command-Q its Force Quit, for a program that
+        // ignores Command-Q; keyDown keeps those.
+        if event.modifierFlags.contains(.command) {
             keyDown(with: event)
             return true
         }
@@ -394,7 +406,9 @@ struct LaunchEvents {
                           andEventID: fourCCValue("dosc"))
     }
 
-    @objc func quit(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) { machine_request_quit() }
+    @objc func quit(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        Suspender.shared.quit() // a suspended program is resumed first, to quit
+    }
 
     /// Launched to print, the program gets Print Documents and then Quit,
     /// as from the System 7 Finder.
@@ -618,6 +632,12 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeFirstResponder(view)
         NSApp.activate(ignoringOtherApps: true)
         DragOut.shared.refresh = { [weak view] in view?.refreshIfChanged() }
+        let title = self.title
+        Suspender.shared.changed = { [weak view] on in
+            view?.showSuspended(on)
+            Suspender.shared.retitle(NSApp.mainMenu, title: title)
+        }
+        Suspender.shared.listen()
 
         // Run the machine off the main thread.
         Thread.detachNewThread {
@@ -627,8 +647,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    @objc func quitApp(_ sender: NSMenuItem) { machine_request_quit() }
-
+    /// A suspended program's window stays (closing it ends the program).
+    func windowShouldClose(_ sender: NSWindow) -> Bool { MainActor.assumeIsolated { !Suspender.shared.suspended } }
     func windowWillClose(_ notification: Notification) { NSApp.terminate(nil) }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
@@ -657,19 +677,16 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
-    // Minimal app menu: Quit, chosen with the mouse (Command-Q itself goes
-    // to the app as a keystroke), asks the app to quit; Option shows Force Quit.
+    // Minimal app menu: Hide, Hide Others and Show All; Suspend; and Quit,
+    // which chosen with the mouse (Command-Q itself goes to the app as a
+    // keystroke, as Command-H does) asks the app to quit; Option shows
+    // Suspend, Control-Option Force Quit.
     let menu = NSMenu()
     let appItem = NSMenuItem()
     menu.addItem(appItem)
     let appMenu = NSMenu()
-    let quit = NSMenuItem(title: "Quit \(title)", action: #selector(HostDelegate.quitApp(_:)), keyEquivalent: "q")
-    quit.target = delegate
-    appMenu.addItem(quit)
-    let force = NSMenuItem(title: "Force Quit \(title)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-    force.keyEquivalentModifierMask = [.command, .option]
-    force.isAlternate = true
-    appMenu.addItem(force)
+    appMenu.autoenablesItems = false
+    Suspender.shared.applicationMenuItems(title: title).forEach { appMenu.addItem($0) }
     appItem.submenu = appMenu
     app.mainMenu = menu
     app.run()

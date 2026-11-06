@@ -10,7 +10,7 @@
 // In the background (bluebox run --background, and bundles made with
 // bluebox install --background) the program has no Dock icon and no menu
 // bar: a status item's menu has its menus' items, its desk accessories,
-// Open at Login and Quit.  The user's typing and clicking in other host
+// Open at Login, Suspend (Resume) and Quit.  The user's typing and clicking in other host
 // applications counts as activity, so code waiting for the Mac to be left
 // alone waits on.
 
@@ -113,7 +113,7 @@ extension RootlessHost {
 
     /// The program's own menus' items (not the Apple, File and Edit menus,
     /// which the host's items stand for), its desk accessories, then
-    /// Open at Login and Quit.
+    /// Open at Login, Suspend (Resume while suspended) and Quit.
     func syncStatusMenu(_ snapshot: [machine_menu], _ n: Int) {
         guard let menu = statusItem?.menu else { return }
         var menus = snapshot
@@ -147,9 +147,7 @@ extension RootlessHost {
             login.state = SMAppService.mainApp.status == .enabled ? .on : .off
             menu.addItem(login)
         }
-        let quit = NSMenuItem(title: "Quit \(title)", action: #selector(quitApp(_:)), keyEquivalent: "")
-        quit.target = self
-        menu.addItem(quit)
+        Suspender.shared.menuItems(title: title, quitKeys: false).forEach { menu.addItem($0) }
     }
 
     /// Only an application bundle can be a login item (a run from the

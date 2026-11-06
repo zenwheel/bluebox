@@ -923,6 +923,25 @@ bool machine_ae_reply_result(const uint8_t *reply, uint32_t len, char *text, siz
 /* Ask the app to quit (Quit Application event, or its own Quit command). */
 void machine_request_quit(void);
 
+/* Suspending the program (the host's Suspend command): the machine's
+ * thread stops at its next pause point and sleeps there until
+ * machine_unpause, with the machine's clock (Ticks, the Time Manager, VBL
+ * tasks, sound, the date) standing still from the moment of asking, so
+ * the program finds no jump when it goes on.  From any thread;
+ * machine_pause_for (the pause:N scripted step) ends by itself after ms.
+ * machine_pause_parked: the machine's thread is stopped;
+ * machine_wait_parked waits up to ms for it to be. */
+void machine_pause(void);
+void machine_unpause(void);
+void machine_pause_for(uint32_t ms);
+bool machine_paused(void);
+bool machine_pause_parked(void);
+bool machine_wait_parked(uint32_t ms);
+/* The machine's thread: stop here while suspended. */
+void machine_pause_point(void);
+/* A host monotonic time (ns) less the time spent suspended. */
+uint64_t machine_unpaused_ns(uint64_t now);
+
 /* Trap census for the current run. */
 typedef struct {
     uint16_t trap;
