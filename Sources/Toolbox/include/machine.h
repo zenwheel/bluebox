@@ -351,6 +351,10 @@ void machine_overlay_rgba(int x, int y, int w, int h, uint8_t *out);
  * on.  For a program run in the background. */
 void machine_note_user_activity(void);
 int machine_menus(machine_menu *out, int max);
+/* Whether the menu bar's menus (as last published) have an item whose key
+ * is Command and this character, in either case, enabled or not: the
+ * program's own Command-H, which MenuKey finds with Option held too. */
+bool machine_menu_bar_has_command_key(int ch);
 /* Deliver a choice made in the host's menu bar (item is 1-based). */
 void machine_choose_menu(int16_t menu_id, int16_t item);
 /* A host menu opened: the app adjusts its menus (waits briefly for that,

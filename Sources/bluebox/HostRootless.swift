@@ -749,8 +749,9 @@ final class TransientView: NSView {
         // Hide, Hide Others and Show All; Suspend, and Quit, which asks the
         // classic app to quit; with Option held Suspend, with Control-Option
         // Force Quit, which ends it at once.  (Command keys themselves go to
-        // the app, Command-H and Command-Q too: the key monitor keeps the
-        // host's.)
+        // the app, Command-Q too; the key monitor keeps the host's, and
+        // Command-H when the app has no Command-H item, as Hide's key then
+        // shows: this menu is made again when the app's menus change.)
         Suspender.shared.applicationMenuItems(title: title).forEach { appMenu.addItem($0) }
         NSApp.mainMenu = bar
     }

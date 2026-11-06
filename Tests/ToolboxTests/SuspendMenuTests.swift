@@ -3,6 +3,7 @@ import AppKit
 import BlueBoxHost
 import Foundation
 import Testing
+import Toolbox
 
 extension BlueBox {
     /// Suspend and Resume in a program's menus and keys, in the shell's
@@ -49,9 +50,10 @@ extension BlueBox {
         }
 
         /// Hide, Hide Others (Command-Option-H) and Show All, sent to the
-        /// application, then a separator before Suspend and Quit.
+        /// application, then a separator before Suspend and Quit.  Their keys
+        /// show when they hide: not when the program has a Command-H item.
         @Test @MainActor func hideItems() {
-            let m = HostHideItems.items(title: "Replace")
+            let m = HostHideItems.items(title: "Replace", programHasH: false)
             #expect(m.map(\.title) == ["Hide Replace", "Hide Others", "Show All", ""])
             #expect(m[0].keyEquivalent == "h" && m[0].keyEquivalentModifierMask == [.command])
             #expect(m[0].action == #selector(NSApplication.hide(_:)))
@@ -60,11 +62,63 @@ extension BlueBox {
             #expect(m[2].keyEquivalent == "" && m[2].action == #selector(NSApplication.unhideAllApplications(_:)))
             #expect(m[3].isSeparatorItem)
             #expect(m.allSatisfy { $0.target == nil && !$0.isAlternate }) // up the responder chain to NSApp
-            // Typed, Command-H is the program's; suspended, the host's.
+            let theirs = HostHideItems.items(title: "Replace", programHasH: true)
+            #expect(theirs[0].keyEquivalent == "" && theirs[1].keyEquivalent == "")
+            // A menu kept (the window mode's) follows when it opens.
+            let menu = NSMenu()
+            theirs.forEach { menu.addItem($0) }
+            HostHideItems.update(menu, programHasH: false)
+            #expect(menu.items[0].keyEquivalent == "h" && menu.items[1].keyEquivalent == "h")
+            #expect(menu.items[1].keyEquivalentModifierMask == [.command, .option])
+        }
+
+        /// Typed, Command-H and Command-Option-H hide, unless the program
+        /// has a Command-H item, which gets both (MenuKey ignores Option);
+        /// suspended, they always hide.
+        @Test func hideKeys() {
+            let none: (Character) -> Bool = { _ in false }, hasH: (Character) -> Bool = { $0 == "h" }
+            #expect(HostKey.classify([.command], "h", suspended: false, programHas: none) == .hide)
+            #expect(HostKey.classify([.command], "H", suspended: false, programHas: none) == .hide)
+            #expect(HostKey.classify([.command, .option], "h", suspended: false, programHas: none) == .hideOthers)
+            #expect(HostKey.classify([.command], "h", suspended: false, programHas: hasH) == .classic)
+            #expect(HostKey.classify([.command, .option], "h", suspended: false, programHas: hasH) == .classic)
+            #expect(HostKey.classify([.command], "h", suspended: true, programHas: hasH) == .hide)
+            #expect(HostKey.classify([.command, .option], "h", suspended: true, programHas: hasH) == .hideOthers)
+            // Other H chords are the program's.
+            #expect(HostKey.classify([.command, .shift], "h", suspended: false, programHas: none) == .classic)
+            #expect(HostKey.classify([.command, .control], "h", suspended: false, programHas: none) == .classic)
+            #expect(HostKey.classify([], "h", suspended: false, programHas: none) == .classic)
+        }
+
+        /// The program's menu bar asked as the key comes: a Command-H item
+        /// (Replace's) makes Command-H the program's, and once its key is
+        /// taken away (SetItemCmd) Command-H hides again.
+        @Test func programsCommandH() {
+            launchTestApp()
+            _ = initToolbox()
+            tb_ClearMenuBar()
+            let s = tb_NewPtr(256, false, true)
+            guestPString("Edit", at: s)
+            let m = tb_NewMenu(130, s)
+            guestPString("Find/F;Replace/H", at: s)
+            tb_AppendMenu(m, s)
+            tb_InsertMenu(m, 0)
+            tb_DrawMenuBar()
+            display_sync()
+            #expect(machine_menu_bar_has_command_key(Int32(UInt8(ascii: "h"))))
+            #expect(machine_menu_bar_has_command_key(Int32(UInt8(ascii: "H"))))
+            #expect(!machine_menu_bar_has_command_key(Int32(UInt8(ascii: "g"))))
             #expect(HostKey.classify([.command], "h", suspended: false) == .classic)
-            #expect(HostKey.classify([.command, .option], "h", suspended: false) == .classic)
-            #expect(HostKey.classify([.command], "h", suspended: true) == .hide)
-            #expect(HostKey.classify([.command, .option], "h", suspended: true) == .hideOthers)
+            tb_DisableItem(m, 2) // disabled, still the program's key
+            display_sync()
+            #expect(HostKey.classify([.command], "h", suspended: false) == .classic)
+            tb_SetItemCmd(m, 2, 0)
+            display_sync()
+            #expect(!machine_menu_bar_has_command_key(Int32(UInt8(ascii: "h"))))
+            #expect(HostKey.classify([.command], "h", suspended: false) == .hide)
+            #expect(HostKey.classify([.command, .option], "h", suspended: false) == .hideOthers)
+            tb_ClearMenuBar()
+            display_sync()
         }
 
         /// A background program's status item menu: Suspend and Quit, no keys.

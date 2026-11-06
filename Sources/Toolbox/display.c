@@ -217,6 +217,23 @@ int machine_menus(machine_menu *out, int max)
     return n;
 }
 
+bool machine_menu_bar_has_command_key(int ch)
+{
+    if (ch >= 'a' && ch <= 'z')
+        ch -= 32;
+    bool found = false;
+    pthread_mutex_lock(&lock);
+    for (int i = 0; i < nmenus_snap && !found; i++)
+        for (int k = 0; k < menus[i].nitems && !found; k++) {
+            const machine_menu_item *it = &menus[i].items[k];
+            int key = it->key >= 'a' && it->key <= 'z' ? it->key - 32 : it->key;
+            /* below 0x20 a submenu or a mark, not a key; 8 "no Command" */
+            found = key >= 0x20 && key == ch && !it->separator && !(it->modifiers & 8);
+        }
+    pthread_mutex_unlock(&lock);
+    return found;
+}
+
 /* The host's menu bar.  A choice is delivered through MenuSelect, after the
  * app has adjusted its menus.  While a host menu is open (tracking), the
  * app is given the menu-bar click right away, so it adjusts its menus

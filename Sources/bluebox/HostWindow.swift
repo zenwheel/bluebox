@@ -590,7 +590,7 @@ nonisolated(unsafe) var appIcon: NSImage?
 /// Set when the command line already sent the launch event.
 nonisolated(unsafe) var launchDocumentsSent = false
 
-final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     let title: String
     var window: NSWindow!
     var launchEvents = LaunchEvents()
@@ -650,6 +650,9 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool { MainActor.assumeIsolated { !Suspender.shared.suspended } }
     func windowWillClose(_ notification: Notification) { NSApp.terminate(nil) }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// The application menu opened: Hide's keys as the program's menus now are.
+    func menuNeedsUpdate(_ menu: NSMenu) { MainActor.assumeIsolated { HostHideItems.update(menu) } }
 }
 
 /// Show the classic screen in a window until the app quits.  Never returns.
@@ -676,15 +679,17 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
-    // Minimal app menu: Hide, Hide Others and Show All; Suspend; and Quit,
-    // which chosen with the mouse (Command-Q itself goes to the app as a
-    // keystroke, as Command-H does) asks the app to quit; Option shows
-    // Suspend, Control-Option Force Quit.
+    // Minimal app menu: Hide, Hide Others and Show All (Command-H hides
+    // unless the program has a Command-H item); Suspend; and Quit, which
+    // chosen with the mouse (Command-Q itself goes to the app as a
+    // keystroke) asks the app to quit; Option shows Suspend, Control-Option
+    // Force Quit.
     let menu = NSMenu()
     let appItem = NSMenuItem()
     menu.addItem(appItem)
     let appMenu = NSMenu()
     appMenu.autoenablesItems = false
+    appMenu.delegate = delegate
     Suspender.shared.applicationMenuItems(title: title).forEach { appMenu.addItem($0) }
     appItem.submenu = appMenu
     app.mainMenu = menu
