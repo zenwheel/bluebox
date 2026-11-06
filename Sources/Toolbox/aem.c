@@ -1445,6 +1445,14 @@ static void forget_suspended(void)
     suspending = 0;
 }
 
+/* Resumed in another process (reattach.c): a suspended event's sender
+ * waited in the process that hibernated; none is owed a reply now. */
+void aem_suspended_after_resume(void)
+{
+    for (int i = 0; i < nsuspended; i++)
+        suspended[i].reply = NULL, suspended[i].ctx = NULL;
+}
+
 /* The flattened form of a descriptor's data, for another process: as we
  * keep it, with files as host paths ('bbfp', where FSSpecs and aliases
  * mean nothing to the other side).  malloc'd. */

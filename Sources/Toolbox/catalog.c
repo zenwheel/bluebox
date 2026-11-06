@@ -17,8 +17,8 @@
 #include "catalog.h"
 
 BB_HOST static sqlite3 *db;
-static bool tried;
-static char db_path[4096];
+BB_HOST static bool tried; /* with db: this process's */
+BB_HOST static char db_path[4096];
 
 void catalog_set_path(const char *path)
 {

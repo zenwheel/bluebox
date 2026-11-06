@@ -153,14 +153,19 @@ qt_vdec *qt_vdec_new(const qt_video_format *f)
 
 bool qt_vdec_decode(qt_vdec *d, const uint8_t *data, size_t len, uint8_t *frame)
 {
-    return d && d->codec->decode(d->state, &d->format, d->palette, data, len, frame);
+    /* Every codec's state is something once open: none is a decoder a
+     * snapshot could not carry (the host's), made again in this process. */
+    if (d && !d->state)
+        d->state = d->codec->open(&d->format);
+    return d && d->state && d->codec->decode(d->state, &d->format, d->palette, data, len, frame);
 }
 
 void qt_vdec_free(qt_vdec *d)
 {
     if (!d)
         return;
-    d->codec->close(d->state);
+    if (d->state)
+        d->codec->close(d->state);
     bb_free(d);
 }
 

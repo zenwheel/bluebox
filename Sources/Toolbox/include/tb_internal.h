@@ -1103,6 +1103,16 @@ void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away);
 void osutil_clock_back(int64_t secs);
 void hibernate_reattach_host(void);
 void aem_after_resume(void);
+void aem_suspended_after_resume(void);
+void display_after_resume(void);
+const char *host_media_open(void);
+bool hostgl_any_live(void);
+bool rave_any_context(void);
+bool q3_any_view(void);
+bool qt_host_movies_open(void);
+bool speech_any_busy(void);
+bool sound_input_capturing(void);
+bool drivevol_any_mounted(void);
 void trap_ctx_load(const trap_ctx *t);
 
 #define TRAP_DEPTH 32

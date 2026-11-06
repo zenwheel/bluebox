@@ -29,7 +29,8 @@ typedef unsigned (*setup_cb)(void **opaque, char *chroma, unsigned *width, unsig
                              unsigned *lines);
 typedef void (*cleanup_cb)(void *opaque);
 
-static struct {
+/* libvlc, as this process loaded it: the host's. */
+BB_HOST static struct {
     libvlc_instance_t *(*new_)(int, const char *const *);
     libvlc_media_t *(*media_new_path)(libvlc_instance_t *, const char *);
     void (*media_add_option)(libvlc_media_t *, const char *);
@@ -48,8 +49,8 @@ static struct {
     void (*video_set_format_callbacks)(libvlc_media_player_t *, setup_cb, cleanup_cb);
 } vlc;
 
-static libvlc_instance_t *instance;
-static int load_state; /* 0 untried, 1 loaded, -1 unavailable */
+BB_HOST static libvlc_instance_t *instance;
+BB_HOST static int load_state; /* 0 untried, 1 loaded, -1 unavailable */
 
 enum { stateEnded = 6, stateError = 7 };
 

@@ -68,8 +68,8 @@ static as_obj *text_param(as_obj *v)
  * default button chosen.  Once they run out, the defaults again. */
 static bool scripted_answer(machine_script_dialog *d, int *button)
 {
-    static const char *next;
-    static bool started;
+    BB_HOST static const char *next; /* the run's environment */
+    BB_HOST static bool started;
     if (!started) {
         started = true;
         next = getenv("BLUEBOX_SCRIPT_ANSWERS");

@@ -551,7 +551,7 @@ uint32_t mac_now(void);
 /* A movie for a description (taken), from a file or not. */
 static movie *new_movie(qtm_movie *mv, const char *path)
 {
-    static bool registered;
+    BB_HOST static bool registered; /* this process's atexit */
     if (!registered) {
         atexit(remove_temp_files);
         registered = true;
@@ -3553,4 +3553,14 @@ bool machine_movie_speed(const char *path, machine_movie_speed_result *r, char *
     r->height = h;
     r->decode_ms = (double)(t1.tv_sec - t0.tv_sec) * 1000 + (double)(t1.tv_nsec - t0.tv_nsec) / 1e6;
     return true;
+}
+
+/* A movie the host plays (VLC, or from a temporary file this process
+ * deletes when it ends): what a hibernated program cannot take along yet. */
+bool qt_host_movies_open(void)
+{
+    for (int i = 0; i < MAX_MOVIES; i++)
+        if (movies[i].used && (movies[i].player || movies[i].temp_file))
+            return true;
+    return false;
 }

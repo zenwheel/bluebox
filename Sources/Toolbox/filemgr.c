@@ -1092,8 +1092,10 @@ void fm_init(const char *app_dir)
     if (!realpath(disk_path(), disk))
         snprintf(disk, sizeof disk, "%s", disk_path());
     snprintf(root_path, sizeof root_path, "%s", disk);
-    for (int i = 0; i < ngrants; i++)
+    for (int i = 0; i < ngrants; i++) {
         bb_free(grants[i].path);
+        grants[i].path = NULL;
+    }
     ngrants = 0;
     for (int i = 0; i < ndirs; i++) {
         bb_free(dirs[i]);

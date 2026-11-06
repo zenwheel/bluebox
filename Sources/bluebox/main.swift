@@ -186,6 +186,14 @@ func usage() -> Never {
                      pause:N suspends the program (as Suspend in its menu) for N ms
                      of real time; snap:F.png saves the screen; in a window, wait:N is N/1000 ms
     \(screensaverUsage)
+          --hibernate-at K  after K instructions, run on to the program's event loop, save
+                 it (Application Support/Blue Box/Hibernated, or --hibernate-to FILE) and end;
+                 --then N goes on N more instead of ending, --snapshot-end FILE saves the end
+      bluebox resume <snapshot> [run options]
+          Resume a hibernated program in this process, booted as the run that saved it
+          (the same build only)
+      bluebox hibernate-diff <snapshot> <snapshot> [N]
+          Where two snapshots differ (up to N places)
       bluebox chooser [run options]
           Open the Chooser on its own (it is also in every program's Apple menu):
           the AppleShare servers, LaserWriters and host printers to choose from,

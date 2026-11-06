@@ -410,7 +410,7 @@ static void unlink_all(void)
 
 void ppc_toolbox_reset(void)
 {
-    static bool registered;
+    BB_HOST static bool registered; /* this process's atexit */
     if (!registered) {
         atexit(unlink_all);
         registered = true;

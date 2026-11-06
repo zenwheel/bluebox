@@ -57,8 +57,10 @@ const char *hibernate_io_blocker(void)
     if (!what)
         what = print_job_open();
     if (!what)
+        what = host_media_open();
+    if (!what)
         return NULL;
-    snprintf(reason, sizeof reason, "the program has %s open", what);
+    snprintf(reason, sizeof reason, "the program %s", what);
     return reason;
 }
 
@@ -138,34 +140,57 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen)
 const char *network_io_open(void)
 {
     if (mactcp_any_open())
-        return "a MacTCP stream";
+        return "has a MacTCP stream open";
     if (ot_endpoints_open())
-        return "an Open Transport endpoint";
+        return "has an Open Transport endpoint open";
     if (appletalk_in_use())
-        return "AppleTalk sockets or names";
+        return "has AppleTalk sockets or names open";
     if (as_sessions_live())
-        return "an AppleShare volume connected";
+        return "has an AppleShare volume connected";
     if (ppc_toolbox_open())
-        return "a PPC Toolbox port";
+        return "has a PPC Toolbox port open";
     if (qt_streams_open())
-        return "a streamed movie";
+        return "has a streamed movie open";
     return NULL;
 }
 
 const char *serial_io_open(void)
 {
     if (serial_port_in_use(0) || serial_port_in_use(1))
-        return "a serial port";
+        return "has a serial port open";
     if (ctb_connections_open())
-        return "a Communications Toolbox connection";
+        return "has a Communications Toolbox connection open";
     return NULL;
 }
 
-const char *print_job_open(void) { return print_job_in_progress() ? "a print job" : NULL; }
+const char *print_job_open(void) { return print_job_in_progress() ? "is printing" : NULL; }
+
+/* What lives in the host's process (its objects, its threads, its temporary
+ * files) and is not reattached yet: refused too. */
+const char *host_media_open(void)
+{
+    if (hostgl_any_live())
+        return "has an OpenGL context open";
+    if (rave_any_context())
+        return "has a QuickDraw 3D RAVE context open";
+    if (q3_any_view())
+        return "has a QuickDraw 3D view open";
+    if (qt_host_movies_open())
+        return "has a QuickTime movie the host plays open";
+    if (speech_any_busy())
+        return "is speaking";
+    if (sound_input_capturing())
+        return "is recording sound";
+    if (drivevol_any_mounted())
+        return "has a disk image mounted";
+    return NULL;
+}
 
 /* ---- The host's memory ---- */
 
 void hibernate_reattach_host(void)
 {
     aem_after_resume();
+    aem_suspended_after_resume();
+    display_after_resume();
 }

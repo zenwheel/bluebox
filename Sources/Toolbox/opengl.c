@@ -80,8 +80,9 @@ struct hostgl_ctx {
 };
 
 static hostgl_ctx *cur;
+static int gl_live;
 BB_HOST static CGLPixelFormatObj pixel_format;
-static int available = -1;
+BB_HOST static int available = -1; /* with pixel_format: this process's */
 
 static CGLPixelFormatObj choose_format(bool accelerated)
 {
@@ -145,8 +146,13 @@ hostgl_ctx *hostgl_create(hostgl_ctx *share, int depth_bits, int stencil_bits)
     unuse();
     hostgl_resize(h, 1, 1);
     h->sized = false;
+    gl_live++;
     return h;
 }
+
+/* Contexts made and not destroyed: OpenGL's state is the host's, which a
+ * hibernated program cannot take along (yet). */
+bool hostgl_any_live(void) { return gl_live > 0; }
 
 static void free_arrays(arrays *a)
 {
@@ -163,6 +169,7 @@ void hostgl_destroy(hostgl_ctx *h)
 {
     if (!h)
         return;
+    gl_live--;
     if (cur == h)
         cur = NULL;
     use(h);

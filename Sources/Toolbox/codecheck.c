@@ -26,7 +26,7 @@ typedef struct {
 
 static code_region regions[MAX_CODE_REGIONS];
 static int nregions;
-static int every = -1;
+BB_HOST static int every = -1; /* the run's environment */
 
 static bool enabled(void)
 {

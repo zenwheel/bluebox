@@ -276,8 +276,8 @@ typedef struct {
     iconv_t cd;
 } open_cd;
 
-static open_cd cds[16];
-static unsigned ncds;
+BB_HOST static open_cd cds[16]; /* iconv handles: the host's */
+BB_HOST static unsigned ncds;
 
 static iconv_t cd_for(uint32_t enc, bool to_unicode)
 {
