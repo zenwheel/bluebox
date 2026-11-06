@@ -2735,7 +2735,7 @@ static as_obj *run(uint32_t base)
 
 /* BLUEBOX_AS_TRACE: each instruction to the log, with the stack's depth
  * and its top (for working out what a script does). */
-static int trace = -1;
+BB_HOST static int trace = -1; /* the run's environment */
 
 static void trace_op(frame *f)
 {

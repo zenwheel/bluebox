@@ -224,11 +224,13 @@ typedef struct {
     bool dirty;
     bool host_text; /* a plain host text file: LF/UTF-8 on disk, CR/MacRoman inside */
     bool claimed;   /* a slot a file system plug-in took (UTAllocateFCB), no file's */
+    bool gone;      /* its file changed or went while the program hibernated: I/O errors */
     char path[PATH_MAX];
     uint8_t *buf;
     uint32_t len, cap, pos;
     int32_t parid;
     uint8_t name[32];
+    int64_t disk[4]; /* the file as read or last written: size and mtime, its sidecar's (disk_stamp) */
 } fcb;
 
 static fcb fcbs[MAX_FCBS];
@@ -1090,8 +1092,10 @@ void fm_init(const char *app_dir)
     if (!realpath(disk_path(), disk))
         snprintf(disk, sizeof disk, "%s", disk_path());
     snprintf(root_path, sizeof root_path, "%s", disk);
-    for (int i = 0; i < ngrants; i++)
+    for (int i = 0; i < ngrants; i++) {
         bb_free(grants[i].path);
+        grants[i].path = NULL;
+    }
     ngrants = 0;
     for (int i = 0; i < ndirs; i++) {
         bb_free(dirs[i]);
@@ -1315,6 +1319,33 @@ static uint8_t *text_out(const uint8_t *b, size_t n, size_t *out_n)
 /* ---------------------------------------------------------------------- */
 /* Forks in memory */
 
+/* What a fork's file on disk is: the file's size and modification time (ns),
+ * and its AppleDouble sidecar's (zero when it has none).  A hibernated
+ * program's forks are checked against it when it resumes. */
+#if defined(__APPLE__)
+#define MTIME_NS(st) ((int64_t)(st).st_mtimespec.tv_sec * 1000000000 + (st).st_mtimespec.tv_nsec)
+#else
+#define MTIME_NS(st) ((int64_t)(st).st_mtim.tv_sec * 1000000000 + (st).st_mtim.tv_nsec)
+#endif
+
+void fm_disk_stamp(const char *path, int64_t out[4])
+{
+    struct stat st;
+    memset(out, 0, 4 * sizeof *out);
+    if (stat(path, &st) == 0) {
+        out[0] = (int64_t)st.st_size;
+        out[1] = MTIME_NS(st);
+    } else {
+        out[0] = -1;
+    }
+    char *side = appledouble_sidecar_path(path);
+    if (side && stat(side, &st) == 0) {
+        out[2] = (int64_t)st.st_size;
+        out[3] = MTIME_NS(st);
+    }
+    bb_free(side);
+}
+
 static int16_t load_fork(fcb *f)
 {
     mac_file mf;
@@ -1337,11 +1368,14 @@ static int16_t load_fork(fcb *f)
     f->len = (uint32_t)n;
     bb_free(conv);
     mac_file_free(&mf);
+    fm_disk_stamp(f->path, f->disk);
     return noErr;
 }
 
 static int16_t save_fork(fcb *f)
 {
+    if (f->gone)
+        return ioErrF; /* never over a file that changed while hibernated */
     if (!f->dirty)
         return noErr;
     mac_file mf;
@@ -1364,6 +1398,7 @@ static int16_t save_fork(fcb *f)
             ok = (fclose(fp) == 0) && ok;
         bb_free(out);
         f->dirty = false;
+        fm_disk_stamp(f->path, f->disk);
         return ok ? noErr : ioErrF;
     } else {
         bb_free(mf.data);
@@ -1377,8 +1412,15 @@ static int16_t save_fork(fcb *f)
     f->dirty = false;
     if (ok)
         as_file_changed(f->path); /* to the server, on an AppleShare volume */
+    fm_disk_stamp(f->path, f->disk);
+    /* The other forks of the file open in memory: the file changed under
+     * them only by this write. */
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && &fcbs[i] != f && !strcmp(fcbs[i].path, f->path))
+            memcpy(fcbs[i].disk, f->disk, sizeof f->disk);
     return ok ? noErr : ioErrF;
 }
+
 
 /* Open forks written out: what a program wrote is on disk by the time it
  * waits for its next event, as the Mac's disk cache had it there soon
@@ -1394,6 +1436,41 @@ void fm_flush_dirty(void)
     for (int i = 0; i < MAX_FCBS; i++)
         if (fcbs[i].used && fcbs[i].dirty)
             save_fork(&fcbs[i]);
+}
+
+/* Hibernating: forks still to write are written first, as at any wait;
+ * then each open file is as it is on disk now, what a resumed program's
+ * files are checked against. */
+void files_before_hibernate(void)
+{
+    any_dirty = true;
+    fm_flush_dirty();
+    for (int i = 0; i < MAX_FCBS; i++)
+        if (fcbs[i].used && !fcbs[i].claimed && fcbs[i].path[0] && !fcbs[i].gone)
+            fm_disk_stamp(fcbs[i].path, fcbs[i].disk);
+    rm_files_before_hibernate();
+}
+
+/* Resumed in another process: each open fork whose file changed or went
+ * meanwhile is gone, an I/O error on its next use, and closing it writes
+ * nothing.  Returns how many. */
+int files_after_resume(void)
+{
+    int n = 0;
+    for (int i = 0; i < MAX_FCBS; i++) {
+        fcb *f = &fcbs[i];
+        if (!f->used || f->claimed || !f->path[0])
+            continue;
+        int64_t now[4];
+        fm_disk_stamp(f->path, now);
+        if (memcmp(now, f->disk, sizeof now)) {
+            f->gone = true;
+            n++;
+            LOGF(LOG_IDLE, "resume: %s (%s fork) changed while hibernated: I/O errors from now on\n", f->path,
+                 f->rsrc ? "resource" : "data");
+        }
+    }
+    return n + rm_files_after_resume();
 }
 
 
@@ -1498,7 +1575,7 @@ int16_t fm_close_fork(int16_t rn)
     fcb *f = fcb_for(rn);
     if (!f)
         return rfNumErr;
-    int16_t err = save_fork(f);
+    int16_t err = f->gone ? noErr : save_fork(f);
     bb_free(f->buf);
     memset(f, 0, sizeof *f);
     fm_fcb_forget(rn);
@@ -1530,6 +1607,8 @@ static int16_t set_mark(fcb *f, int mode, int32_t off)
 static int16_t pb_read(gaddr pb, bool async)
 {
     fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     wr32(pb + IOParam_ioActCount_off, 0);
     if (!f)
         return rfNumErr;
@@ -1582,6 +1661,8 @@ static int16_t pb_write(gaddr pb, bool async)
     int16_t rn = (int16_t)rd16(pb + IOParam_ioRefNum_off);
     fcb *f = fcb_for(rn);
     bool view = !f && (f = fcb_readable(rn)) != NULL;
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     wr32(pb + IOParam_ioActCount_off, 0);
     if (!f)
         return rfNumErr;
@@ -1785,6 +1866,8 @@ int16_t fm_block_io(gaddr pb, bool write)
 int16_t tb_PBGetEOF(gaddr pb, bool async)
 {
     fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     if (!f)
         return rfNumErr;
     wr32(pb + IOParam_ioMisc_off, f->len);
@@ -1795,6 +1878,8 @@ static int16_t pb_set_eof(gaddr pb, bool async)
 {
     int16_t rn = (int16_t)rd16(pb + IOParam_ioRefNum_off);
     fcb *f = fcb_for(rn);
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     uint32_t n = rd32(pb + IOParam_ioMisc_off);
     if (!f && (f = fcb_readable(rn)) != NULL)
         return rsrc_view_write(rn, f, n, 0, 0, true);
@@ -1816,6 +1901,8 @@ static int16_t pb_set_eof(gaddr pb, bool async)
 int16_t tb_PBGetFPos(gaddr pb, bool async)
 {
     fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     if (!f)
         return rfNumErr;
     wr32(pb + IOParam_ioReqCount_off, 0);
@@ -1828,6 +1915,8 @@ int16_t tb_PBGetFPos(gaddr pb, bool async)
 static int16_t pb_set_fpos(gaddr pb, bool async)
 {
     fcb *f = fcb_readable((int16_t)rd16(pb + IOParam_ioRefNum_off));
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     if (!f)
         return rfNumErr;
     int16_t err = set_mark(f, rd16(pb + IOParam_ioPosMode_off), (int32_t)rd32(pb + IOParam_ioPosOffset_off));
@@ -4762,6 +4851,8 @@ int16_t fm_write_refnum(const char *host, bool rsrc)
 int16_t fm_flush_fork(int16_t refnum)
 {
     fcb *f = fcb_for(refnum);
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     if (f)
         return save_fork(f);
     const uint8_t *data;
@@ -4800,6 +4891,8 @@ int16_t fm_fork_io(int16_t refnum, bool write, uint16_t mode, int64_t off, uint3
     *actual = 0;
     fcb *f = fcb_for(refnum);
     bool view = !f && (f = fcb_readable(refnum)) != NULL;
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     if (!f)
         return rfNumErr;
     if (write && !f->write && !view)
@@ -4844,6 +4937,8 @@ int16_t fm_fork_io(int16_t refnum, bool write, uint16_t mode, int64_t off, uint3
 int16_t fm_fork_seek(int16_t refnum, uint16_t mode, int64_t off)
 {
     fcb *f = fcb_readable(refnum);
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     if (!f)
         return rfNumErr;
     int64_t pos = fork_position(f, mode, off);
@@ -4862,6 +4957,8 @@ int16_t fm_fork_seek(int16_t refnum, uint16_t mode, int64_t off)
 int16_t fm_fork_set_eof(int16_t refnum, uint16_t mode, int64_t off)
 {
     fcb *f = fcb_for(refnum);
+    if (f && f->gone) /* changed or gone while the program hibernated */
+        return ioErrF;
     if (!f && (f = fcb_readable(refnum)) != NULL) {
         int64_t n = fork_position(f, mode, off);
         return n < 0 ? posErr : n > 0xFFFFFFF0u ? dskFulErr : rsrc_view_write(refnum, f, (uint32_t)n, 0, 0, true);

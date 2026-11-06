@@ -2547,3 +2547,12 @@ void (*qtstream_export_fn(const char *name))(ppc_cpu *)
             return exports[i].fn;
     return NULL;
 }
+
+/* A streamed movie with its network connection. */
+bool qt_streams_open(void)
+{
+    for (int i = 0; i < MAX_PRES; i++)
+        if (press[i] && press[i]->net)
+            return true;
+    return false;
+}

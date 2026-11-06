@@ -150,6 +150,22 @@ void machine_script_add_snap(uint64_t at, const char *path)
     machine_script_add(at, 5, nsnap_paths++, 0, 0);
 }
 
+/* A resumed program (reattach.c): the input scripted for the run that
+ * hibernated it is that run's; the resuming run queues its own. */
+void machine_script_clear(void) { events_script_clear(); }
+
+void events_script_clear(void)
+{
+    bb_free(script);
+    script = NULL;
+    nscript = script_next = 0;
+    for (int i = 0; i < nsnap_paths; i++)
+        bb_free(snap_paths[i]);
+    bb_free(snap_paths);
+    snap_paths = NULL;
+    nsnap_paths = 0;
+}
+
 /* The next input not yet applied: its instruction count, or 0.  A
  * screenshot is no input: the clock of a program waiting for input moves
  * on to the next key or click, not to a snapshot, which would otherwise
@@ -513,8 +529,15 @@ void machine_idle(void);
 void machine_pass_tick(void);
 
 /* The button itself, as Button reports it (MBState). */
+/* While the machine drains to a safe point the button reads as let go,
+ * and the mouse far outside everything: each tracking loop (a control, a
+ * menu, a window's drag) ends as if released where it does nothing. */
+static bool drain_released(void) { return drain_wanted(); }
+
 static bool button_now(void)
 {
+    if (drain_released())
+        return false;
     if (!host_attached && g_cpu) {
         if (g_cpu->halted)
             return false;
@@ -528,6 +551,8 @@ static bool button_now(void)
 
 bool ev_still_down(void)
 {
+    if (drain_released())
+        return false;
     if (!host_attached && g_cpu) {
         if (g_cpu->halted) /* the instruction limit ended the run mid-drag */
             return false;
@@ -1052,6 +1077,8 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
         woken = false;
         sleep = 0;
     }
+    if (drain_wanted()) /* the machine runs on to a safe point: no sleep */
+        sleep = 0;
     if (host_attached && sleep > 0) {
         /* Sleep until input arrives or the time is up.  Interrupt-time
          * work (sound refills, Time Manager and VBL tasks, speech
@@ -1088,7 +1115,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
                 waiting = qhead == qtail;
             }
             pthread_mutex_unlock(&lock);
-            if (!waiting || !busy)
+            if (!waiting || !busy || drain_wanted())
                 break;
             machine_advance_ticks();
             sound_pump();
@@ -1260,6 +1287,8 @@ void tb_GetMouse(gaddr p)
     pthread_mutex_lock(&lock);
     uint32_t g = wheel_click_now ? wheel_click_where : make_pt(mouse_v, mouse_h);
     pthread_mutex_unlock(&lock);
+    if (drain_released())
+        g = make_pt(-32000, -32000);
     static uint32_t last;
     if (g != last) { /* the mouse moved: what the program does with it is news */
         last = g;
@@ -1282,7 +1311,7 @@ void tb_GetMouse(gaddr p)
  * doing is written every quarter second until it does again (the PC, the
  * trap running, whether in an interrupt task, the instruction count). */
 
-static volatile uint64_t last_poll_ns;
+BB_HOST static volatile uint64_t last_poll_ns;
 BB_HOST static FILE *stall_log;
 
 static uint64_t mono_ns(void)

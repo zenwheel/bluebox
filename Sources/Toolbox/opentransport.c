@@ -1774,3 +1774,15 @@ const ppc_export ot_exports[] = {
     { "OTIoctl", ot_Ioctl },
 };
 const unsigned ot_export_count = sizeof ot_exports / sizeof ot_exports[0];
+
+/* An endpoint or stream open (a service provider alone holds no
+ * connection): what a hibernated program cannot take along. */
+bool ot_endpoints_open(void)
+{
+    for (int i = 0; i < MAX_PROVIDERS; i++) {
+        const provider *p = &providers[i];
+        if (p->used && p->kind != P_INET_SERVICES && p->kind != P_AT_SERVICES && p->kind != P_NBP_MAPPER)
+            return true;
+    }
+    return false;
+}

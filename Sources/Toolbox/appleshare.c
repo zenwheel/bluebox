@@ -536,3 +536,12 @@ void as_idle(void)
             afp_idle(shares[i].s);
     }
 }
+
+/* A volume with its session to the server live. */
+bool as_sessions_live(void)
+{
+    for (int i = 0; i < MAX_SHARES; i++)
+        if (shares[i].used && shares[i].s)
+            return true;
+    return false;
+}

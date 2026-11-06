@@ -1056,6 +1056,63 @@ typedef struct {
     uint16_t current_trap, last_trapword;
 } trap_ctx;
 void trap_ctx_save(trap_ctx *t);
+/* Calls from native code into the guest under way (0: the program's own
+ * level). */
+int trap_call_depth(void);
+
+/* Draining to a safe point (drain.c).  drain_wanted: a Toolbox wait ends
+ * early.  drain_abandon: a native stops its call where it is (true if it
+ * should), and the dispatcher makes the program call it again after
+ * resuming (drain_take_rewind).  drain_at_trap: the CPU stops at an idle
+ * call at the program's level.  drain_slice_point, between machine_run's
+ * slices: stopped at a safe point; drain_exits: machine_run returns there.
+ * drain_expired: past the time a drain may take (then refused). */
+bool drain_wanted(void);
+bool drain_abandon(void);
+bool drain_take_rewind(cpu68k *c, uint16_t op);
+bool drain_at_trap(cpu68k *c, uint16_t op);
+bool drain_slice_point(void);
+bool drain_exits(void);
+bool drain_expired(void);
+void drain_poll(void);
+/* The program's own threads (Thread Manager), besides the application's. */
+int threads_live(void);
+/* Open connections, ports and print jobs a snapshot cannot carry
+ * (reattach.c): the reason, or NULL. */
+const char *hibernate_io_blocker(void);
+const char *network_io_open(void);
+const char *serial_io_open(void);
+const char *print_job_open(void);
+bool mactcp_any_open(void);
+bool ot_endpoints_open(void);
+bool as_sessions_live(void);
+bool ctb_connections_open(void);
+bool ppc_toolbox_open(void);
+bool print_job_in_progress(void);
+bool qt_streams_open(void);
+/* Hibernating and resuming (reattach.c): the open files stamped as they
+ * are on disk, and checked (how many changed or went: marked gone); the
+ * clock rebased; the host's memory the snapshot held made again. */
+void fm_disk_stamp(const char *path, int64_t out[4]);
+void files_before_hibernate(void);
+int files_after_resume(void);
+void rm_files_before_hibernate(void);
+int rm_files_after_resume(void);
+void events_script_clear(void);
+void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away);
+void osutil_clock_back(int64_t secs);
+void hibernate_reattach_host(void);
+void aem_after_resume(void);
+void aem_suspended_after_resume(void);
+void display_after_resume(void);
+const char *host_media_open(void);
+bool hostgl_any_live(void);
+bool rave_any_context(void);
+bool q3_any_view(void);
+bool qt_host_movies_open(void);
+bool speech_any_busy(void);
+bool sound_input_capturing(void);
+bool drivevol_any_mounted(void);
 void trap_ctx_load(const trap_ctx *t);
 
 #define TRAP_DEPTH 32

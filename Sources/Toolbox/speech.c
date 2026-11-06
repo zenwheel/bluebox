@@ -1566,3 +1566,13 @@ int speech_channel_voice(gaddr chan)
     channel *c = chan_of(chan);
     return c ? c->voice : -1;
 }
+
+/* A channel speaking: the host's voice says when it is done, and the one
+ * that would is in the process that hibernates. */
+bool speech_any_busy(void)
+{
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (channels[i].chan && channels[i].busy)
+            return true;
+    return false;
+}

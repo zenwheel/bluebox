@@ -25,6 +25,10 @@ uint32_t mac_now(void)
     return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET + clock_set);
 }
 
+/* A resumed program whose date does not catch up (reattach.c): the
+ * clock as it was when it hibernated, the seconds away taken off. */
+void osutil_clock_back(int64_t secs) { clock_set -= secs; }
+
 /* SetDateTime: the clock set, for the session (the host's stays). */
 int16_t tb_SetDateTime(uint32_t secs)
 {
@@ -70,6 +74,10 @@ void tb_Delay(int32_t n, uint32_t *ftp)
         machine_advance_ticks();
         uint32_t until = rd32(LM_Ticks) + (uint32_t)n;
         while ((int32_t)(rd32(LM_Ticks) - until) < 0 && !g_cpu->halted) {
+            if (drain_wanted()) {
+                drain_abandon(); /* at the program's level: Delay again after resuming */
+                break;
+            }
             struct timespec ts = { 0, 5000000 };
             nanosleep(&ts, NULL);
             machine_advance_ticks();

@@ -658,7 +658,7 @@ static bool prefer_ppc;
 void machine_set_prefer_ppc(bool on) { prefer_ppc = on; }
 
 BB_HOST static bool jit_on;
-static char jit_cache_dir[1024];
+BB_HOST static char jit_cache_dir[1024]; /* the run's choice */
 
 bool machine_set_jit(bool on, const char *cache_dir)
 {
@@ -688,6 +688,11 @@ static void start_jit(const char *path)
     snprintf(name, sizeof name, "%016llx-68k.bbjit", h);
     cpu_jit_enable(true, dir, name);
 }
+
+/* A resumed program (no machine_launch): the JITs as the run chose, for the
+ * application's cache files.  Their translations start empty, and the 68k
+ * one finds its model and address mask from the CPU (check_mode). */
+void machine_jit_resume(const char *app_path) { start_jit(app_path); }
 
 /* One CPU's line of the report, appended to buf (nothing if it ran no
  * instructions). */
@@ -940,7 +945,7 @@ bool machine_launch(const char *app_path, char *err, size_t errlen)
  * Delay moves it forward either way. */
 bool events_host_attached(void);
 
-static bool realtime;
+BB_HOST static bool realtime; /* the run's choice, kept when a snapshot is put back */
 void machine_set_realtime(bool on) { realtime = on; }
 bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
@@ -1001,6 +1006,7 @@ void machine_charge_pixels(uint64_t n)
 /* Bring the 60 Hz tick counter up to the machine's time. */
 void machine_advance_ticks(void)
 {
+    drain_poll();
     machine_pause_point(); /* every wait in the Toolbox comes here */
     uint64_t ns = machine_time_ns();
     uint64_t ticks = ns * 60 / 1000000000u;
@@ -1023,6 +1029,29 @@ const uint8_t *machine_system_resource(uint32_t type, int16_t id, uint32_t *len)
         }
     *len = 0;
     return NULL;
+}
+
+/* A snapshot put back in another process (reattach.c): the machine's
+ * clock goes on from saved_ns, the time it read when the snapshot was
+ * taken, whatever this process's monotonic clock reads (it starts again at
+ * every boot); Ticks, the Time Manager, sound and UpTime with it.  The
+ * date catches up by the host's seconds since (away), or goes on as if
+ * none had passed. */
+void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away)
+{
+    if (machine_wall_clock()) {
+        ticks_base_ns = machine_unpaused_ns(now_ns()) + skipped_ns - saved_ns;
+    } else {
+        uint64_t ran = timed_68000() ? cycles_ns(cpu.cycles) + (cpu.icount - cpu.timed) * 100u : cpu.icount * 100u;
+        skipped_ns = saved_ns > ran ? saved_ns - ran : 0;
+    }
+    if (catch_up_date) {
+        boot_time += (uint32_t)away;
+        uint32_t secs = boot_time + (uint32_t)(machine_time_ns() / 1000000000u);
+        wr32(LM_Time, secs);
+    } else {
+        osutil_clock_back((int64_t)away);
+    }
 }
 
 /* SetDateTime: Time from now on counts from secs. */
@@ -1073,6 +1102,12 @@ run_status machine_run(uint64_t max)
         } else {
             done += cpu_run(&cpu, n);
             pace_68000();
+        }
+        if (drain_slice_point()) {
+            /* A safe point (drain.c): a snapshot's, or Suspend's. */
+            if (drain_exits())
+                return RUN_DRAINED;
+            machine_pause_point();
         }
         idle_slice();
         machine_advance_ticks();

@@ -1000,3 +1000,6 @@ void sound_input_reset(void)
     filter_stub = record_dialog = user_filter = 0;
     capturing = false;
 }
+
+/* The host recording for the program. */
+bool sound_input_capturing(void) { return capturing; }

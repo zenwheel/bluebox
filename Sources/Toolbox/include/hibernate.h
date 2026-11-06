@@ -26,12 +26,21 @@ typedef struct hb_stats {
     uint32_t untyped_blocks;              /* blocks no tag describes */
     uint32_t stale_types;                 /* tags the map has no layout for (or a different size) */
     uint32_t statics;                     /* saved statics the map placed */
+    uint64_t file_bytes;                  /* the file written, compressed */
 } hb_stats;
 
 /* Writes a snapshot into *out (free it with hb_free_buffer). */
 bool hb_save_buffer(uint8_t **out, size_t *len, hb_stats *stats, char *err, size_t errlen);
 void hb_free_buffer(uint8_t *buf);
+/* A snapshot file: deflated, after a header and the caller's bytes (extra:
+ * the record of the launch, for the host).  hb_file_extra reads those back
+ * (and whether this build wrote the file); hb_file_load inflates the
+ * snapshot (free it with hb_free_buffer). */
 bool hb_save_file(const char *path, hb_stats *stats, char *err, size_t errlen);
+bool hb_save_file_extra(const char *path, const void *extra, size_t extra_len, hb_stats *stats, char *err,
+                        size_t errlen);
+bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *same_build, char *err, size_t errlen);
+bool hb_file_load(const char *path, uint8_t **out, size_t *len, char *err, size_t errlen);
 
 enum {
     /* Put each region (the guest's memory) in fresh memory too, as a new

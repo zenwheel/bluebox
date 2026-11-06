@@ -180,7 +180,7 @@ static uint64_t int_68k, int_ppc; /* instructions that work ran */
 static uint64_t int_68k0, int_ppc0;
 static uint64_t sleeps, slept_ns;
 static uint64_t run_sleeps, run_ns; /* this wait's */
-static int enabled = -1;
+BB_HOST static int enabled = -1; /* the run's environment */
 
 uint64_t trap_icount_passed(void);
 bool machine_wall_clock(void);

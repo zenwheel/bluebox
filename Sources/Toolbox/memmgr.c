@@ -1545,7 +1545,7 @@ bool mm_check_zone(gaddr z)
  * "accepted" Boolean written through a stray pointer broke a menu icon's
  * master pointer, and the crash came two redraws on).  False, with the
  * damage logged, when a zone is damaged. */
-static int every = -1;
+BB_HOST static int every = -1; /* the run's environment */
 static const char *checked_after; /* the call the last check followed */
 
 void machine_set_heap_check(int n) { every = n > 0 ? n : 0; }

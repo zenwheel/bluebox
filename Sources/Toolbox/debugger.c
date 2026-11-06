@@ -19,7 +19,7 @@
 #include "tb_internal.h"
 #include "trap.h"
 
-static int mode = -1; /* DEBUGGER_LOG, _HALT or _QUIET; -1: BLUEBOX_DEBUGGER or log */
+BB_HOST static int mode = -1; /* DEBUGGER_LOG, _HALT or _QUIET; -1: BLUEBOX_DEBUGGER or log */
 
 enum { MAX_PLACES = 128 };
 

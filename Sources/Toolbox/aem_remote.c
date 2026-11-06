@@ -128,7 +128,7 @@ static bool read_message(int fd, int timeout_ms, uint32_t *word, uint8_t **data,
 /* ---------------------------------------------------------------------- */
 /* Listening */
 
-static char socket_path[600];
+BB_HOST static char socket_path[600]; /* this process's listener */
 
 /* Beside each socket, "<pid>.<signature>.info": what the run tells the
  * others of itself for GetProcessInformation: its name (a Pascal string),

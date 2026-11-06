@@ -1,13 +1,15 @@
 /* Suspending a program: the whole machine held still until it is resumed.
  *
- * The host asks (machine_pause) from its own thread; the machine's thread
- * stops at the next pause point (between emulation slices, and wherever
- * Ticks are brought up to date, which every wait in the Toolbox does) and
- * sleeps there, using no processor time, until machine_unpause.  The
- * machine's clock stands still from the moment of asking: Ticks, the
- * Time Manager, VBL tasks, the Sound Manager's channels and the date all
- * read the time less the time spent suspended, so a program finds no
- * jump when it goes on. */
+ * The host asks (machine_pause) from its own thread; the machine first
+ * runs on to a safe point (drain.c: its event loop, with nothing of the
+ * Toolbox on the host's stack), where a snapshot of it could be taken,
+ * and stops there; if none comes within two seconds it stops at the next
+ * pause point (between emulation slices, and wherever Ticks are brought
+ * up to date, which every wait in the Toolbox does).  It sleeps there,
+ * using no processor time, until machine_unpause.  The machine's clock
+ * stands still from the moment it stops: Ticks, the Time Manager, VBL
+ * tasks, the Sound Manager's channels and the date all read the time less
+ * the time spent suspended, so a program finds no jump when it goes on. */
 #include <pthread.h>
 #include <stdatomic.h>
 #include <time.h>
@@ -17,11 +19,14 @@
 
 BB_HOST static pthread_mutex_t pause_lock = PTHREAD_MUTEX_INITIALIZER;
 BB_HOST static pthread_cond_t pause_changed = PTHREAD_COND_INITIALIZER;
-static atomic_bool pause_wanted;
-static bool pause_parked;
-static uint64_t pause_since;   /* the clock when it was asked for */
-static _Atomic uint64_t pause_total; /* time spent suspended before that */
-static uint64_t pause_until;   /* a timed pause (pause:N): when it ends, or 0 */
+/* The host's, not the program's: a resumed process starts unpaused (its
+ * clock rebased, machine_resume_clock). */
+BB_HOST static atomic_bool pause_wanted;
+BB_HOST static bool pause_parked;
+BB_HOST static bool frozen;           /* the clock stands still, since pause_since */
+BB_HOST static uint64_t pause_since;  /* the clock when the machine stopped */
+BB_HOST static _Atomic uint64_t pause_total; /* time spent suspended before that */
+BB_HOST static uint64_t pause_until;  /* a timed pause (pause:N): when it ends, or 0 */
 
 static uint64_t mono_ns(void)
 {
@@ -49,9 +54,12 @@ static void unpause_locked(void)
 {
     if (!atomic_load(&pause_wanted))
         return;
-    pause_total += mono_ns() - pause_since;
+    if (frozen)
+        pause_total += mono_ns() - pause_since;
+    frozen = false;
     pause_until = 0;
     atomic_store(&pause_wanted, false);
+    machine_drain_end();
     pthread_cond_broadcast(&pause_changed);
 }
 
@@ -59,8 +67,9 @@ void machine_pause(void)
 {
     pthread_mutex_lock(&pause_lock);
     if (!atomic_load(&pause_wanted)) {
-        pause_since = mono_ns();
         pause_until = 0;
+        frozen = false;
+        machine_drain_begin(false);
         atomic_store(&pause_wanted, true);
     }
     pthread_mutex_unlock(&pause_lock);
@@ -98,7 +107,7 @@ uint64_t machine_unpaused_ns(uint64_t now)
     if (!atomic_load(&pause_wanted) && !pause_total)
         return now;
     pthread_mutex_lock(&pause_lock);
-    if (atomic_load(&pause_wanted) && now > pause_since)
+    if (atomic_load(&pause_wanted) && frozen && now > pause_since)
         now = pause_since;
     now -= pause_total;
     pthread_mutex_unlock(&pause_lock);
@@ -116,7 +125,14 @@ void machine_pause_point(void)
     if (events_host_attached() && pthread_main_np())
         return;
 #endif
+    /* Running on to a safe point first, unless none came in time. */
+    if (drain_wanted() && !drain_expired())
+        return;
     pthread_mutex_lock(&pause_lock);
+    if (!frozen) {
+        pause_since = mono_ns();
+        frozen = true;
+    }
     pause_parked = true;
     pthread_cond_broadcast(&pause_changed);
     while (atomic_load(&pause_wanted)) {

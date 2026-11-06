@@ -2308,3 +2308,12 @@ void q3_view_reset(void)
         r3d_texture_free(texs[i].id);
     ntexs = 0;
 }
+
+/* One open (hibernating cannot carry its host-drawn frames yet). */
+bool q3_any_view(void)
+{
+    for (int i = 0; i < MAX_VIEWS; i++)
+        if (views[i])
+            return true;
+    return false;
+}

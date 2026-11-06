@@ -331,7 +331,7 @@ int16_t drivevol_mount(int16_t drive, gaddr pb)
         return badMDBErr;
     }
     /* The folder its files go to. */
-    static int serial;
+    BB_HOST static int serial; /* this process's folders */
     if (!serial)
         remove_stale();
     disk *d = &disks[ndisks];
@@ -355,7 +355,7 @@ int16_t drivevol_mount(int16_t drive, gaddr pb)
         bb_free(img);
         return badMDBErr;
     }
-    static bool cleanup;
+    BB_HOST static bool cleanup;
     if (!cleanup) {
         atexit(remove_all);
         cleanup = true;
@@ -408,7 +408,7 @@ void drivevol_forget(int16_t vref)
     bb_free(d->image);
     int i = (int)(d - disks);
     memmove(&disks[i], &disks[i + 1], (size_t)(ndisks - i - 1) * sizeof *disks);
-    ndisks--;
+    memset(&disks[--ndisks], 0, sizeof *disks);
 }
 
 int16_t drivevol_eject(int16_t drive)
@@ -752,3 +752,7 @@ int16_t tb_DIReformat(int16_t drvNum, int16_t fsid, gaddr volName, gaddr msgText
         return r;
     return zero(drvNum, volName, 0);
 }
+
+/* A disk image mounted: its files are in a folder of this process's, gone
+ * when it ends (reattaching it is still to come). */
+bool drivevol_any_mounted(void) { return ndisks > 0; }

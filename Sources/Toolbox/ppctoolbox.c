@@ -410,7 +410,7 @@ static void unlink_all(void)
 
 void ppc_toolbox_reset(void)
 {
-    static bool registered;
+    BB_HOST static bool registered; /* this process's atexit */
     if (!registered) {
         atexit(unlink_all);
         registered = true;
@@ -876,4 +876,16 @@ int16_t tb_StartSecureSession(gaddr pb, gaddr userName, int8_t useDefault, int8_
     if (guestSelected)
         wr8(guestSelected, 0);
     return ppctb_call(2, pb, false);
+}
+
+/* A port open, or a session. */
+bool ppc_toolbox_open(void)
+{
+    for (int i = 0; i < MAX_PORTS; i++)
+        if (ports[i].used)
+            return true;
+    for (int i = 0; i < MAX_SESSIONS; i++)
+        if (sessions[i].used)
+            return true;
+    return false;
 }

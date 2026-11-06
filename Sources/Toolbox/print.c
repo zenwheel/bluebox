@@ -746,3 +746,6 @@ static int16_t print_close(gaddr pb)
 }
 
 const native_driver print_driver = { ".Print", 2, NULL, print_close, print_control, NULL, NULL, NULL, NULL };
+
+/* A document being printed (PrOpenDoc, or the low-level calls' document). */
+bool print_job_in_progress(void) { return job_port || ll.port; }

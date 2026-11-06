@@ -2780,8 +2780,10 @@ void carbon_events_reset(void)
         hotkeys = h->next;
         bb_free(h);
     }
-    for (int b = 0; b < ref_blocks; b++)
+    for (int b = 0; b < ref_blocks; b++) {
         bb_free(ref_tab[b]);
+        ref_tab[b] = NULL;
+    }
     ref_blocks = 0;
     app_target = dispatcher_target = focus_target = NULL;
     dead_handlers = NULL;

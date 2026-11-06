@@ -39,6 +39,16 @@ static bool wins_dirty = true;
 
 void display_windows_changed(void) { wins_dirty = true; }
 
+/* Resumed in another process: its host has seen no window yet, whatever
+ * version it last saw (the counter comes back as the snapshot had it). */
+void display_after_resume(void)
+{
+    pthread_mutex_lock(&lock);
+    win_version += 0x10000;
+    wins_dirty = true;
+    pthread_mutex_unlock(&lock);
+}
+
 static void publish_windows(void);
 
 /* After a Toolbox trap called from the program itself, also a safe point:
@@ -90,6 +100,8 @@ static void publish_windows(void)
     for (int i = 0; i < nwins; i++)
         bb_free(wins[i].mask);
     memcpy(wins, fresh, (size_t)n * sizeof *fresh);
+    if (n < nwins) /* no copies left of the masks just freed */
+        memset(wins + n, 0, (size_t)(nwins - n) * sizeof *wins);
     nwins = n;
     win_version++;
     pthread_mutex_unlock(&lock);
@@ -718,7 +730,7 @@ bool display_watch_all_stores(void (*fn)(gaddr a, uint32_t len))
 
 static bool debug_watch(void)
 {
-    static int on = -1;
+    BB_HOST static int on = -1; /* the run's environment */
     if (on < 0) {
         const char *e = getenv("BLUEBOX_WATCH");
         on = e && *e;
