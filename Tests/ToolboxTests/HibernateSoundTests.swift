@@ -294,6 +294,89 @@ extension BlueBox {
             for ch in chans { #expect(tb_DisposeSpeechChannel(ch) == 0) }
         }
 
+        /// The program's code from `words`, run from the start with a stack.
+        func program(_ words: [UInt16]) -> UInt32 {
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let cpu = g_cpu!
+            cpu.pointee.a.7 = tb_NewPtr(65536, false, true) + 65000
+            cpu.pointee.sr = 0x2000
+            cpu.pointee.pc = code
+            cpu.pointee.halted = false
+            cpu.pointee.d.7 = 0x1234
+            return code
+        }
+
+        /// A synchronous SndPlay waiting for its sound gives its call up for
+        /// the drain; made again (going on, or resumed) it only waits, and
+        /// the sound plays once.
+        @Test func aSynchronousPlayGivesUpForTheDrain() {
+            let dir = launchTestApp()
+            installSound()
+            defer { machine_set_sound_handler(nil, nil) }
+            let h = sound(4450)
+            // CLR.W -(SP); CLR.L -(SP); MOVE.L #h,-(SP); CLR.B -(SP); _SndPlay; MOVE.W (SP)+,D7; loop: _SystemTask; BRA.S loop
+            let code = program([0x4267, 0x42A7, 0x2F3C, UInt16(h >> 16), UInt16(h & 0xFFFF), 0x4227, 0xA805, 0x3E1F,
+                                0xA9B4, 0x60FC])
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_pc() == code + 12)                                     // on _SndPlay
+            #expect(String(cString: machine_drain_point()).hasSuffix("(abandoned)"))
+            #expect(Self.played.count == 1)
+            let snap = dir.appendingPathComponent("sync.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            _ = machine_run(100_000)                                             // going on
+            #expect(Self.played.count == 1)
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0)
+
+            resume(snap)
+            Self.played = []
+            #expect(g_cpu!.pointee.d.7 == 0x1234)
+            _ = machine_run(100_000)
+            #expect(Self.played.count == 1 && Self.played.first?.frames == 4450, Comment(rawValue: "\(Self.played)"))  // the old host's, given again
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0)
+        }
+
+        /// A synchronous recording gives its call up for the drain too; made
+        /// again going on it records to the end, and resumed it has stopped:
+        /// abortErr, without asking the host for the microphone again.
+        @Test func aSynchronousRecordingGivesUpForTheDrain() {
+            let dir = launchTestApp()
+            Self.captures = []
+            machine_set_sound_input_handler({ on, _ in HibernateSound.captures.append(on); return true }, nil)
+            defer { machine_set_sound_input_handler(nil, nil) }
+            let r = tb_NewPtr(4, false, true)
+            #expect(tb_SPBOpenDevice(0, 1, r) == 0)
+            let pb = tb_NewPtr(38, false, true), buffer = tb_NewPtr(4450, false, true)
+            wr32(pb, rd32(r))
+            wr32(pb + 4, 4450)
+            wr32(pb + 12, 4450)
+            wr32(pb + 16, buffer)
+            // CLR.W -(SP); MOVE.L #pb,-(SP); CLR.B -(SP); MOVE.L #$03200014,D0; _SoundDispatch (SPBRecord);
+            // MOVE.W (SP)+,D7; loop: _SystemTask; BRA.S loop
+            _ = program([0x4267, 0x2F3C, UInt16(pb >> 16), UInt16(pb & 0xFFFF), 0x4227, 0x203C, 0x0320, 0x0014,
+                         0xA800, 0x3E1F, 0xA9B4, 0x60FC])
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(String(cString: machine_drain_point()).hasSuffix("(abandoned)"))
+            let snap = dir.appendingPathComponent("syncrec.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            _ = machine_run(100_000)                                             // going on: to the end
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd32(pb + 4) == 4450)
+
+            resume(snap)
+            Self.captures = []
+            _ = machine_run(100_000)
+            #expect(Int16(bitPattern: UInt16(g_cpu!.pointee.d.7 & 0xFFFF)) == -27) // abortErr
+            #expect(rd32(pb + 4) < 4450)
+            #expect(Self.captures.isEmpty)
+            #expect(tb_SPBCloseDevice(Int32(bitPattern: rd32(r))) == 0)
+        }
+
         nonisolated(unsafe) static var captures: [Bool] = []
         nonisolated(unsafe) static var completions = 0
         static let recorded: native_fn = { c, _ in

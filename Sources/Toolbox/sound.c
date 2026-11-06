@@ -98,7 +98,15 @@ typedef struct {
     bool sustained;      /* freqCmd's tone is sounding: it gives way to the next sound */
     heard_sound heard[HEARD_MAX]; /* oldest first */
     int nheard;
+    /* A synchronous call that gave up waiting for a drain (made again when
+     * the machine goes on, it only waits): SndPlay's handle or
+     * SndStartFilePlay's file, the handle's state, the result. */
+    uint8_t resume_kind;
+    uint32_t resume_key;
+    int8_t resume_state;
+    int16_t resume_err;
 } channel;
+enum { RESUME_PLAY = 1, RESUME_FILE = 2 };
 
 static channel chans[MAX_CHANNELS];
 static int next_id = 1;
@@ -820,6 +828,7 @@ int16_t tb_SndPlayDoubleBuffer(gaddr chan, gaddr params)
  * (a callback that queues another callBackCmd gets it at the next). */
 static void pump(channel *c)
 {
+    sound_replay_due(); /* a wait for the channel may come before any sound pump */
     pump_double(c);
     int end = c->tail;
     while (!c->paused && c->head != end && c->head != c->tail && now_ns() >= c->busy_until) {
@@ -871,15 +880,38 @@ static int16_t enqueue(channel *c, sndcmd cmd)
     return noErr;
 }
 
-/* Wait (really) until the channel has played everything queued. */
-static void drain(channel *c)
+/* A wait gives up its call for a drain at the program's own level, as
+ * Delay does: the call is made again when the machine goes on, here or
+ * resumed, and waits for the rest.  Elsewhere (a callback, a task) it
+ * waits on, and so does one the Toolbox makes for itself and goes on from
+ * (sound_play_through). */
+static bool hold_waits;
+static bool give_up_for_drain(void) { return !hold_waits && drain_wanted() && drain_abandon(); }
+
+/* SndPlay synchronously for the Toolbox itself (the Notification Manager's
+ * sound, SndRecord's Play), which goes on with its work after it: never
+ * given up for a drain. */
+int16_t sound_play_through(gaddr chan, gaddr sndh)
+{
+    bool held = hold_waits;
+    hold_waits = true;
+    int16_t err = tb_SndPlay(chan, sndh, false);
+    hold_waits = held;
+    return err;
+}
+
+/* Wait (really) until the channel has played everything queued; false
+ * when the wait gave up for a drain. */
+static bool drain(channel *c)
 {
     for (;;) {
         if (!sound_fn)
             c->busy_until = 0; /* no host to hear it: no need to wait */
         pump(c);
         if (c->head == c->tail && now_ns() >= c->busy_until)
-            return;
+            return true;
+        if (give_up_for_drain())
+            return false;
         if (!events_host_attached()) {
             /* Headless, the clock follows instructions: move it on to the end. */
             if (c->busy_until > now_ns())
@@ -920,8 +952,8 @@ int16_t tb_SndDisposeChannel(gaddr chan, int8_t quitnow)
     channel *c = find(chan);
     if (!c)
         return badChannel;
-    if (!quitnow)
-        drain(c);
+    if (!quitnow && !drain(c))
+        return noErr; /* made again */
     if (quitnow || c->sustained) /* a freqCmd's tone ends with its channel */
         stop_host(c);
     /* Each modifier hears freeCmd, then its stub goes. */
@@ -947,7 +979,7 @@ int16_t tb_SndDisposeChannel(gaddr chan, int8_t quitnow)
  * Manager does for SndDoCommand without noWait: not for the whole queue to
  * play (a music driver keeps seconds of notes queued ahead; waiting those
  * out stalled the program, Prince of Persia every half minute). */
-static void wait_for_room(channel *c)
+static bool wait_for_room(channel *c)
 {
     for (;;) {
         /* Interrupts go on while the program waits: a driver's VBL task may
@@ -955,7 +987,9 @@ static void wait_for_room(channel *c)
         time_pump();
         pump(c);
         if ((c->tail + 1) % QUEUE_LEN != c->head)
-            return;
+            return true;
+        if (give_up_for_drain())
+            return false;
         if (!events_host_attached()) {
             /* Headless, the clock follows instructions: on to when the
              * command playing now ends. */
@@ -976,7 +1010,8 @@ int16_t tb_SndDoCommand(gaddr chan, gaddr cmdp, int8_t nowait)
         return badChannel;
     int16_t err = enqueue(c, read_cmd(cmdp));
     if (err == queueFull && !nowait) {
-        wait_for_room(c);
+        if (!wait_for_room(c))
+            return noErr; /* made again */
         err = enqueue(c, read_cmd(cmdp));
     }
     return err;
@@ -1056,23 +1091,50 @@ static int16_t play_resource(channel *c, gaddr sndh)
     return noErr;
 }
 
+/* The channel whose synchronous call (kind, key) gave up for a drain, for
+ * the call made again: the program's channel, or a private one. */
+static channel *gave_up(gaddr chan, int kind, uint32_t key)
+{
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (chans[i].chan && chans[i].resume_kind == kind && chans[i].resume_key == key &&
+            chans[i].chan == (chan ? chan : 0xFFFFFFFFu))
+            return &chans[i];
+    return NULL;
+}
+
 int16_t tb_SndPlay(gaddr chan, gaddr sndh, int8_t async)
 {
     if (!sndh || !rd32(sndh))
         return badFormat;
-    int8_t state = tb_HGetState(sndh);
-    tb_HLock(sndh);
-    channel *c = chan ? find(chan) : NULL;
-    bool temp = !c;
-    if (temp)
-        c = add(0xFFFFFFFFu, true); /* a private channel */
-    if (!c) {
-        tb_HSetState(sndh, state);
-        return chan ? badChannel : notEnoughHardwareErr;
+    channel *c = gave_up(chan, RESUME_PLAY, sndh);
+    int8_t state;
+    bool temp;
+    int16_t err;
+    if (c) { /* made again after a drain: queued already, playing or played */
+        c->resume_kind = 0;
+        state = c->resume_state;
+        err = c->resume_err;
+        temp = c->chan == 0xFFFFFFFFu;
+    } else {
+        state = tb_HGetState(sndh);
+        tb_HLock(sndh);
+        c = chan ? find(chan) : NULL;
+        temp = !c;
+        if (temp)
+            c = add(0xFFFFFFFFu, true); /* a private channel */
+        if (!c) {
+            tb_HSetState(sndh, state);
+            return chan ? badChannel : notEnoughHardwareErr;
+        }
+        err = play_resource(c, sndh);
     }
-    int16_t err = play_resource(c, sndh);
-    if (temp || !async)
-        drain(c);
+    if ((temp || !async) && !drain(c)) {
+        c->resume_kind = RESUME_PLAY;
+        c->resume_key = sndh;
+        c->resume_state = state;
+        c->resume_err = err;
+        return noErr; /* made again */
+    }
     if (temp)
         c->chan = 0;
     if (temp || !async)
@@ -1538,6 +1600,7 @@ static gaddr sd_pb;            /* the write playing */
 static bool sd_async;
 static gaddr sd_ft;            /* four-tone: its FTSoundRec */
 static uint64_t sd_ft_next;    /* when the next tick of four-tone is due */
+static gaddr sd_gave_up;       /* a synchronous write whose wait gave up for a drain, to be made again */
 
 /* A tick of four-tone sound, ahead of time: the four voices' wave tables
  * stepped by their rates (fixed point, table positions a sample), the
@@ -1639,8 +1702,14 @@ static void sd_stop(void)
         sd_done(abortErr);
 }
 
+static int16_t sd_wait(gaddr pb);
+
 static int16_t sd_write(gaddr pb, bool async)
 {
+    if (!async && pb == sd_gave_up) { /* made again after a drain: playing or played */
+        sd_gave_up = 0;
+        return sd_wait(pb);
+    }
     gaddr rec = rd32(pb + IOParam_ioBuffer_off);
     uint32_t len = rd32(pb + IOParam_ioReqCount_off);
     int mode = (int16_t)rd16(rec);
@@ -1687,9 +1756,18 @@ static int16_t sd_write(gaddr pb, bool async)
         sd_pump();
         return sd_pb == pb ? ioInProgress : (int16_t)rd16(pb + IOParam_ioResult_off);
     }
-    /* Synchronous: the sound plays out first, with interrupt-time work
-     * going on, as StartSound with no completion routine did. */
+    return sd_wait(pb);
+}
+
+/* Synchronous: the sound plays out first, with interrupt-time work going
+ * on, as StartSound with no completion routine did. */
+static int16_t sd_wait(gaddr pb)
+{
     while (sd_pb == pb && !g_cpu->halted) {
+        if (give_up_for_drain()) {
+            sd_gave_up = pb;
+            return noErr; /* made again */
+        }
         if (events_host_attached()) {
             struct timespec ts = { 0, 5000000 };
             nanosleep(&ts, NULL);
@@ -1833,7 +1911,7 @@ void sound_app_dead(void)
 
 void sound_reset(void)
 {
-    sd_pb = sd_ft = 0;
+    sd_pb = sd_ft = sd_gave_up = 0;
     heard_clear(&sd_chan);
     memset(&sd_chan, 0, sizeof sd_chan);
     heard_clear(&hw_chan);
@@ -2061,25 +2139,34 @@ int16_t tb_SndStartFilePlay(gaddr chan, int16_t refnum, int16_t resnum, int32_t 
         }
         return err;
     }
-    int16_t err;
-    gaddr h = read_aiff(refnum, &err);
-    if (!h)
-        return err;
     bool temp = !c;
-    if (temp)
-        c = add(0xFFFFFFFFu, true);
-    if (!c) {
-        tb_DisposePtr(h);
-        return notEnoughHardwareErr;
+    channel *again = gave_up(chan, RESUME_FILE, (uint32_t)(uint16_t)refnum);
+    if (again) { /* made again after a drain: playing or played */
+        c = again;
+        c->resume_kind = 0;
+    } else {
+        int16_t err;
+        gaddr h = read_aiff(refnum, &err);
+        if (!h)
+            return err;
+        if (temp)
+            c = add(0xFFFFFFFFu, true);
+        if (!c) {
+            tb_DisposePtr(h);
+            return notEnoughHardwareErr;
+        }
+        file_play_done(c, false); /* anything still playing from a file */
+        c->file_playing = true;
+        c->file_buffer = h;
+        c->file_completion = async ? completion : 0;
+        enqueue(c, (sndcmd){ bufferCmd, 0, (int32_t)h });
+        enqueue(c, (sndcmd){ filePlayDoneCmd, 0, 0 });
     }
-    file_play_done(c, false); /* anything still playing from a file */
-    c->file_playing = true;
-    c->file_buffer = h;
-    c->file_completion = async ? completion : 0;
-    enqueue(c, (sndcmd){ bufferCmd, 0, (int32_t)h });
-    enqueue(c, (sndcmd){ filePlayDoneCmd, 0, 0 });
-    if (!async || temp)
-        drain(c);
+    if ((!async || temp) && !drain(c)) {
+        c->resume_kind = RESUME_FILE;
+        c->resume_key = (uint32_t)(uint16_t)refnum;
+        return noErr; /* made again */
+    }
     if (temp)
         c->chan = 0;
     return noErr;

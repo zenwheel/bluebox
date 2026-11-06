@@ -398,6 +398,7 @@ void iconservices_reset(void); /* Icon Services (iconservices.c) */
 
 /* Run sound commands whose time has come (at safe points). */
 void sound_pump(void);
+int16_t sound_play_through(gaddr chan, gaddr sndh);
 void sound_beep(void);
 void sound_reset(void);
 /* The Sound Input Manager (sound_input.c): recordings go on from the
