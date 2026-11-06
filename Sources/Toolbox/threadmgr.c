@@ -81,8 +81,8 @@ static thread threads[MAX_THREADS];
 static int current; /* index of the running thread */
 static uint32_t next_id;
 static int pool[3]; /* premade threads by style */
-static pthread_mutex_t baton = PTHREAD_MUTEX_INITIALIZER;
-static host_thread app_host;
+BB_HOST static pthread_mutex_t baton = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static host_thread app_host;
 static void (*main_pump)(void);
 static gaddr scheduler, dbg_new, dbg_dispose, dbg_schedule; /* the custom scheduler, the debugger's procs */
 

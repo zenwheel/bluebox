@@ -24,8 +24,8 @@ static uint32_t be16(const uint8_t *p) { return (uint32_t)p[0] << 8 | p[1]; }
 static uint32_t be32(const uint8_t *p) { return be16(p) << 16 | be16(p + 2); }
 
 /* Photo-JPEG ('jpeg'): each sample a JPEG image, through the host. */
-static machine_image_fn image_fn;
-static void *image_ctx;
+BB_HOST static machine_image_fn image_fn;
+BB_HOST static void *image_ctx;
 
 void machine_set_image_decoder(machine_image_fn fn, void *ctx)
 {

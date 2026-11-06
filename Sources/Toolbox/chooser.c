@@ -59,9 +59,9 @@ enum { CHOOSER_DRVR = 16, ICON_BASE = -15872 }; /* DRVR 16's owned resources: -1
 /* The settings */
 
 chooser_config g_chooser;
-static machine_printers_fn printers_fn;
-static machine_setting_fn setting_fn;
-static void *host_ctx;
+BB_HOST static machine_printers_fn printers_fn;
+BB_HOST static machine_setting_fn setting_fn;
+BB_HOST static void *host_ctx;
 
 void machine_set_chooser_host(machine_printers_fn printers, machine_setting_fn changed, void *ctx)
 {

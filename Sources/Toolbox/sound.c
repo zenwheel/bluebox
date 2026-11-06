@@ -86,8 +86,8 @@ typedef struct {
 
 static channel chans[MAX_CHANNELS];
 static int next_id = 1;
-static machine_sound_fn sound_fn;
-static void *sound_ctx;
+BB_HOST static machine_sound_fn sound_fn;
+BB_HOST static void *sound_ctx;
 static uint16_t beep_state = 1;
 static uint32_t beep_volume = 0x01000100;
 
@@ -182,8 +182,8 @@ static void emit(channel *c, const int16_t *pcm, int frames, int nch, double rat
     }
 }
 
-static machine_midi_fn midi_fn;
-static void *midi_ctx;
+BB_HOST static machine_midi_fn midi_fn;
+BB_HOST static void *midi_ctx;
 
 void machine_set_midi_handler(machine_midi_fn fn, void *ctx)
 {

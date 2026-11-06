@@ -12,8 +12,8 @@
 #include "qd_internal.h"
 #include "tb_internal.h"
 
-static machine_control_fn control_fn;
-static void *control_ctx;
+BB_HOST static machine_control_fn control_fn;
+BB_HOST static void *control_ctx;
 
 void machine_set_control_renderer(machine_control_fn fn, void *ctx)
 {

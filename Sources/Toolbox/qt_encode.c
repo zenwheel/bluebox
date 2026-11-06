@@ -31,8 +31,8 @@
 
 enum { RAW = 0x72617720, RLE = 0x726C6520, JPEG = 0x6A706567 };
 
-static machine_image_encode_fn encode_fn;
-static void *encode_ctx;
+BB_HOST static machine_image_encode_fn encode_fn;
+BB_HOST static void *encode_ctx;
 
 void machine_set_image_encoder(machine_image_encode_fn fn, void *ctx)
 {

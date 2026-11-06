@@ -16,7 +16,7 @@
 #include "hw68k.h"
 #include "tb_internal.h"
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* ---------------------------------------------------------------------- */
 /* Windows */
@@ -242,7 +242,7 @@ static int32_t pending_choice;
 /* Clicks posted for a pending choice, and when the last one was. */
 static int choice_clicks;
 static uint32_t choice_click_ticks;
-static pthread_cond_t track_cond = PTHREAD_COND_INITIALIZER;
+BB_HOST static pthread_cond_t track_cond = PTHREAD_COND_INITIALIZER;
 static bool tracking, in_select, track_done;
 
 void ev_post_menubar_click(void);
@@ -399,7 +399,7 @@ const char *machine_screen_mode_wanted(void) { return screen_reason; }
  * host's desktop shows instead.  Each byte painted keeps the value painted;
  * a byte still holding it, outside every window, is desktop. */
 
-static pthread_mutex_t desk_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t desk_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t *desk_val, *desk_have; /* per byte of the screen */
 static uint32_t desk_size, desk_rb;
 static gaddr desk_base;
@@ -490,7 +490,7 @@ bool machine_desktop_mask(int left, int top, int width, int height, uint8_t *out
  * there before its first store; the overlay is the written bytes while
  * any of them differs from that, and ends when all are back. */
 
-static pthread_mutex_t ov_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t ov_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t *ov_orig, *ov_have; /* per byte of the screen */
 static uint32_t ov_size, ov_rb;
 static gaddr ov_base;
@@ -682,7 +682,7 @@ static void debug_watch_written(gaddr a, uint32_t len)
  * while idle.c is making sure a program waiting changes nothing, every
  * store, to it as well. */
 static gaddr screen_watch_lo, screen_watch_len;
-static void (*all_stores)(gaddr a, uint32_t len);
+BB_HOST static void (*all_stores)(gaddr a, uint32_t len);
 
 static void any_store(gaddr a, uint32_t len)
 {
@@ -811,7 +811,7 @@ void display_reset(void)
 /* Transient drawing outside the windows: a pop-up menu.  Rootless hosts
  * show the area above everything while it is up, and take every click. */
 
-static pthread_mutex_t transient_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t transient_lock = PTHREAD_MUTEX_INITIALIZER;
 static int16_t transient[4];
 static bool transient_on;
 static uint32_t transient_version;

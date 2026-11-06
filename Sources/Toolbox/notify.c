@@ -20,8 +20,8 @@ enum { nmType = 8, qErr = -1 };
 #define MAX_REQUESTS 16
 static gaddr requests[MAX_REQUESTS];
 static gaddr respond[MAX_REQUESTS]; /* shown, response not yet run */
-static machine_notify_fn notify_fn;
-static void *notify_ctx;
+BB_HOST static machine_notify_fn notify_fn;
+BB_HOST static void *notify_ctx;
 
 void machine_set_notification_handler(machine_notify_fn fn, void *ctx)
 {

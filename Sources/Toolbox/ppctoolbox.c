@@ -94,7 +94,7 @@ static port ports[MAX_PORTS];
 static session sessions[MAX_SESSIONS];
 static waiting waits[MAX_WAIT];
 static int nwaits;
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static uint16_t next_port = 1;
 static uint32_t next_sess = 1;
 /* completions to run at interrupt time */

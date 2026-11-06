@@ -49,7 +49,7 @@
 #include "jit.h"
 #include "m68k.h"
 
-bool cpu_jit_enabled;
+BB_HOST bool cpu_jit_enabled;
 
 #if !(defined(__aarch64__) || defined(__arm64__))
 
@@ -87,12 +87,12 @@ enum { FX = 0x10, FN = 8, FZ = 4, FV = 2, FC = 1, FNZVC = 0xF, FALL = 0x1F };
 /* What the host flags hold. */
 enum fkind { FK_NONE, FK_SUB, FK_ADD, FK_LOGIC };
 
-static jit_engine E;
-static uint32_t *scratch;
-static cpu_jit_stats st;
-static uint32_t cur_mask = 0xFFFFFFFFu;
-static int cur_model = 68020;
-static int max_insn = MAX_INSN; /* 1 for single-instruction tests */
+BB_HOST static jit_engine E;
+BB_HOST static uint32_t *scratch;
+BB_HOST static cpu_jit_stats st;
+BB_HOST static uint32_t cur_mask = 0xFFFFFFFFu;
+BB_HOST static int cur_model = 68020;
+BB_HOST static int max_insn = MAX_INSN; /* 1 for single-instruction tests */
 
 static void st8(uint32_t a, uint32_t v)
 {
@@ -1253,7 +1253,7 @@ static bool exec_decode(tctx *t)
 /* Its length in bytes (0: not run in the block), emitting nothing. */
 static uint32_t exec_len(tctx *t)
 {
-    static uint32_t dummy[1];
+    BB_HOST static uint32_t dummy[1];
     a64_buf saved = t->b;
     int uses[16];
     memcpy(uses, t->uses, sizeof uses);
@@ -1324,13 +1324,13 @@ typedef struct scan_info {
     int cc;                  /* the condition it tests, or -1 */
 } scan_info;
 
-static bool lookahead = true; /* off: flags are taken to be read after every block */
+BB_HOST static bool lookahead = true; /* off: flags are taken to be read after every block */
 
 /* Decode the instruction at `at` (t scanning): false if not translated
  * or run in a block. */
 static bool scan_one(tctx *t, uint32_t at, scan_info *si)
 {
-    static uint32_t dummy[1];
+    BB_HOST static uint32_t dummy[1];
     t->b = (a64_buf){ dummy, 0, 0, false };
     t->ipc = at;
     t->iop = rd16(at & t->mask);

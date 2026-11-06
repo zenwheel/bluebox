@@ -66,7 +66,7 @@ static uint8_t router_node;
 static uint64_t router_ticks;
 static uint16_t net;  /* this network's number: 0 on LocalTalk, from AARP and RTMP on EtherTalk */
 static char ifname[16]; /* the network interface for mode 2, or "" for the system's choice */
-static int fd = -1;
+BB_HOST static int fd = -1;
 static uint32_t sender;
 static uint8_t node;
 static bool opened, selfsend, booted;

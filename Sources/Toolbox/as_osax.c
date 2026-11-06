@@ -30,8 +30,8 @@ void machine_pass_tick(void);                    /* trap.c */
 /* ---------------------------------------------------------------------- */
 /* Dialogs, shown by the host */
 
-static machine_script_dialog_fn dialog_fn;
-static void *dialog_ctx;
+BB_HOST static machine_script_dialog_fn dialog_fn;
+BB_HOST static void *dialog_ctx;
 
 void machine_set_script_dialog_handler(machine_script_dialog_fn fn, void *ctx)
 {

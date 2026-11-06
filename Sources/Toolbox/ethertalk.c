@@ -48,7 +48,7 @@ static const uint8_t snap_aarp[SNAP] = { 0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x8
 static const uint8_t broadcast[6] = { 0x09, 0x00, 0x07, 0xFF, 0xFF, 0xFF };
 enum { AARP_REQUEST = 1, AARP_RESPONSE = 2, AARP_PROBE = 3 };
 
-static int bfd = -1;
+BB_HOST static int bfd = -1;
 static bool fake;             /* tests: whole frames on a datagram socket */
 static uint8_t mac[6];
 static uint16_t my_net;

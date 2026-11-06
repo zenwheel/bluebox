@@ -12,8 +12,8 @@
 
 /* ---- Pack12 ---- */
 
-static machine_color_fn color_fn;
-static void *color_ctx;
+BB_HOST static machine_color_fn color_fn;
+BB_HOST static void *color_ctx;
 
 void machine_set_color_picker(machine_color_fn fn, void *ctx)
 {

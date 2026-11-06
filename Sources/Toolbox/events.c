@@ -39,8 +39,8 @@ static event queue[QSIZE];
 static int qhead, qtail;
 static uint32_t qversion; /* changes with the queue, for its low-memory copy */
 static void mirror_queue(void);
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t arrived = PTHREAD_COND_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_cond_t arrived = PTHREAD_COND_INITIALIZER;
 static int16_t mouse_h, mouse_v;
 /* Moving the cursor themselves (games recentring it to read the mouse's
  * motion): the position last written to low memory, the program's moves
@@ -81,7 +81,7 @@ static void keys_seen(uint8_t out[16])
         keys_tapped[i] = 0;
     }
 }
-static bool host_attached;
+BB_HOST static bool host_attached;
 /* For low memory: the last key down (key code and character) and whether
  * a key or the button changed since it was last written. */
 static uint16_t key_last;
@@ -1283,7 +1283,7 @@ void tb_GetMouse(gaddr p)
  * trap running, whether in an interrupt task, the instruction count). */
 
 static volatile uint64_t last_poll_ns;
-static FILE *stall_log;
+BB_HOST static FILE *stall_log;
 
 static uint64_t mono_ns(void)
 {

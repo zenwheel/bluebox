@@ -41,8 +41,8 @@ static struct {
 /* Or another package's filter (Navigation Services'): true hides. */
 static bool (*filter_fn)(const char *path);
 
-static machine_file_fn file_fn;
-static void *file_ctx;
+BB_HOST static machine_file_fn file_fn;
+BB_HOST static void *file_ctx;
 static char last_dir[PATH_MAX]; /* where the last panel was left */
 
 void machine_set_file_handler(machine_file_fn fn, void *ctx)

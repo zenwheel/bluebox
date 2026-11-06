@@ -294,7 +294,7 @@ void machine_drop_native_frames(void)
 
 /* ---- Actions from the host's window frames ---- */
 
-static pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct {
     gaddr w;
     int action, a, b;

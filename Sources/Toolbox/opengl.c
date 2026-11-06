@@ -80,7 +80,7 @@ struct hostgl_ctx {
 };
 
 static hostgl_ctx *cur;
-static CGLPixelFormatObj pixel_format;
+BB_HOST static CGLPixelFormatObj pixel_format;
 static int available = -1;
 
 static CGLPixelFormatObj choose_format(bool accelerated)

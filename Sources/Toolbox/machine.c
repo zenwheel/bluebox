@@ -657,7 +657,7 @@ static void build_app_parms(void)
 static bool prefer_ppc;
 void machine_set_prefer_ppc(bool on) { prefer_ppc = on; }
 
-static bool jit_on;
+BB_HOST static bool jit_on;
 static char jit_cache_dir[1024];
 
 bool machine_set_jit(bool on, const char *cache_dir)

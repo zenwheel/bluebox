@@ -812,7 +812,7 @@ gaddr tb_NewPixPat(void)
  * the rectangle ShieldCursor keeps it out of.  Kept under a lock: the host
  * reads it from its own thread. */
 uint32_t ev_mouse_global(void);
-static pthread_mutex_t cursor_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t cursor_lock = PTHREAD_MUTEX_INITIALIZER;
 static machine_cursor cursor = { .arrow = true, .kind = MACHINE_CURSOR_ARROW };
 static int cursor_level, shield_depth;
 static qrect shield; /* global */

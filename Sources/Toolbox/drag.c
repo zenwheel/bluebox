@@ -804,7 +804,7 @@ static int16_t drop(uint32_t ref, gaddr w)
  * program's icon did. */
 
 enum { MAX_HOST_MSGS = 64 };
-static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct { int kind, h, v; } host_msgs[MAX_HOST_MSGS];
 static int nhost_msgs;
 static char **pending_files, *pending_text; /* the next drag's items */
@@ -973,11 +973,11 @@ enum { OUT_OVER, OUT_END };
 
 void ev_wake(void);
 
-static pthread_mutex_t out_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t out_cond = PTHREAD_COND_INITIALIZER;
-static pthread_mutex_t out_request_lock = PTHREAD_MUTEX_INITIALIZER; /* one request at a time */
-static machine_drag_out_fn out_fn;
-static void *out_ctx;
+BB_HOST static pthread_mutex_t out_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_cond_t out_cond = PTHREAD_COND_INITIALIZER;
+BB_HOST static pthread_mutex_t out_request_lock = PTHREAD_MUTEX_INITIALIZER; /* one request at a time */
+BB_HOST static machine_drag_out_fn out_fn;
+BB_HOST static void *out_ctx;
 static bool out_tracking, out_outside, out_refused;
 static uint32_t out_ref;    /* the drag the host has, or 0 */
 typedef struct {

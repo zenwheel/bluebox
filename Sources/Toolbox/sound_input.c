@@ -53,8 +53,8 @@ enum { uppSICompletionProcInfo = 0xC0, uppModalFilterProcInfo = 0xFD0 };
 
 /* ---- The host ---- */
 
-static machine_sound_input_fn host_fn;
-static void *host_ctx;
+BB_HOST static machine_sound_input_fn host_fn;
+BB_HOST static void *host_ctx;
 static bool capturing; /* the host said it is capturing */
 
 void machine_set_sound_input_handler(machine_sound_input_fn fn, void *ctx)
@@ -65,7 +65,7 @@ void machine_set_sound_input_handler(machine_sound_input_fn fn, void *ctx)
 
 /* Captured samples at the device's rate, mono, waiting for a recording. */
 #define RING (1 << 18)
-static pthread_mutex_t ring_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t ring_lock = PTHREAD_MUTEX_INITIALIZER;
 static int16_t ring[RING];
 static uint32_t ring_head, ring_count;
 static double ring_rate = 22254.54545; /* the rate the ring holds */

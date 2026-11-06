@@ -329,8 +329,8 @@ static struct {
 static channel channels[MAX_CHANNELS];
 static channel *default_channel; /* SpeakString's */
 
-static machine_speech_fn speech_fn;
-static void *speech_ctx;
+BB_HOST static machine_speech_fn speech_fn;
+BB_HOST static void *speech_ctx;
 
 void machine_set_speech_handler(machine_speech_fn fn, void *ctx)
 {
@@ -660,7 +660,7 @@ static void word_started(channel *c, double now, int32_t pos, int32_t len)
     phonemes_due(c, now, false);
 }
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 typedef struct {
     int channel, kind;
     int32_t a, b;

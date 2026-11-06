@@ -15,10 +15,10 @@ enum { noScrapErr = -100, noTypeErr = -102 };
 
 /* Host clipboard: text arriving from the host waits here until the
  * emulator thread next touches the scrap; text the app puts goes out. */
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char *incoming;
-static machine_clipboard_fn clipboard_fn;
-static void *clipboard_ctx;
+BB_HOST static machine_clipboard_fn clipboard_fn;
+BB_HOST static void *clipboard_ctx;
 
 void machine_set_clipboard_handler(machine_clipboard_fn fn, void *ctx)
 {

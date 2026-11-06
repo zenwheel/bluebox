@@ -15,8 +15,8 @@
 #include "machine.h"
 #include "tb_internal.h"
 
-static pthread_mutex_t pause_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t pause_changed = PTHREAD_COND_INITIALIZER;
+BB_HOST static pthread_mutex_t pause_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_cond_t pause_changed = PTHREAD_COND_INITIALIZER;
 static atomic_bool pause_wanted;
 static bool pause_parked;
 static uint64_t pause_since;   /* the clock when it was asked for */

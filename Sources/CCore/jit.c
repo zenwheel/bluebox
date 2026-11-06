@@ -244,7 +244,7 @@ void jit_cache_close(jit_cache *c)
 #include "a64.h"
 #include "mem.h"
 
-static jit_engine *engines[2]; /* by code map bit */
+BB_HOST static jit_engine *engines[2]; /* by code map bit */
 
 static unsigned pc_bucket(const jit_engine *e, uint32_t pc)
 {

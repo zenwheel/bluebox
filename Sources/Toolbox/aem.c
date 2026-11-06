@@ -164,7 +164,7 @@ enum {
 };
 enum { msgWasNotAccepted = 0, msgWasFullyAccepted = 1, msgWasPartiallyAccepted = 2 };
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pending_ae queue[16];
 static int qn;
 static pending_ae current; /* delivered to the app, waiting for AEProcessAppleEvent */
@@ -172,7 +172,7 @@ static pending_ae current; /* delivered to the app, waiting for AEProcessAppleEv
 /* Return receipts owed for raw events that are done with.  Events are
  * freed with and without the queue's lock held, so the receipts wait here
  * (under a lock of their own) and go out once the queue's lock is free. */
-static pthread_mutex_t outbox_lock = PTHREAD_MUTEX_INITIALIZER;
+BB_HOST static pthread_mutex_t outbox_lock = PTHREAD_MUTEX_INITIALIZER;
 static pending_ae outbox[16];
 static int nout;
 

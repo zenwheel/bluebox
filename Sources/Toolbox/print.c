@@ -29,9 +29,9 @@ int qd_rec_pages(const machine_print_page **out);
  * also read and set directly. */
 static void set_print_error(int16_t e) { wr16(LM_PrintErr, (uint16_t)e); }
 #define print_error ((int16_t)rd16(LM_PrintErr))
-static machine_print_fn print_fn;
-static machine_page_setup_fn page_setup_fn;
-static void *print_ctx;
+BB_HOST static machine_print_fn print_fn;
+BB_HOST static machine_page_setup_fn page_setup_fn;
+BB_HOST static void *print_ctx;
 static machine_page_setup defaults = { 612, 792, 18, 18, 594, 774, false }; /* US Letter, 1/4" margins */
 
 /* The document being printed. */

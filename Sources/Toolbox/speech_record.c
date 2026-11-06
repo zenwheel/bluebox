@@ -13,7 +13,7 @@
 #include "machine.h"
 #include "tb_internal.h"
 
-static FILE *out;
+BB_HOST static FILE *out;
 
 static const char *op_name(int op)
 {
