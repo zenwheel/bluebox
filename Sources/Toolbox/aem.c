@@ -26,7 +26,9 @@
 
 #include "forks.h"
 #include "machine.h"
+#include "ppc.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 enum {
     errAECoercionFail = -1700, errAEDescNotFound = -1701, errAEWrongDataType = -1703, errAENotAEDesc = -1704,
@@ -416,8 +418,11 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove
 
 static void forget_suspended(void);
 
+static void handler_frames_reset(void);
+
 void aem_reset(void)
 {
+    handler_frames_reset();
     pthread_mutex_lock(&lock);
     for (int i = 0; i < qn; i++)
         free_event(&queue[i], true);
@@ -1473,18 +1478,25 @@ static void finish(gaddr evt, gaddr reply, int16_t result, machine_ae_reply_fn r
     tb_AEDisposeDesc(reply);
 }
 
+/* An event's handlers have run: kept for its reply if a handler
+ * suspended it, else done with. */
+static void dispatched(gaddr evt, gaddr reply, int16_t result, machine_ae_reply_fn reply_fn, void *ctx)
+{
+    if (suspending && suspending == desc_handle(evt) && nsuspended < 16) {
+        suspended[nsuspended++] = (suspended_ae){ suspending, reply_fn, ctx };
+        suspending = 0;
+        return;
+    }
+    suspending = 0;
+    finish(evt, reply, result, reply_fn, ctx);
+}
+
 /* Dispatch an event received; true if it was suspended (and so not done). */
 static int16_t receive(gaddr evt, gaddr reply, machine_ae_reply_fn reply_fn, void *ctx)
 {
     suspending = 0;
     int16_t result = dispatch(evt, reply);
-    if (suspending && suspending == desc_handle(evt) && nsuspended < 16) {
-        suspended[nsuspended++] = (suspended_ae){ suspending, reply_fn, ctx };
-        suspending = 0;
-        return result;
-    }
-    suspending = 0;
-    finish(evt, reply, result, reply_fn, ctx);
+    dispatched(evt, reply, result, reply_fn, ctx);
     return result;
 }
 
@@ -1496,30 +1508,336 @@ static void build_event(const pending_ae *e, gaddr desc)
     set_desc(desc, T("aevt"), unflatten_data(e->flat, e->flatlen));
 }
 
-int16_t tb_AEProcessAppleEvent(gaddr evt)
+/* The event delivered to the program, taken for AEProcessAppleEvent: its
+ * descriptor and reply built in guest memory; false if there is none. */
+static bool take_event(pending_ae *e, gaddr *event, gaddr *reply)
 {
     pthread_mutex_lock(&lock);
-    pending_ae e = current;
+    *e = current;
     /* A raw high-level event is no Apple Event: it stays for
      * AcceptHighLevelEvent. */
-    if (e.raw)
-        e.flat = NULL;
+    if (e->raw)
+        e->flat = NULL;
     else
         memset(&current, 0, sizeof current);
     pthread_mutex_unlock(&lock);
-    if (!e.flat)
-        return errAEEventNotHandled;
-    gaddr event = tb_NewPtr(AEDesc_SIZEOF, false, true), reply = tb_NewPtr(AEDesc_SIZEOF, false, true);
-    build_event(&e, event);
+    if (!e->flat)
+        return false;
+    *event = tb_NewPtr(AEDesc_SIZEOF, false, true);
+    *reply = tb_NewPtr(AEDesc_SIZEOF, false, true);
+    build_event(e, *event);
     /* The sender says in the event whether it wants the reply. */
-    bool wanted = e.reply != NULL && (attr_long(event, T("repq")) >> 24) != 0;
-    make_reply(event, reply, wanted);
+    bool wanted = e->reply != NULL && (attr_long(*event, T("repq")) >> 24) != 0;
+    make_reply(*event, *reply, wanted);
+    return true;
+}
+
+int16_t tb_AEProcessAppleEvent(gaddr evt)
+{
+    pending_ae e;
+    gaddr event, reply;
+    if (!take_event(&e, &event, &reply))
+        return errAEEventNotHandled;
     int16_t result = receive(event, reply, e.reply, e.reply_ctx);
     e.reply = NULL; /* answered, or waiting in the suspended list */
     tb_DisposePtr(event);
     tb_DisposePtr(reply);
     free_event(&e, false);
     return result;
+}
+
+/* ---- Handlers called on the program's own stack ----
+ *
+ * A program calling AEProcessAppleEvent itself has its handlers called as
+ * a Mac's Apple Event Manager calls them, from the program's own code on
+ * its own stack, with nothing of ours under them: the call returns into
+ * the handler, whose return address is a stub of ours that goes on with
+ * the dispatch (the next handler, or the event done with and the result
+ * returned to the program's call).  A program that runs its whole event
+ * loop inside a handler (Anthem 1.01 in its Open Application, UnrealFinder
+ * and HexaSuper) is then at its own level there, and can be hibernated.
+ * A handler of the other ISA, or one of ours, is called from native code
+ * as before.  What the dispatch needs meanwhile is on the program's stack
+ * (an ae_frame); only whoever waits for the reply is the host's. */
+
+enum {
+    AF_EVENT = 0,      /* the event's descriptor (a pointer of ours) */
+    AF_REPLY = 4,      /* the reply's */
+    AF_SAVED = 8,      /* current_event_desc as it was */
+    AF_CLASS = 12,     /* the event's class and ID */
+    AF_ID = 16,
+    AF_STAGE = 20,     /* handler tables looked in: -1 none yet, 0 the predispatch handler's, 1 the app's, 2 both */
+    AF_RESULT = 22,    /* the last handler's result */
+    AF_RETURN = 24,    /* where the program's call returns (68k: its return address; PowerPC: lr) */
+    AF_TOC = 28,       /* PowerPC: the caller's r2 and r1 */
+    AF_SP = 32,
+    AF_REGS = 36,      /* 68k: D0-D7, A0-A6 and SR at the call, put back after it as before */
+    AF_SIZE = 36,      /* PowerPC's */
+    AF_SIZE_68K = 100,
+};
+
+/* Who waits for each event's reply, by its descriptor: the host's (a
+ * resumed process has none, as for a suspended event). */
+BB_HOST static struct {
+    gaddr evt;
+    machine_ae_reply_fn fn;
+    void *ctx;
+} waiters[8];
+
+static void note_waiter(gaddr evt, machine_ae_reply_fn fn, void *ctx)
+{
+    if (!fn)
+        return;
+    for (int i = 0; i < 8; i++)
+        if (!waiters[i].evt) {
+            waiters[i].evt = evt, waiters[i].fn = fn, waiters[i].ctx = ctx;
+            return;
+        }
+    fn(ctx, NULL, 0, errAEEventNotHandled); /* no room to wait: no reply */
+}
+
+static machine_ae_reply_fn take_waiter(gaddr evt, void **ctx)
+{
+    *ctx = NULL;
+    for (int i = 0; i < 8; i++)
+        if (waiters[i].evt == evt) {
+            machine_ae_reply_fn fn = waiters[i].fn;
+            *ctx = waiters[i].ctx;
+            waiters[i].evt = 0;
+            return fn;
+        }
+    return NULL;
+}
+
+enum { kM68kISA = 0, kPowerPCISA = 1 };
+
+/* A handler's ISA, as the program's own code can call it: 1 for 68k code
+ * (its address in *code), 2 for PowerPC (its transition vector), 0 when
+ * native code must call it (a routine of ours, or a descriptor's other
+ * routine). */
+static int handler_isa(gaddr upp, gaddr *code)
+{
+    *code = upp;
+    if (!upp || mm_is_native(upp) || native_index_for(upp) >= 0)
+        return 0;
+    if (mm_is_descriptor(upp)) {
+        uint32_t pi;
+        int isa;
+        if (!mm_descriptor_routine(upp, g_ppc_mode ? kPowerPCISA : kM68kISA, &pi, &isa, code) || !*code)
+            return 0;
+        if (isa == kPowerPCISA)
+            return 2;
+        return native_index_for(*code) >= 0 || mm_is_native(*code) ? 0 : 1;
+    }
+    if (g_ppc_mode)
+        return mm_is_68k_proc(upp) ? 1 : 2;
+    return 1;
+}
+
+/* The next handler to call (dispatch's order), or false when done. */
+static bool next_handler(gaddr f, gaddr *upp, int32_t *refcon)
+{
+    int stage = (int16_t)rd16(f + AF_STAGE);
+    if (stage < 0) {
+        wr16(f + AF_STAGE, 0);
+        gaddr pre = aem_special_handler(T("phac"));
+        if (pre) {
+            *upp = pre, *refcon = 0;
+            return true;
+        }
+        stage = 0;
+    }
+    while (stage < 2 && (int16_t)rd16(f + AF_RESULT) == errAEEventNotHandled) {
+        const handler_entry *hd = find_handler_in(stage, rd32(f + AF_CLASS), rd32(f + AF_ID));
+        wr16(f + AF_STAGE, (uint16_t)++stage);
+        if (hd) {
+            *upp = hd->handler, *refcon = hd->refcon;
+            return true;
+        }
+    }
+    return false;
+}
+
+BB_HOST static gaddr return_68k; /* the 68k stub a handler returns to (aem_reset) */
+static void handler_returned_68k(cpu68k *c, uint16_t tw);
+static void handler_returned_ppc(ppc_cpu *c);
+
+/* A new machine: the stub registered (as the natives are, in the same
+ * order in every process booted alike), and no one waits. */
+static void handler_frames_reset(void)
+{
+    return_68k = native_register(handler_returned_68k, "Apple Event handler return", 0);
+    memset(waiters, 0, sizeof waiters);
+}
+
+/* Go on with the dispatch whose frame is at f, for code of the ISA isa
+ * (1, 2): call the next handler (the program's own code from its own call,
+ * so that the machine goes on into it, or one of the other kind from here
+ * at once); true if the program's code goes on into one, false when the
+ * event is done with, its result in the frame. */
+static bool go_on(gaddr f, int isa)
+{
+    gaddr upp, code;
+    int32_t refcon;
+    gaddr evt = rd32(f + AF_EVENT), reply = rd32(f + AF_REPLY);
+    while (next_handler(f, &upp, &refcon)) {
+        if (handler_isa(upp, &code) != isa) {
+            wr16(f + AF_RESULT, (uint16_t)call_handler(upp, evt, reply, refcon));
+            continue;
+        }
+        if (isa == 1) {
+            cpu68k *c = g_cpu;
+            cpu_push16(c, 0); /* pascal OSErr (AppleEvent *, AppleEvent *, long) */
+            cpu_push32(c, evt);
+            cpu_push32(c, reply);
+            cpu_push32(c, (uint32_t)refcon);
+            cpu_push32(c, return_68k);
+            c->pc = code;
+        } else {
+            ppc_cpu *c = &g_ppc;
+            gaddr rtv = cfm_native_tvector(handler_returned_ppc, "Apple Event handler return");
+            c->gpr[1] = f - 64;
+            c->gpr[3] = evt;
+            c->gpr[4] = reply;
+            c->gpr[5] = (uint32_t)refcon;
+            c->gpr[2] = rd32(code + 4);
+            c->gpr[12] = code;
+            c->lr = rtv ? rd32(rtv) : 0;
+            c->pc = rd32(code);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* The dispatch done with: the event's reply sent, its descriptors gone,
+ * current_event_desc as it was; the result. */
+static int16_t done(gaddr f)
+{
+    gaddr evt = rd32(f + AF_EVENT), reply = rd32(f + AF_REPLY);
+    int16_t result = (int16_t)rd16(f + AF_RESULT);
+    current_event_desc = rd32(f + AF_SAVED);
+    void *ctx;
+    machine_ae_reply_fn fn = take_waiter(evt, &ctx);
+    dispatched(evt, reply, result, fn, ctx);
+    tb_DisposePtr(evt);
+    tb_DisposePtr(reply);
+    return result;
+}
+
+/* A dispatch begun: its frame at f, the event current. */
+static void begin(gaddr f, const pending_ae *e, gaddr event, gaddr reply)
+{
+    wr32(f + AF_EVENT, event);
+    wr32(f + AF_REPLY, reply);
+    wr32(f + AF_SAVED, current_event_desc);
+    wr32(f + AF_CLASS, attr_long(event, T("evcl")));
+    wr32(f + AF_ID, attr_long(event, T("evid")));
+    wr16(f + AF_STAGE, (uint16_t)-1);
+    wr16(f + AF_RESULT, (uint16_t)errAEEventNotHandled);
+    note_waiter(event, e->reply, e->reply_ctx);
+    current_event_desc = event;
+    suspending = 0;
+}
+
+/* A 68k program's call returns: its registers as they were, the frame
+ * gone and the result in its room. */
+static void returned_68k(cpu68k *c, gaddr f, int16_t result)
+{
+    for (int i = 0; i < 8; i++)
+        c->d[i] = rd32(f + AF_REGS + 4 * (uint32_t)i);
+    for (int i = 0; i < 7; i++)
+        c->a[i] = rd32(f + AF_REGS + 32 + 4 * (uint32_t)i);
+    c->sr = rd16(f + AF_REGS + 60);
+    c->a[7] = f + AF_SIZE_68K;
+    wr16(c->a[7], (uint16_t)result);
+}
+
+/* _Pack8 AEProcessAppleEvent from 68k code (trap.c's hand-written
+ * selectors): the stack as the glue finds it, the return address on top
+ * of the event and the result's room.  The dispatcher returns to whatever
+ * is on top afterwards: the handler, or the caller. */
+void aem_trap_ProcessAppleEvent(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    uint32_t ret = cpu_pop32(c);
+    (void)cpu_pop32(c); /* the event: the one delivered */
+    pending_ae e;
+    gaddr event, reply;
+    if (!take_event(&e, &event, &reply)) {
+        wr16(c->a[7], (uint16_t)errAEEventNotHandled);
+        cpu_push32(c, ret);
+        return;
+    }
+    c->a[7] -= AF_SIZE_68K;
+    gaddr f = c->a[7];
+    wr32(f + AF_RETURN, ret);
+    for (int i = 0; i < 8; i++)
+        wr32(f + AF_REGS + 4 * (uint32_t)i, c->d[i]);
+    for (int i = 0; i < 7; i++)
+        wr32(f + AF_REGS + 32 + 4 * (uint32_t)i, c->a[i]);
+    wr16(f + AF_REGS + 60, c->sr);
+    begin(f, &e, event, reply);
+    e.reply = NULL; /* the waiter's now */
+    free_event(&e, false);
+    if (go_on(f, 1)) {
+        cpu_push32(c, c->pc); /* into the handler */
+        return;
+    }
+    returned_68k(c, f, done(f));
+    cpu_push32(c, ret);
+}
+
+/* A 68k handler returned (its result on top of its frame). */
+static void handler_returned_68k(cpu68k *c, uint16_t tw)
+{
+    (void)tw;
+    int16_t r = (int16_t)cpu_pop16(c);
+    gaddr f = c->a[7];
+    wr16(f + AF_RESULT, (uint16_t)r);
+    if (go_on(f, 1))
+        return;
+    returned_68k(c, f, done(f));
+    c->pc = rd32(f + AF_RETURN);
+}
+
+/* AEProcessAppleEvent from PowerPC code (cfm.c's hand-written exports):
+ * the frame below the caller's stack, as ppc_call leaves room. */
+void aem_ppc_ProcessAppleEvent(ppc_cpu *c)
+{
+    pending_ae e;
+    gaddr event, reply;
+    if (!take_event(&e, &event, &reply)) {
+        c->gpr[3] = (uint32_t)(int32_t)errAEEventNotHandled;
+        c->pc = c->lr;
+        return;
+    }
+    gaddr sp = (c->gpr[1] - 512) & ~15u;
+    wr32(sp, c->gpr[1]); /* the back chain */
+    gaddr f = sp + 64;   /* above the handler's linkage and parameter area */
+    wr32(f + AF_RETURN, c->lr);
+    wr32(f + AF_TOC, c->gpr[2]);
+    wr32(f + AF_SP, c->gpr[1]);
+    begin(f, &e, event, reply);
+    e.reply = NULL;
+    free_event(&e, false);
+    if (go_on(f, 2))
+        return;
+    c->gpr[3] = (uint32_t)(int32_t)done(f);
+    c->pc = c->lr;
+}
+
+/* A PowerPC handler returned (its stack pointer back at the frame's). */
+static void handler_returned_ppc(ppc_cpu *c)
+{
+    gaddr f = c->gpr[1] + 64;
+    wr16(f + AF_RESULT, (uint16_t)c->gpr[3]);
+    if (go_on(f, 2))
+        return;
+    c->gpr[3] = (uint32_t)(int32_t)done(f);
+    c->gpr[2] = rd32(f + AF_TOC);
+    c->gpr[1] = rd32(f + AF_SP);
+    c->pc = rd32(f + AF_RETURN);
 }
 
 int16_t tb_AEGetTheCurrentEvent(gaddr return_evt)

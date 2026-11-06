@@ -999,6 +999,11 @@ gaddr cfm_native_tvector(void (*fn)(struct ppc_cpu *), const char *name);
 uint32_t aem_call_proc(gaddr upp, uint32_t procinfo, const uint32_t *args, int n);
 /* The application's special handler for key, else the system's; 0 if none. */
 gaddr aem_special_handler(uint32_t key);
+/* AEProcessAppleEvent as the program's own code calls it, the handlers
+ * called on its own stack: a hand-written selector of _Pack8 (trap.c) and
+ * export (cfm.c). */
+void aem_trap_ProcessAppleEvent(cpu68k *c, uint16_t tw);
+void aem_ppc_ProcessAppleEvent(struct ppc_cpu *c);
 /* A descriptor's data flattened for another process (malloc'd), and such
  * an event queued for the application, its reply to `reply`. */
 uint8_t *aem_flatten(gaddr desc, uint32_t *len_out);
@@ -1025,6 +1030,9 @@ void tb_MoreMasterPointers(uint32_t count);
 /* Mixed Mode (mixedmode.c). */
 void mixedmode_init(void);
 bool mm_is_descriptor(gaddr p);
+/* A descriptor's routine for the ISA wanted (else its first): its
+ * procInfo, ISA and code (a transition vector for PowerPC). */
+bool mm_descriptor_routine(gaddr rd, int want, uint32_t *procinfo, int *isa, gaddr *proc);
 /* A routine of Blue Box's own: 68k code in the ROM's native stubs, never a
  * transition vector, whichever ISA asks for it. */
 bool mm_is_native(gaddr p);

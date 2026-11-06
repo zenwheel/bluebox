@@ -162,6 +162,55 @@ extension BlueBox {
             #expect(try String(contentsOf: file, encoding: .utf8) == "changed")
         }
 
+        /// A program running its event loop inside its Apple Event handler
+        /// (Anthem 1.01's Open Application): the handler is called on the
+        /// program's own stack, so the machine stops at its idle call there,
+        /// its snapshot is put back, and when the handler returns the
+        /// program's AEProcessAppleEvent call answers its result, the
+        /// registers it had kept.
+        @Test func aLoopInsideAnAppleEventHandlerHibernates() {
+            launchTestApp(sizeFlags: 0x0040)
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            let vars = ptr(12) // count, flag, result (word)
+            let count = vars, flag = vars + 4, result = vars + 8
+            // pascal OSErr handler(evt, reply, refcon):
+            //   loop { count += 1; _SystemTask } until flag; return -1700 (errAECoercionFail, say)
+            let handler = code([0x52B9, hi(count), lo(count), 0xA9B4, 0x4AB9, hi(flag), lo(flag), 0x67F0,
+                                0x205F, 0x4FEF, 0x000C, 0x3EBC, 0xF95C, 0x4ED0])
+            #expect(tb_AEInstallEventHandler(Int32(bitPattern: fourCC("aevt")), Int32(bitPattern: fourCC("oapp")),
+                                             handler, 0, 0) == 0)
+            machine_send_apple_event(fourCC("aevt"), fourCC("oapp"), nil, 0, nil, nil, nil)
+            let e = ptr(UInt32(EventRecord_SIZEOF))
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd16(e) == 23)
+            wr16(result, 0x7777)
+            // MOVEQ #5,D3; CLR.W -(SP); MOVE.L #e,-(SP); MOVE.W #$021B,D0; _Pack8; MOVE.W (SP)+,result;
+            // loop: _SystemTask; BRA.S loop
+            _ = start([0x7605, 0x4267, 0x2F3C, hi(e), lo(e), 0x303C, 0x021B, 0xA816, 0x33DF, hi(result), lo(result),
+                       0xA9B4, 0x60FC])
+            g_cpu!.pointee.d.3 = 0
+            _ = machine_run(200_000)
+            #expect(rd32(count) > 0)                        // in the handler
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "SystemTask")
+            let snap = tempDir().appendingPathComponent("aehandler.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            #expect(machine_hibernate_restore(snap, &err, err.count), Comment(rawValue: String(cString: err)))
+            let n = rd32(count)
+            _ = machine_run(200_000)
+            #expect(rd32(count) > n)                        // the handler's loop goes on
+            #expect(rd16(result) == 0x7777)
+            g_cpu!.pointee.d.3 = 9                          // a register the handler changed
+            wr32(flag, 1)
+            _ = machine_run(200_000)
+            #expect(Int16(bitPattern: rd16(result)) == -1700) // the handler's result, returned to the call
+            #expect(g_cpu!.pointee.d.3 == 5)                // as the program had it
+        }
+
         /// Hibernate in a window: the machine runs on its own thread (as the
         /// hosts run it), Suspend stops it at a safe point, the snapshot is
         /// written from another thread while it stands there, and put back

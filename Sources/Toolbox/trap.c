@@ -200,6 +200,19 @@ gaddr trap_visible_address(gaddr a)
     return a;
 }
 
+/* Selectors whose glue is written by hand, as the program's own code
+ * calls them. */
+typedef struct {
+    uint16_t trap;
+    int32_t selector;
+    native_fn fn;
+} hand_selector;
+
+static const hand_selector hand_selectors[] = {
+    { 0xA816, 0x21B, aem_trap_ProcessAppleEvent }, /* its handlers called on the program's stack (aem.c) */
+    { 0, 0, NULL },
+};
+
 static void dispatch_native(cpu68k *c, uint16_t tw)
 {
     const disp_entry *d = find_disp(tw);
@@ -251,6 +264,11 @@ static void dispatch_native(cpu68k *c, uint16_t tw)
         cpu_push32(c, ret);
     }
     idle_selector(s ? s->name : NULL);
+    for (const hand_selector *h = hand_selectors; s && h->fn; h++)
+        if (h->trap == d->trap && h->selector == s->selector) {
+            h->fn(c, tw);
+            return;
+        }
     if (s && s->glue) {
         s->glue(c, tw);
         return;

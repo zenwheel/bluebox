@@ -157,6 +157,51 @@ extension BlueBox {
             machine_drain_end()
         }
 
+        /// A PowerPC program running its event loop inside its Apple Event
+        /// handler (UnrealFinder, HexaSuper): the handler is called from the
+        /// program's own code, so the machine stops on its idle call there,
+        /// and when the handler returns, restored, AEProcessAppleEvent
+        /// answers its result.
+        @Test func aLoopInsideAnAppleEventHandlerHibernates() {
+            defer { g_ppc_mode = false }
+            launchTestApp(sizeFlags: 0x0040)
+            _ = cfm_ppc_cpu()
+            g_cpu!.pointee.halted = false
+            g_ppc.halted = false
+            let task = export("SystemTask"), process = export("AEProcessAppleEvent")
+            let vars = ptr(12) // count, flag, result
+            // handler: loop { count += 1; SystemTask } until flag; return -1700
+            let handler = tvector(code(
+                [0x7FC8_02A6] + load(29, vars)                                   // mflr r30
+                    + [0x839D_0000, 0x3B9C_0001, 0x939D_0000] + call(task)      // count += 1; SystemTask
+                    + [0x839D_0004, 0x2C1C_0000, 0x4182_FFD8]                   // until flag
+                    + [0x3860_F95C, 0x7FC8_03A6, 0x4E80_0020]))                 // li r3,-1700; mtlr r30; blr
+            #expect(tb_AEInstallEventHandler(Int32(bitPattern: fourCC("aevt")), Int32(bitPattern: fourCC("oapp")),
+                                             handler, 0, 0) == 0)
+            machine_send_apple_event(fourCC("aevt"), fourCC("oapp"), nil, 0, nil, nil, nil)
+            let e = ptr(UInt32(EventRecord_SIZEOF))
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd16(e) == 23)
+            wr32(vars + 8, 0x7777)
+            // result := AEProcessAppleEvent(e); loop { SystemTask }
+            _ = start(load(29, vars) + load(3, e) + call(process) + [0x907D_0008] + call(task) + [branch(back: 5)])
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > 0)                         // in the handler
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "SystemTask")
+            let snap = snapshot("ppcaehandler.bbhib")
+            machine_drain_end()
+            restore(snap)
+            let n = rd32(vars)
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > n)
+            #expect(rd32(vars + 8) == 0x7777)
+            wr32(vars + 4, 1)
+            _ = machine_run(200_000)
+            #expect(Int32(bitPattern: rd32(vars + 8)) == -1700) // the handler's result, returned to the call
+        }
+
         /// A PowerPC thread waiting in YieldToThread is saved with the
         /// program; restored, it goes on: its YieldToThread answers noErr and
         /// its loop runs again.
