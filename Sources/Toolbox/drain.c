@@ -54,11 +54,14 @@
 #include "trap.h"
 
 #define DRAIN_GRACE 5000000u                  /* instructions an idle call may take to come */
-#define DRAIN_TIMEOUT_NS 2000000000ull         /* then refused */
+#define DRAIN_TIMEOUT_NS 2000000000ull         /* then refused, once the machine has run DRAIN_LEAST too */
+#define DRAIN_LEAST 50000000u                  /* instructions: a busy host's slow machine gets as far */
+#define DRAIN_LONGEST_NS 10000000000ull        /* refused then whatever it ran (a host wait) */
 
 BB_HOST static atomic_int state;               /* MACHINE_DRAIN_* */
 BB_HOST static bool exits;                     /* machine_run returns RUN_DRAINED at the safe point */
 BB_HOST static uint64_t deadline;              /* the host's monotonic clock */
+BB_HOST static uint64_t begun_ns, begun_at;    /* the host's clock and the instruction count when asked */
 BB_HOST static uint64_t grace_until;           /* the instruction count */
 BB_HOST static bool stopped_here;              /* the CPU stopped at a trap for the drain */
 BB_HOST static bool rewind_wanted;             /* a native abandoned its call */
@@ -81,7 +84,9 @@ void machine_drain_begin(bool exit_run)
         return;
     }
     exits = exit_run;
-    deadline = host_ns() + DRAIN_TIMEOUT_NS;
+    begun_ns = host_ns();
+    begun_at = g_cpu ? g_cpu->icount : 0;
+    deadline = begun_ns + DRAIN_TIMEOUT_NS;
     /* A snapshot taken where the program waits for its next event is the
      * likeliest to go on well; Suspend wants the machine still now. */
     grace_until = exit_run && g_cpu ? g_cpu->icount + DRAIN_GRACE : 0;
@@ -148,7 +153,7 @@ static void describe(char *out, size_t len)
         /* Disk Copy's PowerPC code calls its dialogs' 68k code: a call from
          * native code, as Mixed Mode makes it. */
         snprintf(out, len, "the program waits in 68k code it called through Mixed Mode (CallUniversalProc)%s%s, which "
-                 "a snapshot cannot carry yet", in ? ", inside " : "", in ? in : "");
+                 "a snapshot cannot carry yet", t ? ", inside " : "", t ? trap_name(t) : "");
     else if (depth > 0)
         snprintf(out, len, "the program is in a routine of its own called by the Toolbox (%s) and did not come back to "
                  "its event loop", in ? in : "an interrupt task");
@@ -164,10 +169,19 @@ static void describe(char *out, size_t len)
         snprintf(out, len, "the program did not come to a point where it could be saved");
 }
 
-/* Past the deadline: refused, saying what the machine is doing. */
+/* Past the deadline: refused, saying what the machine is doing.  The
+ * deadline is the host's time, but a machine slowed by a busy host (a
+ * sweep running eight at a time) still gets DRAIN_LEAST instructions, as a
+ * screen saver drawing heavily needed to come to its event loop; a
+ * machine not running at all (in a host wait) is refused at the longest. */
 bool drain_expired(void)
 {
-    if (atomic_load(&state) != MACHINE_DRAIN_GOING || host_ns() < deadline)
+    if (atomic_load(&state) != MACHINE_DRAIN_GOING)
+        return false;
+    uint64_t now = host_ns();
+    if (now < deadline)
+        return false;
+    if (now - begun_ns < DRAIN_LONGEST_NS && g_cpu && g_cpu->icount - begun_at < DRAIN_LEAST)
         return false;
     char where[256];
     describe(where, sizeof where);

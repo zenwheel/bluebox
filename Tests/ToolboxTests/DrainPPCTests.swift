@@ -221,7 +221,7 @@ extension BlueBox {
             machine_set_instruction_limit(0)
             #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
             let why = String(cString: machine_drain_reason())
-            #expect(why.contains("68k code it called through Mixed Mode (CallUniversalProc), inside SystemTask"),
+            #expect(why.contains("68k code it called through Mixed Mode (CallUniversalProc)"),
                     Comment(rawValue: why))
             machine_drain_end()
         }

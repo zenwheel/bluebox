@@ -114,6 +114,20 @@ extension BlueBox {
             machine_post_mouse(120, 80, 0)
         }
 
+        /// A drain is refused when its time is up only once the machine has
+        /// also run its least: a busy host's slow machine gets as far as a
+        /// fast one's.
+        @Test func aSlowMachineGetsItsLeastBeforeARefusal() {
+            launchTestApp()
+            machine_drain_begin(true)
+            Thread.sleep(forTimeInterval: 2.1)
+            #expect(!drain_expired())                       // past the time, not the instructions
+            g_cpu!.pointee.icount += 50_000_000
+            #expect(drain_expired())
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            machine_drain_end()
+        }
+
         /// Suspend drains too: stopped at a safe point, the machine could be
         /// hibernated, and goes on when resumed.
         @Test func suspendStopsAtASafePoint() {
