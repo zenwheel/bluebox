@@ -62,6 +62,7 @@ typedef struct {
     ppc_trap_ctx ppc_trap;
     bool ppc_returned;
     int ppc_depth;
+    gaddr level_68k; /* 68k code run at the program's level for PowerPC code (mixedmode.c) */
 } exec_ctx;
 
 /* The host thread a guest thread runs on: it may go on only when told. */
@@ -95,8 +96,15 @@ typedef struct {
 } thread;
 
 /* How a thread waits while another runs: not at all yet (or running), in
- * a Thread Manager call at its own level (PowerPC or 68k), or elsewhere. */
-enum { PARK_NONE, PARK_PPC, PARK_68K, PARK_DEEP };
+ * a Thread Manager call at its own level (PowerPC or 68k), at an idle call
+ * of its own level it has not made, set aside for a drain (PowerPC or
+ * 68k), or elsewhere. */
+enum { PARK_NONE, PARK_PPC, PARK_68K, PARK_DEEP, PARK_IDLE_PPC, PARK_IDLE_68K };
+
+static bool parked_at_level(uint8_t park)
+{
+    return park == PARK_PPC || park == PARK_68K || park == PARK_IDLE_PPC || park == PARK_IDLE_68K;
+}
 
 static thread threads[MAX_THREADS];
 static int current; /* index of the running thread */
@@ -111,6 +119,11 @@ BB_HOST static host_thread *hosts[MAX_THREADS];
 /* Each thread that waited at its own level in the process that hibernated,
  * until its first turn in this one. */
 BB_HOST static bool resumed[MAX_THREADS];
+/* A thread set aside for a drain (thread_park_idle): the idle call it
+ * waits at, as it switches away; and the application's thread, when its
+ * turn comes, abandons its call. */
+BB_HOST static const char *parking_idle;
+BB_HOST static bool drain_handoff;
 
 static host_thread *new_host(void)
 {
@@ -228,6 +241,7 @@ static void save_ctx(exec_ctx *x)
     ppc_trap_ctx_save(&x->ppc_trap);
     x->ppc_returned = mm_ctx_returned();
     x->ppc_depth = mm_call_depth();
+    x->level_68k = mm_level_ctx();
 }
 
 /* The registers and nesting; the instruction count, the machine's halt and
@@ -268,6 +282,7 @@ static void load_ctx(const exec_ctx *x)
     ppc_trap_ctx_load(&x->ppc_trap);
     mm_ctx_set_returned(x->ppc_returned);
     mm_ctx_set_depth(x->ppc_depth);
+    mm_set_level_ctx(x->level_68k);
 }
 
 /* ---- Where a thread waits ---- */
@@ -299,7 +314,17 @@ static bool switching_68k(uint32_t d0)
 static void note_park(thread *f)
 {
     const exec_ctx *x = f->ctx;
+    /* Its entry routine's call is one call from native code; the
+     * application's thread has none. */
+    int base = f == &threads[0] ? 0 : 1;
     f->park = PARK_DEEP;
+    if (parking_idle) {
+        snprintf(f->park_in, sizeof f->park_in, "%s", parking_idle);
+        f->park = x->ppc_depth == base ? PARK_IDLE_PPC : PARK_IDLE_68K;
+        f->park_trapword = x->trap.last_trapword;
+        parking_idle = NULL;
+        return;
+    }
     uint32_t op = g_ppc_mode ? rd32(x->ppc.pc - 4) : 0;
     uint16_t tw = trap_current_word();
     if (x->ppc_trap.depth == 0 && (op & 0xFC000000u) == PPC_NATIVE_OP)
@@ -308,16 +333,19 @@ static void note_park(thread *f)
         snprintf(f->park_in, sizeof f->park_in, "%s", tw ? trap_name(tw) : "a call of the Toolbox's");
     if (x->ppc_trap.depth != 0)
         return;
-    if (x->ppc_depth == 1 && x->trap.call_depth == 0) {
+    /* The application's thread runs PowerPC code at its level, or 68k code
+     * (a 68k program's, or a PowerPC program's it called there). */
+    bool main_ppc = g_ppc_mode && !x->level_68k;
+    if (x->ppc_depth == base && x->trap.call_depth == 0 && (base || main_ppc)) {
         /* The glue has not answered yet: the program counter is past the
          * NATIVE word, the return in lr. */
         if (switching_ppc(x->ppc.pc - 4))
             f->park = PARK_PPC;
-    } else if (x->trap.call_depth == 1 && x->ppc_depth == 0) {
+    } else if (x->trap.call_depth == base && x->ppc_depth == 0 && (base || !main_ppc)) {
         /* The glue has popped its arguments: A7 is at the result, and the
          * program counter is the return address the caller pushed. */
         gaddr sp0;
-        if (!trap_tm_call(1, &sp0, f->park_args, &f->park_trapword) || !switching_68k(x->cpu.d[0]))
+        if (!trap_tm_call(base, &sp0, f->park_args, &f->park_trapword) || !switching_68k(x->cpu.d[0]))
             return;
         uint32_t ret = (uint32_t)f->park_args[0] << 24 | f->park_args[1] << 16 | f->park_args[2] << 8 | f->park_args[3];
         if (ret != x->cpu.pc || x->cpu.a[7] <= sp0 + 4 || x->cpu.a[7] - sp0 > sizeof f->park_args - 2)
@@ -334,7 +362,7 @@ int threads_parked(void)
 {
     int n = 0;
     for (int i = 1; i < MAX_THREADS; i++)
-        n += threads[i].used && (threads[i].park == PARK_PPC || threads[i].park == PARK_68K);
+        n += threads[i].used && parked_at_level(threads[i].park);
     return n;
 }
 
@@ -347,7 +375,7 @@ const char *threads_blocker(void)
         return "the program runs Multiprocessing Services tasks, which a snapshot cannot carry yet";
     for (int i = 1; i < MAX_THREADS; i++) {
         const thread *t = &threads[i];
-        if (!t->used || !hosts[i] || !hosts[i]->started || t->park == PARK_PPC || t->park == PARK_68K)
+        if (!t->used || !hosts[i] || !hosts[i]->started || parked_at_level(t->park))
             continue;
         const exec_ctx *x = t->ctx;
         bool deep = !x || x->ppc_trap.depth || x->trap.call_depth + x->ppc_depth > 1;
@@ -368,7 +396,7 @@ void threads_after_resume(void)
     for (int i = 1; i < MAX_THREADS; i++) {
         thread *t = &threads[i];
         hosts[i] = t->used ? new_host() : NULL;
-        resumed[i] = t->used && (t->park == PARK_PPC || t->park == PARK_68K);
+        resumed[i] = t->used && parked_at_level(t->park);
         if (t->used && !hosts[i])
             cpu_halt(g_cpu, "Thread Manager: no host thread for thread %u", t->id);
     }
@@ -381,7 +409,14 @@ static uint32_t resume_entry(thread *t)
 {
     cpu68k *c = g_cpu;
     LOGF(LOG_IDLE, "threads: thread %u goes on after resuming, from %s at %08X\n", t->id, t->park_in,
-         t->park == PARK_PPC ? g_ppc.lr : c->pc);
+         t->park == PARK_PPC ? g_ppc.lr : t->park == PARK_IDLE_PPC ? g_ppc.pc : c->pc);
+    /* Set aside at an idle call: it makes the call now. */
+    if (t->park == PARK_IDLE_PPC)
+        return ppc_call_resume();
+    if (t->park == PARK_IDLE_68K) {
+        guest_call_resume(t->park_trapword);
+        return cpu_pop32(c);
+    }
     if (t->park == PARK_PPC) {
         g_ppc.gpr[3] = noErr;
         g_ppc.pc = g_ppc.lr;
@@ -489,6 +524,29 @@ static void switch_to(int to, bool leaving)
     if (!leaving)
         wait_turn(mine);
     pthread_mutex_unlock(&baton);
+    /* The application's thread, going on because another was set aside
+     * for a drain: its call is made again once the machine goes on. */
+    if (!leaving && from == 0 && drain_handoff) {
+        drain_handoff = false;
+        drain_abandon();
+    }
+}
+
+bool thread_drains_aside(void)
+{
+    if (current == 0 || !threads[current].used || !parked_at_level(threads[0].park) ||
+        threads[0].park == PARK_IDLE_PPC || threads[0].park == PARK_IDLE_68K || ppc_trap_depth() != 0 ||
+        mm_level_68k())
+        return false;
+    return (mm_call_depth() == 1 && trap_call_depth() == 0) || (trap_call_depth() == 1 && mm_call_depth() == 0);
+}
+
+void thread_park_idle(const char *name)
+{
+    LOGF(LOG_IDLE, "threads: thread %u set aside at %s for a drain\n", threads[current].id, name);
+    parking_idle = name;
+    drain_handoff = true;
+    switch_to(0, false);
 }
 
 static void finish_thread(int i, uint32_t result_value, bool store)

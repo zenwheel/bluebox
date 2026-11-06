@@ -43,4 +43,13 @@
 
 #include "../include/bbmem.h"
 
+/* A saved value that is the host's own, not the program's: a reading of
+ * the host's clock, an ID made from its process.  It is kept, and goes on
+ * within the process; a resume moves it on or makes it again, so two
+ * processes' snapshots differ there by nature (the state map's kind 'X'
+ * or 'x', which hibernate-diff leaves out with the host's pointers).  A
+ * value a fresh process can simply make again belongs in BB_HOST instead. */
+typedef uint64_t bb_host_value64;
+typedef uint32_t bb_host_value32;
+
 #endif

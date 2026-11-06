@@ -517,7 +517,7 @@ static bool rewound(cpu68k *c, uint16_t op, const entry_regs *r, gaddr sp0, cons
 {
     /* A PowerPC program's call is the one put back (cfm.c), not the 68k
      * trap run for it. */
-    if (call_depth != 0 || g_ppc_mode || c->halted || !drain_take_rewind(c, op))
+    if (call_depth != 0 || (g_ppc_mode && !mm_level_68k()) || c->halted || !drain_take_rewind(c, op))
         return false;
     if (args)
         gput(sp0, args, (uint32_t)nargs);
@@ -547,7 +547,7 @@ void trap_native(cpu68k *c, uint16_t index)
      * (trap_aline): its registers and arguments are noted, and put back
      * with the program counter on the NATIVE word, so the call is made
      * again. */
-    bool level = trap_call_depth() == 0 && !g_ppc_mode;
+    bool level = trap_call_depth() == 0 && (!g_ppc_mode || mm_level_68k());
     entry_regs er;
     gaddr sp0 = c->a[7];
     uint8_t args[ARGS_KEPT];

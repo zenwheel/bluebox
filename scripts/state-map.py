@@ -19,6 +19,9 @@ Each field is one of
   H  a library's handle (FILE, CF, sqlite, Metal ...): the host's state
   Y  a lock or condition variable (the host's)
   D  a file descriptor (the host's)
+  X, x  a value of the host's, 8 or 4 bytes (bb_host_value64, bb_host_value32:
+     a reading of its clock, an ID from its process): data, saved, but
+     hibernate-diff leaves it out, as it does D
   I  an integer as wide as a pointer: data, but where a pointer the map
      does not know of could hide (the scan looks there)
 H, Y and D belong in the host's section (BB_HOST); in a saved static they
@@ -40,6 +43,7 @@ spec.loader.exec_module(census)
 name, tref = census.name, census.tref
 
 SAVED = {'__bbdata', '__bbbss'}
+HOST_VALUES = {'bb_host_value64': 'X', 'bb_host_value32': 'x'}  # bbstate.h
 HOSTSECT = {'__bbhost', '__bbhostz'}
 PLAIN = {'__data', '__bss', '__common'}
 NMLINE = re.compile(r'^([0-9a-f]+) \((\w+),(\w+)\) (?:non-)?external (?:\[[^\]]*\] )?(\S+)')
@@ -124,6 +128,8 @@ class Layouts:
             lay, o = self.resolve(off)
             return lay.runs(o, field, depth + 1) if lay is not self else []
         for n in names:
+            if n in HOST_VALUES:
+                return [(0, HOST_VALUES[n], 1, 0, 1, 0)]
             if census.SYNC_NAMES.search(n):
                 return [(0, 'Y', 1, 0, 1, 0)]
             if census.HOST_NAMES.search(n):

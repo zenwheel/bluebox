@@ -132,7 +132,6 @@ private func readPrefix(_ path: String, _ n: Int = 2048) -> [UInt8] {
     return Array((try? h.read(upToCount: n)) ?? Data())
 }
 
-private let diskTypes: Set<String> = ["dImg", "rohd", "dCpy", "ddsk", "hdsk"]
 private let diskExtensions: Set<String> = ["img", "image", "dsk", "dc42", "iso", "toast", "hfs", "cdr", "disk"]
 
 /// An HFS signature where a raw volume or a DiskCopy 4.2 image would have one.
@@ -175,8 +174,9 @@ func classify(_ path: String) -> InputKind {
         if appledouble_read(path, &f, &err, err.count) {
             defer { mac_file_free(&f) }
             let name = (path as NSString).lastPathComponent
-            let t = fourCCString(mac_file_type(&f)), c = fourCCString(mac_file_creator(&f))
-            if diskTypes.contains(t) || diskTypes.contains(c) || looksLikeDiskData(prefix) { return .diskImage }
+            if isMacDiskImage(type: mac_file_type(&f), creator: mac_file_creator(&f)) || looksLikeDiskData(prefix) {
+                return .diskImage
+            }
             if isMacArchive(type: mac_file_type(&f), creator: mac_file_creator(&f), name: name, data: prefix) {
                 return .archive
             }

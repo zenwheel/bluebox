@@ -1118,6 +1118,16 @@ int threads_parked(void);
  * have started); after a resume, their host threads made again. */
 const char *threads_blocker(void);
 void threads_after_resume(void);
+/* For a drain (drain.c): whether the running thread, not the application's,
+ * is at its own level (in its entry routine's call, nothing else of ours
+ * under it) while the application's thread waits in a Thread Manager call
+ * of its own level (Diablo's event loop runs in a thread, its main thread
+ * in YieldToThread); and the running thread parked waiting at the idle
+ * call `name` it has not made, the application's thread going on so that
+ * its call is abandoned (drain_abandon) and the machine drains at its
+ * level.  Returns when the thread's turn comes again. */
+bool thread_drains_aside(void);
+void thread_park_idle(const char *name);
 /* 68k ThreadDispatch calls (trap.c): the arguments and return address of
  * the one under way at this nesting, as the caller pushed them, for a
  * thread parked in it. */
@@ -1128,6 +1138,8 @@ void guest_call_resume(uint16_t last_trapword);
 /* The PowerPC native called at the program's level now (-1: none), and a
  * native's name; the CFM's host settings after a resume. */
 int cfm_level_call(void);
+/* Whether that native is fn's (made by the program's code, not by ours). */
+bool cfm_level_call_is(void (*fn)(struct ppc_cpu *));
 const char *cfm_native_name(uint32_t index);
 void cfm_after_resume(void);
 void sound_after_resume(void);
@@ -1227,6 +1239,15 @@ void mm_ctx_set_returned(bool r);
 int mm_call_depth(void);
 void mm_ctx_set_depth(int d);
 uint32_t ppc_call_resume(void);
+/* A PowerPC program's 68k code it called through CallUniversalProc at its
+ * own level, run on the guest by machine_run's 68k processor (mixedmode.c):
+ * whether one runs, its frame (switched with a thread's registers), and
+ * whether the processor to run changed since last asked (the flags that
+ * stopped the other cleared). */
+bool mm_level_68k(void);
+gaddr mm_level_ctx(void);
+void mm_set_level_ctx(gaddr f);
+bool mm_take_switch(void);
 /* 68k traps run for PowerPC code under way (ppc_glue.c). */
 int ppc_trap_depth(void);
 

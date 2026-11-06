@@ -2448,9 +2448,10 @@ static void count_tree(const char *dir, bool root, uint32_t *files, uint32_t *di
 
 static void volume_counts(const char *root, uint32_t *files, uint32_t *dirs)
 {
-    static char last[PATH_MAX];
-    static uint32_t last_files, last_dirs;
-    static time_t when;
+    /* A cache of the host's folders, by the host's clock. */
+    BB_HOST static char last[PATH_MAX];
+    BB_HOST static uint32_t last_files, last_dirs;
+    BB_HOST static time_t when;
     time_t now = time(NULL);
     if (strcmp(last, root) || now - when > 5) {
         uint32_t budget = 20000;

@@ -203,26 +203,73 @@ extension BlueBox {
         }
 
         /// A PowerPC program waiting in 68k code it called through
-        /// CallUniversalProc (Disk Copy's dialogs) is under a call from
-        /// native code: refused, saying so.
-        @Test func waitingIn68kCodeCalledThroughMixedModeIsRefusedSayingSo() {
+        /// CallUniversalProc (Disk Copy's dialogs, in ModalDialog): the
+        /// routine runs on the guest, so the machine stops on its idle trap
+        /// there; restored, it goes on, and when it returns its result
+        /// reaches the PowerPC code and the 68k registers are as they were.
+        @Test func waitingIn68kCodeCalledThroughMixedModeHibernates() {
+            defer { g_ppc_mode = false }
+            let cup = export("CallUniversalProc"), task = export("SystemTask")
+            // pascal long routine(long *vars): loop { vars[0] += 1; SystemTask } until vars[1]; return $BEE
+            let words: [UInt16] = [0x206F, 0x0004, 0x5290, 0xA9B4, 0x206F, 0x0004, 0x4AA8, 0x0004, 0x67F2,
+                                   0x205F, 0x588F, 0x2EBC, 0x0000, 0x0BEE, 0x4ED0]
+            let routine = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(routine + UInt32(i * 2), w) }
+            let vars = ptr(12) // count, flag, result
+            wr32(vars + 8, 0x7777)
+            let sp68 = ptr(65536) + 65000
+            g_cpu!.pointee.a.7 = sp68
+            g_cpu!.pointee.d.7 = 0x1234_5678
+            // vars[2] := CallUniversalProc(routine, kPascalStackBased | RESULT_SIZE(4) | STACK_ROUTINE_PARAMETER(1, 4), vars)
+            _ = start(load(29, vars) + load(3, routine) + [0x3880_00F0, 0x7FA5_EB78] + call(cup) + [0x907D_0008]
+                      + call(task) + [branch(back: 5)])
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > 0)                         // in the 68k routine
+            #expect(mm_level_68k())
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "SystemTask")
+            let snap = snapshot("ppc68klevel.bbhib")
+            machine_drain_end()
+            restore(snap)
+            #expect(mm_level_68k())
+            let n = rd32(vars)
+            _ = machine_run(200_000)
+            #expect(rd32(vars) > n)
+            #expect(rd32(vars + 8) == 0x7777)
+            wr32(vars + 4, 1)
+            _ = machine_run(200_000)
+            #expect(rd32(vars + 8) == 0xBEE)                // the routine's result, returned to the call
+            #expect(!mm_level_68k())
+            #expect(g_cpu!.pointee.a.7 == sp68)             // the 68k registers as they were
+            #expect(g_cpu!.pointee.d.7 == 0x1234_5678)
+        }
+
+        /// 68k code called through CallUniversalProc from a callback (under
+        /// a host frame) is not the program's level: run from native code
+        /// as before, and a drain there is refused, the program being in a
+        /// routine of its own the Toolbox called.
+        @Test func waitingIn68kCodeCalledFromACallbackIsRefused() {
             defer { g_ppc_mode = false }
             let cup = export("CallUniversalProc")
             let words: [UInt16] = [0xA9B4, 0x60FC] // loop: _SystemTask; BRA.S loop
             let routine = tb_NewPtr(Int32(words.count * 2), false, false)
             for (i, w) in words.enumerated() { wr16(routine + UInt32(i * 2), w) }
             g_cpu!.pointee.a.7 = ptr(65536) + 65000
-            // CallUniversalProc(routine, kPascalStackBased)
-            _ = start(load(3, routine) + [0x3880_0000] + call(cup) + [branch(back: 0)])
+            // a callback: CallUniversalProc(routine, kPascalStackBased)
+            let callback = tvector(code(load(3, routine) + [0x3880_0000] + call(cup) + [branch(back: 0)]))
+            _ = start([branch(back: 0)])
             machine_hibernate_at(machine_instruction_count() + 1_000_000)
             machine_set_instruction_limit(machine_instruction_count() + 6_000_000)
-            _ = machine_run(10_000_000)
+            _ = ppc_call(callback, nil, 0)
+            #expect(!mm_level_68k())
+            _ = drain_slice_point() // machine_run's, the machine stopped at the limit
             machine_hibernate_at(0)
             machine_set_instruction_limit(0)
             #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
             let why = String(cString: machine_drain_reason())
-            #expect(why.contains("68k code it called through Mixed Mode (CallUniversalProc)"),
-                    Comment(rawValue: why))
+            #expect(why.contains("a routine of its own called by the Toolbox"), Comment(rawValue: why))
             machine_drain_end()
         }
 
@@ -254,6 +301,97 @@ extension BlueBox {
             _ = machine_run(200_000)
             #expect(rd32(vars + 4) > count)
             #expect(rd32(vars) == 0)                       // noErr
+        }
+
+        /// A program whose event loop runs in a thread, its main thread
+        /// waiting in YieldToThread (Diablo): the thread is set aside at its
+        /// idle call, the main thread's YieldToThread abandoned, and the
+        /// machine drains there.  Going on, here or restored, the main
+        /// thread yields again and the thread's loop runs on; the main
+        /// thread's YieldToThread never returns meanwhile.
+        @Test func anEventLoopInAThreadHibernates() {
+            defer {
+                g_ppc_mode = false
+                machine_set_instruction_limit(0)
+                machine_hibernate_at(0)
+            }
+            let task = export("SystemTask"), yield = export("YieldToThread")
+            let vars = ptr(8) // the main thread's count, the thread's
+            let entry = tvector(code(load(29, vars) + [0x839D_0004, 0x3B9C_0001, 0x939D_0004] // count += 1
+                                     + call(task) + [branch(back: 8)]))                    // SystemTask; loop
+            let made = ptr(4)
+            #expect(tb_NewThread(1, entry, 0, 0, 0, 0, made) == 0)
+            // the main thread: loop { YieldToThread(thread); main count += 1 }
+            _ = start(load(29, vars) + load(3, rd32(made)) + call(yield)
+                      + [0x839D_0000, 0x3B9C_0001, 0x939D_0000, branch(back: 10)])
+            machine_hibernate_at(machine_instruction_count() + 300_000)
+            machine_set_instruction_limit(machine_instruction_count() + 20_000_000)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "YieldToThread (abandoned)")
+            #expect(thread_current_index() == 0)
+            #expect(threads_parked() == 1)
+            #expect(rd32(vars) == 0 && rd32(vars + 4) > 0)
+            let snap = snapshot("ppcthreadloop.bbhib")
+            machine_drain_end()
+            func goOn() {
+                let count = rd32(vars + 4)
+                machine_set_instruction_limit(machine_instruction_count() + 400_000)
+                _ = machine_run(10_000_000)
+                #expect(rd32(vars + 4) > count)              // the thread's loop runs on
+                #expect(rd32(vars) == 0)                     // the main thread still waits
+            }
+            goOn()
+            restore(snap)
+            goOn()
+        }
+
+        /// The same for a 68k program: its thread set aside at _SystemTask,
+        /// its main thread's _ThreadDispatch abandoned and made again.
+        @Test func a68kEventLoopInAThreadHibernates() {
+            defer {
+                machine_set_instruction_limit(0)
+                machine_hibernate_at(0)
+            }
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            func code68(_ words: [UInt16]) -> UInt32 {
+                let p = tb_NewPtr(Int32(words.count * 2), false, false)
+                for (i, w) in words.enumerated() { wr16(p + UInt32(i * 2), w) }
+                return p
+            }
+            let vars = ptr(8) // the main thread's count, the thread's
+            // the thread: loop { count += 1; _SystemTask }
+            let entry = code68([0x52B9, hi(vars + 4), lo(vars + 4), 0xA9B4, 0x60F6])
+            let made = ptr(4)
+            #expect(tb_NewThread(1, entry, 0, 0, 0, 0, made) == 0)
+            let id = rd32(made)
+            // the program: loop { YieldToThread(thread); main count += 1 }
+            let app = code68([0x4267, 0x2F3C, hi(id), lo(id), 0x303C, 0x0205, 0xABF2, 0x548F,
+                              0x52B9, hi(vars), lo(vars), 0x60E8])
+            g_cpu!.pointee.a.7 = ptr(65536) + 65000
+            g_cpu!.pointee.sr = 0x2000
+            g_cpu!.pointee.pc = app
+            machine_hibernate_at(machine_instruction_count() + 300_000)
+            machine_set_instruction_limit(machine_instruction_count() + 20_000_000)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()).hasSuffix("(abandoned)"))
+            #expect(g_cpu!.pointee.pc == app + 12)          // on the _ThreadDispatch, to be made again
+            #expect(threads_parked() == 1)
+            #expect(rd32(vars) == 0 && rd32(vars + 4) > 0)
+            let snap = snapshot("68kthreadloop.bbhib")
+            machine_drain_end()
+            func goOn() {
+                let count = rd32(vars + 4)
+                machine_set_instruction_limit(machine_instruction_count() + 400_000)
+                _ = machine_run(10_000_000)
+                #expect(rd32(vars + 4) > count)
+                #expect(rd32(vars) == 0)
+            }
+            goOn()
+            restore(snap)
+            goOn()
         }
 
         /// The same for a 68k thread waiting in _ThreadDispatch: its

@@ -41,6 +41,7 @@
  */
 #include "hibernate.h"
 #include "hibernate_map.h"
+#include "lowmem_gen.h"
 
 #include "mem.h"
 
@@ -720,7 +721,7 @@ static void add_reloc(save_ctx *c, size_t off, int kind, uint32_t tgt, uint64_t 
 static void save_field(void *vctx, size_t off, char kind)
 {
     save_ctx *c = vctx;
-    if (kind == 'Y' || kind == 'D' || kind == 'I')
+    if (kind == 'Y' || kind == 'D' || kind == 'I' || kind == 'X' || kind == 'x')
         return;
     uint64_t v;
     memcpy(&v, c->live + off, 8);
@@ -1410,7 +1411,7 @@ typedef struct {
 static void mark_field(void *vctx, size_t off, char kind)
 {
     scan_ctx *c = vctx;
-    uint8_t m = kind == 'I' ? W_LOOK : kind == 'Y' || kind == 'D' ? W_DATA
+    uint8_t m = kind == 'I' ? W_LOOK : kind == 'Y' || kind == 'D' || kind == 'X' || kind == 'x' ? W_DATA
               : kind == 'U' ? W_UNION : kind == 'H' ? W_HANDLE : W_PTR;
     /* A field at any offset: every word it touches (a word a field of
      * the map's starts at is that field's; one it only reaches into is
@@ -1777,6 +1778,36 @@ static int cmp_reloc(const void *a, const void *b)
     return x->off < y->off ? -1 : x->off > y->off;
 }
 
+/* The bytes of the fields of a layout at base that hold the host's own
+ * values (the map's 'D' descriptors, 'X' and 'x' values of the host's:
+ * readings of its clock, counts of its polls), set in mask: two
+ * processes' snapshots differ there by nature. */
+static void mark_host_values(uint32_t layout, size_t base, size_t limit, uint8_t *mask)
+{
+    if (layout >= hb_nlayouts)
+        return;
+    const hb_layout *l = &hb_layouts[layout];
+    for (uint32_t r = 0; r < l->n; r++) {
+        const hb_run *run = &hb_runs[l->first + r];
+        size_t w = run->kind == 'X' ? 8 : run->kind == 'x' || run->kind == 'D' ? 4 : 0;
+        for (uint32_t i = 0; w && i < run->count; i++)
+            for (uint32_t j = 0; j < run->count2; j++) {
+                size_t off = base + run->off + (size_t)i * run->stride + (size_t)j * run->stride2;
+                if (off + w <= limit)
+                    memset(mask + off, 1, w);
+            }
+    }
+}
+
+/* The first byte of n at x and y that differs and is not masked, or -1. */
+static int first_difference(const uint8_t *x, const uint8_t *y, size_t n, const uint8_t *mask)
+{
+    for (size_t k = 0; k < n; k++)
+        if (x[k] != y[k] && !(mask && mask[k]))
+            return (int)k;
+    return -1;
+}
+
 int hb_compare(const uint8_t *a, size_t alen, const uint8_t *b, size_t blen, int flags, FILE *out, int max)
 {
     char err[256];
@@ -1798,14 +1829,28 @@ int hb_compare(const uint8_t *a, size_t alen, const uint8_t *b, size_t blen, int
                  (unsigned long long)vb.sect_size[i]);
             continue;
         }
-        for (uint64_t o = 0; o + 8 <= va.sect_size[i]; o += 8)
-            if (memcmp(va.sect[i] + o, vb.sect[i] + o, 8)) {
-                uint64_t x, y;
-                memcpy(&x, va.sect[i] + o, 8);
-                memcpy(&y, vb.sect[i] + o, 8);
-                describe_where(&va, (uint32_t)i, o, where, sizeof where);
+        /* The host's values in the statics, left out with the host's pointers. */
+        uint8_t *mask = ignore_host ? bb_host_calloc(va.sect_size[i] + 8, 1) : NULL;
+        uintptr_t lo = (uintptr_t)img.sect[i], hi = lo + img.sect_size[i];
+        for (size_t k = 0; mask && k < nstatics; k++)
+            if (statics[k].addr >= lo && statics[k].addr < hi && statics[k].layout)
+                mark_host_values(statics[k].layout, statics[k].addr - lo, va.sect_size[i], mask);
+        for (uint64_t o = 0; o + 8 <= va.sect_size[i]; o += 8) {
+            int k = first_difference(va.sect[i] + o, vb.sect[i] + o, 8, mask ? mask + o : NULL);
+            if (k < 0)
+                continue;
+            /* Named by the byte that differs: a word may hold two statics. */
+            uint64_t x, y;
+            memcpy(&x, va.sect[i] + o, 8);
+            memcpy(&y, vb.sect[i] + o, 8);
+            describe_where(&va, (uint32_t)i, o + (uint64_t)k, where, sizeof where);
+            if (k)
+                diff(&d, "%s: 0x%llx, then 0x%llx (the 8 bytes from %d before)", where, (unsigned long long)x,
+                     (unsigned long long)y, k);
+            else
                 diff(&d, "%s: 0x%llx, then 0x%llx", where, (unsigned long long)x, (unsigned long long)y);
-            }
+        }
+        bb_host_free(mask);
     }
     if (va.h.nblocks != vb.h.nblocks)
         diff(&d, "%llu blocks, then %llu", (unsigned long long)va.h.nblocks, (unsigned long long)vb.h.nblocks);
@@ -1817,13 +1862,26 @@ int hb_compare(const uint8_t *a, size_t alen, const uint8_t *b, size_t blen, int
             continue;
         }
         const uint8_t *px = (const uint8_t *)(x + 1), *py = (const uint8_t *)(y + 1);
+        uint8_t *mask = NULL;
+        const bb_type *t = (const bb_type *)(img.base + x->type_off);
+        const hb_typemap *m = ignore_host && (t->form == BB_FORM_ARRAY || t->form == BB_FORM_HEAD)
+                                  ? map_type(t->file, t->name) : NULL;
+        if (m && m->size == t->size && m->size && (mask = bb_host_calloc(x->size + 8, 1))) {
+            if (t->form == BB_FORM_HEAD)
+                mark_host_values(m->layout, 0, x->size, mask);
+            else
+                for (size_t e = 0; e + m->size <= x->size; e += m->size)
+                    mark_host_values(m->layout, e, x->size, mask);
+        }
         for (uint32_t o = 0; o < x->size; o += 8) {
             uint32_t n = x->size - o < 8 ? x->size - o : 8;
-            if (memcmp(px + o, py + o, n)) {
-                describe_where(&va, (uint32_t)(NSAVED + i), o, where, sizeof where);
+            int k = first_difference(px + o, py + o, n, mask ? mask + o : NULL);
+            if (k >= 0) {
+                describe_where(&va, (uint32_t)(NSAVED + i), o + (uint32_t)k, where, sizeof where);
                 diff(&d, "%s differs", where);
             }
         }
+        bb_host_free(mask);
     }
     /* The regions' runs and bytes. */
     if (va.h.nregions != vb.h.nregions) {
@@ -1842,10 +1900,27 @@ int hb_compare(const uint8_t *a, size_t alen, const uint8_t *b, size_t blen, int
                 break;
             }
             for (uint64_t k = 0; k < fa.nruns; k++) {
-                for (uint64_t o = 0; o < runs_a[k].len; o += 4096)
-                    if (memcmp(da + o, db + o, runs_a[k].len - o < 4096 ? runs_a[k].len - o : 4096))
-                        diff(&d, "region %.16s: the page at 0x%llx differs", fa.name,
-                             (unsigned long long)(runs_a[k].off + o));
+                for (uint64_t o = 0; o < runs_a[k].len; o += 4096) {
+                    size_t n = runs_a[k].len - o < 4096 ? runs_a[k].len - o : 4096;
+                    /* The guest's Time is the host's date (a resume moves it on). */
+                    uint64_t at = runs_a[k].off + o;
+                    uint8_t page_mask[4096];
+                    bool masked = ignore_host && !strncmp(fa.name, "guest", sizeof fa.name) && LM_Time >= at &&
+                                  LM_Time + 4 <= at + n;
+                    if (masked) {
+                        memset(page_mask, 0, sizeof page_mask);
+                        memset(page_mask + (LM_Time - at), 1, 4);
+                    }
+                    int first = first_difference(da + o, db + o, n, masked ? page_mask : NULL);
+                    if (first < 0)
+                        continue;
+                    size_t last = n - 1;
+                    while (last > (size_t)first && (da[o + last] == db[o + last] || (masked && page_mask[last])))
+                        last--;
+                    diff(&d, "region %.16s: the page at 0x%llx differs (bytes 0x%llx to 0x%llx)", fa.name,
+                         (unsigned long long)(runs_a[k].off + o), (unsigned long long)(runs_a[k].off + o + first),
+                         (unsigned long long)(runs_a[k].off + o + last));
+                }
                 da += pad8(runs_a[k].len);
                 db += pad8(runs_a[k].len);
             }

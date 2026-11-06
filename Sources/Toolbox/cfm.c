@@ -94,6 +94,7 @@ static bool idle_import(const char *name)
 BB_HOST static int level_call = -1;
 
 int cfm_level_call(void) { return level_call; }
+bool cfm_level_call_is(void (*fn)(ppc_cpu *)) { return level_call >= 0 && natives[level_call].fn == fn; }
 const char *cfm_native_name(uint32_t index) { return index < (uint32_t)nnatives ? natives[index].name : "?"; }
 
 /* The registers a call at the program's level was made with: put back
@@ -121,7 +122,7 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
     }
     gaddr at = c->pc - 4; /* the NATIVE word */
     bool level = drain_program_level();
-    if (level && drain_at_native(c, at, natives[index].idle, natives[index].name))
+    if ((level || thread_current_index() != 0) && drain_at_native(c, at, natives[index].idle, natives[index].name))
         return;
     trap_set_current_word(0); /* not a trap: no HFS or async bits */
     LOGF(LOG_TRAPS, "%08X PowerPC %s\n", c->lr, natives[index].name);
