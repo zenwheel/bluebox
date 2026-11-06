@@ -38,7 +38,10 @@ public enum SuspendNotice {
 }
 
 /// The shell's programs: which are running (by application path, with
-/// their process IDs) and which of them are suspended.
+/// their process IDs) and which of them are suspended.  The registry
+/// (ProgramRegistry) is the truth for every program, the shell's own and
+/// those started from a terminal or a bundle; the shell's own children
+/// count from their launch, before they have entered themselves.
 public struct ProgramStates: Equatable {
     public enum Action: Equatable {
         case launch, suspend, resume
@@ -51,39 +54,78 @@ public struct ProgramStates: Equatable {
         }
     }
 
-    public private(set) var pids: [String: Int32] = [:]
-    public private(set) var suspended: Set<String> = []
+    /// What opening a program does (double-clicking it, Launch, its context
+    /// menu's Launch): start it, bring it to the front, or resume it.
+    public enum Open: Equatable {
+        case launch
+        case activate(pid: Int32)
+        case resume(pid: Int32)
+    }
+
+    /// The shell's children, by path.
+    private var children: [String: Int32] = [:]
+    /// The registry's programs, by path (the oldest of a path's).
+    public private(set) var registered: [String: RunningProgram] = [:]
+    /// What the programs have said since the registry was last read.
+    private var noted: [Int32: Bool] = [:]
 
     public init() {}
 
+    public var pids: [String: Int32] { children.merging(registered.mapValues(\.pid)) { _, entry in entry } }
+
     public func isRunning(_ path: String) -> Bool { pids[path] != nil }
-    public func isSuspended(_ path: String) -> Bool { suspended.contains(path) }
+    public func isSuspended(_ path: String) -> Bool {
+        guard let pid = pids[path] else { return false }
+        return noted[pid] ?? (registered[path]?.state == .suspended)
+    }
 
     /// What the button where Launch is does for this application.
     public func action(for path: String) -> Action {
         !isRunning(path) ? .launch : isSuspended(path) ? .resume : .suspend
     }
 
+    public func open(_ path: String) -> Open {
+        guard let pid = pids[path] else { return .launch }
+        return isSuspended(path) ? .resume(pid: pid) : .activate(pid: pid)
+    }
+
+    /// The name to list a program by: what its entry calls it.
+    public func title(_ path: String) -> String { registered[path]?.title ?? (path as NSString).lastPathComponent }
+
     public mutating func launched(_ path: String, pid: Int32) {
-        pids[path] = pid
-        suspended.remove(path)
+        if let old = children[path] { noted[old] = nil }
+        children[path] = pid
+        noted[pid] = nil
     }
 
-    /// Gone, however it went (quit, crashed, killed while suspended).
+    /// A child gone, however it went (quit, crashed, killed while
+    /// suspended): its entry too, until the registry is read again.
     public mutating func ended(_ path: String) {
-        pids[path] = nil
-        suspended.remove(path)
+        guard let pid = children.removeValue(forKey: path) else { return }
+        noted[pid] = nil
+        if registered[path]?.pid == pid { registered[path] = nil }
     }
 
-    /// A program's word on itself; one the shell did not launch is ignored.
+    /// The registry read again: its live programs (a hibernated one is not
+    /// running).
+    public mutating func registry(_ entries: [RunningProgram]) {
+        var byPath: [String: RunningProgram] = [:]
+        for e in entries where e.state != .hibernated && byPath[e.program] == nil { byPath[e.program] = e }
+        registered = byPath
+        noted = noted.filter { pid, _ in !entries.contains { $0.pid == pid } }
+        let known = Set(pids.values)
+        noted = noted.filter { known.contains($0.key) }
+    }
+
+    /// A program's word on itself; one the shell knows nothing of is ignored.
     public mutating func noted(pid: Int32, suspended on: Bool) {
-        guard let path = pids.first(where: { $0.value == pid })?.key else { return }
-        if on { suspended.insert(path) } else { suspended.remove(path) }
+        guard pids.values.contains(pid) else { return }
+        noted[pid] = on
     }
 
     /// Running and not suspended, and suspended: each in name order.
-    public var runningPaths: [String] { Self.byName(pids.keys.filter { !suspended.contains($0) }) }
-    public var suspendedPaths: [String] { Self.byName(Array(suspended)) }
+    public var runningPaths: [String] { Self.byName(pids.keys.filter { !isSuspended($0) }) }
+    public var suspendedPaths: [String] { Self.byName(pids.keys.filter { isSuspended($0) }) }
 
     static func byName(_ paths: [String]) -> [String] {
         paths.sorted {

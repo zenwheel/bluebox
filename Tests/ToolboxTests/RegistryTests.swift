@@ -138,6 +138,69 @@ extension BlueBox {
             #expect(!runRegisters(headless: false, census: false, walkMenus: false, screenshot: true, printToFile: false))
             #expect(!runRegisters(headless: false, census: false, walkMenus: false, screenshot: false, printToFile: true))
         }
+
+        #if canImport(AppKit)
+        /// The shell's view: its children from their launch, the registry's
+        /// programs wherever they were started, the registry winning once a
+        /// child has entered itself.
+        @Test func shellMergedView() {
+            var s = ProgramStates()
+            let shell = "/lib/Bolo", terminal = "/lib/Games/Apeiron", bundle = "/lib/Moose"
+            s.launched(shell, pid: 100)                       // not entered yet
+            #expect(s.isRunning(shell) && !s.isSuspended(shell))
+            var fromTerminal = entry(terminal, pid: 200)
+            fromTerminal.state = .suspended
+            var moose = entry(bundle, pid: 300)
+            moose.title = "Talking Moose"
+            s.registry([fromTerminal, moose])
+            #expect(s.isRunning(shell))                       // still, though not in the registry
+            #expect(s.isRunning(terminal) && s.isSuspended(terminal))
+            #expect(s.runningPaths == [shell, bundle] && s.suspendedPaths == [terminal])
+            #expect(s.title(bundle) == "Talking Moose" && s.title(shell) == "Bolo")
+            // The child enters itself; then suspends (its notice ahead of
+            // the registry's change), and the registry catches up.
+            s.registry([fromTerminal, moose, entry(shell, pid: 100)])
+            s.noted(pid: 100, suspended: true)
+            #expect(s.isSuspended(shell))
+            var bolo = entry(shell, pid: 100)
+            bolo.state = .suspended
+            s.registry([fromTerminal, moose, bolo])
+            #expect(s.isSuspended(shell))
+            s.noted(pid: 400, suspended: true)                // nobody's
+            #expect(s.pids.count == 3)
+            // The terminal's run quits: gone from the registry, gone here.
+            s.registry([moose, bolo])
+            #expect(!s.isRunning(terminal) && s.action(for: terminal) == .launch)
+            // The child crashes: gone at once, before the registry is read.
+            s.ended(shell)
+            #expect(!s.isRunning(shell))
+            // A hibernated program is not running.
+            var asleep = entry(terminal, pid: 200)
+            asleep.state = .hibernated
+            s.registry([moose, asleep])
+            #expect(!s.isRunning(terminal) && s.runningPaths == [bundle])
+        }
+
+        /// Double-click, Launch and the context menu: launch what isn't
+        /// running, bring forward what is, resume what is suspended.
+        @Test func openAction() {
+            var s = ProgramStates()
+            #expect(s.open("/lib/Bolo") == .launch)
+            s.launched("/lib/Bolo", pid: 100)
+            #expect(s.open("/lib/Bolo") == .activate(pid: 100))
+            var other = entry("/lib/Apeiron", pid: 200)
+            #expect(s.open("/lib/Apeiron") == .launch)
+            s.registry([other])
+            #expect(s.open("/lib/Apeiron") == .activate(pid: 200)) // started from a terminal
+            other.state = .suspended
+            s.registry([other])
+            #expect(s.open("/lib/Apeiron") == .resume(pid: 200))
+            s.noted(pid: 100, suspended: true)
+            #expect(s.open("/lib/Bolo") == .resume(pid: 100))
+            s.ended("/lib/Bolo")
+            #expect(s.open("/lib/Bolo") == .launch)
+        }
+        #endif
     }
 }
 

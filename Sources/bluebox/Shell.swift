@@ -144,7 +144,7 @@ struct ShellNodeRows: View {
                     Text(app.name)
                     if model.states.isSuspended(app.path) {
                         Image(systemName: "pause.circle.fill").font(.caption2).foregroundStyle(.orange).help("Suspended")
-                    } else if model.running[app.path] != nil {
+                    } else if model.states.isRunning(app.path) {
                         Circle().fill(Color.green).frame(width: 6, height: 6).help("Running")
                     }
                 }
@@ -170,7 +170,7 @@ struct ShellNodeRows: View {
                 } label: {
                     Label(node.name, systemImage: "folder").lineLimit(1)
                         .contextMenu {
-                            let running = node.paths.contains { model.running[$0] != nil }
+                            let running = node.paths.contains { model.states.isRunning($0) }
                             Button("Move to Trash…") { trashing = node }
                                 .disabled(running || !model.canTrash(node))
                                 .help(running ? "Quit its applications first" : "Move the whole folder to the Trash")
@@ -208,8 +208,14 @@ enum ShellItem: Hashable {
     @Published var settings: [String: AppSettings] = [:]
     @Published var systemItems: [SystemItem] = []
     @Published var running: [String: Process] = [:] /* by application path */
-    /// The running programs' process IDs, and which are suspended (as they say).
+    /// The running programs' process IDs, and which are suspended: the
+    /// registry's, and the children just launched.
     @Published var states = ProgramStates()
+    let registry = defaultRegistry()
+    private var registryWatch: DispatchSourceFileSystemObject?
+    /// Each registered process, watched for its end (a crash leaves its
+    /// entry, which the next reading removes).
+    private var exitWatches: [Int32: DispatchSourceProcess] = [:]
     /// Recently launched applications (paths saved before the rename from
     /// Classic follow the moved data folder).
     @Published var recent: [String] = (UserDefaults.standard.stringArray(forKey: "recent") ?? [])
@@ -271,18 +277,66 @@ enum ShellItem: Hashable {
     init() {
         refreshInBackground()
         watchSystemFolder()
+        watchRegistry()
         watchSuspensions()
     }
 
     // MARK: Suspending and resuming
 
     /// The programs say when they are suspended or resumed (from their own
-    /// menus too); a program ending, however it ends, is neither.
+    /// menus too), having written it in the registry first; a program
+    /// ending, however it ends, is neither.
     private func watchSuspensions() {
         DistributedNotificationCenter.default().addObserver(forName: SuspendNotice.state, object: nil,
                                                             queue: .main) { [weak self] note in
             guard let (pid, suspended) = SuspendNotice.parse(note) else { return }
-            MainActor.assumeIsolated { self?.states.noted(pid: pid, suspended: suspended) }
+            MainActor.assumeIsolated {
+                self?.readRegistry()
+                self?.states.noted(pid: pid, suspended: suspended)
+            }
+        }
+    }
+
+    /// The registry's folder changes as programs start, change and end,
+    /// wherever they were started.
+    private func watchRegistry() {
+        try? FileManager.default.createDirectory(atPath: registry.directory, withIntermediateDirectories: true)
+        readRegistry()
+        let fd = open(registry.directory, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .rename, .delete],
+                                                               queue: .main)
+        source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.readRegistry() } }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        registryWatch = source
+    }
+
+    func readRegistry() {
+        let entries = registry.entries()
+        states.registry(entries)
+        let pids = Set(entries.filter { $0.state != .hibernated }.map(\.pid))
+        for (pid, watch) in exitWatches where !pids.contains(pid) {
+            watch.cancel()
+            exitWatches[pid] = nil
+        }
+        for pid in pids where exitWatches[pid] == nil {
+            let watch = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
+            watch.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.readRegistry() } }
+            watch.resume()
+            exitWatches[pid] = watch
+        }
+    }
+
+    /// Open a program: launch it, or bring it to the front if it is running
+    /// (from here or anywhere), resumed if it is suspended.
+    func openProgram(path: String) {
+        switch states.open(path) {
+        case .launch: launch(path: path)
+        case .activate(let pid): bringToFront(pid: pid)
+        case .resume(let pid):
+            SuspendNotice.ask(pid: pid, suspend: false)
+            bringToFront(pid: pid)
         }
     }
 
@@ -407,21 +461,21 @@ enum ShellItem: Hashable {
 
     /// Run an application as `bluebox run` does from a terminal: a process of
     /// its own, with its own Dock icon and rootless windows.
-    func launch(_ app: ShellApp) { launch(path: app.path) }
+    func launch(_ app: ShellApp) { openProgram(path: app.path) }
 
-    func launch(path: String) {
+    private func launch(path: String) {
         let name = (path as NSString).lastPathComponent
-        if let p = running[path], p.isRunning {
-            messages.append("\(name) is already running")
-            return
-        }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
         p.arguments = ["run", path]
+        var env = ProcessInfo.processInfo.environment
+        env[RunningProgram.launchedByVariable] = "shell"
+        p.environment = env
         p.terminationHandler = { [weak self] _ in
             Task { @MainActor in
                 self?.running[path] = nil
                 self?.states.ended(path) // a crash while suspended too
+                self?.readRegistry()
             }
         }
         do {
@@ -488,7 +542,7 @@ enum ShellItem: Hashable {
         guard canTrash(node), let path = folderPath(node) else { return }
         let inside = apps(in: node)
         let name = (node.folder as NSString).lastPathComponent
-        if inside.contains(where: { running[$0.path] != nil }) {
+        if inside.contains(where: { states.isRunning($0.path) }) {
             messages.append("Quit the applications in \(name) before moving it to the Trash")
             return
         }
@@ -633,11 +687,15 @@ struct ShellView: View {
                 model.searchCollapsed = []
                 query = search
             }
-            // Double-clicking an application launches it; its context menu
-            // launches it or shows it in the Finder.
+            // Double-clicking an application launches it, or brings it to the
+            // front (resumed) if it is running; its context menu does that,
+            // suspends or resumes it, or shows it in the Finder.
             .contextMenu(forSelectionType: ShellItem.self) { items in
                 if case .app(let app)? = items.first {
                     if model.states.isRunning(app.path) {
+                        if !model.states.isSuspended(app.path) {
+                            Button("Bring to Front") { model.launch(app) }
+                        }
                         Button(model.states.action(for: app.path).title) { model.toggleSuspend(path: app.path) }
                     } else {
                         Button("Launch") { model.launch(app) }
@@ -770,7 +828,7 @@ struct SystemFolderPage: View {
                             }
                             Spacer()
                             if item.isApplication {
-                                Button("Launch") { model.launch(path: item.path) }
+                                Button("Launch") { model.openProgram(path: item.path) }
                             }
                         }
                     }
@@ -808,12 +866,12 @@ struct AppPage: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if model.running[app.path] != nil {
+                    if model.states.isRunning(app.path) {
                         Text(model.states.isSuspended(app.path) ? "Suspended" : "Running").foregroundStyle(.secondary)
                     }
                     Button("Delete…", role: .destructive) { confirmDelete = true }
-                        .disabled(model.running[app.path] != nil)
-                        .help(model.running[app.path] != nil ? "Quit it first" : "Move it to the Trash")
+                        .disabled(model.states.isRunning(app.path))
+                        .help(model.states.isRunning(app.path) ? "Quit it first" : "Move it to the Trash")
                     Button(model.states.action(for: app.path).title) { model.primaryAction(app) }
                         .keyboardShortcut(.defaultAction)
                 }
@@ -1152,12 +1210,15 @@ struct HighlightPicker: View {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        let running = model.states.runningPaths.filter { model.running[$0] != nil }
+        model.readRegistry()
+        let running = model.states.runningPaths
         if !running.isEmpty {
             menu.addItem(header("Running"))
             for path in running {
-                let item = NSMenuItem(title: (path as NSString).lastPathComponent, action: nil, keyEquivalent: "")
-                item.isEnabled = false
+                let item = NSMenuItem(title: model.states.title(path), action: #selector(showProgram(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = path
+                item.toolTip = "Bring it to the front"
                 menu.addItem(item)
             }
             menu.addItem(.separator())
@@ -1190,8 +1251,12 @@ struct HighlightPicker: View {
         }
     }
 
+    @objc func showProgram(_ sender: NSMenuItem) {
+        if let path = sender.representedObject as? String { model.openProgram(path: path) }
+    }
+
     @objc func launchRecent(_ sender: NSMenuItem) {
-        if let path = sender.representedObject as? String { model.launch(path: path) }
+        if let path = sender.representedObject as? String { model.openProgram(path: path) }
     }
 
     @objc func openWindow(_ sender: Any?) { showWindow() }
