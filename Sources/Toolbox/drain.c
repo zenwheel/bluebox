@@ -15,7 +15,9 @@
  *     idle call): machine_run's own loop,
  *     with cpu_run or ppc_run returned, so nothing of the Toolbox is on
  *     the host's stack (a call into guest code or a nested trap has
- *     returned by then).
+ *     returned by then), and no OpenGL context mid-way through something
+ *     a snapshot cannot carry (between glBegin and glEnd, a display list
+ *     compiling: hostgl_blocker), which it comes out of soon.
  * Meanwhile the Toolbox's waits end early (drain_wanted): WaitNextEvent's
  * sleep, Delay's, the mouse-tracking loops (the mouse reads as let go,
  * outside everything, so each cancels as if released there); a native
