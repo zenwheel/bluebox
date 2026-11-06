@@ -1179,7 +1179,7 @@ static bool setup(void)
 {
     if (E.ready)
         return true;
-    scratch = bb_malloc(16384 * 4, BB_BYTES);
+    scratch = bb_host_malloc(16384 * 4);
     if (!scratch || !jit_engine_init(&E, CODE_PPC, 2, CODE_SIZE))
         return false;
     E.build = build_id();
@@ -1346,10 +1346,10 @@ int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
     int bad = 0;
     why[0] = 0;
     enum { AREA = 0x10000 };
-    uint8_t *before = bb_malloc(AREA, BB_BYTES), *after_i = bb_malloc(AREA, BB_BYTES);
+    uint8_t *before = bb_host_malloc(AREA), *after_i = bb_host_malloc(AREA);
     if (!before || !after_i) {
-        bb_free(before);
-        bb_free(after_i);
+        bb_host_free(before);
+        bb_host_free(after_i);
         return -1;
     }
     bool was = ppc_jit_enabled;
@@ -1455,8 +1455,8 @@ int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
         }
     }
     ppc_jit_enabled = was;
-    bb_free(before);
-    bb_free(after_i);
+    bb_host_free(before);
+    bb_host_free(after_i);
     return bad;
 }
 

@@ -83,11 +83,14 @@ bb_block *bb_block_of(const void *p)
     return b->magic == magic_for(b) ? b : NULL;
 }
 
-static void *fresh(size_t n, const bb_type *t, int zero)
+/* Always zeroed: what a block's owner has not written yet is the same in
+ * every run (a snapshot then holds nothing of the memory's last user,
+ * and its scan sees no stale pointers there). */
+static void *fresh(size_t n, const bb_type *t)
 {
     if (n > UINT32_MAX - sizeof(bb_block))
         return NULL;
-    bb_block *b = zero ? calloc(1, sizeof *b + n) : malloc(sizeof *b + n);
+    bb_block *b = calloc(1, sizeof *b + n);
     if (!b)
         return NULL;
     b->type = t ? t : &bb_type_untyped;
@@ -99,14 +102,14 @@ static void *fresh(size_t n, const bb_type *t, int zero)
 
 void *bb_malloc(size_t n, const bb_type *t)
 {
-    return fresh(n, t, 0);
+    return fresh(n, t);
 }
 
 void *bb_calloc(size_t count, size_t size, const bb_type *t)
 {
     if (size && count > SIZE_MAX / size)
         return NULL;
-    return fresh(count * size, t, 1);
+    return fresh(count * size, t);
 }
 
 void bb_free(void *p)
@@ -126,7 +129,7 @@ void bb_free(void *p)
 void *bb_realloc(void *p, size_t n, const bb_type *t)
 {
     if (!p)
-        return fresh(n, t, 0);
+        return fresh(n, t);
     if (n > UINT32_MAX - sizeof(bb_block))
         return NULL;
     bb_block *b = bb_block_of(p);
@@ -137,7 +140,7 @@ void *bb_realloc(void *p, size_t n, const bb_type *t)
 #else
         size_t old = malloc_usable_size(p);
 #endif
-        void *q = fresh(n, t, 0);
+        void *q = fresh(n, t);
         if (!q)
             return NULL;
         memcpy(q, p, old < n ? old : n);
@@ -145,6 +148,7 @@ void *bb_realloc(void *p, size_t n, const bb_type *t)
         return q;
     }
     /* Off the list while it moves: the lock is not held across realloc. */
+    uint32_t old = b->size;
     unlink_block(b);
     b->magic = 0;
     bb_block *nb = realloc(b, sizeof *b + n);
@@ -153,6 +157,8 @@ void *bb_realloc(void *p, size_t n, const bb_type *t)
         link_block(b);
         return NULL;
     }
+    if (n > old)
+        memset((uint8_t *)(nb + 1) + old, 0, n - old);
     nb->size = (uint32_t)n;
     if (t)
         nb->type = t;
@@ -164,7 +170,7 @@ void *bb_realloc(void *p, size_t n, const bb_type *t)
 char *bb_strdup(const char *s)
 {
     size_t n = strlen(s) + 1;
-    char *d = fresh(n, &bb_type_bytes, 0);
+    char *d = fresh(n, &bb_type_bytes);
     if (d)
         memcpy(d, s, n);
     return d;
@@ -173,7 +179,7 @@ char *bb_strdup(const char *s)
 char *bb_strndup(const char *s, size_t n)
 {
     size_t len = strnlen(s, n);
-    char *d = fresh(len + 1, &bb_type_bytes, 0);
+    char *d = fresh(len + 1, &bb_type_bytes);
     if (d) {
         memcpy(d, s, len);
         d[len] = 0;

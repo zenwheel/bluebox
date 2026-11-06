@@ -105,6 +105,16 @@ void mem_copy_wrapping(gaddr dst, gaddr src, uint32_t n)
     }
 }
 
+/* 24-bit mode's one 16 MB space and its mirrors. */
+#define SPACE_24 ((size_t)1 << 24)
+
+/* What a snapshot saves of the arena: in 24-bit mode the one space (the
+ * rest mirrors it). */
+static size_t arena_extent(void)
+{
+    return g_mem_24bit ? SPACE_24 : ARENA_SIZE;
+}
+
 bool mem_init(void)
 {
     if (g_mem)
@@ -116,11 +126,9 @@ bool mem_init(void)
         return false;
     }
     g_mem = p;
+    bb_region_add("guest", g_mem, ARENA_SIZE + ARENA_SLACK, arena_extent);
     return true;
 }
-
-/* 24-bit mode's one 16 MB space and its mirrors. */
-#define SPACE_24 ((size_t)1 << 24)
 BB_HOST static int space_fd = -1;
 
 /* A fresh (zeroed) space mapped at every 16 MB of the arena, and over the
