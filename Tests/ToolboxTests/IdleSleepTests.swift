@@ -182,6 +182,20 @@ extension BlueBox {
             #expect(r.slept > r.wall / 2, "slept \(r.slept) s of \(r.wall)")
         }
 
+        /// The program's own stores into the screen are pixels too: a frame
+        /// it draws itself, the same each time, is nothing new; a count it
+        /// keeps there is.
+        @Test func theSameFrameStoredOnTheScreenLetsTheHostSleep() throws {
+            let loop = [0x2078, 0x0824, 0x20BC, 0xFFFF, 0xFFFF, 0x217C, 0x00FF, 0x00FF, 0x0040] + button
+            let r = try run(drawSetup + loop + [back(loop.count)]) // MOVE.L ScrnBase,A0; two longs stored
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        @Test func aCountOnTheScreenIsWork() throws {
+            let loop = [0x2078, 0x0824, 0x5290] + button // ADDQ.L #1,(A0)
+            #expect(try run(drawSetup + loop + [back(loop.count)]).sleeps == 0)
+        }
+
         /// The screen's colours set again: the same colours each time are
         /// nothing new, though the table's seed moves on, and two colours set
         /// in turn between two polls are a loop going round the same; a
@@ -205,6 +219,16 @@ extension BlueBox {
         @Test func aColourFadingIsWork() throws {
             let loop = [0x046D, 0x0100, 0xFF02] + setEntries(0xFF00) + button // SUBI.W #$100,-254(A5): less red
             #expect(try run(drawSetup + specs + loop + [back(loop.count)], depth: 8).sleeps == 0)
+        }
+
+        /// A program at work for a while (a count kept in memory, which the
+        /// watch finds again and again and so looks less often), then
+        /// waiting: the wait is still found.
+        @Test func aWaitAfterWorkIsStillFound() throws {
+            let body = [0x3B7C, 3000, 0xFF10] + button + [0x536D, 0xFF10, 0x66F4] // 3000 times: Button, SUBQ.W #1; then
+                + button + [back(button.count)]                                      // Button for ever
+            let r = try run(body, seconds: 0.5)
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
         }
 
         /// A computation going round in a few registers, calling nothing.

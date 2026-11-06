@@ -58,6 +58,7 @@
 
 enum {
     SAME_BEFORE_WATCH = 3, /* idle iterations in a row before the stores are watched */
+    MOST_BEFORE_WATCH = 256, /* ... after watching found work again and again */
     MAX_RUN = 20000,       /* instructions a poll loop's iteration may run */
     MAX_STORES = 64,       /* places an idle iteration may store to */
     MAX_DRAWN = 16,        /* destinations it may draw into */
@@ -165,6 +166,12 @@ static struct {
 } st;
 
 bool g_qd_drawn_watch;
+
+/* Idle iterations in a row before the stores are watched: more each time
+ * watching found the program at work after all (a game drawing each frame
+ * with the registers as they were, its state in memory), so that playing
+ * isn't slowed by the watch; fewer again once it sleeps. */
+static unsigned watch_after = SAME_BEFORE_WATCH;
 
 static uint64_t calls;          /* the program's Toolbox calls */
 static int interrupt_depth;     /* inside interrupt-time work */
@@ -532,7 +539,11 @@ static bool iteration_end(int mode)
     bool sleep = idle && stores == SAME;
     if (!idle)
         wait_broken();
-    watch(st.same >= SAME_BEFORE_WATCH);
+    if (st.watched && stores == CHANGED && watch_after < MOST_BEFORE_WATCH)
+        watch_after *= 2;
+    else if (sleep)
+        watch_after = SAME_BEFORE_WATCH;
+    watch(st.same >= watch_after);
     if (idle && st.watched) {
         memcpy(shots[site].stores, st.stores, (size_t)st.nstores * sizeof *st.stores);
         shots[site].nstores = st.nstores;
@@ -809,6 +820,7 @@ void idle_reset(void)
 {
     watch(false);
     memset(&st, 0, sizeof st);
+    watch_after = SAME_BEFORE_WATCH;
     memset(sites, 0, sizeof sites);
     forget_shots();
     interrupt_depth = 0;
