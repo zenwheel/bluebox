@@ -10,6 +10,7 @@
 #define R3D_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* A vertex as RAVE's TQAVTexture has it: x and y in pixels from the
@@ -79,5 +80,39 @@ void r3d_write(r3d_frame *f, const uint32_t *pixels, const float *depth);
  * it can't be made. */
 int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap);
 void r3d_texture_free(int texture);
+/* A texture its maker makes again from the guest's own memory after
+ * resuming (it lets go of it then): a snapshot need not carry it. */
+void r3d_texture_derived(int texture);
+
+/* Hibernating (r3d.c keeps the frames and textures with the machine):
+ * before the snapshot, what the host has that the machine does not (a
+ * frame's drawing so far, the textures' pixels) read back into it; after,
+ * let go of again; resumed, the host's made again as each is used. */
+void r3d_before_hibernate(void);
+void r3d_after_hibernate(void);
+void r3d_after_resume(void);
+size_t r3d_saved_bytes(void);
+
+/* ---- The host's side (r3d_metal.m), by the frame's or texture's slot ---- */
+
+enum { R3D_MAX_FRAMES = 256, R3D_MAX_TEXTURES = 4096 };
+
+bool r3dh_available(void);
+bool r3dh_frame_make(int slot, int width, int height);
+void r3dh_frame_drop(int slot);
+bool r3dh_frame_live(int slot);
+void r3dh_begin(int slot, const uint32_t *pixels, uint32_t clear_argb, float clear_z);
+void r3dh_clear(int slot, int x0, int y0, int x1, int y1, bool color, uint32_t argb, bool depth, float z);
+void r3dh_draw(int slot, const r3d_state *s, int primitive, const r3d_vertex *v, int count);
+void r3dh_end(int slot, uint32_t *pixels);
+void r3dh_read(int slot, uint32_t *pixels, float *depth);
+void r3dh_write(int slot, const uint32_t *pixels, const float *depth);
+bool r3dh_texture_make(int slot, int width, int height, const uint32_t *pixels, bool mipmap);
+void r3dh_texture_drop(int slot);
+bool r3dh_texture_live(int slot);
+/* Level 0's pixels, as r3dh_texture_make was given them. */
+void r3dh_texture_read(int slot, uint32_t *pixels);
+/* Every frame and texture the host has, let go of. */
+void r3dh_drop_all(void);
 
 #endif

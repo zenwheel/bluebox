@@ -1,5 +1,6 @@
 /*
- * r3d.h on Metal (macOS): a frame is a render target and a depth texture
+ * r3d.h's host side on Metal (macOS), by the slots r3d.c gives its frames
+ * and textures: a frame is a render target and a depth texture
  * of its size, private to the GPU, with a shared buffer the colours come
  * back through.  A frame's draws are kept until r3d_end, then encoded in
  * one command buffer: a pass per clear, the vertices in one buffer, a
@@ -99,8 +100,9 @@ static id<MTLSamplerState> samplers[2][2][2];
 static id<MTLTexture> white; /* bound when nothing is textured */
 static int available = -1;
 
-enum { MAX_TEXTURES = 4096 };
+enum { MAX_TEXTURES = R3D_MAX_TEXTURES, MAX_FRAMES = R3D_MAX_FRAMES };
 static id<MTLTexture> textures[MAX_TEXTURES];
+static R3DFrame *frames[MAX_FRAMES];
 
 static MTLRenderPipelineDescriptor *pipeline_descriptor(id<MTLLibrary> lib, int blend)
 {
@@ -120,7 +122,7 @@ static MTLRenderPipelineDescriptor *pipeline_descriptor(id<MTLLibrary> lib, int 
     return d;
 }
 
-bool r3d_available(void)
+bool r3dh_available(void)
 {
     if (available >= 0)
         return available;
@@ -181,10 +183,10 @@ bool r3d_available(void)
     return true;
 }
 
-r3d_frame *r3d_frame_new(int width, int height)
+bool r3dh_frame_make(int slot, int width, int height)
 {
-    if (!r3d_available() || width <= 0 || height <= 0 || width > 16384 || height > 16384)
-        return NULL;
+    if (slot < 0 || slot >= MAX_FRAMES || !r3dh_available())
+        return false;
     R3DFrame *f = [R3DFrame new];
     f->width = width;
     f->height = height;
@@ -207,22 +209,20 @@ r3d_frame *r3d_frame_new(int width, int height)
     f->depthback = [device newBufferWithLength:(NSUInteger)width * (NSUInteger)height * 4
                                        options:MTLResourceStorageModeShared];
     if (!f->color || !f->depth || !f->readback || !f->depthback)
-        return NULL;
-    return (__bridge_retained r3d_frame *)f;
+        return false;
+    frames[slot] = f;
+    return true;
 }
 
-void r3d_frame_free(r3d_frame *f)
+void r3dh_frame_drop(int slot)
 {
-    if (f) {
-        R3DFrame *o = (__bridge_transfer R3DFrame *)f;
-        (void)o;
-    }
+    if (slot >= 0 && slot < MAX_FRAMES)
+        frames[slot] = nil;
 }
 
-static R3DFrame *frame(r3d_frame *f) { return (__bridge R3DFrame *)f; }
+bool r3dh_frame_live(int slot) { return slot >= 0 && slot < MAX_FRAMES && frames[slot] != nil; }
 
-int r3d_frame_width(const r3d_frame *f) { return f ? frame((r3d_frame *)f)->width : 0; }
-int r3d_frame_height(const r3d_frame *f) { return f ? frame((r3d_frame *)f)->height : 0; }
+static R3DFrame *frame(int slot) { return slot >= 0 && slot < MAX_FRAMES ? frames[slot] : nil; }
 
 static command *new_command(R3DFrame *o)
 {
@@ -239,11 +239,11 @@ static command *new_command(R3DFrame *o)
     return c;
 }
 
-void r3d_begin(r3d_frame *f, const uint32_t *pixels, uint32_t clear_argb, float clear_z)
+void r3dh_begin(int slot, const uint32_t *pixels, uint32_t clear_argb, float clear_z)
 {
-    if (!f)
+    R3DFrame *o = frame(slot);
+    if (!o)
         return;
-    R3DFrame *o = frame(f);
     o->nverts = o->ncmds = 0;
     o->clear_argb = clear_argb;
     o->clear_z = clear_z;
@@ -253,11 +253,11 @@ void r3d_begin(r3d_frame *f, const uint32_t *pixels, uint32_t clear_argb, float 
         memcpy([o->readback contents], pixels, (size_t)o->width * (size_t)o->height * 4);
 }
 
-void r3d_clear(r3d_frame *f, int x0, int y0, int x1, int y1, bool color, uint32_t argb, bool depth, float z)
+void r3dh_clear(int slot, int x0, int y0, int x1, int y1, bool color, uint32_t argb, bool depth, float z)
 {
-    if (!f)
+    R3DFrame *o = frame(slot);
+    if (!o)
         return;
-    R3DFrame *o = frame(f);
     if (x0 < 0)
         x0 = 0;
     if (y0 < 0)
@@ -276,11 +276,11 @@ void r3d_clear(r3d_frame *f, int x0, int y0, int x1, int y1, bool color, uint32_
     c->color = color, c->argb = argb, c->depth = depth, c->z = z;
 }
 
-void r3d_draw(r3d_frame *f, const r3d_state *s, int primitive, const r3d_vertex *v, int count)
+void r3dh_draw(int slot, const r3d_state *s, int primitive, const r3d_vertex *v, int count)
 {
-    if (!f || count <= 0)
+    R3DFrame *o = frame(slot);
+    if (!o || count <= 0)
         return;
-    R3DFrame *o = frame(f);
     if (o->nverts + count > o->capverts) {
         int cap = o->capverts ? o->capverts : 1024;
         while (cap < o->nverts + count)
@@ -445,23 +445,25 @@ static void run(R3DFrame *o, bool keep, uint32_t *pixels, float *depth_out)
     }
 }
 
-void r3d_end(r3d_frame *f, uint32_t *pixels)
+void r3dh_end(int slot, uint32_t *pixels)
 {
-    if (f)
-        run(frame(f), false, pixels, NULL);
+    R3DFrame *o = frame(slot);
+    if (o)
+        run(o, false, pixels, NULL);
 }
 
-void r3d_read(r3d_frame *f, uint32_t *pixels, float *depth)
+void r3dh_read(int slot, uint32_t *pixels, float *depth)
 {
-    if (f)
-        run(frame(f), true, pixels, depth);
+    R3DFrame *o = frame(slot);
+    if (o)
+        run(o, true, pixels, depth);
 }
 
-void r3d_write(r3d_frame *f, const uint32_t *pixels, const float *depth)
+void r3dh_write(int slot, const uint32_t *pixels, const float *depth)
 {
-    if (!f)
+    R3DFrame *o = frame(slot);
+    if (!o)
         return;
-    R3DFrame *o = frame(f);
     if (o->ncmds) /* what was drawn before stays before */
         run(o, true, NULL, NULL);
     size_t n = (size_t)o->width * (size_t)o->height * 4;
@@ -475,20 +477,10 @@ void r3d_write(r3d_frame *f, const uint32_t *pixels, const float *depth)
     }
 }
 
-
-
-int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap)
+bool r3dh_texture_make(int slot, int width, int height, const uint32_t *pixels, bool mipmap)
 {
-    if (!r3d_available() || width <= 0 || height <= 0 || width > 16384 || height > 16384)
-        return 0;
-    int slot = 0;
-    for (int i = 1; i < MAX_TEXTURES; i++)
-        if (!textures[i]) {
-            slot = i;
-            break;
-        }
-    if (!slot)
-        return 0;
+    if (slot <= 0 || slot >= MAX_TEXTURES || !r3dh_available())
+        return false;
     @autoreleasepool {
         MTLTextureDescriptor *td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                                                                       width:(NSUInteger)width
@@ -497,7 +489,7 @@ int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap)
         td.usage = MTLTextureUsageShaderRead;
         id<MTLTexture> t = [device newTextureWithDescriptor:td];
         if (!t)
-            return 0;
+            return false;
         [t replaceRegion:MTLRegionMake2D(0, 0, (NSUInteger)width, (NSUInteger)height)
              mipmapLevel:0
                withBytes:pixels
@@ -512,12 +504,49 @@ int r3d_texture_new(int width, int height, const uint32_t *pixels, bool mipmap)
         }
         textures[slot] = t;
     }
-    return slot;
+    return true;
 }
 
-void r3d_texture_free(int texture)
+void r3dh_texture_drop(int slot)
 {
-    if (texture > 0 && texture < MAX_TEXTURES)
-        textures[texture] = nil;
+    if (slot > 0 && slot < MAX_TEXTURES)
+        textures[slot] = nil;
+}
+
+bool r3dh_texture_live(int slot) { return slot > 0 && slot < MAX_TEXTURES && textures[slot] != nil; }
+
+/* Through a shared buffer, whatever the texture's storage. */
+void r3dh_texture_read(int slot, uint32_t *pixels)
+{
+    id<MTLTexture> t = r3dh_texture_live(slot) ? textures[slot] : nil;
+    if (!t)
+        return;
+    @autoreleasepool {
+        NSUInteger w = t.width, h = t.height;
+        id<MTLBuffer> buf = [device newBufferWithLength:w * h * 4 options:MTLResourceStorageModeShared];
+        id<MTLCommandBuffer> cb = [queue commandBuffer];
+        id<MTLBlitCommandEncoder> b = [cb blitCommandEncoder];
+        [b copyFromTexture:t
+                     sourceSlice:0
+                     sourceLevel:0
+                    sourceOrigin:MTLOriginMake(0, 0, 0)
+                      sourceSize:MTLSizeMake(w, h, 1)
+                        toBuffer:buf
+               destinationOffset:0
+          destinationBytesPerRow:w * 4
+        destinationBytesPerImage:w * h * 4];
+        [b endEncoding];
+        [cb commit];
+        [cb waitUntilCompleted];
+        memcpy(pixels, [buf contents], w * h * 4);
+    }
+}
+
+void r3dh_drop_all(void)
+{
+    for (int i = 0; i < MAX_FRAMES; i++)
+        frames[i] = nil;
+    for (int i = 0; i < MAX_TEXTURES; i++)
+        textures[i] = nil;
 }
 #endif
