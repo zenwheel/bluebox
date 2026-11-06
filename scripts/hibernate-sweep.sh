@@ -24,7 +24,7 @@
 #     B's steps, A's last step, B's last step, walk (same / same end /
 #     differ: what), seconds for H, A and B, and the class (pass, expected
 #     refusal, sound, unexpected refusal, not hibernated, save failure,
-#     resume crash, divergent walk)
+#     resume crash, divergent walk, both timed out)
 #   and <work dir>/report.txt (the totals by class, refusals by reason);
 #   each run's output is kept in <work dir>/logs/<program>/.
 #   K=n hibernates after n instructions (default 30000000), K2=n the second
@@ -192,7 +192,7 @@ sweep_one() {
 		[ "$ahib" = "$hhib" ] || walk="$walk (A hibernated at $ahib, H at $hhib)"
 	fi
 
-	class=$(classify "$hib" "$why" "$resume" "$walk")
+	class=$(classify "$hib" "$why" "$resume" "$walk" "$aend")
 	[ -z "${KEEP:-}" ] && [ "$class" = pass ] && rm -f "$w/k.bbhib"
 	if [ -f "$w/k.bbhib" ]; then mv "$w/k.bbhib" "$logs/k.bbhib"; fi
 	rm -rf "$w"
@@ -223,7 +223,9 @@ classify() {
 		return
 		;;
 	esac
-	if [ "$3" != ok ]; then
+	if [ "$3" = "timed out" ] && [ "$5" = "timed out" ]; then
+		echo "both timed out" # a walk too long for WALK_TIMEOUT, resumed or not
+	elif [ "$3" != ok ]; then
 		echo "resume crash"
 	else
 		case $4 in
