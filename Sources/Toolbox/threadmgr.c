@@ -17,6 +17,18 @@
  * yields (its SchedulerInfoRec has the current and suggested thread); the
  * debugger's notification procedures are told of each thread made and
  * disposed of.
+ *
+ * Hibernating (drain.c) needs every thread but the application's waiting
+ * at its own level: in a Thread Manager call (YieldToThread,
+ * SetThreadState, SuspendThread) made straight from its entry routine's
+ * code, not from a routine the Toolbox called, nor from 68k code run for
+ * PowerPC code.  Each thread notes, as it switches away, whether it waits
+ * so (park).  Its registers and its stacks are in the snapshot (the
+ * context, the stack block in the guest's heap); its host thread is not.
+ * In a resumed process each such thread gets a new host thread when its
+ * turn comes, which answers the call it waited in (noErr, as it would
+ * have) and goes on with the entry routine's call where the hibernated
+ * process's left it.  A thread that never ran starts as any new one.
  */
 #include <pthread.h>
 #include <setjmp.h>
@@ -49,6 +61,7 @@ typedef struct {
     trap_ctx trap;
     ppc_trap_ctx ppc_trap;
     bool ppc_returned;
+    int ppc_depth;
 } exec_ctx;
 
 /* The host thread a guest thread runs on: it may go on only when told. */
@@ -72,10 +85,18 @@ typedef struct {
     gaddr terminator, term_param;
     gaddr switch_in, switch_in_param, switch_out, switch_out_param;
     exec_ctx *ctx;
-    host_thread *host;
     void (*exit_hook)(uint32_t id, uint32_t result); /* native code told it ended */
     uint32_t exit_to;                                /* the thread to run then */
+    uint8_t park;                                    /* how it waits while another runs: PARK_* */
+    gaddr park_sp0;                                  /* a 68k call's: what its caller pushed */
+    uint8_t park_args[64];
+    uint16_t park_trapword;                          /* the trap word before it */
+    char park_in[40];                                /* the call it switched away in, for a refusal */
 } thread;
+
+/* How a thread waits while another runs: not at all yet (or running), in
+ * a Thread Manager call at its own level (PowerPC or 68k), or elsewhere. */
+enum { PARK_NONE, PARK_PPC, PARK_68K, PARK_DEEP };
 
 static thread threads[MAX_THREADS];
 static int current; /* index of the running thread */
@@ -83,6 +104,21 @@ static uint32_t next_id;
 static int pool[3]; /* premade threads by style */
 BB_HOST static pthread_mutex_t baton = PTHREAD_MUTEX_INITIALIZER;
 BB_HOST static host_thread app_host;
+/* Each thread's host thread, by its index: the host's memory, never
+ * saved, and never freed (a host thread whose guest thread was disposed
+ * of while it waited waits on it for good). */
+BB_HOST static host_thread *hosts[MAX_THREADS];
+/* Each thread that waited at its own level in the process that hibernated,
+ * until its first turn in this one. */
+BB_HOST static bool resumed[MAX_THREADS];
+
+static host_thread *new_host(void)
+{
+    host_thread *h = bb_host_calloc(1, sizeof *h);
+    if (h)
+        pthread_cond_init(&h->cv, NULL);
+    return h;
+}
 static void (*main_pump)(void);
 static gaddr scheduler, dbg_new, dbg_dispose, dbg_schedule; /* the custom scheduler, the debugger's procs */
 
@@ -108,7 +144,10 @@ void threads_reset(void)
     }
     app_host.run = true;
     threads[0] = (thread){ .used = true, .id = kApplicationThreadID, .state = kRunningThreadState,
-                           .style = kCooperativeThread, .ctx = NULL, .host = &app_host };
+                           .style = kCooperativeThread, .ctx = NULL };
+    for (int i = 1; i < MAX_THREADS; i++)
+        hosts[i] = NULL, resumed[i] = false;
+    hosts[0] = &app_host;
     current = 0;
     next_id = kApplicationThreadID + 1;
     memset(pool, 0, sizeof pool);
@@ -188,6 +227,7 @@ static void save_ctx(exec_ctx *x)
     trap_ctx_save(&x->trap);
     ppc_trap_ctx_save(&x->ppc_trap);
     x->ppc_returned = mm_ctx_returned();
+    x->ppc_depth = mm_call_depth();
 }
 
 /* The registers and nesting; the instruction count, the machine's halt and
@@ -227,6 +267,130 @@ static void load_ctx(const exec_ctx *x)
     trap_ctx_load(&x->trap);
     ppc_trap_ctx_load(&x->ppc_trap);
     mm_ctx_set_returned(x->ppc_returned);
+    mm_ctx_set_depth(x->ppc_depth);
+}
+
+/* ---- Where a thread waits ---- */
+
+/* A Thread Manager call that may switch away and answers noErr when its
+ * thread's turn comes again. */
+static bool switching_ppc(gaddr native_word)
+{
+    uint32_t op = rd32(native_word);
+    if ((op & 0xFC000000u) != PPC_NATIVE_OP)
+        return false;
+    const char *n = cfm_native_name(op & 0x03FFFFFFu);
+    return !strcmp(n, "YieldToThread") || !strcmp(n, "YieldToAnyThread") || !strcmp(n, "SetThreadState") ||
+           !strcmp(n, "SetThreadStateEndCritical") || !strcmp(n, "SuspendThread");
+}
+
+static bool switching_68k(uint32_t selector)
+{
+    return selector == 0x205 || selector == 0x508 || selector == 0x512; /* Yield, SetThreadState, ...EndCritical */
+}
+
+/* As thread f switches away (its context just saved): whether it waits at
+ * its own level, inside its entry routine's call (one call from native
+ * code into guest code: guest_call or ppc_call) and nothing else, in a
+ * call that answers noErr when it goes on. */
+static void note_park(thread *f)
+{
+    const exec_ctx *x = f->ctx;
+    f->park = PARK_DEEP;
+    uint32_t op = g_ppc_mode ? rd32(x->ppc.pc - 4) : 0;
+    uint16_t tw = trap_current_word();
+    if (x->ppc_trap.depth == 0 && (op & 0xFC000000u) == PPC_NATIVE_OP)
+        snprintf(f->park_in, sizeof f->park_in, "%s", cfm_native_name(op & 0x03FFFFFFu));
+    else
+        snprintf(f->park_in, sizeof f->park_in, "%s", tw ? trap_name(tw) : "a call of the Toolbox's");
+    if (x->ppc_trap.depth != 0)
+        return;
+    if (x->ppc_depth == 1 && x->trap.call_depth == 0) {
+        /* The glue has not answered yet: the program counter is past the
+         * NATIVE word, the return in lr. */
+        if (switching_ppc(x->ppc.pc - 4))
+            f->park = PARK_PPC;
+    } else if (x->trap.call_depth == 1 && x->ppc_depth == 0) {
+        /* The glue has popped its arguments: A7 is at the result, and the
+         * program counter is the return address the caller pushed. */
+        gaddr sp0;
+        if (!trap_tm_call(1, &sp0, f->park_args, &f->park_trapword) || !switching_68k(x->cpu.d[0]))
+            return;
+        uint32_t ret = (uint32_t)f->park_args[0] << 24 | f->park_args[1] << 16 | f->park_args[2] << 8 | f->park_args[3];
+        if (ret != x->cpu.pc || x->cpu.a[7] <= sp0 + 4 || x->cpu.a[7] - sp0 > sizeof f->park_args - 2)
+            return;
+        f->park_sp0 = sp0;
+        f->park = PARK_68K;
+    }
+}
+
+int thread_current_index(void) { return current; }
+
+/* The threads a snapshot carries waiting (for the log). */
+int threads_parked(void)
+{
+    int n = 0;
+    for (int i = 1; i < MAX_THREADS; i++)
+        n += threads[i].used && (threads[i].park == PARK_PPC || threads[i].park == PARK_68K);
+    return n;
+}
+
+const char *threads_blocker(void)
+{
+    BB_HOST static char reason[200];
+    if (current != 0)
+        return "one of the program's threads (Thread Manager) is running";
+    if (mp_have_tasks())
+        return "the program runs Multiprocessing Services tasks, which a snapshot cannot carry yet";
+    for (int i = 1; i < MAX_THREADS; i++) {
+        const thread *t = &threads[i];
+        if (!t->used || !hosts[i] || !hosts[i]->started || t->park == PARK_PPC || t->park == PARK_68K)
+            continue;
+        const exec_ctx *x = t->ctx;
+        bool deep = !x || x->ppc_trap.depth || x->trap.call_depth + x->ppc_depth > 1;
+        snprintf(reason, sizeof reason, "thread %u of the program's (Thread Manager) waits in %s, %s", t->id,
+                 t->park_in, deep ? "called from a routine of its own the Toolbox called" : "not a Thread Manager call");
+        return reason;
+    }
+    return NULL;
+}
+
+void threads_after_resume(void)
+{
+    /* Each thread that waited in the process that hibernated, and each
+     * that never ran, gets a host thread of its own when its turn comes
+     * (the process's own host threads, if it is the one, wait for good). */
+    app_host.run = true; /* the application's thread runs */
+    hosts[0] = &app_host;
+    for (int i = 1; i < MAX_THREADS; i++) {
+        thread *t = &threads[i];
+        hosts[i] = t->used ? new_host() : NULL;
+        resumed[i] = t->used && (t->park == PARK_PPC || t->park == PARK_68K);
+        if (t->used && !hosts[i])
+            cpu_halt(g_cpu, "Thread Manager: no host thread for thread %u", t->id);
+    }
+}
+
+/* A resumed thread's first turn: the Thread Manager call it waited in
+ * answers noErr, as the glue would have, and its entry routine goes on.
+ * Returns the entry routine's result. */
+static uint32_t resume_entry(thread *t)
+{
+    cpu68k *c = g_cpu;
+    LOGF(LOG_IDLE, "threads: thread %u goes on after resuming, from %s at %08X\n", t->id, t->park_in,
+         t->park == PARK_PPC ? g_ppc.lr : c->pc);
+    if (t->park == PARK_PPC) {
+        g_ppc.gpr[3] = noErr;
+        g_ppc.pc = g_ppc.lr;
+        return ppc_call_resume();
+    }
+    wr16(c->a[7], noErr);
+    /* The trap's dispatcher puts back what the return address covered. */
+    gaddr slot = c->a[7] - 4;
+    if (slot > t->park_sp0 && slot - t->park_sp0 <= sizeof t->park_args - 4)
+        gput(slot, t->park_args + (slot - t->park_sp0), 4);
+    guest_call_resume(t->park_trapword);
+    return cpu_pop32(c);
 }
 
 /* ---- Handing over ---- */
@@ -284,7 +448,7 @@ static void switch_to(int to, bool leaving)
 {
     int from = current;
     thread *f = &threads[from], *t = &threads[to];
-    host_thread *mine = f->host;
+    host_thread *mine = hosts[from];
     if (to == from)
         return;
     if (!leaving) {
@@ -292,6 +456,7 @@ static void switch_to(int to, bool leaving)
         if (!f->ctx)
             f->ctx = bb_calloc(1, sizeof *f->ctx, BB_TAG(exec_ctx));
         save_ctx(f->ctx);
+        note_park(f);
         if (f->state == kRunningThreadState)
             f->state = kReadyThreadState;
     }
@@ -304,7 +469,7 @@ static void switch_to(int to, bool leaving)
     pthread_mutex_lock(&baton);
     if (!leaving)
         mine->run = false;
-    host_thread *h = t->host;
+    host_thread *h = hosts[to];
     h->run = true;
     if (!h->started) {
         h->started = true;
@@ -359,7 +524,7 @@ static int successor(int i)
 static void *host_main(void *arg)
 {
     thread *t = arg;
-    host_thread *h = t->host;
+    host_thread *h = hosts[t - threads];
     pthread_mutex_lock(&baton);
     wait_turn(h);
     pthread_mutex_unlock(&baton);
@@ -368,7 +533,10 @@ static void *host_main(void *arg)
     if (!setjmp(h->top)) {
         cpu68k *c = g_cpu;
         uint32_t result;
-        if (native_ppc(t->entry)) {
+        if (resumed[i]) {
+            resumed[i] = false;
+            result = resume_entry(t);
+        } else if (native_ppc(t->entry)) {
             result = ppc_call(t->entry, &t->param, 1);
         } else {
             cpu_push32(c, 0); /* the result */
@@ -376,8 +544,10 @@ static void *host_main(void *arg)
             guest_call(t->entry);
             result = cpu_pop32(c);
         }
-        if (!c->halted && threads[i].used)
+        if (!c->halted && threads[i].used) {
+            LOGF(LOG_IDLE, "threads: thread %u ended (%08X)\n", t->id, result);
             finish_thread(i, result, true);
+        }
     }
     /* Ended by its entry routine's return, by disposing of itself, or by
      * the machine stopping. */
@@ -473,18 +643,22 @@ int16_t tb_NewThread(int32_t style, gaddr entry, gaddr param, int32_t stack_size
         size += STACK_68K;
     gaddr stack = tb_NewPtr((int32_t)size, false, false);
     exec_ctx *x = bb_calloc(1, sizeof *x, BB_TAG(exec_ctx));
-    host_thread *h = bb_calloc(1, sizeof *h, BB_TAG(host_thread));
+    host_thread *h = new_host();
     if (!stack || !x || !h) {
         if (stack)
             tb_DisposePtr(stack);
         bb_free(x);
-        bb_free(h);
+        if (h) {
+            pthread_cond_destroy(&h->cv);
+            bb_host_free(h);
+        }
         return memFullErr;
     }
-    pthread_cond_init(&h->cv, NULL);
+    hosts[i] = h;
+    resumed[i] = false;
     thread *t = &threads[i];
     *t = (thread){ .used = true, .id = next_id++, .style = style, .stack = stack, .stack_size = size,
-                   .entry = entry, .param = param, .result = resultp, .ctx = x, .host = h,
+                   .entry = entry, .param = param, .result = resultp, .ctx = x,
                    .state = (options & kNewSuspend) ? kStoppedThreadState : kReadyThreadState };
     /* It starts with the creator's registers (A5 and the rest), its own
      * stacks, and nothing nested. */
@@ -500,6 +674,7 @@ int16_t tb_NewThread(int32_t style, gaddr entry, gaddr param, int32_t stack_size
     memset(&x->trap, 0, sizeof x->trap);
     memset(&x->ppc_trap, 0, sizeof x->ppc_trap);
     x->ppc_returned = false;
+    x->ppc_depth = 0;
     if (madep)
         wr32(madep, t->id);
     if (dbg_new)
@@ -573,7 +748,7 @@ int16_t tb_DisposeThread(int32_t id, gaddr result, int8_t recycle)
     if (recycle && (style == kCooperativeThread || style == kPreemptiveThread))
         pool[style]++;
     if (i == current)          /* a thread ending itself does not return: */
-        longjmp(threads[i].host->top, 1); /* its host thread leaves */
+        longjmp(hosts[i]->top, 1); /* its host thread leaves */
     /* Another thread: its host thread waits for good. */
     if (threads[i].stack)
         tb_DisposePtr(threads[i].stack);

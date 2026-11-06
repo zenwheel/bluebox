@@ -67,6 +67,8 @@ void ppc_trap_ctx_load(const ppc_trap_ctx *t)
     memcpy(trap_finished, t->finished, sizeof trap_finished);
 }
 
+int ppc_trap_depth(void) { return trap_depth; }
+
 static void trap_done_native(cpu68k *c, uint16_t tw)
 {
     (void)tw;

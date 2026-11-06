@@ -233,9 +233,14 @@ gaddr mm_new_descriptor(gaddr proc, uint32_t procinfo, int isa)
 /* Running PowerPC code from native code */
 
 static bool ppc_returned;
+static int ppc_depth; /* calls into PowerPC code from native code under way */
 
 bool mm_ctx_returned(void) { return ppc_returned; }
 void mm_ctx_set_returned(bool r) { ppc_returned = r; }
+int mm_call_depth(void) { return ppc_depth; }
+void mm_ctx_set_depth(int d) { ppc_depth = d; }
+
+static void run_to_return(void);
 
 static void ppc_return_native(ppc_cpu *c)
 {
@@ -268,6 +273,46 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
     g_ppc.gpr[12] = tvector;
     g_ppc.lr = return_code;
     g_ppc.halted = false;
+    ppc_depth++;
+    run_to_return();
+    ppc_depth--;
+    uint32_t result = g_ppc.gpr[3];
+    bool returned = ppc_returned;
+    ppc_returned = false;
+    char reason[sizeof g_ppc.halt_reason];
+    memcpy(reason, g_ppc.halt_reason, sizeof reason);
+    uint64_t icount = g_ppc.icount;
+    g_ppc = saved;
+    g_ppc.icount = icount;
+    if (!returned) {
+        /* Stopped inside: the whole machine stops. */
+        ppc_halt(&g_ppc, "%s", reason);
+        if (!g_cpu->halted)
+            cpu_halt(g_cpu, "%s", reason);
+    }
+    return result;
+}
+
+/* A resumed thread's entry routine goes on (threadmgr.c): its call was
+ * made by the process that hibernated, its return address is the Mixed
+ * Mode return its stack already holds, and the call is counted in the
+ * depth the thread's context put back.  Returns r3 as the routine left
+ * it; a stop inside stops the machine, as in ppc_call. */
+uint32_t ppc_call_resume(void)
+{
+    g_ppc.halted = false;
+    run_to_return();
+    ppc_depth--;
+    uint32_t result = g_ppc.gpr[3];
+    bool returned = ppc_returned;
+    ppc_returned = false;
+    if (!returned && !g_cpu->halted)
+        cpu_halt(g_cpu, "%s", g_ppc.halt_reason);
+    return result;
+}
+
+static void run_to_return(void)
+{
     int was_68k = running_68k;
     running_68k = 0;
     uint64_t cap = trap_instruction_limit();
@@ -287,21 +332,6 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
         }
     }
     running_68k = was_68k;
-    uint32_t result = g_ppc.gpr[3];
-    bool returned = ppc_returned;
-    ppc_returned = false;
-    char reason[sizeof g_ppc.halt_reason];
-    memcpy(reason, g_ppc.halt_reason, sizeof reason);
-    uint64_t icount = g_ppc.icount;
-    g_ppc = saved;
-    g_ppc.icount = icount;
-    if (!returned) {
-        /* Stopped inside: the whole machine stops. */
-        ppc_halt(&g_ppc, "%s", reason);
-        if (!g_cpu->halted)
-            cpu_halt(g_cpu, "%s", reason);
-    }
-    return result;
 }
 
 /* A value of size code `code` (1, 2 or 4 bytes) as a PowerPC register holds it. */

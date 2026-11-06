@@ -10,7 +10,8 @@
  *                or gone while hibernated is marked bad, and the program
  *                gets an I/O error on its next use of it (filemgr.c)
  *   the host     what the snapshot held of the host's memory is cleared or
- *                made again (hibernate_reattach_host)
+ *                made again (hibernate_reattach_host), the program's
+ *                threads' host threads among it (threadmgr.c)
  *
  * What a snapshot cannot carry is refused before it is taken
  * (hibernate_io_blocker): connections, serial ports, print jobs.
@@ -198,4 +199,6 @@ void hibernate_reattach_host(void)
     aem_after_resume();
     aem_suspended_after_resume();
     display_after_resume();
+    threads_after_resume(); /* their host threads, made again when their turns come */
+    cfm_after_resume();
 }
