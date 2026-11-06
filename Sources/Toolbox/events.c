@@ -114,7 +114,18 @@ static void enqueue(int16_t what, uint32_t message)
 void events_start_stall_log(void);
 void machine_attach_host(bool attached)
 {
+    /* A resumed machine's clock was rebased before any host attached (on
+     * the instructions): it goes on from there on the wall clock. */
+    bool was_wall = machine_wall_clock(), was_attached = host_attached;
+    uint64_t now = hibernate_resumed() ? machine_time_ns() : 0;
     host_attached = attached;
+    if (hibernate_resumed() && was_wall != machine_wall_clock())
+        machine_clock_continue(now);
+    /* and its host takes everything it shows afresh */
+    if (hibernate_resumed() && attached && !was_attached) {
+        display_host_attached_after_resume();
+        cursor_after_resume();
+    }
     if (attached)
         events_start_stall_log();
 }

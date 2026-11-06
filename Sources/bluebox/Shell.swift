@@ -146,6 +146,8 @@ struct ShellNodeRows: View {
                         Image(systemName: "pause.circle.fill").font(.caption2).foregroundStyle(.orange).help("Suspended")
                     } else if model.states.isRunning(app.path) {
                         Circle().fill(Color.green).frame(width: 6, height: 6).help("Running")
+                    } else if let label = model.hibernationLabel(app.path) {
+                        Image(systemName: "moon.zzz.fill").font(.caption2).foregroundStyle(.indigo).help(label)
                     }
                 }
                 .help(app.folder.isEmpty ? app.name : app.folder + "/" + app.name)
@@ -213,6 +215,8 @@ enum ShellItem: Hashable {
     @Published var states = ProgramStates()
     /// The application Export as App… is showing its options for.
     @Published var exporting: ShellApp?
+    /// Each hibernated program's snapshot: whether it resumes here.
+    @Published private(set) var snapshotStatus: [String: SnapshotStatus] = [:]
     let registry = defaultRegistry()
     private var registryWatch: DispatchSourceFileSystemObject?
     /// Each registered process, watched for its end (a crash leaves its
@@ -317,6 +321,11 @@ enum ShellItem: Hashable {
     func readRegistry() {
         let entries = registry.entries()
         states.registry(entries)
+        // Whether each hibernated program's snapshot resumes in this build
+        // (the file's head only), once per file.
+        for e in entries where e.state == .hibernated {
+            if let snap = e.snapshot, snapshotStatus[snap] == nil { snapshotStatus[snap] = SnapshotFile.problem(snap) }
+        }
         let pids = Set(entries.filter { $0.state != .hibernated }.map(\.pid))
         for (pid, watch) in exitWatches where !pids.contains(pid) {
             watch.cancel()
@@ -334,12 +343,62 @@ enum ShellItem: Hashable {
     /// (from here or anywhere), resumed if it is suspended.
     func openProgram(path: String) {
         switch states.open(path) {
-        case .launch: launch(path: path)
+        case .launch:
+            // Hibernated from a bundle of its own (installed, or an exported
+            // application with its own Blue Box): woken there, to resume in
+            // the build that saved it.
+            if let url = hibernatedBundle(path) {
+                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+                    guard let error else { return }
+                    Task { @MainActor in self.messages.append("Could not open \(url.lastPathComponent): \(error.localizedDescription)") }
+                }
+                return
+            }
+            launch(path: path)
         case .activate(let pid): bringToFront(pid: pid)
         case .resume(let pid):
             SuspendNotice.ask(pid: pid, suspend: false)
             bringToFront(pid: pid)
         }
+    }
+
+    /// "Hibernated 2026-11-06 01:23" for a hibernated program (and whether
+    /// its snapshot resumes here), or nil.
+    func hibernationLabel(_ path: String) -> String? {
+        guard states.isHibernated(path), let e = states.hibernated[path] else { return nil }
+        let label = SnapshotFile.label(e.hibernatedDate)
+        switch e.snapshot.flatMap({ snapshotStatus[$0] }) {
+        case .missing?: return label + " (its snapshot is gone)"
+        case .cannotResume?: return label + " (by another build of Blue Box: it resumes only in that one)"
+        default: return label
+        }
+    }
+
+    /// Start a hibernated program fresh: its snapshot to the Trash (the run
+    /// does it: --fresh).
+    func startFresh(path: String) {
+        guard states.isHibernated(path) else { return }
+        if hibernatedBundle(path) != nil, let snap = states.hibernated[path]?.snapshot {
+            // Its bundle runs it: the snapshot goes first, then it opens fresh.
+            do {
+                try HibernatedSnapshots.delete(snap, registry: registry)
+            } catch {
+                messages.append("Could not move \(snap) to the Trash: \(error.localizedDescription)")
+                return
+            }
+            readRegistry()
+            openProgram(path: path)
+            return
+        }
+        launch(path: path, extra: ["--fresh"])
+    }
+
+    /// The bundle a hibernated program was running from, if it still is
+    /// there.
+    func hibernatedBundle(_ path: String) -> URL? {
+        guard states.isHibernated(path), let e = states.hibernated[path], e.launchedBy == .bundle,
+              let id = e.bundle else { return nil }
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
     }
 
     /// Suspend a running program, or resume a suspended one.
@@ -465,11 +524,11 @@ enum ShellItem: Hashable {
     /// its own, with its own Dock icon and rootless windows.
     func launch(_ app: ShellApp) { openProgram(path: app.path) }
 
-    private func launch(path: String) {
+    private func launch(path: String, extra: [String] = []) {
         let name = (path as NSString).lastPathComponent
         let p = Process()
         p.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
-        p.arguments = ["run", path]
+        p.arguments = ["run", path] + extra
         var env = ProcessInfo.processInfo.environment
         env[RunningProgram.launchedByVariable] = "shell"
         p.environment = env
@@ -654,6 +713,8 @@ struct ShellView: View {
     /// The search the sidebar shows: the typed one, once typing pauses.
     @State private var query = ""
     @State private var trashing: ShellNode?
+    /// The hibernated application whose Start Fresh is being confirmed.
+    @State private var freshening: ShellApp?
 
     var body: some View {
         NavigationSplitView {
@@ -699,6 +760,15 @@ struct ShellView: View {
                             Button("Bring to Front") { model.launch(app) }
                         }
                         Button(model.states.action(for: app.path).title) { model.toggleSuspend(path: app.path) }
+                    } else if model.states.isHibernated(app.path) {
+                        // Opening it resumes it; Start Fresh discards the snapshot.
+                        Button("Resume") { model.launch(app) }
+                        Button("Start Fresh\u{2026}") { freshening = app }
+                        if let snap = model.states.hibernated[app.path]?.snapshot {
+                            Button("Show Snapshot in Finder") {
+                                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: snap)])
+                            }
+                        }
                     } else {
                         Button("Launch") { model.launch(app) }
                     }
@@ -753,6 +823,15 @@ struct ShellView: View {
             let count = model.apps(in: node).count
             Text("\(node.place) › \(node.folder), with \(count) application\(count == 1 ? "" : "s") and everything "
                  + "else in it. Their settings are forgotten; you can put it back from the Trash.")
+        }
+        .confirmationDialog("Start \(freshening?.name ?? "") fresh?", isPresented: Binding(
+            get: { freshening != nil }, set: { if !$0 { freshening = nil } }), titleVisibility: .visible,
+            presenting: freshening) { app in
+            Button("Start Fresh", role: .destructive) { model.startFresh(path: app.path) }
+            Button("Cancel", role: .cancel) {}
+        } message: { app in
+            Text("It is hibernated: starting it fresh moves its snapshot to the Trash (you can put it back from there "
+                 + "and open it with bluebox resume), and whatever it had open is not as it was.")
         }
         .sheet(item: $model.exporting) { app in ExportSheet(model: model, app: app) }
         .overlay(dropTargeted ? RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor, lineWidth: 3) : nil)
@@ -849,6 +928,7 @@ struct AppPage: View {
     @ObservedObject var model: ShellModel
     let app: ShellApp
     @State private var confirmDelete = false
+    @State private var confirmFresh = false
 
     private var neededDepth: Int? {
         requiredDepth(creator: app.creator, over: model.settings[defaultSettingsKey]?.depth)
@@ -873,6 +953,10 @@ struct AppPage: View {
                     Spacer()
                     if model.states.isRunning(app.path) {
                         Text(model.states.isSuspended(app.path) ? "Suspended" : "Running").foregroundStyle(.secondary)
+                    } else if let label = model.hibernationLabel(app.path) {
+                        Label(label, systemImage: "moon.zzz.fill").foregroundStyle(.secondary).lineLimit(2)
+                            .help("Resume goes on where it was; Start Fresh moves the snapshot to the Trash")
+                        Button("Start Fresh\u{2026}") { confirmFresh = true }
                     }
                     Button("Export as App\u{2026}") { model.exporting = app }
                         .help("Make a Mac application of it that runs without Blue Box")
@@ -888,6 +972,13 @@ struct AppPage: View {
         }
         .formStyle(.grouped)
         .navigationTitle(app.name)
+        .confirmationDialog("Start \(app.name) fresh?", isPresented: $confirmFresh, titleVisibility: .visible) {
+            Button("Start Fresh", role: .destructive) { model.startFresh(path: app.path) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its hibernated snapshot is moved to the Trash (you can put it back from there and open it with "
+                 + "bluebox resume).")
+        }
         .confirmationDialog("Move \(app.name) to the Trash?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Move to Trash", role: .destructive) { model.delete(app) }
             Button("Cancel", role: .cancel) {}
@@ -1173,6 +1264,7 @@ struct HighlightPicker: View {
 
 @MainActor final class ShellDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
     var window: NSWindow?
+    var snapshotsWindow: NSWindow?
     var statusItem: NSStatusItem?
     let model = ShellModel()
 #if canImport(Sparkle)
@@ -1232,6 +1324,10 @@ struct HighlightPicker: View {
         }
         SuspendedMenuSection.items(model.states.suspendedPaths, target: self, resume: #selector(resumeProgram(_:)))
             .forEach { menu.addItem($0) }
+        let sleeping = model.states.hibernatedPaths.compactMap { path in
+            model.states.hibernated[path].map { (path: path, title: $0.title, at: $0.hibernatedDate) }
+        }
+        HibernatedMenuSection.items(sleeping, target: self, resume: #selector(showProgram(_:))).forEach { menu.addItem($0) }
         if !model.recent.isEmpty {
             menu.addItem(header("Recent"))
             for path in model.recent {
@@ -1246,6 +1342,9 @@ struct HighlightPicker: View {
         let open = NSMenuItem(title: "Open Blue Box", action: #selector(openWindow(_:)), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+        let snapshots = NSMenuItem(title: "Hibernated Snapshots…", action: #selector(showSnapshots(_:)), keyEquivalent: "")
+        snapshots.target = self
+        menu.addItem(snapshots)
         let importItem = NSMenuItem(title: "Import…", action: #selector(importFiles(_:)), keyEquivalent: "")
         importItem.target = self
         menu.addItem(importItem)
@@ -1267,6 +1366,23 @@ struct HighlightPicker: View {
     }
 
     @objc func openWindow(_ sender: Any?) { showWindow() }
+    @objc func showSnapshots(_ sender: Any?) {
+        if let w = snapshotsWindow {
+            w.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 360),
+                         styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        w.title = "Hibernated Snapshots"
+        w.isReleasedWhenClosed = false
+        w.contentView = NSHostingView(rootView: SnapshotsView(model: model))
+        w.center()
+        w.setFrameAutosaveName("BlueBoxSnapshots")
+        w.makeKeyAndOrderFront(nil)
+        snapshotsWindow = w
+        NSApp.activate(ignoringOtherApps: true)
+    }
     @objc func importFiles(_ sender: Any?) { model.chooseImport() }
     @objc func importFonts(_ sender: Any?) { model.chooseFontImport() }
     @objc func refreshLibrary(_ sender: Any?) { model.refresh() }
@@ -1326,6 +1442,109 @@ struct HighlightPicker: View {
     func application(_ application: NSApplication, open urls: [URL]) { model.importFiles(urls) }
 }
 
+/// File › Hibernated Snapshots…: every snapshot kept (a resumed program's
+/// stays until deleted), newest first, each with its program, when it
+/// hibernated, its size and whether opening its program resumes it; Resume,
+/// Show in Finder and Move to Trash.
+struct SnapshotsView: View {
+    @ObservedObject var model: ShellModel
+    @State private var snapshots: [SnapshotInfo] = []
+    @State private var selection: String?
+    @State private var trashing: SnapshotInfo?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if snapshots.isEmpty {
+                Text("No hibernated snapshots").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(snapshots, id: \.path, selection: $selection) { s in
+                    HStack {
+                        Image(systemName: s.entered ? "moon.zzz.fill" : "doc").foregroundStyle(s.entered ? .indigo : .secondary)
+                            .frame(width: 18)
+                        VStack(alignment: .leading) {
+                            Text(s.title)
+                            Text("\(SnapshotFile.label(s.saved)) · \(ByteCountFormatter.string(fromByteCount: Int64(s.bytes), countStyle: .file)) · \(state(s))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .help(s.path)
+                    .contextMenu { actions(s) }
+                }
+            }
+            Divider()
+            HStack {
+                let chosen = snapshots.first { $0.path == selection }
+                Button("Resume") { if let c = chosen { resume(c) } }
+                    .disabled(chosen.map { !canResume($0) } ?? true)
+                Button("Show in Finder") {
+                    if let c = chosen { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: c.path)]) }
+                }
+                .disabled(chosen == nil)
+                Button("Move to Trash\u{2026}") { trashing = chosen }.disabled(chosen == nil)
+                Spacer()
+                Button { reload() } label: { Image(systemName: "arrow.clockwise") }.help("Look again")
+            }
+            .padding(10)
+        }
+        .frame(minWidth: 480, minHeight: 240)
+        .onAppear { reload() }
+        .onReceive(model.$states) { _ in reload() }
+        .confirmationDialog("Move the snapshot of \(trashing?.title ?? "") to the Trash?", isPresented: Binding(
+            get: { trashing != nil }, set: { if !$0 { trashing = nil } }), titleVisibility: .visible,
+            presenting: trashing) { s in
+            Button("Move to Trash", role: .destructive) {
+                do {
+                    try HibernatedSnapshots.delete(s.path, registry: model.registry)
+                } catch {
+                    model.messages.append("Could not move \(s.path) to the Trash: \(error.localizedDescription)")
+                }
+                model.readRegistry()
+                reload()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { s in
+            Text(s.entered ? "\(s.title) is hibernated in it: it then starts fresh when opened." : "It can be put back from the Trash.")
+        }
+    }
+
+    @ViewBuilder private func actions(_ s: SnapshotInfo) -> some View {
+        Button("Resume") { resume(s) }.disabled(!canResume(s))
+        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: s.path)]) }
+        Divider()
+        Button("Move to Trash\u{2026}") { trashing = s }
+    }
+
+    private func state(_ s: SnapshotInfo) -> String {
+        if let p = s.problem { return "unreadable: \(p)" }
+        if !s.sameBuild { return "by another build of Blue Box (it resumes only in that one)" }
+        return s.entered ? "opening \(s.title) resumes it" : "resumed already, or set aside"
+    }
+
+    /// One a hibernated program is entered with resumes by opening it; any
+    /// other of this build's resumes in a process of its own (bluebox resume).
+    private func canResume(_ s: SnapshotInfo) -> Bool { s.sameBuild && s.problem == nil }
+
+    private func resume(_ s: SnapshotInfo) {
+        if s.entered, let program = s.record?.program, model.states.isHibernated(program) {
+            model.openProgram(path: program)
+            return
+        }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
+        p.arguments = ["resume", s.path]
+        var env = ProcessInfo.processInfo.environment
+        env[RunningProgram.launchedByVariable] = "shell"
+        p.environment = env
+        do { try p.run() } catch { model.messages.append("Could not resume \(s.title): \(error.localizedDescription)") }
+    }
+
+    private func reload() {
+        snapshots = HibernatedSnapshots.list(folders: hibernatedFolders(), registry: model.registry)
+        if let sel = selection, !snapshots.contains(where: { $0.path == sel }) { selection = nil }
+    }
+}
+
 func shellCommand(_ args: [String]) -> Never {
     MainActor.assumeIsolated {
         let app = NSApplication.shared
@@ -1367,6 +1586,8 @@ func shellCommand(_ args: [String]) -> Never {
     file.addItem(withTitle: "Import Fonts from Disk Image…", action: #selector(ShellDelegate.importFonts(_:)),
                  keyEquivalent: "")
     file.addItem(withTitle: "Refresh Library", action: #selector(ShellDelegate.refreshLibrary(_:)), keyEquivalent: "r")
+    file.addItem(.separator())
+    file.addItem(withTitle: "Hibernated Snapshots…", action: #selector(ShellDelegate.showSnapshots(_:)), keyEquivalent: "")
     file.addItem(.separator())
     file.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
     fileItem.submenu = file

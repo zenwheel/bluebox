@@ -132,6 +132,64 @@ extension BlueBox {
             #expect(try String(contentsOf: file, encoding: .utf8) == "changed")
         }
 
+        /// Hibernate in a window: the machine runs on its own thread (as the
+        /// hosts run it), Suspend stops it at a safe point, the snapshot is
+        /// written from another thread while it stands there, and put back
+        /// it goes on from the event loop.
+        @Test func suspendedOnItsThreadIsSaved() {
+            let dir = launchTestApp()
+            let pc = start([0x5287, 0xA9B4, 0x60FA]) // ADDQ.L #1,D7; _SystemTask; BRA.S loop
+            _ = machine_run(100_000)
+            final class Flag: @unchecked Sendable { var stop = false }
+            let flag = Flag(), done = DispatchSemaphore(value: 0)
+            Thread.detachNewThread {
+                while !flag.stop && !machine_halted() { _ = machine_run(200_000) }
+                done.signal()
+            }
+            machine_pause()
+            #expect(machine_wait_parked(3000))
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            let snap = dir.appendingPathComponent("suspended.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            let d7 = g_cpu!.pointee.d.7
+            flag.stop = true
+            machine_unpause()
+            done.wait()
+            #expect(!machine_hibernatable())
+            #expect(machine_hibernate_restore(snap, &err, err.count), Comment(rawValue: String(cString: err)))
+            #expect(g_cpu!.pointee.d.7 == d7)
+            #expect(machine_pc() == pc + 2 || machine_pc() == pc || machine_pc() == pc + 4) // at its loop
+            _ = machine_run(100_000)
+            #expect(g_cpu!.pointee.d.7 > d7)
+        }
+
+        /// A resumed machine's clock is rebased on the instructions (no host
+        /// has attached yet); the host attaching after (an interactive
+        /// resume) switches it to the wall clock, and it goes on from where
+        /// it was, not from the host's time since boot.
+        @Test func clockGoesOnWhenAHostAttaches() {
+            let dir = launchTestApp()
+            _ = start([0xA9B4, 0x60FC]) // _SystemTask; BRA.S loop
+            _ = machine_run(100_000)
+            g_cpu!.pointee.icount += 10_000_000_000 // a thousand seconds of the instruction clock
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            let snap = dir.appendingPathComponent("clock.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            #expect(machine_hibernate_restore(snap, &err, err.count), Comment(rawValue: String(cString: err)))
+            let before = machine_time_ns()
+            #expect(before > 1_000_000_000_000)
+            machine_attach_host(true)
+            let attached = machine_time_ns()
+            machine_attach_host(false)
+            let detached = machine_time_ns()
+            #expect(attached >= before && attached - before < 500_000_000)
+            #expect(detached >= attached && detached - attached < 500_000_000)
+        }
+
         /// A snapshot file's launch record reads back without the rest.
         @Test func theLaunchRecordReadsBack() {
             let dir = launchTestApp()

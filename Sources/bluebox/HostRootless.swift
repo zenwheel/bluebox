@@ -767,6 +767,7 @@ final class TransientView: NSView {
     // which waits until the host menu closes.
 
     func menuWillOpen(_ menu: NSMenu) {
+        Suspender.shared.menuOpening(menu) // Hibernate enabled as the machine is now
         // A suspended program's menus are only looked at: no click in its
         // menu bar for it to find when it goes on, and its items dimmed.
         if openMenus == 0 { menusTrack = !Suspender.shared.suspended }

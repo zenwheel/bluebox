@@ -1031,6 +1031,19 @@ const uint8_t *machine_system_resource(uint32_t type, int16_t id, uint32_t *len)
     return NULL;
 }
 
+/* The machine's clock goes on from ns in the mode it now has: a resumed
+ * machine's clock was rebased by the instructions (no host had attached
+ * yet), and a host attaching switches it to the wall clock (reattach.c). */
+void machine_clock_continue(uint64_t ns)
+{
+    if (machine_wall_clock()) {
+        ticks_base_ns = machine_unpaused_ns(now_ns()) + skipped_ns - ns;
+    } else {
+        uint64_t ran = timed_68000() ? cycles_ns(cpu.cycles) + (cpu.icount - cpu.timed) * 100u : cpu.icount * 100u;
+        skipped_ns = ns > ran ? ns - ran : 0;
+    }
+}
+
 /* A snapshot put back in another process (reattach.c): the machine's
  * clock goes on from saved_ns, the time it read when the snapshot was
  * taken, whatever this process's monotonic clock reads (it starts again at
@@ -1039,12 +1052,7 @@ const uint8_t *machine_system_resource(uint32_t type, int16_t id, uint32_t *len)
  * none had passed. */
 void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away)
 {
-    if (machine_wall_clock()) {
-        ticks_base_ns = machine_unpaused_ns(now_ns()) + skipped_ns - saved_ns;
-    } else {
-        uint64_t ran = timed_68000() ? cycles_ns(cpu.cycles) + (cpu.icount - cpu.timed) * 100u : cpu.icount * 100u;
-        skipped_ns = saved_ns > ran ? saved_ns - ran : 0;
-    }
+    machine_clock_continue(saved_ns);
     if (catch_up_date) {
         boot_time += (uint32_t)away;
         uint32_t secs = boot_time + (uint32_t)(machine_time_ns() / 1000000000u);

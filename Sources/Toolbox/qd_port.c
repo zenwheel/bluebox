@@ -827,6 +827,14 @@ static void cursor_changed(void)
     wr8(LM_CrsrVis, cursor_level >= 0 ? 0xFF : 0);
 }
 
+/* A host attached to a resumed machine: it has seen no cursor yet. */
+void cursor_after_resume(void)
+{
+    pthread_mutex_lock(&cursor_lock);
+    cursor_version += 0x10000;
+    pthread_mutex_unlock(&cursor_lock);
+}
+
 uint32_t machine_cursor_state(machine_cursor *out)
 {
     pthread_mutex_lock(&cursor_lock);
