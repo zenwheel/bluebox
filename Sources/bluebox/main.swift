@@ -77,6 +77,9 @@ func usage() -> Never {
                  the program at an earlier run (scripts/walk-corpus.sh)
       --realtime a headless run's clock follows real time, not the instructions
                      run (for networked programs talking to other copies)
+          --new      start another copy even if the program is running already
+                     (otherwise that one comes to the front, resumed if suspended,
+                     and is given the documents)
           --background  run in the background: no Dock icon or menu bar; the
                      program's menus are in a menu bar status item (with Open at
                      Login and Quit), its windows and what an INIT or desk accessory
@@ -475,6 +478,8 @@ func runCommand(_ args: [String]) {
     var keyScript: [String] = []
     var headless = false
     var background = false
+    var walkMenus = false
+    var newCopy = false
     var appArgument: String? // the application as given, before it is resolved
     var screenWindow = false
     var appletalkGiven = false
@@ -507,7 +512,10 @@ func runCommand(_ args: [String]) {
         case "--headless": headless = true
         case "--background": background = true
         case "--realtime": machine_set_realtime(true)
-        case "--walk-menus": machine_set_menu_walk(true)
+        case "--walk-menus":
+            machine_set_menu_walk(true)
+            walkMenus = true
+        case "--new": newCopy = true
         case "--walk-avoid":
             i += 1
             guard i < args.count else { usage() }
@@ -728,6 +736,12 @@ func runCommand(_ args: [String]) {
     let interactive = !headless && !census && screenshot == nil && printTo == nil
     if background && !interactive { background = false }
     if interactive && !background { reexecInNamedBundle(app: app, given: appArgument) }
+    // Entered in the registry, unless it is running already: then that one
+    // comes forward instead.
+    if runRegisters(headless: headless, census: census, walkMenus: walkMenus, screenshot: screenshot != nil,
+                    printToFile: printTo != nil) {
+        registerRun(app: app, documents: documents, newCopy: newCopy)
+    }
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
         MainActor.assumeIsolated { displayScale = CGFloat(scale) }
@@ -1125,6 +1139,7 @@ func relaunchAtWantedDepth() {
     }
     print("relaunch: \(name) asked for depth \(depth)\(save ? " (now its setting)" : "")")
     fflush(stdout)
+    Registration.current?.end() // entered again by the run it becomes
     // --depth also keeps the second run from asking again.
     let args = [me] + CommandLine.arguments.dropFirst() + ["--depth", String(depth)]
     var cargs = args.map { strdup($0) } + [nil]

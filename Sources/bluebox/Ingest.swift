@@ -85,6 +85,11 @@ func migrateDataFolder() {
 func defaultLibrary() -> String {
     // An exported application keeps its own, beside its program.
     if let support = exportSupport() { return support + "/Library" }
+    return sharedLibrary()
+}
+
+/// Blue Box's own library, an exported application's or not.
+func sharedLibrary() -> String {
     let env = ProcessInfo.processInfo.environment
     if let lib = env["BLUEBOX_LIBRARY"], !lib.isEmpty { return lib }
     migrateDataFolder()

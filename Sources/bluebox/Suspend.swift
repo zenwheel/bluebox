@@ -4,7 +4,8 @@
 // menu, or asked by the shell) holds the machine still: no instruction runs, and its
 // clock, sound and voices stand still until Resume, so the program finds
 // no jump when it goes on.  Meanwhile its windows are greyed and inert,
-// with Resume and Hide over each.  The shell hears of each change.
+// with Resume and Hide over each.  Its entry in the registry of running
+// programs says so, and the shell hears of each change.
 
 #if canImport(AppKit)
 import AppKit
@@ -42,6 +43,7 @@ import Toolbox
         ClassicMusic.shared.setSuspended(true)
         ClassicSpeech.shared.setSuspended(true)
         changed?(true)
+        Registration.current?.setState(.suspended) // the registry first: the shell reads it on hearing
         SuspendNotice.tell(suspended: true)
     }
 
@@ -53,6 +55,7 @@ import Toolbox
         ClassicMusic.shared.setSuspended(false)
         ClassicAudio.shared.setSuspended(false)
         machine_unpause()
+        Registration.current?.setState(.running)
         SuspendNotice.tell(suspended: false)
     }
 
