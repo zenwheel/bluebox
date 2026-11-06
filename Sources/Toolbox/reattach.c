@@ -45,8 +45,13 @@ static struct {
     uint64_t time_ns;      /* machine_time_ns */
     int64_t wall;          /* the host's date (time()) */
     int layout;            /* g_mem_layout: the fresh process must have the same */
-    bool resumed;          /* this machine was resumed (for the log) */
 } saved;
+
+/* This process put a snapshot back: the host's to know, not the program's
+ * (a snapshot of a resumed machine is the same as of one never stopped). */
+BB_HOST static bool resumed;
+
+bool hibernate_resumed(void) { return resumed; }
 
 const char *hibernate_io_blocker(void)
 {
@@ -124,7 +129,7 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen)
         snprintf(err, errlen, "the snapshot's memory layout (%d) is not this machine's (%d)", saved.layout, layout);
         return false;
     }
-    saved.resumed = true;
+    resumed = true;
     events_script_clear();
     bool catch_up = date_override >= 0 ? date_override : resume_date_catches_up;
     machine_resume_clock(saved.time_ns, catch_up, (int64_t)time(NULL) - saved.wall);

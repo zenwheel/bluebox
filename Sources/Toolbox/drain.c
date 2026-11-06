@@ -164,6 +164,11 @@ bool drain_abandon(void)
     return true;
 }
 
+/* For the host, closing an alert or a file panel of its own for a drain:
+ * only when the call would be abandoned and made again (drain_abandon),
+ * never where the program would take the closing as its answer. */
+bool machine_drain_abandonable(void) { return atomic_load(&state) == MACHINE_DRAIN_GOING && trap_call_depth() == 0; }
+
 bool drain_take_rewind(cpu68k *c, uint16_t op)
 {
     if (!rewind_wanted)

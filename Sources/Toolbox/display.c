@@ -39,15 +39,10 @@ static bool wins_dirty = true;
 
 void display_windows_changed(void) { wins_dirty = true; }
 
-/* Resumed in another process: its host has seen no window yet, whatever
- * version it last saw (the counter comes back as the snapshot had it). */
-void display_after_resume(void)
-{
-    pthread_mutex_lock(&lock);
-    win_version += 0x10000;
-    wins_dirty = true;
-    pthread_mutex_unlock(&lock);
-}
+/* Resumed in another process: nothing to do until a host attaches
+ * (display_host_attached_after_resume); the windows as last published come
+ * back with the snapshot. */
+void display_after_resume(void) {}
 
 static void publish_windows(void);
 
@@ -848,4 +843,24 @@ uint32_t machine_transient(int16_t rect[4], bool *on)
     uint32_t v = transient_version;
     pthread_mutex_unlock(&transient_lock);
     return v;
+}
+
+/* A host attached to a resumed machine has seen none of its windows, menu
+ * bar, pop-up or overlay, whatever versions the snapshot's host last saw
+ * (the counters come back as the snapshot had them): each moves on, so the
+ * host takes all of them afresh.  Only then: a headless resume, with no
+ * host, ends as an unbroken run does. */
+void display_host_attached_after_resume(void)
+{
+    pthread_mutex_lock(&lock);
+    win_version += 0x10000;
+    wins_dirty = true; /* and published again */
+    menu_version += 0x10000;
+    pthread_mutex_unlock(&lock);
+    pthread_mutex_lock(&transient_lock);
+    transient_version += 0x10000;
+    pthread_mutex_unlock(&transient_lock);
+    pthread_mutex_lock(&ov_lock);
+    ov_version += 0x10000;
+    pthread_mutex_unlock(&ov_lock);
 }

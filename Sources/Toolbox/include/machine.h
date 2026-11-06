@@ -976,6 +976,9 @@ const char *machine_drain_reason(void);
 const char *machine_drain_point(void);
 /* Stopped at a safe point: a snapshot may be taken now. */
 bool machine_hibernatable(void);
+/* Draining, at the program's own level: an alert or a file panel the host
+ * closes now is abandoned and shown again after the machine goes on. */
+bool machine_drain_abandonable(void);
 /* Why the program cannot be saved now (its own threads, a connection, a
  * serial port, a print job), or NULL. */
 const char *machine_hibernate_blocker(void);
