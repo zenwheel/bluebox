@@ -144,6 +144,11 @@ static void describe(char *out, size_t len)
     else if (mm_call_depth() > 0 && !g_ppc_mode)
         snprintf(out, len, "the program runs PowerPC code it called through Mixed Mode%s%s and did not come back to its "
                  "event loop", in ? " inside " : "", in ? in : "");
+    else if (depth > 0 && g_ppc_mode && native >= 0 && !strcmp(cfm_native_name((uint32_t)native), "CallUniversalProc"))
+        /* Disk Copy's PowerPC code calls its dialogs' 68k code: a call from
+         * native code, as Mixed Mode makes it. */
+        snprintf(out, len, "the program waits in 68k code it called through Mixed Mode (CallUniversalProc)%s%s, which "
+                 "a snapshot cannot carry yet", in ? ", inside " : "", in ? in : "");
     else if (depth > 0)
         snprintf(out, len, "the program is in a routine of its own called by the Toolbox (%s) and did not come back to "
                  "its event loop", in ? in : "an interrupt task");

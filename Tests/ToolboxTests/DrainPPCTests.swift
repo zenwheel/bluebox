@@ -202,6 +202,30 @@ extension BlueBox {
             #expect(Int32(bitPattern: rd32(vars + 8)) == -1700) // the handler's result, returned to the call
         }
 
+        /// A PowerPC program waiting in 68k code it called through
+        /// CallUniversalProc (Disk Copy's dialogs) is under a call from
+        /// native code: refused, saying so.
+        @Test func waitingIn68kCodeCalledThroughMixedModeIsRefusedSayingSo() {
+            defer { g_ppc_mode = false }
+            let cup = export("CallUniversalProc")
+            let words: [UInt16] = [0xA9B4, 0x60FC] // loop: _SystemTask; BRA.S loop
+            let routine = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(routine + UInt32(i * 2), w) }
+            g_cpu!.pointee.a.7 = ptr(65536) + 65000
+            // CallUniversalProc(routine, kPascalStackBased)
+            _ = start(load(3, routine) + [0x3880_0000] + call(cup) + [branch(back: 0)])
+            machine_hibernate_at(machine_instruction_count() + 1_000_000)
+            machine_set_instruction_limit(machine_instruction_count() + 6_000_000)
+            _ = machine_run(10_000_000)
+            machine_hibernate_at(0)
+            machine_set_instruction_limit(0)
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            let why = String(cString: machine_drain_reason())
+            #expect(why.contains("68k code it called through Mixed Mode (CallUniversalProc), inside SystemTask"),
+                    Comment(rawValue: why))
+            machine_drain_end()
+        }
+
         /// A PowerPC thread waiting in YieldToThread is saved with the
         /// program; restored, it goes on: its YieldToThread answers noErr and
         /// its loop runs again.
