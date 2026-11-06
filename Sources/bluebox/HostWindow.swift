@@ -1421,9 +1421,6 @@ import UserNotifications
 
     /// Nonisolated: the handler runs on the machine's thread.
     nonisolated func install() {
-        if Bundle.main.bundleIdentifier != nil {
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
-        }
         machine_set_notification_handler({ id, text, flags, _ in
             let message = text.map { String(cString: $0) } ?? ""
             DispatchQueue.main.async {
@@ -1443,11 +1440,16 @@ import UserNotifications
         if !NSApp.isActive { attention[id] = NSApp.requestUserAttention(.criticalRequest) }
         guard !message.isEmpty else { return }
         if Bundle.main.bundleIdentifier != nil {
-            let content = UNMutableNotificationContent()
-            content.title = ProcessInfo.processInfo.processName
-            content.body = message
-            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "bluebox-\(id)", content: content,
-                                                                         trigger: nil))
+            // Permission is asked for when the program first has something
+            // to say, not when every program starts.
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                guard granted else { return }
+                let content = UNMutableNotificationContent()
+                content.title = ProcessInfo.processInfo.processName
+                content.body = message
+                UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "bluebox-\(id)",
+                                                                             content: content, trigger: nil))
+            }
         } else {
             let alert = NSAlert()
             alert.messageText = message
