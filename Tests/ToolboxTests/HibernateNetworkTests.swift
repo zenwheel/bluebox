@@ -125,6 +125,344 @@ extension BlueBox {
             }
         }
 
+        // ---- MacTCP
+
+        /// pascal void notify(stream, eventCode, userData, terminReason, icmpMsg *)
+        static let asr: native_fn = { c, _ in
+            guard let c else { return }
+            let ret = cpu_pop32(c)
+            _ = cpu_pop32(c)
+            let reason = cpu_pop16(c)
+            _ = cpu_pop32(c)
+            let event = cpu_pop16(c)
+            _ = cpu_pop32(c)
+            asrEvents.append((event, reason))
+            cpu_push32(c, ret)
+        }
+
+        /// A completion routine (C, the block in A0 and on the stack).
+        static let completion: native_fn = { c, _ in
+            guard let c else { return }
+            completions.append(Int16(bitPattern: rd16(c.pointee.a.0 + UInt32(IOParam_ioResult_off))))
+        }
+
+        func ipp() -> UInt32 {
+            let pb = tb_NewPtr(128, false, true)
+            let name = tb_NewPtr(8, false, true)
+            guestPString(".IPP", at: name)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            #expect(tb_PBOpen(pb, false) == 0)
+            return pb
+        }
+
+        /// A parameter block for csCode on the stream (0: none yet).
+        func tcpPB(_ stream: UInt32, _ code: Int, completion: UInt32 = 0) -> UInt32 {
+            let pb = tb_NewPtr(128, false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -49))
+            wr32(pb + 28, stream)
+            wr16(pb + UInt32(CntrlParam_csCode_off), UInt16(code))
+            wr32(pb + UInt32(IOParam_ioCompletion_off), completion)
+            return pb
+        }
+
+        func newStream(udp: Bool, port: UInt16 = 0, notify: UInt32 = 0) -> (UInt32, UInt16) {
+            let pb = tcpPB(0, udp ? 20 : 30)
+            let rcv = tb_NewPtr(8192, false, true)
+            wr32(pb + 32, rcv)
+            wr32(pb + 36, 8192)
+            wr32(pb + 40, notify)       // the notify routine (both)
+            if udp { wr16(pb + 44, port) }
+            #expect(tb_PBControl(pb, false) == 0)
+            return (rd32(pb + 28), udp ? rd16(pb + 44) : 0)
+        }
+
+        /// MacTCP resumed: a UDP stream is bound again to its port, a passive
+        /// open listens again on its own and takes the connection made to it
+        /// after resuming; a connection is over, its receive under way ending
+        /// with connectionTerminated and its notification routine hearing
+        /// TCPTerminate (a network failure).
+        @Test func macTCPListensAgainAndEndsConnections() {
+            let dir = launchTestApp()
+            startLoop()
+            _ = ipp()
+            asrEvents = []
+            completions = []
+            let asr = native_register(Self.asr, "hibernate ASR", 0)
+            let done = native_register(Self.completion, "hibernate MacTCP completion", 0)
+
+            let (udp, uport) = newStream(udp: true)
+            #expect(uport != 0)
+            let (passive, _) = newStream(udp: false)
+            let open = tcpPB(passive, 31, completion: done)               // TCPPassiveOpen
+            #expect(tb_PBControl(open, true) == 1)
+            let qport = rd16(open + 32 + UInt32(TCPOpenPB_localPort_off))
+            #expect(qport != 0)
+
+            let (lfd, port) = listener()
+            defer { close(lfd) }
+            let (conn, _) = newStream(udp: false, notify: asr)
+            let active = tcpPB(conn, 32)                                     // TCPActiveOpen
+            wr32(active + 32 + UInt32(TCPOpenPB_remoteHost_off), 0x7F00_0001)
+            wr16(active + 32 + UInt32(TCPOpenPB_remotePort_off), port)
+            #expect(tb_PBControl(active, false) == 0)
+            let peer = accept(lfd, nil, nil)
+            #expect(peer >= 0)
+            let rcvBuf = tb_NewPtr(64, false, true)
+            let rcv = tcpPB(conn, 37, completion: done)                       // TCPRcv
+            wr32(rcv + 32 + UInt32(TCPReceivePB_rcvBuff_off), rcvBuf)
+            wr16(rcv + 32 + UInt32(TCPReceivePB_rcvBuffLen_off), 64)
+            #expect(tb_PBControl(rcv, true) == 1)
+
+            let snap = hibernate(dir, "mactcp.bbhib")
+            close(peer)
+            resume(snap)
+            #expect(completions.isEmpty && asrEvents.isEmpty)               // nothing during the restore
+            mactcp_poll()
+            #expect(completions == [-23012])                                  // connectionTerminated
+            #expect(asrEvents.count == 1 && asrEvents.first?.event == 3 && asrEvents.first?.reason == 3)
+            let status = tcpPB(conn, 39)                                      // TCPStatus
+            #expect(tb_PBControl(status, false) == 0)
+            #expect(rd8(status + 32 + UInt32(TCPStatusPB_connectionState_off)) == 0)
+
+            // The UDP stream reads what comes to its port.
+            sendDatagram("again", to: uport)
+            let read = tcpPB(udp, 21)                                         // UDPRead
+            wr16(read + 32, 2)                                                // a two-second timeout
+            #expect(tb_PBControl(read, false) == 0)
+            #expect(rd16(read + 32 + 12) == 5)
+
+            // The passive open takes a connection made now.
+            let caller = connectTo(qport)
+            #expect(caller >= 0)
+            defer { close(caller) }
+            for _ in 0..<200 where completions.count < 2 {
+                usleep(2000)
+                mactcp_poll()
+            }
+            #expect(completions == [-23012, 0])
+            for s in [udp, passive, conn] {
+                #expect(tb_PBControl(tcpPB(s, s == udp ? 24 : 42), false) == 0)   // released
+            }
+        }
+
+        /// A synchronous TCPRcv waiting for data gives its call up for the
+        /// drain; made again going on it gets the data, and resumed (the
+        /// connection gone) it ends with connectionTerminated.
+        @Test func aSynchronousReceiveGivesUpForTheDrain() {
+            let dir = launchTestApp()
+            _ = ipp()
+            let (lfd, port) = listener()
+            defer { close(lfd) }
+            let (conn, _) = newStream(udp: false)
+            let active = tcpPB(conn, 32)
+            wr32(active + 32 + UInt32(TCPOpenPB_remoteHost_off), 0x7F00_0001)
+            wr16(active + 32 + UInt32(TCPOpenPB_remotePort_off), port)
+            #expect(tb_PBControl(active, false) == 0)
+            let peer = accept(lfd, nil, nil)
+            #expect(peer >= 0)
+            defer { close(peer) }
+            let buf = tb_NewPtr(64, false, true)
+            let pb = tcpPB(conn, 37)
+            wr32(pb + 32 + UInt32(TCPReceivePB_rcvBuff_off), buf)
+            wr16(pb + 32 + UInt32(TCPReceivePB_rcvBuffLen_off), 64)
+            // MOVEA.L #pb,A0; _Control; MOVE.W D0,D7; loop: _SystemTask; BRA.S loop
+            let code = program([0x207C, UInt16(pb >> 16), UInt16(pb & 0xFFFF), 0xA004, 0x3E00, 0xA9B4, 0x60FC])
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(machine_pc() == code + 6)                                 // on _Control
+            #expect(String(cString: machine_drain_point()).hasSuffix("(abandoned)"))
+            let snap = dir.appendingPathComponent("tcprcv.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            _ = "hi".withCString { send(peer, $0, 2, 0) }
+            _ = machine_run(100_000)                                          // going on: the data
+            #expect(g_cpu!.pointee.d.7 & 0xFFFF == 0 && rd16(pb + 32 + UInt32(TCPReceivePB_rcvBuffLen_off)) == 2)
+
+            resume(snap)
+            _ = machine_run(100_000)
+            #expect(Int16(bitPattern: UInt16(g_cpu!.pointee.d.7 & 0xFFFF)) == -23012)
+            #expect(tb_PBControl(tcpPB(conn, 42), false) == 0)
+        }
+
+        // ---- Open Transport
+
+        @discardableResult
+        func ot(_ name: String, _ args: UInt32...) -> UInt32 {
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { raw in
+                for (i, a) in args.enumerated() { raw.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+            }
+            guard let fn = cfm_export_fn(name) else {
+                Issue.record("\(name) is not exported")
+                return 0xFFFF_FFFF
+            }
+            fn(&g_ppc)
+            return g_ppc.gpr.3
+        }
+
+        func cstr(_ s: String) -> UInt32 {
+            let bytes = Array(s.utf8)
+            let p = tb_NewPtr(Int32(bytes.count + 1), false, true)
+            for (i, b) in bytes.enumerated() { wr8(p + UInt32(i), b) }
+            return p
+        }
+
+        func endpoint(_ config: String) -> UInt32 {
+            let e = tb_NewPtr(4, false, true)
+            let ep = ot("OTOpenEndpoint", ot("OTCreateConfiguration", cstr(config)), 0, 0, e)
+            #expect(rd32(e) == 0 && ep != 0)
+            return ep
+        }
+
+        /// A TBind for the loopback address and port, with a queue.
+        func tbind(_ port: UInt16, qlen: UInt32 = 0) -> UInt32 {
+            let b = tb_NewPtr(16, false, true), a = tb_NewPtr(16, false, true)
+            wr16(a, 2)                                                        // AF_INET
+            wr16(a + 2, port)
+            wr32(a + 4, 0x7F00_0001)
+            wr32(b, 16); wr32(b + 4, 16); wr32(b + 8, a); wr32(b + 12, qlen)
+            return b
+        }
+
+        /// void notifier(context, code, result, cookie)
+        static let notifier: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
+            notified.append(withUnsafeBytes(of: c!.pointee.gpr) { $0.load(fromByteOffset: 4 * 4, as: UInt32.self) })
+            c!.pointee.pc = c!.pointee.lr
+        }
+
+        /// Open Transport resumed: a UDP endpoint is bound again to its port,
+        /// a listener listens again with its queue, and a connected endpoint
+        /// has lost its connection: T_DISCONNECT for its notifier at the next
+        /// poll, kOTLookErr for its calls until OTRcvDisconnect, after which
+        /// it can connect again.
+        @Test func openTransportListensAgainAndDisconnects() {
+            let dir = launchTestApp()
+            _ = cfm_ppc_cpu()                                                 // for the notifier
+            g_ppc.halted = false
+            startLoop()
+            notified = []
+            let uport = freePort(SOCK_DGRAM), lport = freePort(SOCK_STREAM)
+            let udp = endpoint("udp")
+            #expect(ot("OTBind", udp, tbind(uport), 0) == 0)
+            let server = endpoint("tcp")
+            #expect(ot("OTBind", server, tbind(lport, qlen: 1), 0) == 0)
+
+            let (lfd, port) = listener()
+            defer { close(lfd) }
+            let conn = endpoint("tcp")
+            #expect(ot("OTSetBlocking", conn) == 0)
+            #expect(ot("OTBind", conn, 0, 0) == 0)
+            let tcall = tb_NewPtr(40, false, true)
+            wr32(tcall, 16); wr32(tcall + 4, 16); wr32(tcall + 8, rd32(tbind(port) + 8))
+            #expect(ot("OTConnect", conn, tcall, 0) == 0)
+            let peer = accept(lfd, nil, nil)
+            #expect(peer >= 0)
+            let tv = cfm_native_tvector(Self.notifier, "hibernate OT notifier")
+            #expect(ot("OTInstallNotifier", conn, tv, 0) == 0)
+            #expect(ot("OTSetNonBlocking", conn) == 0)
+
+            let snap = hibernate(dir, "ot.bbhib")
+            close(peer)
+            resume(snap)
+            #expect(notified.isEmpty)
+            opentransport_poll()
+            #expect(notified == [0x10])                                       // T_DISCONNECT
+            #expect(ot("OTLook", conn) == 0x10)
+            let buf = tb_NewPtr(64, false, true), flags = tb_NewPtr(4, false, true)
+            #expect(Int32(bitPattern: ot("OTRcv", conn, buf, 64, flags)) == -3158) // kOTLookErr
+            #expect(ot("OTRcvDisconnect", conn, 0) == 0)
+            #expect(ot("OTGetEndpointState", conn) == 2)                      // T_IDLE
+            #expect(ot("OTSetBlocking", conn) == 0)
+            #expect(ot("OTConnect", conn, tcall, 0) == 0)                     // and again
+            let again = accept(lfd, nil, nil)
+            #expect(again >= 0)
+            close(again)
+
+            // The UDP endpoint reads what comes to its port.
+            sendDatagram("datagram", to: uport)
+            usleep(20_000)
+            let ud = tb_NewPtr(36, false, true), from = tb_NewPtr(16, false, true), data = tb_NewPtr(64, false, true)
+            wr32(ud, 16); wr32(ud + 8, from); wr32(ud + 24, 64); wr32(ud + 32, data)
+            #expect(ot("OTRcvUData", udp, ud, flags) == 0)
+            #expect(rd32(ud + 28) == 8)
+
+            // The listener hears a connection made to its port now.
+            let caller = connectTo(lport)
+            #expect(caller >= 0)
+            defer { close(caller) }
+            usleep(20_000)
+            #expect(ot("OTLook", server) == 0x01)                             // T_LISTEN
+            for ep in [udp, server, conn] { #expect(ot("OTCloseProvider", ep) == 0) }
+        }
+
+        /// PowerPC code from its words.
+        func ppcCode(_ words: [UInt32]) -> UInt32 {
+            let p = tb_NewPtr(Int32(words.count * 4), false, false)
+            for (i, w) in words.enumerated() { wr32(p + UInt32(i * 4), w) }
+            return p
+        }
+
+        func load(_ r: UInt32, _ v: UInt32) -> [UInt32] {
+            [0x3C00_0000 | r << 21 | v >> 16, 0x6000_0000 | r << 21 | r << 16 | (v & 0xFFFF)]
+        }
+
+        func call(_ tv: UInt32) -> [UInt32] {
+            load(12, tv) + [0x800C_0000, 0x7C09_03A6, 0x4E80_0421] // lwz r0,0(r12); mtctr r0; bctrl
+        }
+
+        func export(_ name: String) -> UInt32 { cfm_native_tvector(cfm_export_fn(name)!, name) }
+
+        func gpr(_ n: Int) -> UInt32 { withUnsafeBytes(of: g_ppc.gpr) { $0.load(fromByteOffset: n * 4, as: UInt32.self) } }
+
+        /// A PowerPC program's blocking OTRcv waiting for data gives its call
+        /// up for the drain on its NATIVE word; made again going on it gets
+        /// the data, and resumed it finds the connection gone (kOTLookErr).
+        @Test func aBlockingOTRcvGivesUpForTheDrain() {
+            let dir = launchTestApp()
+            _ = cfm_ppc_cpu()
+            g_cpu!.pointee.halted = false
+            g_ppc.halted = false
+            defer { g_ppc_mode = false }
+            let (lfd, port) = listener()
+            defer { close(lfd) }
+            let conn = endpoint("tcp")
+            #expect(ot("OTSetBlocking", conn) == 0)
+            #expect(ot("OTBind", conn, 0, 0) == 0)
+            let tcall = tb_NewPtr(40, false, true)
+            wr32(tcall, 16); wr32(tcall + 4, 16); wr32(tcall + 8, rd32(tbind(port) + 8))
+            #expect(ot("OTConnect", conn, tcall, 0) == 0)
+            let peer = accept(lfd, nil, nil)
+            #expect(peer >= 0)
+            defer { close(peer) }
+            let buf = tb_NewPtr(64, false, true), flags = tb_NewPtr(4, false, true)
+            let rcv = export("OTRcv"), task = export("SystemTask")
+            // r3-r6 the call's; OTRcv; mr r31,r3; loop: SystemTask; b loop
+            let words = load(3, conn) + load(4, buf) + load(5, 64) + load(6, flags) + call(rcv) + [0x7C7F_1B78]
+                + call(task) + [0x4BFF_FFEC]
+            g_ppc_mode = true
+            g_ppc.pc = ppcCode(words)
+            withUnsafeMutableBytes(of: &g_ppc.gpr) {
+                $0.storeBytes(of: tb_NewPtr(65536, false, true) + 60000, toByteOffset: 4, as: UInt32.self)
+                $0.storeBytes(of: UInt32(0x1234), toByteOffset: 31 * 4, as: UInt32.self)
+            }
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(String(cString: machine_drain_point()) == "OTRcv (abandoned)")
+            #expect(g_ppc.pc == rd32(rcv))
+            let snap = dir.appendingPathComponent("otrcv.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            _ = "data".withCString { send(peer, $0, 4, 0) }
+            _ = machine_run(100_000)                                          // going on: the data
+            #expect(gpr(31) == 4)
+
+            resume(snap)
+            _ = machine_run(100_000)
+            #expect(Int32(bitPattern: gpr(31)) == -3158)                      // kOTLookErr: T_DISCONNECT
+            #expect(ot("OTLook", conn) == 0x10)
+        }
+
         // ---- AppleTalk
 
         func atOpen(_ name: String) -> Int16 {

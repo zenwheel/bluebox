@@ -25,9 +25,8 @@
  *                as each protocol tells it (network_after_resume)
  *
  * What a snapshot cannot carry is refused before it is taken
- * (hibernate_io_blocker): MacTCP's and Open Transport's endpoints, the
- * PPC Toolbox's ports, serial ports, print jobs, EtherTalk bridged onto
- * an interface, the host's media.
+ * (hibernate_io_blocker): the PPC Toolbox's ports, serial ports, print
+ * jobs, EtherTalk bridged onto an interface, the host's media.
  *
  * The fresh process is booted as the original was (the host replays its
  * launch record) but the program is not launched: the snapshot replaces
@@ -114,6 +113,7 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     saved.layout = g_mem_layout;
     saved.host_ns = host_clock_ns();
     files_before_hibernate();
+    ot_before_hibernate();
     /* BLUEBOX_HIBERNATE_SCAN=1: what the snapshot holds of the host's memory
      * (and any pointer the map misses), listed first. */
     const char *scan = getenv("BLUEBOX_HIBERNATE_SCAN");
@@ -186,10 +186,6 @@ const char *network_io_open(void)
     const char *at = appletalk_unresumable();
     if (at)
         return at;
-    if (mactcp_any_open())
-        return "has a MacTCP stream open";
-    if (ot_endpoints_open())
-        return "has an Open Transport endpoint open";
     if (ppc_toolbox_open())
         return "has a PPC Toolbox port open";
     if (qt_streams_open())
@@ -247,10 +243,12 @@ void hibernate_reattach_host(void)
  * file's here), so each is forgotten, never closed.  What only listens
  * or is registered is made again on the new host: the AppleTalk link and
  * this node (the old address if no one has taken it), NBP's names, DDP
- * sockets and ATP's transactions (which go on by their retries); the
- * program's ASP sessions are over.
+ * sockets and ATP's transactions (which go on by their retries); MacTCP's
+ * and Open Transport's listeners and UDP streams and endpoints, bound to
+ * their old ports.
  * A connection is over: the program hears of it at the next safe point as
- * each protocol says so (ADSP's tear-down, ASP's aspSessClosed), and its
+ * each protocol says so (MacTCP's TCPTerminate and connectionTerminated,
+ * Open Transport's T_DISCONNECT, ADSP's tear-down, ASP's aspSessClosed), and its
  * calls under way end with that error; an AppleShare volume's session is
  * opened again on its next use, as for a server's restart. */
 void network_after_resume(void)
@@ -258,10 +256,14 @@ void network_after_resume(void)
     appletalk_after_resume(); /* first: the protocols on it send */
     xpp_after_resume();
     appleshare_after_resume();
+    mactcp_after_resume();
+    ot_after_resume();
 }
 
 /* The network's host sockets closed, as when a process ends: for the
  * tests, which resume a snapshot in the process that took it. */
 void network_close_sockets(void)
 {
+    mactcp_close_sockets();
+    ot_close_sockets();
 }

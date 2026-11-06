@@ -546,6 +546,8 @@ static bool wait_for_msg(provider *p)
     while (p->used && p->st && !p->st->nq) {
         if (!p->blocking || p->st->hangup)
             return false;
+        if (drain_give_up()) /* at the program's level: made again when the machine goes on */
+            return false;
         if (!ot_wait_slice(p))
             return false;
         opentransport_poll();
@@ -1165,6 +1167,8 @@ static void s_StreamPoll(ppc_cpu *c)
     int32_t ready;
     while (!(ready = poll_once(fds, n)) && timeout != 0 && !g_cpu->halted) {
         if (timeout > 0 && (rd32(LM_Ticks) - start) * 50 / 3 >= (uint32_t)timeout)
+            break;
+        if (drain_give_up()) /* made again when the machine goes on (its timeout starts again) */
             break;
         machine_pass_tick();
         opentransport_poll();

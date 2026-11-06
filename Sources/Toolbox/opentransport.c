@@ -308,10 +308,19 @@ static int32_t take_cancel(provider *p)
  * call was cancelled (take_cancel says which). */
 static bool wait_fd(provider *p, int fd, short what)
 {
+    p->gave_up = false;
     for (;;) {
         struct pollfd pf = { fd, what, 0 };
         if (poll(&pf, 1, 10) > 0)
             return true;
+        /* At the program's own level the wait gives up for a drain, as
+         * Delay does: the call is made again when the machine goes on,
+         * here or resumed (gave_up; OTConnect and OTSnd go on from where
+         * they were). */
+        if (drain_give_up()) {
+            p->gave_up = true;
+            return false;
+        }
         if (p->notifier && !delivering)
             call_notifier(p, kOTSyncIdleEvent, 0, 0);
         machine_pass_tick();
@@ -647,26 +656,37 @@ static void ot_Connect(ppc_cpu *c)
         RETURN((uint32_t)kOTBadAddressErr);
         return;
     }
-    if (p->state != T_IDLE) {
+    /* The same call made again after its wait gave up for a drain: it
+     * waits on for the connection it started (made again after resuming). */
+    bool again = p->gave_call == GAVE_CONNECT && p->state == T_OUTCON && !p->async && p->blocking;
+    p->gave_call = 0;
+    if (!again && p->state != T_IDLE) {
         RETURN((uint32_t)kOTOutStateErr);
         return;
     }
-    ot_options_apply(p, snd + 12); /* the options the connection asks for */
-    LOGF(LOG_TRAPS, "OT: connect %d to %s:%u (%s, %s)\n", (int)(p - providers), inet_ntoa(sa.sin_addr),
-         ntohs(sa.sin_port), p->async ? "async" : "sync", p->blocking ? "blocking" : "non-blocking");
-    p->peer = sa;
-    p->connected = p->told_connect = p->disconnected = p->told_disc = false;
-    int r = connect(p->fd, (struct sockaddr *)&sa, sizeof sa);
-    if (r < 0 && errno != EINPROGRESS) {
-        RETURN((uint32_t)errno_result(errno));
-        return;
+    if (!again) {
+        ot_options_apply(p, snd + 12); /* the options the connection asks for */
+        LOGF(LOG_TRAPS, "OT: connect %d to %s:%u (%s, %s)\n", (int)(p - providers), inet_ntoa(sa.sin_addr),
+             ntohs(sa.sin_port), p->async ? "async" : "sync", p->blocking ? "blocking" : "non-blocking");
+        p->peer = sa;
+        p->connected = p->told_connect = p->disconnected = p->told_disc = false;
+        int r = connect(p->fd, (struct sockaddr *)&sa, sizeof sa);
+        if (r < 0 && errno != EINPROGRESS) {
+            RETURN((uint32_t)errno_result(errno));
+            return;
+        }
+        p->state = T_OUTCON;
+        p->connecting = r < 0;
+        if (!p->connecting)
+            p->connected = true;
     }
-    p->state = T_OUTCON;
-    p->connecting = r < 0;
-    if (!p->connecting)
-        p->connected = true;
     if (!p->async && p->blocking) {
         if (p->connecting && !wait_fd(p, p->fd, POLLOUT)) {
+            if (p->gave_up) {
+                p->gave_call = GAVE_CONNECT;
+                RETURN((uint32_t)kOTNoDataErr);
+                return;
+            }
             int32_t ce = p->used ? take_cancel(p) : 0;
             if (ce) { /* the attempt is given up: a fresh socket */
                 close(p->fd);
@@ -687,7 +707,7 @@ static void ot_Connect(ppc_cpu *c)
         p->told_connect = true;
         p->state = T_DATAXFER;
         if (rcv)
-            netbuf_put_inet(rcv, &sa);
+            netbuf_put_inet(rcv, &p->peer);
         RETURN(kOTNoError);
         return;
     }
@@ -820,7 +840,10 @@ static void ot_Snd(ppc_cpu *c)
     ENDPOINT(p, ota_Snd);
     gaddr buf = R(1);
     uint32_t n = R(2), done = 0;
-    if (p->state != T_DATAXFER && p->state != T_INREL) {
+    if (p->gave_call == GAVE_SND && p->gave_buf == buf && p->gave_n == n)
+        done = p->gave_done; /* made again after its wait gave up for a drain: the rest */
+    p->gave_call = 0;
+    if (p->disconnected || (p->state != T_DATAXFER && p->state != T_INREL)) {
         RETURN((uint32_t)(p->disconnected ? kOTLookErr : kOTOutStateErr));
         return;
     }
@@ -849,6 +872,17 @@ static void ot_Snd(ppc_cpu *c)
         if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
             if (p->blocking && !p->async && wait_fd(p, p->fd, POLLOUT))
                 continue;
+            if (p->used && p->gave_up) {
+                p->gave_call = GAVE_SND;
+                p->gave_buf = buf;
+                p->gave_n = R(2);
+                p->gave_done = done;
+                bb_free(gathered);
+                if (sendflags)
+                    fcntl(p->fd, F_SETFL, oldfl);
+                RETURN(0);
+                return;
+            }
             if (p->used && p->cancel_err) {
                 int32_t ce = take_cancel(p);
                 bb_free(gathered);
@@ -1777,12 +1811,99 @@ const unsigned ot_export_count = sizeof ot_exports / sizeof ot_exports[0];
 
 /* An endpoint or stream open (a service provider alone holds no
  * connection): what a hibernated program cannot take along. */
-bool ot_endpoints_open(void)
+/* ---- Hibernating ---- */
+
+/* Each socket's own address, for a resumed process to bind again. */
+void ot_before_hibernate(void)
 {
     for (int i = 0; i < MAX_PROVIDERS; i++) {
-        const provider *p = &providers[i];
-        if (p->used && p->kind != P_INET_SERVICES && p->kind != P_AT_SERVICES && p->kind != P_NBP_MAPPER)
-            return true;
+        provider *p = &providers[i];
+        memset(&p->local, 0, sizeof p->local);
+        if (!p->used || (p->kind != P_TCP && p->kind != P_UDP) || p->fd < 0)
+            continue;
+        socklen_t len = sizeof p->local;
+        if (getsockname(p->fd, (struct sockaddr *)&p->local, &len) < 0 || p->local.sin_family != AF_INET)
+            memset(&p->local, 0, sizeof p->local);
     }
-    return false;
+}
+
+/* The host's sockets closed, as when the process ends (the tests' end of
+ * a process that hibernated); the state is left as it was. */
+void ot_close_sockets(void)
+{
+    for (int i = 0; i < MAX_PROVIDERS; i++) {
+        provider *p = &providers[i];
+        if (!p->used || OT_ATALK(p))
+            continue;
+        if (p->fd >= 0)
+            close(p->fd);
+        if (p->pending_fd >= 0)
+            close(p->pending_fd);
+        p->fd = p->pending_fd = -1;
+    }
+}
+
+/* The endpoint's connection did not survive the resume: T_DISCONNECT at
+ * the next poll, as for a connection reset, and its calls say kOTLookErr
+ * until OTRcvDisconnect. */
+static void lose_connection(provider *p)
+{
+    p->connecting = p->connected = p->eof = p->flow = false;
+    p->disconnected = true;
+    p->disc_reason = ECONNRESET;
+    p->told_disc = false;
+    LOGF(LOG_TRAPS, "OT: endpoint %d: its connection ended with the hibernated process\n", (int)(p - providers));
+}
+
+/* The descriptors are the old process's: forgotten (never closed: here
+ * they may be another file's), and each TCP or UDP endpoint has a new
+ * socket with the options it had, bound again to its old address when it
+ * was bound to one, listening again with its queue; a connection being
+ * made is made again (the other end never had it); one made is lost.
+ * A connection waiting for OTAccept is gone with the old process. */
+void ot_after_resume(void)
+{
+    for (int i = 0; i < MAX_PROVIDERS; i++) {
+        provider *p = &providers[i];
+        if (!p->used)
+            continue;
+        p->fd = p->pending_fd = -1;
+        if (OT_ATALK(p)) {
+            ota_after_resume(p);
+            continue;
+        }
+        if (p->kind != P_TCP && p->kind != P_UDP)
+            continue;
+        p->told_listen = p->told_data = p->told_exdata = false;
+        p->fd = make_socket(p->kind);
+        if (p->fd < 0) {
+            lose_connection(p);
+            continue;
+        }
+        ot_options_reapply(p);
+        bool listener = p->kind == P_TCP && p->qlen > 0;
+        bool bound = p->local.sin_port && (p->kind == P_UDP || listener || p->state == T_IDLE);
+        if (bound && p->state != T_UNBND) {
+            int one = 1;
+            setsockopt(p->fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+            if (bind(p->fd, (struct sockaddr *)&p->local, sizeof p->local) < 0)
+                LOGF(LOG_IDLE, "resume: Open Transport: port %u is taken: endpoint %d is bound to another\n",
+                     ntohs(p->local.sin_port), i);
+        }
+        if (listener && listen(p->fd, p->qlen) < 0)
+            LOGF(LOG_IDLE, "resume: Open Transport: endpoint %d cannot listen again\n", i);
+        if (p->kind != P_TCP)
+            continue;
+        if (p->state == T_OUTCON && p->connecting) {
+            int r = connect(p->fd, (struct sockaddr *)&p->peer, sizeof p->peer);
+            if (r < 0 && errno != EINPROGRESS) {
+                lose_connection(p);
+                continue;
+            }
+            p->connecting = r < 0;
+            p->connected = r == 0;
+        } else if (p->state == T_OUTCON || p->state == T_DATAXFER || p->state == T_OUTREL || p->state == T_INREL) {
+            lose_connection(p);
+        }
+    }
 }

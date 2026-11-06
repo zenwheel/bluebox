@@ -1132,6 +1132,11 @@ void network_close_sockets(void);
 void appletalk_after_resume(void);
 void xpp_after_resume(void);
 void appleshare_after_resume(void);
+void mactcp_after_resume(void);
+void mactcp_close_sockets(void);
+void ot_before_hibernate(void);
+void ot_after_resume(void);
+void ot_close_sockets(void);
 /* The host's monotonic clock, going on after resuming from where it
  * stopped (the network's timers). */
 uint64_t host_clock_ns(void);
@@ -1145,8 +1150,6 @@ const char *hibernate_io_blocker(void);
 const char *network_io_open(void);
 const char *serial_io_open(void);
 const char *print_job_open(void);
-bool mactcp_any_open(void);
-bool ot_endpoints_open(void);
 bool ctb_connections_open(void);
 bool ppc_toolbox_open(void);
 bool print_job_in_progress(void);

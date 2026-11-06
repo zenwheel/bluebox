@@ -68,7 +68,7 @@ enum {
 /* Notification (ASR) event codes */
 enum { TCPClosing = 1, TCPTerminate = 3, TCPDataArrival = 4 };
 enum { UDPDataArrival = 1 };
-enum { TCPRemoteAbort = 2 }; /* terminReason */
+enum { TCPRemoteAbort = 2, TCPNetworkFailure = 3 }; /* terminReason */
 
 /* Connection states, as TCPStatus reports them */
 enum { stClosed = 0, stListen = 2, stSynSent = 6, stEstablished = 8, stFinWait1 = 10, stCloseWait = 14 };
@@ -97,6 +97,16 @@ typedef struct {
     uint32_t lhost, rhost;
     uint16_t lport, rport;
     bool told_data, told_closing, told_term, eof, reset;
+    bool lost;           /* its connection did not survive a resume: not told yet */
+    /* A synchronous call that gave up waiting for a drain (run): made
+     * again, it goes on from where it was (a send's progress, its
+     * deadline); after resuming on a lost connection it ends with
+     * connectionTerminated, as the calls under way did. */
+    gaddr gave_pb;
+    int gave_code;
+    uint32_t gave_sent;
+    uint64_t gave_deadline;
+    bool gave_lost;
 } mstream;
 
 typedef struct {
@@ -603,11 +613,31 @@ static int16_t run(gaddr pb, int code, int s, uint32_t timeout_s, bool async)
 {
     op o = { true, pb, code, s, timeout_s ? now_ns() + (uint64_t)timeout_s * 1000000000u : 0, 0, ioInProgress };
     if (!async) {
+        mstream *m = &streams[s];
+        if (m->gave_pb == pb && m->gave_code == code) { /* made again after giving up for a drain */
+            o.sent = m->gave_sent;
+            o.deadline = m->gave_deadline;
+            bool lost = m->gave_lost;
+            m->gave_pb = 0;
+            m->gave_lost = false;
+            if (lost)
+                return connectionTerminated;
+        }
+        m->gave_pb = 0;
         for (;;) {
             int16_t r = step(&o);
             if (r != ioInProgress)
                 return r;
-            mstream *m = &streams[s];
+            /* At the program's own level the wait gives up for a drain,
+             * as Delay does: the call is made again when the machine goes
+             * on, here or resumed, and goes on from here. */
+            if (drain_give_up()) {
+                m->gave_pb = pb;
+                m->gave_code = code;
+                m->gave_sent = o.sent;
+                m->gave_deadline = o.deadline;
+                return ioInProgress;
+            }
             int fd = m->fd >= 0 ? m->fd : m->lfd;
             struct pollfd pf = { fd, (short)(code == TCPSend || code == TCPActiveOpen ? POLLOUT : POLLIN), 0 };
             if (fd >= 0)
@@ -750,8 +780,8 @@ static int16_t ipp_control(gaddr pb, bool async)
     switch (code) {
     case TCPPassiveOpen:
     case TCPActiveOpen:
-        if (m->fd >= 0 || m->lfd >= 0)
-            return connectionExists;
+        if ((m->fd >= 0 || m->lfd >= 0) && !(m->gave_pb == pb && m->gave_code == code))
+            return connectionExists; /* (unless it is the open that gave up for a drain, made again) */
         return run(pb, code, s, rd8(p + TCPOpenPB_commandTimeoutValue_off), async);
     case TCPSend: return run(pb, code, s, 0, async);
     case TCPRcv:
@@ -826,6 +856,19 @@ void mactcp_poll(void)
     polling = true;
     expire_early(false);
     call_result_procs();
+    /* Connections that did not survive a resume end as a network failure
+     * ends one: the calls under way with connectionTerminated, and the
+     * notification routine hears TCPTerminate. */
+    for (int s = 0; s < MAX_STREAMS; s++) {
+        mstream *m = &streams[s];
+        if (!m->used || !m->lost)
+            continue;
+        m->lost = false;
+        LOGF(LOG_TRAPS, "  .IPP stream %08X: its connection ended with the hibernated process\n", m->stream);
+        fail_ops(s, connectionTerminated);
+        m->told_closing = m->told_term = true;
+        notify(m, TCPTerminate, TCPNetworkFailure);
+    }
     for (int i = 0; i < MAX_OPS; i++) {
         if (!ops[i].used)
             continue;
@@ -1056,12 +1099,86 @@ void mactcp_install_resolver(void)
     mac_file_free(&mf);
 }
 
-/* A stream made and not released (reattach.c: a hibernated program
- * cannot take its connections along). */
-bool mactcp_any_open(void)
+/* ---------------------------------------------------------------------- */
+/* Resuming (reattach.c): the old process's sockets are gone. */
+
+/* A listening socket on the port, or -1. */
+static int listen_on(uint16_t port)
 {
-    for (int i = 0; i < MAX_STREAMS; i++)
-        if (streams[i].used)
-            return true;
-    return false;
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0)
+        return -1;
+    int one = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+    struct sockaddr_in la = inet(0, port);
+    if (bind(fd, (struct sockaddr *)&la, sizeof la) < 0 || listen(fd, 1) < 0) {
+        close(fd);
+        return -1;
+    }
+    set_nonblocking(fd);
+    return fd;
+}
+
+/* Each stream's descriptors are the old process's: forgotten (never
+ * closed: here they may be another file's).  A UDP stream is bound again
+ * to its port and a passive open listens again on its own; an active open
+ * not yet answered is made again; a connection is over, and is told so at
+ * the next poll (lost). */
+void mactcp_after_resume(void)
+{
+    for (int i = 0; i < MAX_EARLY; i++)
+        if (early[i].used) {
+            early[i].fd = listen_on(early[i].port);
+            early[i].used = early[i].fd >= 0;
+        }
+    for (int s = 0; s < MAX_STREAMS; s++) {
+        mstream *m = &streams[s];
+        if (!m->used)
+            continue;
+        bool listening = m->lfd >= 0;
+        m->fd = m->lfd = -1;
+        m->told_data = false;
+        if (m->udp) {
+            m->fd = socket(AF_INET, SOCK_DGRAM, 0);
+            struct sockaddr_in la = inet(0, m->lport);
+            if (m->fd >= 0 && bind(m->fd, (struct sockaddr *)&la, sizeof la) == 0) {
+                set_nonblocking(m->fd);
+            } else {
+                close_fd(&m->fd);
+                LOGF(LOG_IDLE, "resume: MacTCP: UDP port %u is taken: its stream reads nothing\n", m->lport);
+            }
+            continue;
+        }
+        if (m->state == stListen && listening) {
+            m->lfd = listen_on(m->lport);
+            if (m->lfd >= 0)
+                continue;
+            LOGF(LOG_IDLE, "resume: MacTCP: port %u is taken: its passive open ends\n", m->lport);
+        } else if (m->state == stSynSent) {
+            continue; /* step_open connects again: the other end never had the connection */
+        } else if (m->state == stClosed) {
+            continue;
+        }
+        m->state = stClosed;
+        m->eof = m->reset = true;
+        m->lost = true;
+        m->gave_lost = m->gave_pb != 0;
+        active = true;
+    }
+}
+
+/* The host's sockets closed, as when the process ends (the tests' end of
+ * a process that hibernated); the state is left as it was. */
+void mactcp_close_sockets(void)
+{
+    for (int s = 0; s < MAX_STREAMS; s++)
+        if (streams[s].used) {
+            close_fd(&streams[s].fd);
+            close_fd(&streams[s].lfd);
+        }
+    for (int i = 0; i < MAX_EARLY; i++)
+        if (early[i].used && early[i].fd >= 0) {
+            close(early[i].fd);
+            early[i].fd = -1;
+        }
 }
