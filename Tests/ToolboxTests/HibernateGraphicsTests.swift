@@ -276,6 +276,9 @@ extension BlueBox {
             }
             #expect(g.gl("glGetError") == 0)
             let before = frame()
+            let depths = tb_NewPtr(Int32(w * w * 4), false, true)
+            g.gl("glReadPixels", [0, 0, UInt32(w), UInt32(w), 0x1902 /* DEPTH_COMPONENT */, G.GL_FLOAT, depths])
+            let depthSum = checksum(depths, w * w)
             let state = dump()
             #expect(g.gl("glGetError") == 0)
             #expect(rd32(mem + UInt32(4 * (16 * w + 16))) & 0xFFFFFF != 0x1A334C) // something drawn mid-way
@@ -294,6 +297,9 @@ extension BlueBox {
             for i in 0..<(w * w) { wr32(mem + UInt32(4 * i), 0) }
             g.gl("aglSwapBuffers", [ctx])         // the frame as it was, before anything is drawn
             #expect(checksum(mem, w * w) == before)
+            for i in 0..<(w * w) { wr32(depths + UInt32(4 * i), 0) }
+            g.gl("glReadPixels", [0, 0, UInt32(w), UInt32(w), 0x1902, G.GL_FLOAT, depths])
+            #expect(checksum(depths, w * w) == depthSum) // and its depths
             #expect(hostgl_saved_bytes() == 0)
             #expect(hostgl_display_lists() == 3)
             #expect(dump() == state)
@@ -397,6 +403,42 @@ extension BlueBox {
             resume(snap)
             #expect(values() == before)
             #expect(frame() == drawn)
+            #expect(g.gl("glGetError") == 0)
+            g.gl("aglDestroyContext", [ctx])
+        }
+
+        /// A context with a stencil buffer: its stencil values and depths
+        /// come back with the framebuffer.
+        @Test func openGLStencilComesBack() {
+            let dir = launchTestApp()
+            startLoop()
+            // AGL_RGBA, AGL_DEPTH_SIZE 24, AGL_STENCIL_SIZE 8
+            let pix = g.gl("aglChoosePixelFormat", [0, 0, g.words([4, 12, 24, 13, 8, 0])])
+            let ctx = g.gl("aglCreateContext", [pix, 0])
+            #expect(g.gl("aglSetCurrentContext", [ctx]) == 1)
+            let mem = tb_NewPtr(8 * 8 * 4, false, true)
+            #expect(g.gl("aglSetOffScreen", [ctx, 8, 8, 32, mem]) == 1)
+            g.gl("glClearStencil", [5]); g.gl("glClearDepth", fp: [0.25]); g.gl("glClear", [0x0500])
+            g.gl("glEnable", [0x0C11]); g.gl("glScissor", [2, 2, 3, 3])          // SCISSOR_TEST
+            g.gl("glClearStencil", [200]); g.gl("glClearDepth", fp: [0.75]); g.gl("glClear", [0x0500])
+            g.gl("glDisable", [0x0C11])
+            func read() -> [UInt32] {
+                let out = tb_NewPtr(8 * 8 * 4, false, true)
+                defer { tb_DisposePtr(out) }
+                g.gl("glReadPixels", [0, 0, 8, 8, 0x1901 /* STENCIL_INDEX */, G.GL_UNSIGNED_BYTE, out])
+                var v = (0..<16).map { rd32(out + UInt32(4 * $0)) }
+                g.gl("glReadPixels", [0, 0, 8, 8, 0x1902 /* DEPTH_COMPONENT */, G.GL_FLOAT, out])
+                v += (0..<64).map { rd32(out + UInt32(4 * $0)) }
+                return v
+            }
+            let before = read()
+            #expect(before[0] == 0x0505_0505)
+            #expect(g.gl("glGetError") == 0)
+            let snap = hibernate(dir, "stencil.bbhib")
+            resume(snap)
+            let after = read()
+            #expect(Array(after[0..<16]) == Array(before[0..<16]), "stencil \(after[0..<16].map { String($0, radix: 16) })")
+            #expect(Array(after[16...]) == Array(before[16...]), "depth \(after[16..<24].map { String($0, radix: 16) }) was \(before[16..<24].map { String($0, radix: 16) })")
             #expect(g.gl("glGetError") == 0)
             g.gl("aglDestroyContext", [ctx])
         }

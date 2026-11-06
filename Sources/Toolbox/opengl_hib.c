@@ -221,7 +221,9 @@ typedef struct glsaved {
     GLfloat *pixmap; /* each map's in turn */
     gltexture defaults[3];
     int fw, fh;
-    uint32_t *color, *ds; /* the framebuffer */
+    uint32_t *color; /* the framebuffer's colours, */
+    float *ds;       /* depths */
+    uint8_t *stencil;
 } glsaved;
 
 static const GLfloat *f4(const double *v, GLfloat *out)
@@ -587,13 +589,13 @@ void glh_capture(hostgl_ctx *h)
     s->color = n ? bb_malloc(n * 4, BB_BYTES) : NULL;
     if (s->color)
         glReadPixels(0, 0, h->width, h->height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, s->color);
-    s->ds = n && h->depth ? bb_malloc(n * 4, BB_BYTES) : NULL;
-    if (s->ds) {
-        if (h->stencil_bits)
-            glReadPixels(0, 0, h->width, h->height, GL_DEPTH_STENCIL_EXT, GL_UNSIGNED_INT_24_8_EXT, s->ds);
-        else
-            glReadPixels(0, 0, h->width, h->height, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, s->ds);
-    }
+    s->ds = n && h->depth_bits ? bb_malloc(n * 4, BB_BYTES) : NULL;
+    /* Depths as floats: the host keeps them so, and an integer loses some. */
+    if (s->ds)
+        glReadPixels(0, 0, h->width, h->height, GL_DEPTH_COMPONENT, GL_FLOAT, s->ds);
+    s->stencil = n && h->stencil_bits ? bb_malloc(n, BB_BYTES) : NULL;
+    if (s->stencil)
+        glReadPixels(0, 0, h->width, h->height, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, s->stencil);
     glPopAttrib();
     glPopClientAttrib();
     while (glGetError() != GL_NO_ERROR) { /* the program's were taken before */
@@ -613,18 +615,17 @@ void glh_restore(hostgl_ctx *h)
     if (s->color && s->fw == h->width && s->fh == h->height) {
         glWindowPos2i(0, 0);
         glDrawPixels(s->fw, s->fh, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, s->color);
-        if (s->ds) {
+        if (s->ds) { /* depth tested (always) to be written, colours left alone */
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_ALWAYS);
             glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-            if (h->stencil_bits)
-                glDrawPixels(s->fw, s->fh, GL_DEPTH_STENCIL_EXT, GL_UNSIGNED_INT_24_8_EXT, s->ds);
-            else
-                glDrawPixels(s->fw, s->fh, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, s->ds);
+            glDrawPixels(s->fw, s->fh, GL_DEPTH_COMPONENT, GL_FLOAT, s->ds);
             glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
             glDepthFunc(GL_LESS);
             glDisable(GL_DEPTH_TEST);
         }
+        if (s->stencil)
+            glDrawPixels(s->fw, s->fh, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, s->stencil);
     }
     for (int b = 0; b < 3; b++)
         restore_texture(&s->defaults[b]);
@@ -733,6 +734,7 @@ void glh_free(hostgl_ctx *h)
     bb_free(s->pixmap);
     bb_free(s->color);
     bb_free(s->ds);
+    bb_free(s->stencil);
     bb_free(s);
     h->hib = NULL;
 }
@@ -749,6 +751,8 @@ size_t glh_saved_bytes(const hostgl_ctx *h)
         n += (size_t)s->fw * (size_t)s->fh * 4;
     if (s->ds)
         n += (size_t)s->fw * (size_t)s->fh * 4;
+    if (s->stencil)
+        n += (size_t)s->fw * (size_t)s->fh;
     return n;
 }
 #endif
