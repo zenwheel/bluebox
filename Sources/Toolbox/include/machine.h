@@ -133,6 +133,8 @@ uint32_t machine_pc(void);
 
 /* Screen size in pixels (call before machine_boot; default 1024x768). */
 void machine_set_screen(int width, int height);
+/* A Mac's screen size for a host area: width rounded down to 64, height to 2. */
+void machine_fit_screen(int *width, int *height);
 /* Open the fonts (FOND/NFNT/FONT) of a resource file below the application.
  * Call after machine_boot and before machine_launch. */
 bool machine_add_resource_file(const char *path, char *err, size_t errlen);

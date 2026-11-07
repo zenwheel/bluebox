@@ -46,6 +46,19 @@ void machine_set_screen(int width, int height)
         screen_h = height;
     }
 }
+
+/* A screen a Mac could have had for a host area of width x height: as wide
+ * as a whole number of 64 pixels and as tall as a whole number of 2, as
+ * every Mac screen was (512x342, 640x480, 832x624, 1152x870, 1600x1200).
+ * Programs relied on both: Bachman centres its 512-wide window and draws in
+ * long words, and Space Junkie centres its field at
+ * (height - 384) * rowBytes / 2, half a row out on an odd height, which
+ * drew its screen's halves swapped. */
+void machine_fit_screen(int *width, int *height)
+{
+    *width = *width / 64 * 64;
+    *height = *height / 2 * 2;
+}
 static uint64_t ticks_base_ns;
 static uint64_t skipped_ns; /* Delay's skips (see machine_time_ns) */
 /* The environment profile's low memory (PLAN 2.6): the double-click,
