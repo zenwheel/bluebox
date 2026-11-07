@@ -324,6 +324,7 @@ static int16_t run_alert(int16_t id, int kind)
         LOGF(LOG_UNIMPL, "alert %d: %s\n", id, a.message);
         result = headless_answer(id, &a, default_item);
     }
+    wm_modal_closed();
     return result;
 }
 
@@ -385,6 +386,7 @@ int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gadd
         LOGF(LOG_UNIMPL, "alert standard: %s\n", a.message);
         result = headless_answer(0, &a, default_item);
     }
+    wm_modal_closed();
     if (item_hit)
         wr16(item_hit, (uint16_t)result);
     return noErr;

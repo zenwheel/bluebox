@@ -138,7 +138,9 @@ int8_t tb_PrStlDialog(gaddr h)
         set_print_error(noErr);
         return 1; /* no host panel: keep the defaults */
     }
-    if (!page_setup_fn(&ps, print_ctx)) {
+    bool ok = page_setup_fn(&ps, print_ctx);
+    wm_modal_closed();
+    if (!ok) {
         set_print_error(noErr);
         return 0;
     }
