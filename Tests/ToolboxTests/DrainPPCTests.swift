@@ -133,6 +133,39 @@ extension BlueBox {
             #expect(abandonCalls > 1 && gpr(31) > 0)
         }
 
+        /// A PowerPC program's PBReadSync to a 68k driver of its own whose
+        /// Prime waits for input in GetNextEvent: the routine is left at the
+        /// idle call, the program's call put back on its NATIVE word, and
+        /// made again after a restore, when the driver answers it.
+        @Test func aSynchronousReadWaitingInsideItsDriverHibernates() {
+            defer { g_ppc_mode = false }
+            let (storage, pb, buf) = waitingDriverRead()
+            let result = ptr(4)
+            wr32(result, 0x7777_7777)
+            let read = export("PBReadSync"), task = export("SystemTask")
+            // r30 = result; r3 = pb; PBReadSync; stw r3,0(r30); loop: SystemTask
+            _ = start(load(30, result) + load(3, pb) + call(read) + [0x907E_0000] + call(task) + [branch(back: 5)])
+            machine_set_instruction_limit(machine_instruction_count() + 60_000_000)
+            machine_drain_begin(true)
+            #expect(machine_run(50_000_000) == RUN_DRAINED)
+            machine_set_instruction_limit(0)
+            #expect(rd32(storage + 4) > 1000)               // it waited in Prime
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(String(cString: machine_drain_point()) == "PBReadSync (abandoned)")
+            #expect(g_ppc.pc == rd32(read))                 // on the NATIVE word
+            #expect(gpr(3) == pb)
+            #expect(rd32(waitingDriverQueue()) == 0)
+            #expect(rd32(result) == 0x7777_7777)
+            let snap = snapshot("ppcdrvwait.bbhib")
+            machine_drain_end()
+            restore(snap)
+            wr16(storage, 1)                                // the line comes
+            _ = machine_run(5_000_000)
+            #expect(rd16(storage + 2) == 2)                 // the call made again, and answered
+            #expect(rd32(result) == 0)
+            #expect(rd8(buf) == 0x58)
+        }
+
         static let noteLevel: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in
             levelSeen.append(drain_program_level())
             c!.pointee.pc = c!.pointee.lr

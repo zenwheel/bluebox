@@ -33,7 +33,11 @@
  * through Mixed Mode (ppc_call), no 68k trap run for PowerPC code
  * (ppc_trap: a patch of the program's own, or a trap with no PowerPC
  * glue).  A PowerPC call abandoned inside a trap run for it unwinds to the
- * PowerPC call, which is the one made again.
+ * PowerPC call, which is the one made again.  One host frame is left
+ * instead: a 68k driver's routine run for the program's own synchronous
+ * request (Small Talk's console driver waits for a line in its Prime),
+ * at an idle call there once the grace is over; the routine is left where
+ * it is and the program's call given up, to be made again (driver68k.c).
  *
  * Refused (with a reason the host can show) when no safe point comes in
  * DRAIN_TIMEOUT_NS of the host's time (the program in a callback from
@@ -121,13 +125,16 @@ bool drain_program_level(void)
 
 /* Where a native may abandon its call: at the program's level, or for a
  * PowerPC program inside a 68k trap run for its call at that level (the
- * PowerPC call is put back, cfm.c). */
-static bool abandon_level(void)
+ * PowerPC call is put back, cfm.c); with `calls` calls from native code
+ * into the guest under way, where it would be once they were left. */
+static bool abandon_level_under(int calls)
 {
-    if (thread_current_index() != 0 || trap_call_depth() != 0 || mm_call_depth() != 0)
+    if (thread_current_index() != 0 || trap_call_depth() != calls || mm_call_depth() != 0)
         return false;
     return g_ppc_mode && !mm_level_68k() ? cfm_level_call() >= 0 : ppc_trap_depth() == 0;
 }
+
+static bool abandon_level(void) { return abandon_level_under(0); }
 
 static void refuse(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void refuse(const char *fmt, ...)
@@ -237,8 +244,17 @@ bool drain_at_trap(cpu68k *c, uint16_t op)
     /* A PowerPC program's 68k code runs at its own level only when its
      * PowerPC code called it there (mixedmode.c); otherwise under a host
      * frame (a trap or a callback run for it). */
-    if ((g_ppc_mode && !mm_level_68k()) || !drain_program_level())
+    if ((g_ppc_mode && !mm_level_68k()) || !drain_program_level()) {
+        /* A driver's routine waiting inside the program's synchronous
+         * call, once the grace has given it the time to finish: left, and
+         * the program's call given up (driver68k.c), to be made again. */
+        if (c->icount >= grace_until && abandon_level_under(1) && drv68k_leave_for_drain()) {
+            c->pc = c->op_pc;
+            c->icount--; /* not made: the routine is left */
+            return true;
+        }
         return false;
+    }
     c->pc = c->op_pc;
     c->icount--; /* not made: made again when the machine goes on */
     c->stopped = true;

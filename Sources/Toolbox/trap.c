@@ -877,6 +877,11 @@ void trap_ctx_load(const trap_ctx *t)
 static void guest_return_native(cpu68k *c, uint16_t tw) { returned_depth = call_depth; }
 static void run_to_return(void);
 
+/* The call into the guest under way is left where it is, as if it had
+ * returned: its native caller puts back the registers (A7 with them), so
+ * nothing of it stays but what it wrote to memory. */
+void guest_call_leave(void) { returned_depth = call_depth; }
+
 /* Call fn and return with the registers it left (the caller saves what it needs). */
 void guest_call_regs(gaddr fn)
 {
