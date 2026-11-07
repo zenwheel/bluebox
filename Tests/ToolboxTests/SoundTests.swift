@@ -693,6 +693,52 @@ extension BlueBox {
             #expect(rd8(0x27E) == 0)                     // SoundActive
         }
 
+        /// The write finished is the one at the head of the driver's queue
+        /// (SoundDCE's) when its completion runs, as IODone took it:
+        /// StartSound's glue, asked for a sound while one plays, copies the
+        /// playing write's block to a larger one, frees the old and puts the
+        /// copy in the queue in its place (Continuum, whose old block's
+        /// ioCompletion was soon something else's).
+        @Test func completionTakesTheBlockAtTheQueueHead() {
+            launchTestApp()
+            let vars = tb_NewPtr(8, false, true)         // last A0, count, wrong
+            let hi = UInt16(vars >> 16), lo = UInt16(vars & 0xFFFF)
+            let words: [UInt16] = [0x23C8, hi, lo,           // MOVE.L A0,last
+                                   0x5279, hi, lo &+ 4,      // ADDQ.W #1,count
+                                   0x4E75]                   // RTS
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let other: [UInt16] = [0x33FC, 0x0001, hi, lo &+ 6, 0x4E75] // MOVE.W #1,wrong; RTS
+            let wrong = tb_NewPtr(Int32(other.count * 2), false, false)
+            for (i, w) in other.enumerated() { wr16(wrong + UInt32(i * 2), w) }
+            let rec = tb_NewPtr(6 + 64, false, true)
+            wr32(rec + 2, 0x0001_0000)
+            for i in 0..<64 { wr8(rec + 6 + UInt32(i), 128) }
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            wr32(pb + 12, code)                          // ioCompletion
+            wr32(pb + UInt32(IOParam_ioBuffer_off), rec)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 70)
+            #expect(tb_PBWrite(pb, true) == 1)
+            let dce = rd32(0x27A)                        // SoundDCE
+            #expect(dce != 0 && Int16(bitPattern: rd16(dce + 24)) == -4)
+            #expect(rd32(dce + 8) == pb)                 // the write waits in its queue
+            // The glue's move: the block copied, the old one's memory reused.
+            let moved = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            for i in 0..<UInt32(IOParam_SIZEOF) { wr8(moved + i, rd8(pb + i)) }
+            wr32(pb + 12, wrong)
+            wr32(dce + 8, moved)
+            wr32(dce + 12, moved)
+            machine_skip_time(1_000_000_000)
+            time_pump()
+            time_pump()
+            #expect(rd16(vars + 4) == 1)
+            #expect(rd32(vars) == moved)
+            #expect(rd16(vars + 6) == 0)                 // the old block's routine never ran
+            #expect(rd16(moved + UInt32(IOParam_ioResult_off)) == 0)
+            #expect(rd32(dce + 8) == 0 && rd32(dce + 12) == 0) // and the queue is empty
+        }
+
         /// A synchronous write's ioCompletion is not called: the Reversi
         /// games' parameter block is on the stack with garbage there.
         @Test func synchronousWritesRunNoCompletion() {

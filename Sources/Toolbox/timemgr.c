@@ -240,14 +240,15 @@ enum { MAX_COMPLETIONS = 64 };
 typedef struct {
     gaddr pb;
     int16_t result;
+    gaddr dce; /* the driver whose queue holds the request, or 0 */
 } completion;
 static completion completions[MAX_COMPLETIONS];
 static int ncompletions;
 
-void io_complete_later(gaddr pb, int16_t result)
+static void complete_later(gaddr pb, int16_t result, gaddr dce)
 {
     if (ncompletions < MAX_COMPLETIONS) {
-        completions[ncompletions++] = (completion){ pb, result };
+        completions[ncompletions++] = (completion){ pb, result, dce };
         /* Until its completion runs the call is still going on, as the
          * I/O was: a program that waits for ioResult and then forgets the
          * block (MacGLQuake's, on the stack) must not get the completion
@@ -257,10 +258,49 @@ void io_complete_later(gaddr pb, int16_t result)
     }
 }
 
+void io_complete_later(gaddr pb, int16_t result) { complete_later(pb, result, 0); }
+
+/* A request a driver keeps in its DCE's queue until it finishes, as the
+ * Device Manager queued them: the request finished is the one at the
+ * queue's head when its completion runs, as IODone took it, not the block
+ * the call was made with.  StartSound's glue (THINK C's and MPW's), asked
+ * for a sound while one plays, copies the playing write's block to a
+ * larger one with the new sound after it, frees the old and puts the copy
+ * at the head of SoundDCE's queue; the old block's ioCompletion is soon
+ * something else's (Continuum's sound, at interrupt level, into the
+ * middle of its own code). */
+void io_complete_later_queued(gaddr dce, gaddr pb, int16_t result) { complete_later(pb, result, dce); }
+
+/* The head of a driver's queue taken off it (the request finishing), or
+ * pb when the queue is empty. */
+static gaddr dequeue_head(gaddr dce, gaddr pb)
+{
+    gaddr q = dce + DCtlEntry_dCtlQHdr_off;
+    gaddr head = rd32(q + 2);
+    if (!head)
+        return pb;
+    gaddr next = rd32(head); /* qLink */
+    wr32(q + 2, next);
+    if (!next)
+        wr32(q + 6, 0);
+    return head;
+}
+
+void io_complete_queued_now(gaddr dce, gaddr pb, int16_t result)
+{
+    pb = dequeue_head(dce, pb);
+    wr16(pb + 16, (uint16_t)result);
+    gaddr fn = rd32(pb + 12);
+    if (fn)
+        call_completion(fn, pb, result);
+}
+
 /* A queued call finishes: its result in ioResult, then its completion. */
 static int completing; /* inside a completion routine */
-static void complete(gaddr pb, int16_t result)
+static void complete(gaddr pb, int16_t result, gaddr dce)
 {
+    if (dce)
+        pb = dequeue_head(dce, pb);
     wr16(pb + 16, (uint16_t)result); /* ioResult */
     gaddr fn = rd32(pb + 12);        /* ioCompletion */
     if (fn) {
@@ -280,7 +320,7 @@ void io_complete_soon(gaddr pb, int16_t result)
     if (completing)
         io_complete_later(pb, result);
     else
-        complete(pb, result);
+        complete(pb, result, 0);
 }
 
 /* Deferred tasks (DTInstall): run once at the next interrupt pump. */
@@ -320,11 +360,13 @@ static void run_deferred(void)
 void io_complete_now_for(int16_t refnum)
 {
     for (int i = 0; i < ncompletions;) {
-        gaddr pb = completions[i].pb;
-        if ((int16_t)rd16(pb + 24) == refnum) { /* ioRefNum */
+        gaddr pb = completions[i].pb, dce = completions[i].dce;
+        /* A queued request's block may have moved: its driver says. */
+        int16_t of = (int16_t)rd16(dce ? dce + DCtlEntry_dCtlRefNum_off : pb + 24); /* ioRefNum */
+        if (of == refnum) {
             int16_t r = completions[i].result;
             memmove(completions + i, completions + i + 1, sizeof completions[0] * (size_t)(--ncompletions - i));
-            complete(pb, r);
+            complete(pb, r, dce);
             i = 0; /* a completion may have queued more */
         } else {
             i++;
@@ -337,8 +379,9 @@ void io_complete_now(gaddr pb, int16_t result)
     for (int i = 0; i < ncompletions;) {
         if (completions[i].pb == pb) {
             int16_t r = completions[i].result;
+            gaddr dce = completions[i].dce;
             memmove(completions + i, completions + i + 1, sizeof completions[0] * (size_t)(--ncompletions - i));
-            complete(pb, r);
+            complete(pb, r, dce);
         } else {
             i++;
         }
@@ -356,7 +399,7 @@ static void run_completions(void)
     memcpy(due, completions, sizeof due[0] * (size_t)n);
     ncompletions = 0;
     for (int i = 0; i < n; i++)
-        complete(due[i].pb, due[i].result);
+        complete(due[i].pb, due[i].result, due[i].dce);
 }
 
 /* One tick's VBL tasks: each count down, those reaching zero run. */

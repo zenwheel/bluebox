@@ -1639,16 +1639,52 @@ static void sd_lowmem(gaddr rec)
     wr8(LM_SoundActive, rec ? 0xFF : 0);
 }
 
+/* An asynchronous write waits in the driver's queue (its DCE's, SoundDCE)
+ * until its completion has run, as the Device Manager queued it; what
+ * finishes is the queue's head then (timemgr.c).  StartSound's glue moves
+ * the playing write's block and puts the new one in the queue in its
+ * place: the write playing is the queue's last. */
+static gaddr sd_queue(void)
+{
+    gaddr e = driver_dce(-4);
+    return e ? e + DCtlEntry_dCtlQHdr_off : 0;
+}
+
+static void sd_enqueue(gaddr pb)
+{
+    gaddr q = sd_queue();
+    if (!q)
+        return;
+    for (gaddr p = rd32(q + 2); p; p = rd32(p))
+        if (p == pb)
+            return; /* a block already waiting there: never linked to itself */
+    wr32(pb, 0); /* qLink */
+    gaddr tail = rd32(q + 6);
+    if (tail)
+        wr32(tail, pb);
+    else
+        wr32(q + 2, pb);
+    wr32(q + 6, pb);
+}
+
+static gaddr sd_playing(void)
+{
+    gaddr q = sd_queue();
+    if (sd_pb && sd_async && q && rd32(q + 6))
+        sd_pb = rd32(q + 6);
+    return sd_pb;
+}
+
 static void sd_done(int16_t result)
 {
-    gaddr pb = sd_pb;
+    gaddr pb = sd_playing();
     sd_pb = sd_ft = 0;
     sd_lowmem(0);
     if (!pb)
         return;
     wr16(pb + IOParam_ioResult_off, (uint16_t)result);
     if (sd_async)
-        io_complete_later(pb, result);
+        io_complete_later_queued(driver_dce(-4), pb, result);
 }
 
 /* KillIO: the sound stops, and the write's completion runs now.  The
@@ -1659,7 +1695,10 @@ static void sd_done(int16_t result)
 static void sd_kill_now(void)
 {
     for (int n = 0; n < 100000; n++) {
-        gaddr pb = sd_pb;
+        /* Writes that finished but whose completions have not run yet are
+         * ahead of the playing one in the queue: theirs run first. */
+        io_complete_now_for(-4);
+        gaddr pb = sd_playing();
         stop_host(&sd_chan);
         sd_pb = sd_ft = 0;
         sd_lowmem(0);
@@ -1668,7 +1707,7 @@ static void sd_kill_now(void)
         wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
         if (!sd_async)
             return;
-        io_complete_now(pb, abortErr);
+        io_complete_queued_now(driver_dce(-4), pb, abortErr);
     }
 }
 
@@ -1752,6 +1791,7 @@ static int16_t sd_write(gaddr pb, bool async)
     sd_pb = pb;
     sd_async = async;
     if (async) {
+        sd_enqueue(pb);
         wr16(pb + IOParam_ioResult_off, ioInProgress);
         sd_pump();
         return sd_pb == pb ? ioInProgress : (int16_t)rd16(pb + IOParam_ioResult_off);

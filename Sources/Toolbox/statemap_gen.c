@@ -2585,7 +2585,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/threadmgr.c", "scheduler", 4, 0 },
     { "Toolbox/threadmgr.c", "threads", 12800, 142 },
     { "Toolbox/timemgr.c", "completing", 4, 0 },
-    { "Toolbox/timemgr.c", "completions", 512, 0 },
+    { "Toolbox/timemgr.c", "completions", 768, 0 },
     { "Toolbox/timemgr.c", "deferred", 256, 0 },
     { "Toolbox/timemgr.c", "in_interrupt", 1, 0 },
     { "Toolbox/timemgr.c", "ncompletions", 4, 0 },
