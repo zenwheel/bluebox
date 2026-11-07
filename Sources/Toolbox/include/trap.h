@@ -77,6 +77,10 @@ void guest_call_defproc(gaddr fn);
 gaddr trap_new_handle_clear(int32_t size);
 /* The same, leaving the registers as the routine left them. */
 void guest_call_regs(gaddr fn);
+/* The innermost guest_call_regs under way returns once the instruction
+ * running now is done, whatever the routine was doing (for a drain that
+ * gives up the call it was made for, driver68k.c). */
+void guest_call_leave(void);
 /* Call a low-memory hook with D0 and A0 set; all registers (A7 = sp) are
  * restored afterwards.  Returns the D0 it left. */
 uint32_t hook_call(gaddr fn, uint32_t d0, uint32_t a0, uint32_t sp);
