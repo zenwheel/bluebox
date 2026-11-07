@@ -149,6 +149,8 @@ int16_t rm_open_empty_system(void);
  * there is none or it failed. */
 bool process_launch(const char *app, const char *const *docs, int ndocs);
 bool process_is_finder(uint32_t hi, uint32_t lo); /* the Finder's serial number */
+void process_finder_quit(void); /* the Finder told to quit: no longer listed */
+void process_reset(void); /* the Process Manager's list (process.c): a fresh machine */
 bool process_is_us(uint32_t hi, uint32_t lo); /* this run's serial number or kCurrentProcess */
 /* A run this one launched, waited for until it listens for events (true)
  * or ends; false at once for any other process. */

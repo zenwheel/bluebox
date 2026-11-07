@@ -24,9 +24,18 @@ enum { procNotFound = -600 };
 
 static uint32_t our_psn(void) { return g_is_finder ? FINDER_PSN : OUR_PSN; }
 
+/* The Finder has been told to quit: an installer making way quits every
+ * other application and waits for each to leave the list (Internet
+ * Explorer 4.01's Installer VISE waited for ever on the Finder), so it is
+ * no longer listed.  Starting it again lists it again. */
+static bool finder_quit;
+
+void process_reset(void) { finder_quit = false; }
+void process_finder_quit(void) { finder_quit = true; }
+
 /* The Finder's serial number; when the run is the Finder, that is us. */
 bool process_is_finder(uint32_t hi, uint32_t lo) { return hi == 0 && lo == FINDER_PSN; }
-static bool is_finder(gaddr psn) { return !g_is_finder && process_is_finder(rd32(psn), rd32(psn + 4)); }
+static bool is_finder(gaddr psn) { return !g_is_finder && !finder_quit && process_is_finder(rd32(psn), rd32(psn + 4)); }
 
 bool process_is_us(uint32_t hi, uint32_t lo) { return hi == 0 && (lo == our_psn() || lo == kCurrentProcess); }
 static bool is_us(gaddr psn) { return process_is_us(rd32(psn), rd32(psn + 4)); }
@@ -96,7 +105,7 @@ int16_t tb_GetNextProcess(gaddr psn)
         put_us(psn);
         return noErr;
     }
-    if (is_us(psn) && !g_is_finder) { /* then the Finder */
+    if (is_us(psn) && !g_is_finder && !finder_quit) { /* then the Finder */
         wr32(psn, 0);
         wr32(psn + 4, FINDER_PSN);
         return noErr;
