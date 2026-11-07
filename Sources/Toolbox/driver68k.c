@@ -17,11 +17,20 @@
  * The system reaches desk accessories and drivers with windows through
  * SystemEvent, SystemClick, SystemMenu, SystemEdit and SystemTask, which
  * Control them with accEvent, accMenu, accUndo ... accClear and accRun.
+ *
+ * A routine run for a synchronous request the program made at its own
+ * level may wait inside for an event (Small Talk's console driver reads a
+ * line in its Prime, calling GetNextEvent until Return is pressed): a
+ * drain gives such a request up at an idle call there (drv68k_leave_for_
+ * drain), the routine left and the program's call made again when the
+ * machine goes on, so that the machine stops at the program's level.
  */
 #include <ctype.h>
 #include <string.h>
 
+#include "ppc.h"
 #include "tb_internal.h"
+#include "trap.h"
 
 enum {
     dReadEnable = 0x0100, dWritEnable = 0x0200, dCtlEnable = 0x0400, dStatEnable = 0x0800,
@@ -322,6 +331,42 @@ static int16_t call_routine(gaddr fn, gaddr pb, gaddr e)
 
 static void run_head(gaddr e);
 
+/* The synchronous request of the program's own whose routine runs, called
+ * from its level (nothing of ours under its call that runs guest code),
+ * which a drain may give up; and whether one did.  The host's: a drain
+ * leaves the routine before the machine stops. */
+BB_HOST static struct {
+    gaddr e, pb;
+    int thread; /* the Thread Manager's thread that made it */
+    bool left;
+} own;
+
+/* Whether the parameter block is the one the program's own call passed
+ * (not one of ours, as drivevol.c's reads of a disk the driver serves). */
+static bool programs_block(gaddr pb)
+{
+    if (g_ppc_mode && !mm_level_68k())
+        return g_ppc.gpr[3] == pb;
+    return g_cpu && g_cpu->a[0] == pb;
+}
+
+/* A drain at an idle call inside a routine (drain.c, which has seen that
+ * leaving it puts the machine at the program's level): the routine is left
+ * if it is the one run for the program's own synchronous request, still
+ * under way and alone in its driver's queue, and the request is then given
+ * up (submit). */
+bool drv68k_leave_for_drain(void)
+{
+    if (!own.pb || own.left || own.thread != thread_current_index() || trap_call_depth() != 1)
+        return false;
+    gaddr q = own.e + DCtlEntry_dCtlQHdr_off;
+    if (rd32(q + 2) != own.pb || rd32(own.pb) || (int16_t)rd16(own.pb + IOParam_ioResult_off) != ioInProgress)
+        return false;
+    own.left = true;
+    guest_call_leave();
+    return true;
+}
+
 /* IODone: the request at the head of the queue is over. */
 static void finish(gaddr e, int16_t r)
 {
@@ -507,8 +552,25 @@ static int16_t submit(gaddr e, gaddr pb, bool async, int kind)
     if (idle) {
         gaddr saved = submitting;
         submitting = pb;
+        bool mine = !async && !own.pb && trap_call_depth() == 0 && programs_block(pb);
+        if (mine)
+            own.e = e, own.pb = pb, own.thread = thread_current_index(), own.left = false;
         run_head(e);
+        bool left = mine && own.left;
+        if (mine)
+            own.e = own.pb = 0;
         submitting = saved;
+        if (left) {
+            /* Given up for a drain: out of the queue, and made again when
+             * the machine goes on (drain_abandon); a call that cannot be
+             * made again (never so here) is answered abortErr. */
+            tb_Dequeue(pb, q);
+            last_pb = 0;
+            wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
+            LOGF(LOG_TRAPS, "  driver %d call %04X given up for a drain\n", refnum_of(e), rd16(pb + IOParam_ioTrap_off));
+            drain_abandon();
+            return abortErr;
+        }
     }
     int16_t r = (int16_t)rd16(pb + IOParam_ioResult_off);
     if (r != ioInProgress || async)
