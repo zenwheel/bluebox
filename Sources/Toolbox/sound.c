@@ -839,7 +839,7 @@ static void pump(channel *c)
 }
 
 static bool in_pump;
-static void sd_pump(void);
+static void sd_pump(bool at_once);
 static void heard_trim_all(void);
 
 /* Called at safe points (Event Manager, TickCount, SystemTask). */
@@ -863,7 +863,7 @@ void sound_pump(void)
     for (int i = 0; i < MAX_CHANNELS; i++)
         if (chans[i].chan)
             pump(&chans[i]);
-    sd_pump();
+    sd_pump(true);
     sound_input_pump();
     qt_tune_pump();
     in_pump = false;
@@ -1601,6 +1601,8 @@ static bool sd_async;
 static gaddr sd_ft;            /* four-tone: its FTSoundRec */
 static uint64_t sd_ft_next;    /* when the next tick of four-tone is due */
 static gaddr sd_gave_up;       /* a synchronous write whose wait gave up for a drain, to be made again */
+static uint64_t sd_ended;      /* when the last asynchronous write to finish had played out (machine ns), or 0 */
+static bool sd_finishing;      /* a write's completion running from the driver */
 
 /* A tick of four-tone sound, ahead of time: the four voices' wave tables
  * stepped by their rates (fixed point, table positions a sample), the
@@ -1675,16 +1677,30 @@ static gaddr sd_playing(void)
     return sd_pb;
 }
 
-static void sd_done(int16_t result)
+/* A write finished.  Its completion runs at once when the sound has
+ * played out (now, from a pump: as the driver's IODone ran it when the
+ * last sample went) unless the program has masked interrupts, else at
+ * the next interrupt pump.  Any pump, not only the interrupt pump's: a
+ * program waiting in a TickCount loop (Continuum) is pumped there first. */
+static void sd_done(int16_t result, bool now)
 {
     gaddr pb = sd_playing();
+    bool async = sd_async;
+    sd_ended = result == noErr && async ? sd_chan.busy_until : 0;
     sd_pb = sd_ft = 0;
     sd_lowmem(0);
     if (!pb)
         return;
     wr16(pb + IOParam_ioResult_off, (uint16_t)result);
-    if (sd_async)
+    if (!async)
+        return;
+    if (now && !sd_finishing && !(g_cpu->sr & 0x0700)) {
+        sd_finishing = true;
+        io_complete_queued_now(driver_dce(-4), pb, result);
+        sd_finishing = false;
+    } else {
         io_complete_later_queued(driver_dce(-4), pb, result);
+    }
 }
 
 /* KillIO: the sound stops, and the write's completion runs now.  The
@@ -1712,33 +1728,42 @@ static void sd_kill_now(void)
 }
 
 /* From the sound pump: four-tone goes on a tick at a time while its
- * duration lasts; a write finishes when its sound has played. */
-static void sd_pump(void)
+ * duration lasts; a write finishes when its sound has played.  The next
+ * write its completion makes is finished here too when its time has come
+ * already (the clock moved on several ticks at once), as many as played
+ * meanwhile: StartSound's glue queues a sound each tick from Continuum's
+ * VBL task and plays them one a write, and a driver finishing one a pump
+ * fell behind until its queue's 16-bit length went negative and the next
+ * sound was copied over the program's code. */
+static void sd_pump(bool at_once)
 {
-    if (!sd_pb)
-        return;
-    if (sd_ft) {
-        while (sd_ft && now_ns() + DB_LEAD_NS / 2 >= sd_ft_next) {
-            int16_t left = (int16_t)rd16(sd_ft);
-            if (left <= 0) {
-                sd_done(noErr);
-                return;
+    for (int n = 0; n < 64 && sd_pb; n++) {
+        if (sd_ft) {
+            while (sd_ft && now_ns() + DB_LEAD_NS / 2 >= sd_ft_next) {
+                int16_t left = (int16_t)rd16(sd_ft);
+                if (left <= 0) {
+                    sd_done(noErr, at_once);
+                    break;
+                }
+                wr16(sd_ft, (uint16_t)(left - 1));
+                ft_render_tick();
+                sd_ft_next = sd_chan.busy_until;
             }
-            wr16(sd_ft, (uint16_t)(left - 1));
-            ft_render_tick();
-            sd_ft_next = sd_chan.busy_until;
+            if (sd_ft)
+                return;
+            continue;
         }
-        return;
+        if (now_ns() < sd_chan.busy_until)
+            return;
+        sd_done(noErr, at_once);
     }
-    if (now_ns() >= sd_chan.busy_until)
-        sd_done(noErr);
 }
 
 static void sd_stop(void)
 {
     stop_host(&sd_chan);
     if (sd_pb)
-        sd_done(abortErr);
+        sd_done(abortErr, false);
 }
 
 static int16_t sd_wait(gaddr pb);
@@ -1788,12 +1813,23 @@ static int16_t sd_write(gaddr pb, bool async)
         sd_ft = rd32(rec + 2);
         sd_ft_next = now_ns();
     }
+    /* A write made as the last one finished (from its completion) plays
+     * on from where that one ended, as the driver went from one buffer to
+     * the next: the pump that saw the end came a little after it, and a
+     * sound started then would leave the driver further behind each
+     * time. */
+    uint64_t t = now_ns();
+    if (async && sd_finishing && sd_ended && sd_ended <= t && sd_chan.busy_until > t)
+        sd_chan.busy_until -= t - sd_ended;
+    sd_ended = 0;
     sd_pb = pb;
     sd_async = async;
     if (async) {
         sd_enqueue(pb);
         wr16(pb + IOParam_ioResult_off, ioInProgress);
-        sd_pump();
+        if (sd_finishing)
+            return ioInProgress; /* the pump that made the completion looks again */
+        sd_pump(false); /* not from inside the call: its completion waits for the pump */
         return sd_pb == pb ? ioInProgress : (int16_t)rd16(pb + IOParam_ioResult_off);
     }
     return sd_wait(pb);
