@@ -27,6 +27,7 @@ int8_t tb_GetColor(uint32_t where, gaddr prompt, gaddr in, gaddr out)
     char text[256];
     pstr_to_c(prompt, text, sizeof text);
     bool ok = color_fn && color_fn(text, a, b, color_ctx);
+    wm_modal_closed();
     if (!ok)
         b[0] = a[0], b[1] = a[1], b[2] = a[2];
     wr16(out, b[0]);

@@ -743,6 +743,36 @@ extension BlueBox {
             #expect(dialog_standard_alert(2, guestString("Disk full"), 0, param, hit) == 0 && rd16(hit) == 2)
         }
 
+        /// The alert window closing makes the window in front active
+        /// again, with an activate event, whether the host showed the
+        /// alert or (headless) answered it: Bolo reads the keyboard only
+        /// after that event, and its tutorial begins with alerts.
+        @Test func closingAnAlertActivatesTheFrontWindow() {
+            launchTestApp(Self.alertResources())
+            machine_set_instruction_limit(0)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [40, 40, 240, 340].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let w = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+            let e = tb_NewPtr(16, false, true)
+            func activate() -> (UInt32, Bool)? {
+                guard tb_GetNextEvent(0x0100, e) != 0, rd16(e) == 8 else { return nil } // activMask
+                return (rd32(e + 2), rd16(e + 14) & 1 != 0)
+            }
+            while activate() != nil {} // the window's own, as it was made
+            for host in [true, false] {
+                if host { install() } else { machine_set_alert_handler(nil, nil) }
+                Self.answer = 1
+                _ = tb_NoteAlert(128, 0)
+                let got = activate()
+                #expect(got?.0 == w && got?.1 == true, "host \(host)")
+                #expect(activate() == nil)
+            }
+            machine_set_alert_handler(nil, nil)
+            let hit = tb_NewPtr(2, false, true)
+            #expect(dialog_standard_alert(2, guestString("Disk full"), 0, 0, hit) == 0)
+            #expect(activate()?.0 == w)
+        }
+
         @Test func stagesWithoutABoxReturnMinusOne() {
             launchTestApp(Self.alertResources(stages: 0x0000))
             install()

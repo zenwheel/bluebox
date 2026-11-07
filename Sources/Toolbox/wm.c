@@ -1511,6 +1511,23 @@ void tb_CloseWindow(gaddr w)
         close_window(w, false);
 }
 
+/* A modal window the host stood in for (an alert, a file panel, the colour
+ * picker) has closed.  The real one, closing, made the window in front
+ * active again, with an activate event: Bolo stops reading the keyboard
+ * when it puts up an alert (its tutorial's) and starts again only on that
+ * event. */
+void wm_modal_closed(void)
+{
+    gaddr front = front_active();
+    if (!front)
+        return;
+    if (same_window(rd32(LM_CurDeactive), front))
+        wr32(LM_CurDeactive, 0);
+    set_hilite(front, true);
+    wr32(LM_CurActivate, front);
+    active_window = front;
+}
+
 /* Windows that DisposeWindow frees stay whole (record, regions, port) until
  * a few more have been disposed, as freed memory on a Mac stays as it was
  * until something else takes it.  Programs go on using a window they have

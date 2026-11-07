@@ -456,12 +456,15 @@ bool stdfile_request(machine_file_request *rq, char *path, size_t pathsize)
         snprintf(rq->directory, sizeof rq->directory, "%s", last_dir);
     if (!file_fn) {
         LOGF(LOG_UNIMPL, "Standard File: no host, %s cancelled\n", rq->save ? "save" : "open");
+        wm_modal_closed();
         return false;
     }
-    if (!file_fn(rq, path, pathsize, file_ctx) || !path[0]) {
-        drain_abandon(); /* the host closed its panel for a drain: shown again after resuming */
+    bool chosen = file_fn(rq, path, pathsize, file_ctx) && path[0];
+    if (!chosen && drain_abandon()) /* the host closed its panel for a drain: shown again after resuming */
         return false;
-    }
+    wm_modal_closed();
+    if (!chosen)
+        return false;
     snprintf(last_dir, sizeof last_dir, "%s", path);
     char *slash = strrchr(last_dir, '/');
     if (slash && !rq->folders)

@@ -982,6 +982,7 @@ bool gestalt_exists(uint32_t selector);
 void gestalt_delete(uint32_t selector);
 void wm_hide_menu_bar(bool hide);
 void wm_host_requests(void); /* what the host asked of the Window Manager, at an event */
+void wm_modal_closed(void); /* a host alert or panel closed: the front window active again */
 bool wm_is_collapsed(gaddr w);
 bool wm_set_collapsed(gaddr w, bool on); /* false when the window can't collapse */
 uint32_t wm_window_features(gaddr w);

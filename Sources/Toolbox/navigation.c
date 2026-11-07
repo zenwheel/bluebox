@@ -347,6 +347,7 @@ static int ask(machine_alert *a)
         LOGF(LOG_UNIMPL, "Navigation alert: %s\n", a->message);
         machine_idle_answered(); /* headless: the user's answer is the wait for input */
     }
+    wm_modal_closed();
     return r > 0 ? r : a->default_item;
 }
 
