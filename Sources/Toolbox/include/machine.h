@@ -6,6 +6,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* The host side's catching of Objective-C exceptions, for Swift: a header
+ * new to the umbrella directory is not seen by a build already made. */
+#include "hostobjc.h"
+
 typedef enum {
     RUN_LIMIT = 0,   /* instruction limit reached, still runnable */
     RUN_HALTED = 1,  /* the app quit or an error stopped the CPU */
