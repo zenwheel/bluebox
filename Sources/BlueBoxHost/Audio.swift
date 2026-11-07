@@ -60,7 +60,7 @@ public final class ClassicAudio: @unchecked Sendable {
                 self.engine.pause()
             } else {
                 if !self.engine.isRunning { try? self.engine.start() }
-                for entry in self.players.values where entry.scheduled > 0 { entry.node.play() }
+                for (channel, entry) in self.players where entry.scheduled > 0 { self.start(channel) }
             }
         }
     }
@@ -134,7 +134,24 @@ public final class ClassicAudio: @unchecked Sendable {
         node.scheduleBuffer(buffer, completionHandler: nil)
         entry!.scheduled += Double(buffer.frameLength) / format.sampleRate
         players[channel] = entry
-        if !node.isPlaying { node.play() }
+        if !node.isPlaying { start(channel) }
+    }
+
+    /// On `queue`: the channel's player playing.  The engine can stop under
+    /// it at any moment (the output device changing, on CoreAudio's own
+    /// thread), and play on a stopped engine raises an exception Swift
+    /// cannot catch: the engine is started again and the player with it,
+    /// and if that fails too what the channel had waiting is dropped and the
+    /// next sound starts it.
+    private func start(_ channel: Int32) {
+        guard let node = players[channel]?.node else { return }
+        var reason = [CChar](repeating: 0, count: 256)
+        if host_objc_try({ node.play() }, &reason, reason.count) { return }
+        try? engine.start()
+        if engine.isRunning, host_objc_try({ node.play() }, nil, 0) { return }
+        node.stop()
+        players[channel]?.scheduled = 0
+        FileHandle.standardError.write(Data("sound: channel \(channel) not started: \(String(decoding: reason.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self))\n".utf8))
     }
 
     /// Seconds given to the player that it has not played yet.
