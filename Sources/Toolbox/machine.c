@@ -556,6 +556,7 @@ bool machine_boot(bool census)
     icons_reset();
     disk_driver_reset();
     finder_reset();
+    process_reset();
     shutdown_reset();
     iconservices_reset();
     agl_reset(); /* OpenGL's contexts, on the host */
