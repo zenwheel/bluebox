@@ -254,39 +254,8 @@ extension BlueBox {
             launchTestApp()
             func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
             func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
-            // The driver: header, Open and Close (MOVEQ #0,D0; RTS), Prime at
-            // 0x30, storage at 0x100: 0 the flag, 2 Prime's entries, 4 its
-            // turns round the loop, 8 the parameter block, 16 an event record.
-            var b = [UInt16](repeating: 0, count: 0xA0)
-            func put(_ at: Int, _ words: [UInt16]) { for (i, w) in words.enumerated() { b[at / 2 + i] = w } }
-            put(0, [0x0F00, 0, 0, 0, 0x20, 0x30, 0, 0, 0x24, 0x052E, 0x5761, 0x6974]) // ".Wait"
-            put(0x20, [0x7000, 0x4E75, 0x7000, 0x4E75])
-            put(0x30, [0x45FA, 0x00CE,           // LEA storage(PC),A2
-                       0x2548, 0x0008,           // MOVE.L A0,8(A2)
-                       0x526A, 0x0002,           // ADDQ.W #1,2(A2)
-                       0x52AA, 0x0004,           // loop: ADDQ.L #1,4(A2)
-                       0x4267, 0x4267,           // CLR.W -(SP) (result); CLR.W -(SP) (no events)
-                       0x486A, 0x0010, 0xA970,   // PEA 16(A2); _GetNextEvent
-                       0x544F, 0x4A52, 0x67EC,   // ADDQ.W #2,SP; TST.W (A2); BEQ.S loop
-                       0x206A, 0x0008,           // MOVEA.L 8(A2),A0
-                       0x2268, 0x0020,           // MOVEA.L ioBuffer(A0),A1
-                       0x12BC, 0x0058,           // MOVE.B #'X',(A1)
-                       0x2168, 0x0024, 0x0028,   // MOVE.L ioReqCount(A0),ioActCount(A0)
-                       0x7000, 0x2678, 0x08FC, 0x4ED3]) // MOVEQ #0,D0; MOVEA.L JIODone,A3; JMP (A3)
-            let hdr = ptr(UInt32(b.count * 2))
-            for (i, w) in b.enumerated() { wr16(hdr + UInt32(i * 2), w) }
-            let storage = hdr + 0x100
-            #expect(tb_DriverInstall(hdr, -63) == 0)
-            let open = ptr(UInt32(IOParam_SIZEOF))
-            let name = ptr(8)
-            for (i, c) in [5, 0x2E, 0x57, 0x61, 0x69, 0x74].enumerated() { wr8(name + UInt32(i), UInt8(c)) }
-            wr32(open + UInt32(IOParam_ioNamePtr_off), name)
-            let opened = tb_PBOpen(open, false)
-            #expect(opened == 0)
-            let pb = ptr(UInt32(IOParam_SIZEOF)), buf = ptr(4), result = ptr(2)
-            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -63))
-            wr32(pb + UInt32(IOParam_ioBuffer_off), buf)
-            wr32(pb + UInt32(IOParam_ioReqCount_off), 1)
+            let (storage, pb, buf) = waitingDriverRead()
+            let result = ptr(2)
             wr16(result, 0x7777)
             // MOVEA.L #pb,A0; _Read; MOVE.W D0,result; loop: _SystemTask; BRA.S loop
             // (The machine is run only with a drain wanted, and a limit: a
@@ -300,7 +269,7 @@ extension BlueBox {
             #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
             #expect(machine_pc() == pc + 6)                 // on the _Read
             #expect(g_cpu!.pointee.a.0 == pb)
-            #expect(rd32(dce(-63) + UInt32(DCtlEntry_dCtlQHdr_off) + 2) == 0) // the request out of the queue
+            #expect(rd32(waitingDriverQueue()) == 0)       // the request out of the queue
             #expect(rd16(result) == 0x7777)                 // the program has no answer yet
             let snap = tempDir().appendingPathComponent("drvwait.bbhib").path
             var err = [CChar](repeating: 0, count: 256)
@@ -315,8 +284,6 @@ extension BlueBox {
             #expect(rd8(buf) == 0x58)
             #expect(rd32(pb + UInt32(IOParam_ioActCount_off)) == 1)
         }
-
-        func dce(_ refnum: Int16) -> UInt32 { rd32(rd32(rd32(UInt32(LM_UTableBase)) + 4 * UInt32(-1 - Int(refnum)))) }
 
         /// Hibernate in a window: the machine runs on its own thread (as the
         /// hosts run it), Suspend stops it at a safe point, the snapshot is
@@ -397,4 +364,47 @@ extension BlueBox {
             }
         }
     }
+}
+
+/// A driver of a program's own (unit 62) whose Prime waits for input as a
+/// console driver does, calling GetNextEvent until the word at its storage
+/// is set, then answers 'X'; opened, with a read's parameter block for it
+/// and its buffer.  Storage: 0 the flag, 2 Prime's entries, 4 its turns
+/// round the loop, 8 the parameter block, 16 an event record.
+func waitingDriverRead() -> (storage: UInt32, pb: UInt32, buf: UInt32) {
+    func ptr(_ n: UInt32) -> UInt32 { tb_NewPtr(Int32(n), false, true) }
+    // The header, Open and Close (MOVEQ #0,D0; RTS), Prime at 0x30, storage at 0x100.
+    var b = [UInt16](repeating: 0, count: 0xA0)
+    func put(_ at: Int, _ words: [UInt16]) { for (i, w) in words.enumerated() { b[at / 2 + i] = w } }
+    put(0, [0x0F00, 0, 0, 0, 0x20, 0x30, 0, 0, 0x24, 0x052E, 0x5761, 0x6974]) // ".Wait"
+    put(0x20, [0x7000, 0x4E75, 0x7000, 0x4E75])
+    put(0x30, [0x45FA, 0x00CE,           // LEA storage(PC),A2
+               0x2548, 0x0008,           // MOVE.L A0,8(A2)
+               0x526A, 0x0002,           // ADDQ.W #1,2(A2)
+               0x52AA, 0x0004,           // loop: ADDQ.L #1,4(A2)
+               0x4267, 0x4267,           // CLR.W -(SP) (result); CLR.W -(SP) (no events)
+               0x486A, 0x0010, 0xA970,   // PEA 16(A2); _GetNextEvent
+               0x544F, 0x4A52, 0x67EC,   // ADDQ.W #2,SP; TST.W (A2); BEQ.S loop
+               0x206A, 0x0008,           // MOVEA.L 8(A2),A0
+               0x2268, 0x0020,           // MOVEA.L ioBuffer(A0),A1
+               0x12BC, 0x0058,           // MOVE.B #'X',(A1)
+               0x2168, 0x0024, 0x0028,   // MOVE.L ioReqCount(A0),ioActCount(A0)
+               0x7000, 0x2678, 0x08FC, 0x4ED3]) // MOVEQ #0,D0; MOVEA.L JIODone,A3; JMP (A3)
+    let hdr = ptr(UInt32(b.count * 2))
+    for (i, w) in b.enumerated() { wr16(hdr + UInt32(i * 2), w) }
+    #expect(tb_DriverInstall(hdr, -63) == 0)
+    let open = ptr(UInt32(IOParam_SIZEOF)), name = ptr(8)
+    for (i, c) in [5, 0x2E, 0x57, 0x61, 0x69, 0x74].enumerated() { wr8(name + UInt32(i), UInt8(c)) }
+    wr32(open + UInt32(IOParam_ioNamePtr_off), name)
+    #expect(tb_PBOpen(open, false) == 0)
+    let pb = ptr(UInt32(IOParam_SIZEOF)), buf = ptr(4)
+    wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -63))
+    wr32(pb + UInt32(IOParam_ioBuffer_off), buf)
+    wr32(pb + UInt32(IOParam_ioReqCount_off), 1)
+    return (hdr + 0x100, pb, buf)
+}
+
+/// Where the head of the waiting driver's queue is.
+func waitingDriverQueue() -> UInt32 {
+    rd32(rd32(rd32(UInt32(LM_UTableBase)) + 4 * 62)) + UInt32(DCtlEntry_dCtlQHdr_off) + 2
 }
