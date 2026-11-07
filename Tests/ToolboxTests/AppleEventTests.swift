@@ -940,6 +940,35 @@ extension BlueBox {
             #expect(count >= 2) // us and the Finder
         }
 
+        /// The Finder, sent Quit, leaves the process list, as an installer
+        /// quitting every other application waits for it to (Internet
+        /// Explorer 4.01's Installer VISE waited for ever); a fresh machine
+        /// lists it again.
+        @Test func finderToldToQuitLeavesTheList() {
+            launchTestApp()
+            func listed() -> [UInt32] {
+                let psn = tb_NewPtr(8, false, true)
+                var found: [UInt32] = []
+                while tb_GetNextProcess(psn) == 0 { found.append(rd32(psn + 4)) }
+                return found
+            }
+            let finder = tb_NewPtr(8, false, true)
+            wr32(finder + 4, 0x1001)
+            #expect(listed().contains(0x1001))
+            let target = newDesc(), evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateDesc(code("psn "), finder, 8, target)
+            _ = tb_AECreateAppleEvent(code("aevt"), code("quit"), target, -1, 0, evt)
+            #expect(tb_AESend(evt, reply, 1, 0, -1, 0, 0) == 0) // kAENoReply
+            #expect(!listed().contains(0x1001))
+            let info = tb_NewPtr(Int32(ProcessInfoRec_SIZEOF), false, true)
+            wr32(info + UInt32(ProcessInfoRec_processInfoLength_off), UInt32(ProcessInfoRec_SIZEOF))
+            wr32(info + UInt32(ProcessInfoRec_processName_off), 0)
+            wr32(info + UInt32(ProcessInfoRec_processAppSpec_off), 0)
+            #expect(tb_GetProcessInformation(finder, info) == -600) // procNotFound
+            launchTestApp()
+            #expect(listed().contains(0x1001))
+        }
+
         func ourSignature() -> UInt32 {
             let psn = tb_NewPtr(8, false, true), port = tb_NewPtr(Int32(PPCPortRec_SIZEOF), false, true)
             _ = tb_GetCurrentProcess(psn)
