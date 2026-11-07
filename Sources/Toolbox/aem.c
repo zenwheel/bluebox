@@ -2242,6 +2242,12 @@ static int16_t finder_open(const char *path)
 static int16_t finder_event(gaddr evt)
 {
     uint32_t cls = attr_long(evt, T("evcl")), id = attr_long(evt, T("evid"));
+    /* Quit: the Finder leaves the Process Manager's list, as a System 7
+     * Finder quits (installers wait for it to go). */
+    if (cls == T("aevt") && id == T("quit")) {
+        process_finder_quit();
+        return noErr;
+    }
     bool open = (cls == T("aevt") && id == T("odoc")) || (cls == T("FNDR") && id == T("sope"));
     if (!open)
         return cls == T("aevt") && id == T("oapp") ? noErr : errAEEventNotHandled;

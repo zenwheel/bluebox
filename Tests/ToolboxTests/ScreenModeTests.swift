@@ -38,6 +38,20 @@ extension BlueBox {
             display_sync()
         }
 
+        /// The screen for a host display is a size a Mac's was: a whole
+        /// number of 64 pixels wide and of 2 tall.  Space Junkie centres its
+        /// field at (height - 384) * rowBytes / 2, and on an odd height
+        /// (a 1728x1117 display's visible area) that is half a row out:
+        /// its screen's left and right halves were drawn swapped.
+        @Test(arguments: [((1728, 1099), (1728, 1098)), ((1200, 801), (1152, 800)),
+                          ((1024, 768), (1024, 768)), ((1152, 870), (1152, 870)),
+                          ((1366, 789), (1344, 788))])
+        func hostDisplaysGiveAMacsScreenSize(area: (Int, Int), screen: (Int, Int)) {
+            var w = Int32(area.0), h = Int32(area.1)
+            machine_fit_screen(&w, &h)
+            #expect(Int(w) == screen.0 && Int(h) == screen.1)
+        }
+
         @Test func writesInsideAWindowStayRootless() {
             _ = setUp()
             store(x: 150, y: 150)

@@ -2210,6 +2210,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/print.c", "tb_PrJobInit.where", 300, 0 },
     { "Toolbox/print_ps.c", "ps_font.name", 80, 0 },
     { "Toolbox/private_os9.c", "switch_disabled", 4, 0 },
+    { "Toolbox/process.c", "finder_quit", 1, 0 },
     { "Toolbox/process.c", "g_app_size_flags", 2, 0 },
     { "Toolbox/process.c", "last_launched", 4, 0 },
     { "Toolbox/process.c", "launched", 128, 0 },
@@ -2694,7 +2695,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1688;
+const unsigned hb_nstatics = 1689;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
