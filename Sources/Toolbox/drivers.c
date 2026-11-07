@@ -11,6 +11,8 @@
 
 #include "tb_internal.h"
 
+#define LM_SoundDCE 0x027A /* the Sound Driver's device control entry */
+
 /* The CD-ROM driver (.AppleCD, on SCSI ID 3) that a mounted volume's drive
  * belongs to: programs find a volume's drive in the drive queue and look
  * at its driver's name to learn that it is a CD (Prince of Persia 2's
@@ -87,6 +89,18 @@ void drivers_reset(void)
         if (d->unit >= 0 && d->unit < UNITS)
             wr32(table + 4 * (uint32_t)d->unit, h);
     }
+    /* SoundDCE: StartSound's glue puts the playing write's parameter block,
+     * when it moves it, at the head of this DCE's queue (sound.c); with
+     * none it wrote over the bus and address error vectors. */
+    wr32(LM_SoundDCE, driver_dce(-4));
+}
+
+gaddr driver_dce(int16_t refnum)
+{
+    for (int i = 0; i < NDRIVERS; i++)
+        if (-1 - drivers[i]->unit == refnum)
+            return dce[i];
+    return 0;
 }
 
 static void set_opened(const native_driver *d, bool open)

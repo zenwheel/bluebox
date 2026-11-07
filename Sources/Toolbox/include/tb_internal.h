@@ -243,6 +243,10 @@ void time_pump(void);
 /* An asynchronous call's completion routine, at the next interrupt pump. */
 void io_complete_later(gaddr pb, int16_t result);
 void io_complete_soon(gaddr pb, int16_t result); /* before the call returns, unless in a completion */
+/* A request its driver keeps in its DCE's queue: the one finished is the
+ * queue's head when the completion runs (timemgr.c). */
+void io_complete_later_queued(gaddr dce, gaddr pb, int16_t result);
+void io_complete_queued_now(gaddr dce, gaddr pb, int16_t result); /* KillIO's */
 bool time_busy(void);  /* a Time Manager or VBL task waiting */
 bool sound_busy(void); /* a sound channel open */
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */
@@ -756,6 +760,7 @@ enum { FLOPPY_DRIVE = 1, BOOT_DRIVE = 5 };
 void io_complete_now(gaddr pb, int16_t result); /* KillIO's: inside the call (timemgr.c) */
 void io_complete_now_for(int16_t refnum);
 void drivers_reset(void);                 /* the unit table, at boot */
+gaddr driver_dce(int16_t refnum);       /* a native driver's device control entry, or 0 */
 /* Drivers a program supplies, in 68k code (driver68k.c). */
 bool drv68k_refnum(int16_t refnum);
 bool drv68k_open_name(gaddr pb, int16_t *err); /* false: no such driver or DRVR resource */

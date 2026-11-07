@@ -654,8 +654,11 @@ extension BlueBox {
             wr32(pb + UInt32(IOParam_ioReqCount_off), 70)
             _ = tb_PBWrite(pb, true)
             machine_skip_time(1_000_000_000)              // the sound plays out
+            let sr = g_cpu!.pointee.sr
+            g_cpu!.pointee.sr = sr | 0x0100               // interrupts masked: its completion waits
             sound_pump()
-            #expect(rd16(flag) == 0)                     // its completion waits for interrupt time
+            g_cpu!.pointee.sr = sr
+            #expect(rd16(flag) == 0)
             let kill = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
             wr16(kill + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
             _ = tb_PBKillIO(kill, false)
@@ -691,6 +694,92 @@ extension BlueBox {
             #expect(rd16(count) == 3)                    // each write it made was killed in turn
             #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -27) // none left playing
             #expect(rd8(0x27E) == 0)                     // SoundActive
+        }
+
+        /// The write finished is the one at the head of the driver's queue
+        /// (SoundDCE's) when its completion runs, as IODone took it:
+        /// StartSound's glue, asked for a sound while one plays, copies the
+        /// playing write's block to a larger one, frees the old and puts the
+        /// copy in the queue in its place (Continuum, whose old block's
+        /// ioCompletion was soon something else's).
+        @Test func completionTakesTheBlockAtTheQueueHead() {
+            launchTestApp()
+            let vars = tb_NewPtr(8, false, true)         // last A0, count, wrong
+            let hi = UInt16(vars >> 16), lo = UInt16(vars & 0xFFFF)
+            let words: [UInt16] = [0x23C8, hi, lo,           // MOVE.L A0,last
+                                   0x5279, hi, lo &+ 4,      // ADDQ.W #1,count
+                                   0x4E75]                   // RTS
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let other: [UInt16] = [0x33FC, 0x0001, hi, lo &+ 6, 0x4E75] // MOVE.W #1,wrong; RTS
+            let wrong = tb_NewPtr(Int32(other.count * 2), false, false)
+            for (i, w) in other.enumerated() { wr16(wrong + UInt32(i * 2), w) }
+            let rec = tb_NewPtr(6 + 64, false, true)
+            wr32(rec + 2, 0x0001_0000)
+            for i in 0..<64 { wr8(rec + 6 + UInt32(i), 128) }
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            wr32(pb + 12, code)                          // ioCompletion
+            wr32(pb + UInt32(IOParam_ioBuffer_off), rec)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 70)
+            #expect(tb_PBWrite(pb, true) == 1)
+            let dce = rd32(0x27A)                        // SoundDCE
+            #expect(dce != 0 && Int16(bitPattern: rd16(dce + 24)) == -4)
+            #expect(rd32(dce + 8) == pb)                 // the write waits in its queue
+            // The glue's move: the block copied, the old one's memory reused.
+            let moved = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            for i in 0..<UInt32(IOParam_SIZEOF) { wr8(moved + i, rd8(pb + i)) }
+            wr32(pb + 12, wrong)
+            wr32(dce + 8, moved)
+            wr32(dce + 12, moved)
+            machine_skip_time(1_000_000_000)
+            time_pump()
+            time_pump()
+            #expect(rd16(vars + 4) == 1)
+            #expect(rd32(vars) == moved)
+            #expect(rd16(vars + 6) == 0)                 // the old block's routine never ran
+            #expect(rd16(moved + UInt32(IOParam_ioResult_off)) == 0)
+            #expect(rd32(dce + 8) == 0 && rd32(dce + 12) == 0) // and the queue is empty
+        }
+
+        /// Writes a completion makes play one after another with no gap,
+        /// each finished when its sound has played, however far the clock
+        /// moved since the pump last looked: Continuum queues a sound a tick
+        /// (each a tick long) through StartSound's glue, which plays them a
+        /// write at a time; a driver finishing one a pump, each started
+        /// when the pump came, fell behind until the glue's queue overran
+        /// and the next sound was copied over the program's code.
+        @Test func chainedWritesKeepUpWithTheClock() {
+            launchTestApp()
+            let count = tb_NewPtr(2, false, true)
+            let hi = UInt16(count >> 16), lo = UInt16(count & 0xFFFF)
+            let words: [UInt16] = [0x5279, hi, lo,           // ADDQ.W #1,count
+                                   0x0C79, 0x00C8, hi, lo,   // CMPI.W #200,count
+                                   0x6C02,                   // BGE.S done
+                                   0xA403,                   // _Write ,ASYNC (A0 the block)
+                                   0x4E75]                   // done: RTS
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let rec = tb_NewPtr(6 + 734, false, true)    // 734 samples at twice 22254.5 Hz: 16.5 ms
+            wr32(rec + 2, 0x0002_0000)
+            for i in 0..<734 { wr8(rec + 6 + UInt32(i), 128) }
+            let pb = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(pb + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            wr32(pb + 12, code)
+            wr32(pb + UInt32(IOParam_ioBuffer_off), rec)
+            wr32(pb + UInt32(IOParam_ioReqCount_off), 740)
+            #expect(tb_PBWrite(pb, true) == 1)
+            machine_skip_time(500_000_000)               // half a second: 30 of them
+            time_pump()
+            let n = rd16(count)
+            #expect(n >= 29 && n <= 31)
+            machine_skip_time(500_000_000)
+            time_pump()
+            #expect(rd16(count) >= 59 && rd16(count) <= 62)
+            let kill = tb_NewPtr(Int32(IOParam_SIZEOF), false, true)
+            wr16(kill + UInt32(IOParam_ioRefNum_off), UInt16(bitPattern: -4))
+            wr16(count, 199)                             // the next completion makes no write
+            _ = tb_PBKillIO(kill, false)
         }
 
         /// A synchronous write's ioCompletion is not called: the Reversi

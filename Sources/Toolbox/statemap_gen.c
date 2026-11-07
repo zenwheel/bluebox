@@ -2480,6 +2480,8 @@ const hb_static hb_statics[] = {
     { "Toolbox/sound.c", "out", 20, 0 },
     { "Toolbox/sound.c", "sd_async", 1, 0 },
     { "Toolbox/sound.c", "sd_chan", 1944, 132 },
+    { "Toolbox/sound.c", "sd_ended", 8, 12 },
+    { "Toolbox/sound.c", "sd_finishing", 1, 0 },
     { "Toolbox/sound.c", "sd_ft", 4, 0 },
     { "Toolbox/sound.c", "sd_ft_next", 8, 12 },
     { "Toolbox/sound.c", "sd_gave_up", 4, 0 },
@@ -2586,7 +2588,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/threadmgr.c", "scheduler", 4, 0 },
     { "Toolbox/threadmgr.c", "threads", 12800, 142 },
     { "Toolbox/timemgr.c", "completing", 4, 0 },
-    { "Toolbox/timemgr.c", "completions", 512, 0 },
+    { "Toolbox/timemgr.c", "completions", 768, 0 },
     { "Toolbox/timemgr.c", "deferred", 256, 0 },
     { "Toolbox/timemgr.c", "in_interrupt", 1, 0 },
     { "Toolbox/timemgr.c", "ncompletions", 4, 0 },
@@ -2693,7 +2695,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1687;
+const unsigned hb_nstatics = 1689;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
