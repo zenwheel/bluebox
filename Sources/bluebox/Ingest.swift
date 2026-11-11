@@ -258,7 +258,9 @@ func writeAppleDouble(_ f: inout mac_file, to path: String) throws {
 /// MacBinary files in place, and extract nested archives (bounded depth).
 private func normalise(_ dir: String, depth: Int, notes: inout [String]) throws {
     let fm = FileManager.default
-    guard let names = try? fm.contentsOfDirectory(atPath: dir) else { return }
+    // Not contentsOfDirectory: it hides "._" sidecars, so a file with only a
+    // resource fork (most 68k programs) never got its empty data file.
+    guard let names = directoryNames(dir) else { return }
     for name in names.sorted() {
         let path = dir + "/" + name
         var isDir: ObjCBool = false
@@ -364,7 +366,7 @@ private func sourceStamp(_ source: String) -> String {
 /// Raised when importing extracts more than it did (a disk image or archive
 /// kind newly understood, a decoding fixed): entries made before are made
 /// again the next time their source is imported.
-let importerVersion = 2
+let importerVersion = 3
 
 /// Ingest a file into the library.  Re-ingesting an unchanged source reuses
 /// the existing entry.  Returns the entry folder and any notes.
@@ -408,6 +410,21 @@ func ingest(_ source: String, library: String, force: Bool = false) throws -> (e
         fm.createFile(atPath: stampPath, contents: Data(stamp.utf8))
     }
     return (entry, notes)
+}
+
+/// The names in a folder, including "._" sidecars (which Foundation's
+/// directory listings hide); nil if it cannot be read.
+func directoryNames(_ dir: String) -> [String]? {
+    guard let d = opendir(dir) else { return nil }
+    defer { closedir(d) }
+    var out: [String] = []
+    while let e = readdir(d) {
+        let name = withUnsafePointer(to: &e.pointee.d_name) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(e.pointee.d_namlen) + 1) { String(cString: $0) }
+        }
+        if name != "." && name != ".." { out.append(name) }
+    }
+    return out
 }
 
 /// Every file under root, relative paths, including "._" sidecars (which
