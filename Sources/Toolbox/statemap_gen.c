@@ -2291,6 +2291,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/qd_cqd.c", "ngworlds", 8, 12 },
     { "Toolbox/qd_cqd.c", "palette_updates", 2, 0 },
     { "Toolbox/qd_cqd.c", "qd_search_color.busy", 1, 0 },
+    { "Toolbox/qd_cqd.c", "reserved", 256, 0 },
     { "Toolbox/qd_cqd.c", "system_palette", 4, 0 },
     { "Toolbox/qd_cqd.c", "tb_GetCTSeed.seed", 4, 0 },
     { "Toolbox/qd_cqd.c", "window_pal", 512, 0 },
@@ -2696,7 +2697,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1690;
+const unsigned hb_nstatics = 1691;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
