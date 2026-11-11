@@ -2216,7 +2216,8 @@ static bool finder_listening(void)
     machine_ae_process procs[64];
     int n = machine_ae_processes(procs, 64);
     for (int i = 0; i < n; i++)
-        if (procs[i].signature == T("MACS") && procs[i].pid != getpid())
+        if (procs[i].signature == T("MACS") && procs[i].pid != getpid() &&
+            !process_other_run_quit_by_us(procs[i].pid))
             return true;
     return false;
 }
@@ -2302,6 +2303,26 @@ static int16_t send_to_self(gaddr evt, gaddr reply, int32_t send_mode)
     return result;
 }
 
+/* The answer to a Quit another run was sent, as a program that quit
+ * gives it: no error, by the reply or as an Answer event later. */
+static void answer_quit(gaddr evt, gaddr reply, int mode)
+{
+    if (mode == kAEWaitReply && reply)
+        make_reply(evt, reply, true);
+    else if (mode == kAEQueueReply) {
+        gaddr r = tb_NewPtr(AEDesc_SIZEOF, false, true);
+        make_reply(evt, r, true);
+        if (desc_handle(r)) {
+            uint32_t len;
+            uint8_t *data = flatten_data(desc_handle(r), &len);
+            aem_queue_flat(data, len, NULL, NULL);
+            bb_free(data);
+        }
+        tb_AEDisposeDesc(r);
+        tb_DisposePtr(r);
+    }
+}
+
 int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, int32_t timeout, gaddr idle,
                   gaddr filter)
 {
@@ -2316,9 +2337,16 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
         return noErr;
     /* The Finder: a run of Apple's Finder takes its events (open, print,
      * reveal and the rest of its suite), or Blue Box carries them out. */
+    /* Quit to another run (an installer making way quits every process
+     * it lists) never reaches it: the runs are the user's programs, and
+     * only this program's own (those it launched) are its to end.  The
+     * run leaves this program's list as if it had quit, and the sender is
+     * answered as it would be (aem_remote_quit); a run of the Finder goes
+     * as the Finder's stand-in does. */
+    bool quit = attr_long(evt, T("evcl")) == T("aevt") && attr_long(evt, T("evid")) == T("quit");
     bool finder_run = false;
     if (to_finder(evt)) {
-        if (!finder_listening())
+        if (!finder_listening() || quit)
             return finder_event(evt);
         finder_run = true;
     }
@@ -2336,6 +2364,12 @@ int16_t tb_AESend(gaddr evt, gaddr reply, int32_t send_mode, int16_t priority, i
         put32(addr, T("MACS"));
     }
     int mode = send_mode & 3;
+    int16_t quit_err;
+    if (quit && aem_remote_quit(addr, atype, alen > 64 ? 64 : alen, &quit_err)) {
+        if (quit_err == noErr)
+            answer_quit(evt, reply, mode);
+        return quit_err;
+    }
     uint8_t repq = mode != kAENoReply, inte = (uint8_t)(send_mode & 0x30);
     put_keyed(evt, true, T("repq"), T("bool"), 0, 1, &repq);
     put_keyed(evt, true, T("inte"), T("byte"), 0, 1, &inte);
@@ -2378,6 +2412,13 @@ int16_t aem_script_send(gaddr evt, gaddr reply)
         return procNotFound;
     uint8_t addr[4] = { 0 };
     gget(addr, p + 12, alen > 4 ? 4 : alen);
+    int16_t quit_err;
+    if (attr_long(evt, T("evcl")) == T("aevt") && attr_long(evt, T("evid")) == T("quit") &&
+        aem_remote_quit(addr, atype, 4, &quit_err)) { /* as AESend's */
+        if (quit_err == noErr)
+            answer_quit(evt, reply, kAEWaitReply);
+        return quit_err;
+    }
     uint8_t repq = 1, inte = (uint8_t)kAENeverInteract;
     put_keyed(evt, true, T("repq"), T("bool"), 0, 1, &repq);
     put_keyed(evt, true, T("inte"), T("byte"), 0, 1, &inte);
@@ -2818,6 +2859,10 @@ static int16_t post_to_run(const pending_ae *e, uint32_t atype, uint32_t a0, uin
     uint8_t addr[8];
     put32(addr, a0);
     put32(addr + 4, a1);
+    int16_t quit_err;
+    if (e->cls == T("aevt") && e->id == T("quit") &&
+        aem_remote_quit(addr, atype, atype == T("psn ") ? 8 : 4, &quit_err)) /* as AESend's */
+        return quit_err;
     uint8_t *msg = bb_malloc(msg_len ? msg_len : 1, BB_BYTES);
     if (msg_len)
         gget(msg, msg_buf, msg_len);

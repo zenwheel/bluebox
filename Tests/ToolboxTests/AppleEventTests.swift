@@ -1186,5 +1186,130 @@ extension BlueBox {
             #expect(Array(body[20..<28]) == be32(UInt32(getpid())) + be32(ourSignature()))
             #expect(Array(body[64...]) == msg)
         }
+
+        /// Quit to another run never reaches it: an installer making way
+        /// sends Quit to every process it lists (FlashPath SM Installer),
+        /// and the other runs are the user's programs.  The sender is
+        /// answered as by a program that quit, and the run leaves its list
+        /// (the installer waits for that); a fresh machine lists it again.
+        @Test func quitToAnotherRunIsNotDelivered() throws {
+            launchTestApp(sizeFlags: 0x0040)
+            #expect(machine_listen_for_apple_events())
+            let folder = FileManager.default.temporaryDirectory.path
+            guard let ours = (try? FileManager.default.contentsOfDirectory(atPath: folder))?
+                .filter({ $0.hasPrefix("bluebox-ae-") })
+                .map({ folder + "/" + $0 })
+                .first(where: { ((try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? []).contains { $0.hasPrefix("\(getpid()).") } })
+            else { Issue.record("no socket folder"); return }
+            let sleeper = Process()
+            sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+            sleeper.arguments = ["20"]
+            try sleeper.run()
+            defer { sleeper.terminate() }
+            let other = UInt32(sleeper.processIdentifier)
+            let path = ours + "/\(other).4F746852" // 'OthR'
+            defer { unlink(path) }
+            let sock = socket(AF_UNIX, SOCK_STREAM, 0)
+            defer { close(sock) }
+            var sa = sockaddr_un()
+            sa.sun_family = sa_family_t(AF_UNIX)
+            withUnsafeMutableBytes(of: &sa.sun_path) { dst in
+                _ = path.utf8CString.withUnsafeBytes { src in memcpy(dst.baseAddress, src.baseAddress, src.count) }
+            }
+            let bound = withUnsafePointer(to: &sa) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(sock, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+            }
+            #expect(bound == 0 && listen(sock, 4) == 0)
+            // Whether anything connected to the stand-in.
+            func delivered() -> Bool {
+                var p = pollfd(fd: sock, events: Int16(POLLIN), revents: 0)
+                guard poll(&p, 1, 300) > 0 else { return false }
+                close(accept(sock, nil, nil))
+                return true
+            }
+            func listed() -> Bool {
+                let psn = tb_NewPtr(8, false, true)
+                while tb_GetNextProcess(psn) == 0 {
+                    if rd32(psn) == 1 && rd32(psn + 4) == other { return true }
+                }
+                return false
+            }
+            #expect(listed())
+            let psn = tb_NewPtr(8, false, true)
+            wr32(psn, 1)
+            wr32(psn + 4, other)
+            let target = newDesc(), evt = newDesc(), reply = newDesc()
+            _ = tb_AECreateDesc(code("psn "), psn, 8, target)
+            _ = tb_AECreateAppleEvent(code("aevt"), code("quit"), target, 5, 0, evt)
+            #expect(tb_AESend(evt, reply, 3, 0, 60, 0, 0) == 0) // kAEWaitReply
+            #expect(!delivered())
+            // An answer with no error, as from a program that quit.
+            let out = tb_NewPtr(4, false, true), type = tb_NewPtr(4, false, true), size = tb_NewPtr(4, false, true)
+            #expect(tb_AEGetAttributePtr(reply, code("evid"), code("type"), type, out, 4, size) == 0)
+            #expect(rd32(out) == fourCC("ansr"))
+            #expect(tb_AEGetParamPtr(reply, code("errn"), code("long"), type, out, 4, size) != 0)
+            // Gone from this program's list, and from its events.
+            #expect(!listed())
+            let info = tb_NewPtr(Int32(ProcessInfoRec_SIZEOF), false, true)
+            wr32(info + UInt32(ProcessInfoRec_processInfoLength_off), UInt32(ProcessInfoRec_SIZEOF))
+            wr32(info + UInt32(ProcessInfoRec_processName_off), 0)
+            wr32(info + UInt32(ProcessInfoRec_processAppSpec_off), 0)
+            #expect(tb_GetProcessInformation(psn, info) == -600) // procNotFound
+            let dosc = newDesc()
+            _ = tb_AECreateAppleEvent(code("misc"), code("dosc"), target, -1, 0, dosc)
+            #expect(tb_AESend(dosc, 0, 1, 0, -1, 0, 0) == -600)
+            #expect(!delivered())
+
+            // A fresh machine sees it again; PostHighLevelEvent's Quit and
+            // AESend's by signature don't reach it either.
+            launchTestApp(sizeFlags: 0x0040)
+            #expect(listed())
+            #expect(tb_PostHighLevelEvent(hle("aevt", "quit"), fourCC("OthR"), 0, 0, 0,
+                                          Self.receiverIDisSignature) == 0)
+            #expect(!delivered())
+            #expect(!listed())
+            launchTestApp(sizeFlags: 0x0040)
+            let sig = tb_NewPtr(4, false, true)
+            wr32(sig, fourCC("OthR"))
+            let byName = newDesc(), quit = newDesc()
+            _ = tb_AECreateDesc(code("sign"), sig, 4, byName)
+            _ = tb_AECreateAppleEvent(code("aevt"), code("quit"), byName, -1, 0, quit)
+            #expect(tb_AESend(quit, 0, 1, 0, -1, 0, 0) == 0) // kAENoReply
+            #expect(!delivered())
+            #expect(!listed())
+
+            // Other events still reach it.
+            launchTestApp(sizeFlags: 0x0040)
+            let sig2 = tb_NewPtr(4, false, true), byName2 = newDesc(), open = newDesc()
+            wr32(sig2, fourCC("OthR"))
+            _ = tb_AECreateDesc(code("sign"), sig2, 4, byName2)
+            _ = tb_AECreateAppleEvent(code("misc"), code("dosc"), byName2, -1, 0, open)
+            #expect(tb_AESend(open, 0, 1, 0, -1, 0, 0) == 0)
+            #expect(delivered())
+
+            // A run the program launched itself is its own to quit.
+            let dir = launchTestApp(sizeFlags: 0x0040)
+            guestStack()
+            let app = dir.appendingPathComponent("Other App")
+            try Data().write(to: app)
+            launchedPID = sleeper.processIdentifier
+            machine_set_launch_handler({ _, _, _, _ in
+                machine_launched_process(launchedPID)
+                return true
+            }, nil)
+            defer { machine_set_launch_handler(nil, nil) }
+            let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+            fm_spec_for_path(app.path, spec)
+            let pb = tb_NewPtr(Int32(LaunchParamBlockRec_SIZEOF), false, true)
+            wr16(pb + UInt32(LaunchParamBlockRec_launchBlockID_off), 0x4C43)
+            wr16(pb + UInt32(LaunchParamBlockRec_launchControlFlags_off), 0x4000) // launchContinue
+            wr32(pb + UInt32(LaunchParamBlockRec_launchAppSpec_off), spec)
+            #expect(tb_LaunchApplication(pb) == 0)
+            let launchedTarget = newDesc(), launchedQuit = newDesc()
+            _ = tb_AECreateDesc(code("psn "), pb + UInt32(LaunchParamBlockRec_launchProcessSN_off), 8, launchedTarget)
+            _ = tb_AECreateAppleEvent(code("aevt"), code("quit"), launchedTarget, -1, 0, launchedQuit)
+            #expect(tb_AESend(launchedQuit, 0, 1, 0, -1, 0, 0) == 0)
+            #expect(delivered())
+        }
     }
 }

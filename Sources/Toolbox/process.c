@@ -4,7 +4,8 @@
  * its type and creator to send it events, which aem.c carries out), then
  * the other runs that take Apple Events, as serial numbers {1, their
  * process ID}, so programs can find each other by signature and send
- * events.  When the run is the Finder itself (bluebox run on a 'FNDR'
+ * events; one the program told to quit leaves its list without being told
+ * (quit_runs).  When the run is the Finder itself (bluebox run on a 'FNDR'
  * file), it is that Finder process, first in the list.  Temporary memory
  * comes from the growable application heap.
  */
@@ -30,8 +31,40 @@ static uint32_t our_psn(void) { return g_is_finder ? FINDER_PSN : OUR_PSN; }
  * no longer listed.  Starting it again lists it again. */
 static bool finder_quit;
 
-void process_reset(void) { finder_quit = false; }
+/* Other Blue Box runs this program told to quit, by process ID.  An
+ * installer making way sends Quit to every process it lists and waits for
+ * each to go; the other runs are the user's own programs, so the Quit is
+ * not delivered (aem_remote_quit) and the run is taken off this program's
+ * list instead, as if it had quit.  Programs that only look another up
+ * and send it events still find it, and a run the program launched
+ * itself is its own to quit. */
+static int quit_runs[32];
+static int nquit_runs;
+
+void process_reset(void)
+{
+    finder_quit = false;
+    nquit_runs = 0;
+}
+
 void process_finder_quit(void) { finder_quit = true; }
+
+bool process_other_run_quit_by_us(int pid)
+{
+    for (int i = 0; i < nquit_runs; i++)
+        if (quit_runs[i] == pid)
+            return true;
+    return false;
+}
+
+void process_other_run_quit(int pid)
+{
+    if (process_other_run_quit_by_us(pid))
+        return;
+    if (nquit_runs == 32) /* the oldest makes way */
+        memmove(quit_runs, quit_runs + 1, sizeof quit_runs - sizeof *quit_runs), nquit_runs--;
+    quit_runs[nquit_runs++] = pid;
+}
 
 /* The Finder's serial number; when the run is the Finder, that is us. */
 bool process_is_finder(uint32_t hi, uint32_t lo) { return hi == 0 && lo == FINDER_PSN; }
@@ -65,19 +98,24 @@ static bool listed(int pid, machine_ae_process *found)
     machine_ae_process procs[64];
     int n = machine_ae_processes(procs, 64);
     for (int i = 0; i < n; i++)
-        if (procs[i].pid == pid) {
+        if (procs[i].pid == pid && !process_other_run_quit_by_us(pid)) {
             *found = procs[i];
             return true;
         }
     return false;
 }
 
+bool process_launched_by_us(int pid)
+{
+    for (int i = 0; i < nlaunched; i++)
+        if (launched[i] == pid)
+            return true;
+    return false;
+}
+
 bool process_await_launched(int pid)
 {
-    bool ours = false;
-    for (int i = 0; i < nlaunched; i++)
-        ours |= launched[i] == pid;
-    if (!ours || pid <= 0)
+    if (!process_launched_by_us(pid) || pid <= 0 || process_other_run_quit_by_us(pid))
         return false;
     machine_ae_process p;
     for (int waited = 0; waited < 30000; waited += 20) { /* a program starting up, at most half a minute */
@@ -116,7 +154,8 @@ int16_t tb_GetNextProcess(gaddr psn)
     int n = machine_ae_processes(procs, 64);
     uint32_t next = UINT32_MAX;
     for (int i = 0; i < n; i++)
-        if (procs[i].pid != getpid() && (uint32_t)procs[i].pid > after && (uint32_t)procs[i].pid < next)
+        if (procs[i].pid != getpid() && !process_other_run_quit_by_us(procs[i].pid) &&
+            (uint32_t)procs[i].pid > after && (uint32_t)procs[i].pid < next)
             next = (uint32_t)procs[i].pid;
     if (next != UINT32_MAX) {
         wr32(psn, 1);
