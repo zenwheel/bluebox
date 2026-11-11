@@ -1460,6 +1460,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/dictionary.c", "trees", 3072, 50 },
     { "Toolbox/diskdriver.c", "floppy_icon", 4, 0 },
     { "Toolbox/diskdriver.c", "hd_icon", 4, 0 },
+    { "Toolbox/display.c", "all_stores", 8, 1 },
     { "Toolbox/display.c", "choice_click_ticks", 4, 0 },
     { "Toolbox/display.c", "choice_clicks", 4, 0 },
     { "Toolbox/display.c", "debug_watch_len", 4, 0 },
@@ -2702,7 +2703,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1696;
+const unsigned hb_nstatics = 1697;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
