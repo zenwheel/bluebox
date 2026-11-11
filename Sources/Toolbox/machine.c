@@ -1135,17 +1135,26 @@ run_status machine_run(uint64_t max)
             }
         } while (mm_take_switch() && ran < n && !cpu.halted);
         done += ran;
-        if (drain_slice_point()) {
-            /* A safe point (drain.c): a snapshot's, or Suspend's. */
-            if (drain_exits())
+        bool drained = drain_slice_point();
+        if (drained) {
+            /* A safe point (drain.c): a snapshot's at an idle call, or
+             * Suspend's. */
+            if (drain_exits() && !drain_between())
                 return RUN_DRAINED;
-            machine_pause_point();
+            if (!drain_exits())
+                machine_pause_point();
         }
         idle_slice();
         machine_advance_ticks();
         events_script_pump(cpu.icount);
         events_sync_lowmem();
         time_pump();
+        /* A snapshot's at the slice boundary: taken once the slice's own
+         * end is done (its ticks, input and interrupt-time work), as a
+         * resumed machine starts with the next slice, which the one that
+         * never stopped went on to. */
+        if (drained && drain_exits())
+            return RUN_DRAINED;
         if (cpu.stopped)
             break;
     }
