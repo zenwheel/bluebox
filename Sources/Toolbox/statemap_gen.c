@@ -1580,7 +1580,8 @@ const hb_static hb_statics[] = {
     { "Toolbox/events.c", "key_new", 1, 0 },
     { "Toolbox/events.c", "key_presses", 4, 0 },
     { "Toolbox/events.c", "keymap", 16, 0 },
-    { "Toolbox/events.c", "keys_tapped", 16, 0 },
+    { "Toolbox/events.c", "keys_polled", 1, 0 },
+    { "Toolbox/events.c", "keys_tapped", 32, 0 },
     { "Toolbox/events.c", "last_relative_ns", 8, 12 },
     { "Toolbox/events.c", "last_warp_ns", 8, 12 },
     { "Toolbox/events.c", "mirrored", 4, 0 },
@@ -2695,7 +2696,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1689;
+const unsigned hb_nstatics = 1690;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
