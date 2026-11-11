@@ -896,6 +896,34 @@ extension BlueBox {
             #expect(bbox(WindowRecord_strucRgn(w)) == [21, -1, 342, 402])
         }
     }
+
+    /// SizeWindow with fUpdate false adds nothing to the update region but
+    /// keeps what was pending (Glypha III sizes and moves its new window,
+    /// then draws its playfield on the first update event).
+    @Suite struct SizeWindowWithoutUpdate {
+        @Test func aNewWindowStillGetsItsFirstUpdate() {
+            launchTestApp()
+            _ = initToolbox()
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [40, 0, 500, 640].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let w = tb_NewCWindow(0, r, 0, 1, 2, 0xFFFF_FFFF, 0, 0)
+            tb_SizeWindow(w, 640, 460, 0)
+            tb_MoveWindow(w, 100, 120, 1)
+            let ev = tb_NewPtr(16, false, true)
+            #expect(tb_CheckUpdate(ev) == 1)
+            #expect(rd32(ev + 2) == w)
+            // Pending in global coordinates, over the moved content.
+            let upd = rd32(WindowRecord_updateRgn(w))
+            #expect((0..<4).map { Int(Int16(bitPattern: rd16(upd + 2 + UInt32($0 * 2)))) } == [120, 100, 580, 740])
+            tb_SetPort(w)
+            tb_BeginUpdate(w)
+            tb_EndUpdate(w)
+            // Growing it without an update leaves the new area to the program.
+            tb_SizeWindow(w, 700, 500, 0)
+            #expect(tb_CheckUpdate(ev) == 0)
+            tb_DisposeWindow(w)
+        }
+    }
 }
 
 extension BlueBox {

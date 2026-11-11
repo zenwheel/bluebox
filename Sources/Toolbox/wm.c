@@ -2212,9 +2212,11 @@ void tb_SizeWindow(gaddr w, int16_t width, int16_t height, int8_t flag)
 {
     if (!w)
         return;
-    hrgn old;
+    hrgn old, pending;
     hrgn_init(&old);
+    hrgn_init(&pending);
     rgn_read(WindowRecord_strucRgn(w), &old);
+    rgn_read(WindowRecord_updateRgn(w), &pending);
     gaddr saved = qd_port();
     tb_SetPort(w);
     tb_PortSize(width, height);
@@ -2226,13 +2228,17 @@ void tb_SizeWindow(gaddr w, int16_t width, int16_t height, int8_t flag)
     hrgn_op(&old, &old, &now, RGN_UNION);
     if (wvisible(w)) /* a hidden window changes nothing on the screen */
         repaint(&old);
-    if (!flag) { /* caller handles updating the new content itself */
-        gaddr cur = qd_port();
-        tb_SetPort(w);
-        tb_ValidRect(w + GrafPort_portRect_off);
-        tb_SetPort(cur);
+    if (!flag) {
+        /* The caller handles updating the new content itself: sizing adds
+         * nothing to the update region, but what was already pending stays
+         * (Glypha III sizes its new window and waits for its first update
+         * to draw the playfield). */
+        rgn_read(WindowRecord_contRgn(w), &now);
+        hrgn_op(&pending, &pending, &now, RGN_SECT);
+        rgn_write(WindowRecord_updateRgn(w), &pending);
     }
     hrgn_free(&old);
+    hrgn_free(&pending);
     hrgn_free(&now);
 }
 
