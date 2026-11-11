@@ -377,7 +377,8 @@ static bool find_target(const uint8_t *addr, uint32_t type, uint32_t len, machin
         machine_ae_process procs[64];
         int n = machine_ae_processes(procs, 64);
         for (int i = 0; i < n; i++)
-            if (procs[i].pid != getpid() && (pid ? procs[i].pid == pid : procs[i].signature == sig)) {
+            if (procs[i].pid != getpid() && !process_other_run_quit_by_us(procs[i].pid) &&
+                (pid ? procs[i].pid == pid : procs[i].signature == sig)) {
                 *found = procs[i];
                 return true;
             }
@@ -410,6 +411,22 @@ int16_t aem_remote_send(const uint8_t *addr, uint32_t addr_type, uint32_t addr_l
     int16_t err = machine_ae_send(p.pid, p.signature, event, len, mode, ms, reply, reply_len);
     /* Delivered: the handler's error is in the reply (keyErrorNumber). */
     return *reply ? noErr : err;
+}
+
+/* Quit from a program to another run: the run is the user's, so it is
+ * not told; it leaves this program's process list, as a run that quit.
+ * One the program launched is its own, and is told. */
+bool aem_remote_quit(const uint8_t *addr, uint32_t addr_type, uint32_t addr_len, int16_t *err)
+{
+    machine_ae_process p;
+    *err = procNotFound;
+    if (!find_target(addr, addr_type, addr_len, &p))
+        return true;
+    if (process_launched_by_us(p.pid))
+        return false;
+    process_other_run_quit(p.pid);
+    *err = noErr;
+    return true;
 }
 
 /* ---------------------------------------------------------------------- */

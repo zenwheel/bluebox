@@ -2215,6 +2215,8 @@ const hb_static hb_statics[] = {
     { "Toolbox/process.c", "last_launched", 4, 0 },
     { "Toolbox/process.c", "launched", 128, 0 },
     { "Toolbox/process.c", "nlaunched", 4, 0 },
+    { "Toolbox/process.c", "nquit_runs", 4, 0 },
+    { "Toolbox/process.c", "quit_runs", 128, 0 },
     { "Toolbox/q3_controller.c", "ctls", 512, 10 },
     { "Toolbox/q3_controller.c", "cursor_deltas", 1, 0 },
     { "Toolbox/q3_controller.c", "cursor_depth", 4, 0 },
@@ -2695,7 +2697,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1689;
+const unsigned hb_nstatics = 1691;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

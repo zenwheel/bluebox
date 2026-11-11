@@ -151,10 +151,15 @@ bool process_launch(const char *app, const char *const *docs, int ndocs);
 bool process_is_finder(uint32_t hi, uint32_t lo); /* the Finder's serial number */
 void process_finder_quit(void); /* the Finder told to quit: no longer listed */
 void process_reset(void); /* the Process Manager's list (process.c): a fresh machine */
+/* Another Blue Box run this program told to quit: it goes on, but this
+ * program no longer sees it (GetNextProcess, events to it). */
+void process_other_run_quit(int pid);
+bool process_other_run_quit_by_us(int pid);
 bool process_is_us(uint32_t hi, uint32_t lo); /* this run's serial number or kCurrentProcess */
 /* A run this one launched, waited for until it listens for events (true)
  * or ends; false at once for any other process. */
 bool process_await_launched(int pid);
+bool process_launched_by_us(int pid); /* a run LaunchApplication started here */
 bool process_open_url(const char *url);
 /* Internet Config's ICLaunchURL: the URL in data[a..b) (all len bytes when
  * the selection is empty) opened by the host; an Internet Config error. */
@@ -1038,6 +1043,12 @@ uint8_t *aem_build_flat(uint32_t cls, uint32_t id, const char *const *files, int
  * reply.  procNotFound when none listens. */
 int16_t aem_remote_send(const uint8_t *addr, uint32_t addr_type, uint32_t addr_len, const uint8_t *event,
                         uint32_t len, int mode, int32_t timeout, uint8_t **reply, uint32_t *reply_len);
+/* Quit to the run an address names, from a program here: not delivered
+ * (another run is the user's, not the program's to end); the run leaves
+ * this program's process list instead, and true with *err noErr, or
+ * procNotFound when none listens.  False for a run the program launched
+ * itself, which is sent Quit as any event. */
+bool aem_remote_quit(const uint8_t *addr, uint32_t addr_type, uint32_t addr_len, int16_t *err);
 /* A flattened event to process pid (with signature sig), waiting at most
  * timeout_ms (negative: for ever) for its reply; the handler's result. */
 int16_t machine_ae_send(int pid, uint32_t sig, const uint8_t *event, uint32_t len, int mode, int timeout_ms,
