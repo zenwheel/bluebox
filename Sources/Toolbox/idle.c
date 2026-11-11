@@ -615,6 +615,12 @@ static void idle_sleep(void)
     if (!events_host_attached())
         machine_pass_time(slept);
     machine_advance_ticks();
+    /* Interrupt-time work comes as the clock moves, as on a Mac: with a
+     * host attached the instructions don't move on while the thread
+     * sleeps, so a poll loop could spend seconds asleep in one slice,
+     * its VBL tasks, sound refills and completions held till the slice's
+     * end (S.C.OUT's music stopped while "Perfect" waits for a key). */
+    time_pump();
     st.at = executed();
 }
 

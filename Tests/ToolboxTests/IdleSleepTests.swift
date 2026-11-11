@@ -14,7 +14,11 @@ extension BlueBox {
         /// Launch a one-segment application whose code is `body` (words),
         /// on the wall clock; run it for `seconds`; the sleeps it let the
         /// host take and the time they took.
-        func run(_ body: [Int], seconds: Double = 0.3, depth: Int32 = 1) throws -> (sleeps: UInt64, slept: Double, halted: Bool, wall: Double) {
+        /// With `host`, a host is attached (a window, not --realtime): the
+        /// instructions don't move on while the thread sleeps.  `chunk` is
+        /// how many instructions each machine_run call is given.
+        func run(_ body: [Int], seconds: Double = 0.3, depth: Int32 = 1, host: Bool = false, chunk: UInt64 = 200,
+                 setup: () -> Void = {}) throws -> (sleeps: UInt64, slept: Double, halted: Bool, wall: Double) {
             machine_set_screen_depth(depth)
             defer { machine_set_screen_depth(1) }
             bootMachine()
@@ -37,12 +41,15 @@ extension BlueBox {
             #expect(machine_launch(path, &err, err.count))
             machine_set_realtime(true)
             defer { machine_set_realtime(false) }
+            if host { machine_attach_host(true) }
+            defer { if host { machine_attach_host(false) } }
+            setup()
             var ns0: UInt64 = 0, ns1: UInt64 = 0
             let sleeps0 = machine_idle_sleeps(&ns0)
             let start = Date()
             var halted = false
             while Date().timeIntervalSince(start) < seconds {
-                if machine_run(200) == RUN_HALTED {
+                if machine_run(chunk) == RUN_HALTED {
                     halted = true
                     break
                 }
@@ -250,6 +257,34 @@ extension BlueBox {
                 + button + [back(button.count)]                                      // Button for ever
             let r = try run(body, seconds: 0.5)
             #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// While the host sleeps through a poll loop, interrupt-time work
+        /// goes on at the clock's pace: with a host attached a slice of
+        /// polls can take seconds, and a VBL task (S.C.OUT's music, as
+        /// "Perfect" waits for a key) ran only at its end.
+        @Test func vblTasksGoOnWhileTheHostSleeps() throws {
+            var out: UInt32 = 0, ticks0: UInt32 = 0
+            let loop = button
+            let r = try run(loop + [back(loop.count)], seconds: 0.01, host: true, chunk: 600) {
+                out = tb_NewPtr(4, false, true)
+                let words: [UInt16] = [0x52B9, UInt16(out >> 16), UInt16(out & 0xFFFF), // ADDQ.L #1,out
+                                       0x317C, 1, UInt16(VBLTask_vblCount_off),         // MOVE.W #1,vblCount(A0)
+                                       0x4E75]                                          // RTS
+                let code = tb_NewPtr(Int32(words.count * 2), false, false)
+                for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+                let v = tb_NewPtr(Int32(VBLTask_SIZEOF), false, true)
+                wr16(v + 4, 1) // vType
+                wr32(v + UInt32(VBLTask_vblAddr_off), code)
+                wr16(v + UInt32(VBLTask_vblCount_off), 1)
+                #expect(tb_VInstall(v) == 0)
+                machine_advance_ticks()
+                ticks0 = rd32(UInt32(LM_Ticks))
+            }
+            let ticks = rd32(UInt32(LM_Ticks)) - ticks0
+            #expect(!r.halted)
+            #expect(r.sleeps > 20 && ticks > 10, "slept \(r.sleeps) times, \(ticks) ticks")
+            #expect(rd32(out) * 2 >= ticks, "the VBL task ran \(rd32(out)) times in \(ticks) ticks")
         }
 
         /// A computation going round in a few registers, calling nothing.
