@@ -253,6 +253,26 @@ func requiredMachine(application path: String) -> String? {
     return knownMachineRequirements[mac_file_creator(&mf)]
 }
 
+/// Programs that need the screen they were written for, by creator: they
+/// centre what they draw on the screen but place part of it as if the
+/// screen were that size, and on a bigger one drew it in the wrong place
+/// or not at all.  They get that screen, shown whole in a window, unless
+/// a size is chosen.
+let knownScreenRequirements: [UInt32: (Int32, Int32)] = [
+    /* Spe2 Spectre 1.1 (1.1d16): the end-of-level statistics' numbers are
+     * drawn in a rectangle at the centred panel but also offset by the
+     * panel's own left edge, which is right only on a 640-wide screen */
+    0x5370_6532: (640, 480),
+]
+
+func requiredScreen(application path: String) -> (Int32, Int32)? {
+    var mf = mac_file()
+    var err = [CChar](repeating: 0, count: 256)
+    guard appledouble_read(path, &mf, &err, err.count) else { return nil }
+    defer { mac_file_free(&mf) }
+    return knownScreenRequirements[mac_file_creator(&mf)]
+}
+
 /// An RGB highlight colour from "#RRGGBB" as 16-bit components.
 func parseHighlight(_ s: String) -> (UInt16, UInt16, UInt16)? {
     guard s.hasPrefix("#"), s.count == 7, let v = UInt32(s.dropFirst(), radix: 16) else { return nil }

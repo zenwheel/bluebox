@@ -112,7 +112,8 @@ func usage() -> Never {
                      ApFontID, ScrDmpEnb or the SP parameter RAM copies, e.g.
                      DoubleTime=20 (windowed runs take the first four from macOS)
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
-          --screen WxH  screen size (default 1024x768)
+          --screen WxH  screen size (default 1024x768, or the display's; a game known to need
+                 a 13-inch monitor's 640x480 gets that, the whole screen in a window)
           --ppc      run a fat application's PowerPC code (the default; PowerPC-only ones
                      always run it)
           --68k      run a fat application's 68k code (as a cpu setting of 68020 or 68040 does)
@@ -516,6 +517,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var appArgument: String? // the application as given, before it is resolved
     var appIndex = 0 // where in args
     var screenWindow = false
+    var screenGiven = false
     var appletalkGiven = false
     var portsGiven = Set<Int32>()
     var screenshot: String?
@@ -712,6 +714,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
             guard parts.count == 2 else { fail("--screen expects WxH, e.g. 1024x768") }
             machine_set_screen(parts[0], parts[1])
             screenWindow = true
+            screenGiven = true
         case "--app":
             i += 1
             guard i < args.count else { usage() }
@@ -818,6 +821,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
                            extra: extra, resumes: interactive || resumeHibernated, fresh: startFresh,
                            newCopy: newCopy, interactive: interactive)
     }
+    // A game known to need a 13-inch monitor's screen gets it, unless a size is
+    // given, it resumes on the one it hibernated with, or it is to stay rootless.
+    let requiredSize = screenGiven || resumeRecord != nil || background || saved.display == "rootless"
+        ? nil : requiredScreen(application: app)
     #if canImport(AppKit)
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
@@ -853,6 +860,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
             }
         }
         machine_set_screen(sc[0], sc[1])
+    } else if let sz = requiredSize {
+        machine_set_screen(sz.0, sz.1)
+        if interactive { screenWindow = true }
     } else if interactive && !screenWindow {
         // Rootless: the Mac screen covers the host display's visible area.
         MainActor.assumeIsolated {
@@ -861,7 +871,11 @@ func runCommand(_ args: [String], resume: String? = nil) {
         }
     }
     #else
-    if let sc = resumeRecord?.screen, sc.count == 2 { machine_set_screen(sc[0], sc[1]) }
+    if let sc = resumeRecord?.screen, sc.count == 2 {
+        machine_set_screen(sc[0], sc[1])
+    } else if let sz = requiredSize {
+        machine_set_screen(sz.0, sz.1)
+    }
     #endif
     machine_set_appearance(appearance)
     // Network and serial ports from the settings, unless given here.
