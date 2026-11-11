@@ -689,7 +689,9 @@ static void debug_watch_written(gaddr a, uint32_t len)
  * while idle.c is making sure a program waiting changes nothing, every
  * store, to it as well. */
 static gaddr screen_watch_lo, screen_watch_len;
-BB_HOST static void (*all_stores)(gaddr a, uint32_t len);
+/* Saved with the rest: a snapshot taken while idle.c watches has g_watch_fn
+ * at any_store, which calls it. */
+static void (*all_stores)(gaddr a, uint32_t len);
 
 static void any_store(gaddr a, uint32_t len)
 {
