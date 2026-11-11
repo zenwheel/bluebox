@@ -105,7 +105,8 @@ extension BlueBox {
             #expect(m.map(\.title) == ["Suspend TeachText", "Hibernate TeachText", "", "Quit TeachText",
                                        "Force Quit TeachText"])
             #expect(m[1].action == #selector(Target.hibernate(_:)) && m[1].target === target && m[1].isEnabled)
-            #expect(m[1].keyEquivalent == "" && !m[1].isAlternate)
+            #expect(m[1].keyEquivalent == "h" && m[1].keyEquivalentModifierMask == [.control, .option, .command])
+            #expect(!m[1].isAlternate)
             let menu = NSMenu()
             menu.autoenablesItems = false
             let sub = NSMenu()

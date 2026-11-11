@@ -36,6 +36,10 @@ import Toolbox
     private var resumeIfRefused = false
     /// Polling for the machine to stop at its safe point.
     private var parkTimer: Timer?
+    /// Saying why it could not be hibernated.
+    private var refusing = false
+    /// The key whose key-down was Hibernate's: its key-up is the host's too.
+    private var hibernateKeyCode: UInt16?
 
     /// Whether Hibernate can be chosen now.
     var hibernation: HibernateAvailability {
@@ -208,6 +212,9 @@ import Toolbox
 
     /// Why it could not be hibernated, in an alert.
     private func refused(_ why: String, goesOn: Bool = false) {
+        guard !refusing else { return } // Hibernate's key pressed again over the alert
+        refusing = true
+        defer { refusing = false }
         let title = hibernateContext?.title ?? "The program"
         let alert = NSAlert()
         if let appIcon { alert.icon = appIcon }
@@ -235,9 +242,39 @@ import Toolbox
         case .quit: quit()
         case .hide: NSApp.hide(nil)
         case .hideOthers: NSApp.hideOtherApplications(nil)
+        case .hibernate:
+            // After the key's event, as a menu item's action comes: a
+            // refusal's alert runs an event loop of its own.
+            DispatchQueue.main.async { MainActor.assumeIsolated { Suspender.shared.hibernate() } }
         case .ignore: break
         }
         return true
+    }
+
+    /// Hibernate's key (HostKey.hibernate) in every window, before the
+    /// screen view or the rootless key monitor sends keys to the program:
+    /// in a window, in the whole screen, rootless, over a native alert or
+    /// panel, and while the program reads the keyboard itself.  Its key-up
+    /// is kept too, so the program sees neither.
+    func installHibernateKey() {
+        NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+            let type = event.type, code = event.keyCode, flags = event.modifierFlags
+            let key = event.charactersIgnoringModifiers, repeated = type == .keyDown && event.isARepeat
+            let kept = MainActor.assumeIsolated { () -> Bool in
+                let me = Suspender.shared
+                if type == .keyUp {
+                    guard me.hibernateKeyCode == code else { return false }
+                    me.hibernateKeyCode = nil
+                    return true
+                }
+                guard HostKey.classify(flags, key, suspended: me.suspended, programHas: { _ in false }) == .hibernate
+                else { return false }
+                me.hibernateKeyCode = code
+                if !repeated { _ = me.handle(.hibernate) }
+                return true
+            }
+            return kept ? nil : event
+        }
     }
 
     @objc func toggleSuspend(_ sender: Any?) { toggle() }

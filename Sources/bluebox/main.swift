@@ -95,6 +95,11 @@ func usage() -> Never {
                      draws on the desktop float over the host's (the Talking Moose)
           --screen-window  show the whole classic screen in one window instead of
                      rootless windows (implied by --screen)
+                     The host keeps a few keys from the program: Command-Option-Q
+                     (Force Quit), Command-H and Command-Option-H (Hide, Hide Others,
+                     unless the program has a Command-H item) and Control-Option-
+                     Command-H (Hibernate: save it to disk and quit; opening it again
+                     resumes it), in a window, in the whole screen and rootless
           --census   keep going past unimplemented traps and report every trap used
           --max N    stop after N instructions (default 50000000)
           --log      comma list of: traps, unimpl, seg, rsrc, mem, cpu, speech (the Speech

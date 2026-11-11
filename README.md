@@ -193,6 +193,15 @@ Some useful options for `run`:
 `bluebox set <app> depth 8` (or `cpu`, `fpu`, `addressing`, `scale`)
 remembers a setting for one application. `bluebox --help` lists everything.
 
+Command keys go to the program, as on a Mac, Command-Q too. The host keeps
+a few, in a window, in the whole screen and rootless:
+
+| Keys | |
+|---|---|
+| Command-Option-Q | Force Quit, for a program that ignores Command-Q. |
+| Command-H, Command-Option-H | Hide and Hide Others, unless the program has a Command-H item of its own. |
+| Control-Option-Command-H | Hibernate: save the program to disk and quit; opening it again resumes it where it was. It works when the program hides the menu bar or reads the keyboard itself (a game); when the program can't be saved, an alert says why. |
+
 ### Apple Events
 
 A running application takes Apple Events as it would from the Finder or

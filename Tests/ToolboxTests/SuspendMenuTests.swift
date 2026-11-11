@@ -144,6 +144,37 @@ extension BlueBox {
             #expect(HostKey.classify([.command], "s", suspended: true) == .ignore)
         }
 
+        /// Control-Option-Command-H hibernates, running or suspended, whatever
+        /// the program's menus have: the host's always.  Other chords with H
+        /// stay the program's (or Hide's).
+        @Test func hibernateKey() {
+            let hasAll: (Character) -> Bool = { _ in true }
+            #expect(HostKey.classify([.control, .option, .command], "h", suspended: false) == .hibernate)
+            #expect(HostKey.classify([.control, .option, .command], "H", suspended: false) == .hibernate)
+            #expect(HostKey.classify([.control, .option, .command], "h", suspended: true) == .hibernate)
+            #expect(HostKey.classify([.control, .option, .command], "h", suspended: false, programHas: hasAll)
+                    == .hibernate)
+            #expect(HostKey.classify([.control, .option, .command, .capsLock, .numericPad, .function], "h",
+                                     suspended: false) == .hibernate)
+            #expect(HostKey.classify([.control, .option, .command, .shift], "h", suspended: false) == .classic)
+            #expect(HostKey.classify([.control, .option], "h", suspended: false) == .classic)
+            #expect(HostKey.classify([.control, .command], "h", suspended: false) == .classic)
+            #expect(HostKey.classify([.control, .option, .command], "j", suspended: false) == .classic)
+            #expect(HostKey.classify([.control, .option, .command], nil, suspended: false) == .classic)
+            #expect(HostKey.classify([.control, .option], "h", suspended: true) == .ignore)
+        }
+
+        /// Hibernate's key (HibernationTests' menuItem) is no other host
+        /// item's.
+        @Test @MainActor func hibernateKeyUnique() {
+            let m = HostHideItems.items(title: "Marathon", programHasH: false)
+                + HostQuitItems.items(title: "Marathon", suspended: false, target: target,
+                                      quit: #selector(Target.quit(_:)), suspend: #selector(Target.suspend(_:)),
+                                      forceQuit: #selector(Target.force(_:)), hibernate: #selector(Target.resume(_:)))
+            let keys = m.filter { !$0.keyEquivalent.isEmpty }.map { "\($0.keyEquivalent)\($0.keyEquivalentModifierMask.rawValue)" }
+            #expect(keys.count == 5 && Set(keys).count == keys.count)
+        }
+
         /// The shell's programs: Launch, Suspend or Resume where Launch is;
         /// a program's word on itself; and one gone however it went.
         @Test func shellStates() {
