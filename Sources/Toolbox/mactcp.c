@@ -98,6 +98,7 @@ typedef struct {
     uint16_t lport, rport;
     bool told_data, told_closing, told_term, eof, reset;
     bool lost;           /* its connection did not survive a resume: not told yet */
+    bool lost_open;      /* ...and it was still being opened: openFailed */
     /* A synchronous call that gave up waiting for a drain (run): made
      * again, it goes on from where it was (a send's progress, its
      * deadline); after resuming on a lost connection it ends with
@@ -621,7 +622,7 @@ static int16_t run(gaddr pb, int code, int s, uint32_t timeout_s, bool async)
             m->gave_pb = 0;
             m->gave_lost = false;
             if (lost)
-                return connectionTerminated;
+                return code == TCPActiveOpen ? openFailed : connectionTerminated;
         }
         m->gave_pb = 0;
         for (;;) {
@@ -864,8 +865,10 @@ void mactcp_poll(void)
         if (!m->used || !m->lost)
             continue;
         m->lost = false;
-        LOGF(LOG_TRAPS, "  .IPP stream %08X: its connection ended with the hibernated process\n", m->stream);
-        fail_ops(s, connectionTerminated);
+        LOGF(LOG_TRAPS, "  .IPP stream %08X: its connection %s with the hibernated process\n", m->stream,
+             m->lost_open ? "being opened failed" : "ended");
+        fail_ops(s, m->lost_open ? openFailed : connectionTerminated);
+        m->lost_open = false;
         m->told_closing = m->told_term = true;
         notify(m, TCPTerminate, TCPNetworkFailure);
     }
@@ -1121,9 +1124,10 @@ static int listen_on(uint16_t port)
 
 /* Each stream's descriptors are the old process's: forgotten (never
  * closed: here they may be another file's).  A UDP stream is bound again
- * to its port and a passive open listens again on its own; an active open
- * not yet answered is made again; a connection is over, and is told so at
- * the next poll (lost). */
+ * to its port and a passive open listens again on its own; a connection
+ * is over, and is told so at the next poll (lost); an active open not yet
+ * answered fails then with openFailed (it is not made again hours later:
+ * the program tries again if it wants to). */
 void mactcp_after_resume(void)
 {
     for (int i = 0; i < MAX_EARLY; i++)
@@ -1160,8 +1164,10 @@ void mactcp_after_resume(void)
             }
             LOGF(LOG_IDLE, "resume: MacTCP: port %u is taken: its passive open ends\n", m->lport);
         } else if (m->state == stSynSent) {
+            /* Not made again hours later: it failed, as an open the other
+             * end never answered fails, and the program tries again. */
+            m->lost_open = true;
             opening++;
-            continue; /* step_open connects again: the other end never had the connection */
         } else if (m->state == stClosed) {
             continue;
         }
@@ -1170,10 +1176,10 @@ void mactcp_after_resume(void)
         m->lost = true;
         m->gave_lost = m->gave_pb != 0;
         active = true;
-        ended++;
+        ended += !m->lost_open;
     }
     if (n)
-        LOGF(LOG_IDLE, "resume: MacTCP: %d stream%s: %d UDP bound again, %d listening again, %d open%s made again, "
+        LOGF(LOG_IDLE, "resume: MacTCP: %d stream%s: %d UDP bound again, %d listening again, %d open%s failed, "
              "%d connection%s ended\n", n, n == 1 ? "" : "s", udp, listening_again, opening, opening == 1 ? "" : "s",
              ended, ended == 1 ? "" : "s");
 }

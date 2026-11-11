@@ -1228,10 +1228,18 @@ void ots_poll(provider *p)
 /* Resumed: a connection or session is over (its other end has long since
  * timed it out, or gone on without it).  The other end is told, in case,
  * and the program hears T_DISCONNECT at the next poll; its commands under
- * way end.  One being opened goes on asking; a listener goes on. */
+ * way end.  One being opened failed, as when the other end never answers
+ * (kETIMEDOUTErr; not asked again hours later); a listener goes on. */
 void ots_after_resume(provider *p)
 {
     ot_session *s = p->ss;
+    if (s && s->opening && s->open.result == ioInProgress) {
+        LOGF(LOG_TRAPS, "OT: %s %d: its connection being opened failed with the hibernated process\n",
+             s->pap ? "pap" : "asp", (int)(p - ot_providers));
+        atp_host_cancel(&s->open);
+        s->open.result = -1096; /* reqFailed */
+        return;
+    }
     if (!s || !s->live)
         return;
     LOGF(LOG_TRAPS, "OT: %s %d: its %s ended with the hibernated process\n", s->pap ? "pap" : "asp",
