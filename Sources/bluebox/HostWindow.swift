@@ -696,6 +696,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
     app.delegate = delegate
+    Suspender.shared.installHibernateKey()
     // Minimal app menu: Hide, Hide Others and Show All (Command-H hides
     // unless the program has a Command-H item); Suspend; and Quit, which
     // chosen with the mouse (Command-Q itself goes to the app as a

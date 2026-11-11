@@ -166,8 +166,19 @@ public enum HostKey: Equatable {
     /// running program's menu bar has a Command-H item of its own (Replace
     /// in many), which then gets both, as MenuKey finds it with Option held.
     case hide, hideOthers
+    /// Control-Option-Command-H: Hibernate, running or suspended, for a
+    /// program that hides the menu bar or never lets the host's menus be
+    /// reached (a game reading the keyboard itself).  Always the host's.
+    case hibernate
     /// Anything else while suspended: nothing.
     case ignore
+
+    /// Hibernate's key, as its menu item shows it.  Classic programs' keys
+    /// are Command, Command-Shift or Command-Option (Control only from Mac
+    /// OS 8's 'xmnu', and all three together hardly ever), and macOS's
+    /// Control-Option-Command keys (contrast, invert, shut down) leave H.
+    public static let hibernateKey = "h"
+    public static let hibernateModifiers: NSEvent.ModifierFlags = [.control, .option, .command]
 
     /// `programHas`: whether the program's current menu bar has an item
     /// with Command and this key, asked as the key comes, since programs
@@ -176,6 +187,7 @@ public enum HostKey: Equatable {
     public static func classify(_ flags: NSEvent.ModifierFlags, _ key: String?, suspended: Bool,
                                 programHas: (Character) -> Bool = programHasCommandKey) -> HostKey {
         let mods = flags.intersection([.command, .option, .control, .shift])
+        if key?.lowercased() == hibernateKey && mods == hibernateModifiers { return .hibernate }
         if key?.lowercased() == "q" {
             if mods == [.command, .option] { return .forceQuit }
             if mods == [.command] && suspended { return .quit }
@@ -195,7 +207,7 @@ public enum HostKey: Equatable {
 }
 
 /// The application menu's end: Suspend (Resume when suspended) and
-/// Hibernate, then Quit, with Option Force Quit (Command-Option-Q) in its
+/// Hibernate (Control-Option-Command-H), then Quit, with Option Force Quit (Command-Option-Q) in its
 /// place.  Quit asks the classic program to quit, resuming it first.
 @MainActor public enum HostQuitItems {
     public static func items(title: String, suspended: Bool, target: AnyObject, quit: Selector, suspend: Selector,
@@ -206,7 +218,11 @@ public enum HostKey: Equatable {
         toggle.target = target
         var top = [toggle]
         if let hibernate {
-            let item = NSMenuItem(title: "Hibernate \(title)", action: hibernate, keyEquivalent: "")
+            // Its key shown (the key monitor acts on it: HostKey.hibernate),
+            // but not in a status item's menu, which shows none.
+            let item = NSMenuItem(title: "Hibernate \(title)", action: hibernate,
+                                  keyEquivalent: quitKeys ? HostKey.hibernateKey : "")
+            item.keyEquivalentModifierMask = HostKey.hibernateModifiers
             item.target = target
             show(hibernation, on: item)
             top.append(item)
