@@ -349,6 +349,7 @@ void machine_advance_ticks(void);
 uint64_t machine_time_ns(void);
 void machine_skip_time(uint64_t ns);
 void machine_set_time(uint32_t secs); /* SetDateTime: Time counts from secs */
+uint32_t machine_clock_date(void);     /* the date by the machine's clock (Time); 0 before boot */
 bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);

@@ -892,6 +892,12 @@ static struct {
     int minute; /* drawn for, or -1 */
 } clock_state = { .minute = -1 };
 
+uint32_t mac_now(void); /* osutil.c */
+
+/* The minute of the day by the Mac's date (local time): SetDateTime's,
+ * and a headless run's the same each time (mac_now). */
+static int clock_minute(void) { return (int)(mac_now() / 60 % 1440); }
+
 void os9tbx_draw_clock(void)
 {
     if (!clock_state.on || !rd32(LM_WMgrPort))
@@ -899,13 +905,11 @@ void os9tbx_draw_clock(void)
     int16_t bar = (int16_t)rd16(LM_MBarHeight);
     if (bar <= 0)
         return;
-    time_t now = time(NULL);
-    struct tm lt;
-    localtime_r(&now, &lt);
+    int minute = clock_minute(), h24 = minute / 60;
     char text[16];
-    int hour = lt.tm_hour % 12 ? lt.tm_hour % 12 : 12;
-    snprintf(text, sizeof text, "%d:%02d %s", hour, lt.tm_min, lt.tm_hour < 12 ? "AM" : "PM");
-    clock_state.minute = lt.tm_hour * 60 + lt.tm_min;
+    int hour = h24 % 12 ? h24 % 12 : 12;
+    snprintf(text, sizeof text, "%d:%02d %s", hour, minute % 60, h24 < 12 ? "AM" : "PM");
+    clock_state.minute = minute;
     gaddr saved = qd_port();
     gaddr wp = rd32(LM_WMgrPort);
     tb_SetPort(wp);
@@ -994,10 +998,7 @@ static void TickleMenuBarClock(ppc_cpu *c)
         RETURN(menuNotFoundErr);
         return;
     }
-    time_t now = time(NULL);
-    struct tm lt;
-    localtime_r(&now, &lt);
-    if (lt.tm_hour * 60 + lt.tm_min != clock_state.minute)
+    if (clock_minute() != clock_state.minute)
         os9tbx_draw_clock();
     RETURN(noErr);
 }

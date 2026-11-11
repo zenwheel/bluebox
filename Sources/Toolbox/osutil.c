@@ -16,13 +16,25 @@
 
 static int64_t clock_set; /* SetDateTime's change to the host's clock */
 
-uint32_t mac_now(void)
+/* The date by the host's clock, moved as SetDateTime and --date moved it. */
+static uint32_t host_now(void)
 {
     time_t t = time(NULL);
     struct tm lt;
     localtime_r(&t, &lt);
     /* Mac time is local time. */
     return (uint32_t)((int64_t)t + lt.tm_gmtoff + MAC_EPOCH_OFFSET + clock_set);
+}
+
+/* The date: the host's with a host attached; headless, Time's, which
+ * follows the instructions (machine_clock_date).  A headless run reading
+ * the host's read a later second the slower the host ran it, and two runs
+ * of a game seeding its random numbers from the date went differently
+ * (Firefall). */
+uint32_t mac_now(void)
+{
+    uint32_t secs = machine_wall_clock() ? 0 : machine_clock_date();
+    return secs ? secs : host_now();
 }
 
 /* A resumed program whose date does not catch up (reattach.c): the
@@ -37,13 +49,13 @@ void machine_set_date(int64_t unix_secs)
     time_t t = (time_t)unix_secs;
     struct tm lt;
     localtime_r(&t, &lt);
-    clock_set += unix_secs + lt.tm_gmtoff + MAC_EPOCH_OFFSET - (int64_t)mac_now();
+    clock_set += unix_secs + lt.tm_gmtoff + MAC_EPOCH_OFFSET - (int64_t)host_now();
 }
 
 /* SetDateTime: the clock set, for the session (the host's stays). */
 int16_t tb_SetDateTime(uint32_t secs)
 {
-    clock_set += (int64_t)secs - (int64_t)mac_now();
+    clock_set += (int64_t)secs - (int64_t)host_now();
     machine_set_time(secs);
     return noErr;
 }

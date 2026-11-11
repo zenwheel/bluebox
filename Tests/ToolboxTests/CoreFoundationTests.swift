@@ -718,8 +718,13 @@ extension BlueBox {
             _ = start()
             #expect(double(ppc_data_export("kCFAbsoluteTimeIntervalSince1970")) == 978_307_200)
             #expect(double(ppc_data_export("kCFAbsoluteTimeIntervalSince1904")) == 3_061_152_000)
+            // Now is the Mac's date (headless, its clock's: the same each
+            // run), in UTC.
+            let mac = buffer(4)
+            tb_GetDateTime(mac)
             call("CFAbsoluteTimeGetCurrent")
-            #expect(abs(f1 - (Date().timeIntervalSince1970 - 978_307_200)) < 5)
+            let utc = Double(rd32(mac)) - Double(TimeZone.current.secondsFromGMT()) - 3_061_152_000
+            #expect(f1 >= utc && f1 < utc + 2)
 
             let res = buffer(32)
             func gregorian(_ at: Double) -> (Int32, UInt8, UInt8, UInt8, UInt8, Double) {

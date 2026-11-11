@@ -1076,6 +1076,15 @@ void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away)
     }
 }
 
+/* The date by the machine's clock, as Time counts it; 0 before boot.  A
+ * headless run's follows its instructions, so that a program reading the
+ * date (or seeding its random numbers from it) reads the same each run,
+ * however fast the host ran it. */
+uint32_t machine_clock_date(void)
+{
+    return boot_time ? boot_time + (uint32_t)(machine_time_ns() / 1000000000u) : 0;
+}
+
 /* SetDateTime: Time from now on counts from secs. */
 void machine_set_time(uint32_t secs)
 {
