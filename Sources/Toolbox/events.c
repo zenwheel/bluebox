@@ -148,7 +148,14 @@ static int nscript, script_next;
 void machine_script_add(uint64_t at, int kind, int a, int b, int c)
 {
     script = bb_realloc(script, (size_t)(nscript + 1) * sizeof *script, BB_TAG(script_step));
-    script[nscript++] = (script_step){ at, kind, a, b, c };
+    /* In order of time, after any step due at the same count (an at: step
+     * may go back before steps already queued). */
+    int i = nscript++;
+    while (i > script_next && script[i - 1].at > at) {
+        script[i] = script[i - 1];
+        i--;
+    }
+    script[i] = (script_step){ at, kind, a, b, c };
 }
 
 static char **snap_paths;
@@ -181,7 +188,10 @@ void events_script_clear(void)
  * screenshot is no input: the clock of a program waiting for input moves
  * on to the next key or click, not to a snapshot, which would otherwise
  * be taken at the program's first wait however much it had yet to draw
- * (SmallTalk polls for events once before loading its Prelude). */
+ * (SmallTalk polls for events once before loading its Prelude).  A sync
+ * step is no input either, but the clock stops at it: a program sleeping
+ * as long as it can then goes on in steps, a title timed by Ticks has its
+ * time before the next click comes. */
 uint64_t events_script_next_at(void)
 {
     for (int i = script_next; i < nscript; i++)
@@ -217,6 +227,7 @@ void events_script_pump(uint64_t now)
         case 7: machine_post_wheel(s.a, s.b, 0, s.c); break; /* the scroll wheel, c lines (up) */
         case 8: machine_post_wheel(s.a, s.b, s.c, 0); break; /* sideways, c columns (left) */
         case 9: machine_pause_for((uint32_t)s.a); break; /* held still from the next pause point */
+        case 10: break; /* sync: no input, only a point the clock stops at */
         }
     }
 }
