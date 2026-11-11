@@ -123,6 +123,26 @@ extension BlueBox {
             tb_FlushEvents(-1, 0)
         }
 
+        /// The System's key maps ('KMAP' 0, and 2 for the Extended Keyboard
+        /// KbdType says): raw key codes to virtual ones, the arrows and
+        /// Control moved, the right-hand modifiers their own.  S.C.OUT looks
+        /// the keys it reads with GetKeys up in KMAP KbdType.
+        @Test func theSystemHasKeyMaps() {
+            launchTestApp()
+            #expect(rd8(0x21E) == 2) // KbdType
+            for id: Int16 in [0, 2] {
+                let h = tb_GetResource(Int32(bitPattern: fourCC("KMAP")), id)
+                #expect(h != 0 && tb_GetHandleSize(h) == 134)
+                let p = rd32(h)
+                #expect(Int16(bitPattern: rd16(p)) == id)
+                let map = { (raw: UInt32) in rd8(p + 4 + raw) }
+                #expect(map(0x00) == 0x00 && map(0x5B) == 0x5B && map(0x24) == 0x24) // a, keypad 8, Return
+                #expect(map(0x3B) == 0x7B && map(0x3E) == 0x7E && map(0x36) == 0x3B) // left, up, Control
+                #expect(map(0x7B) == 0x3C && map(0x7D) == 0x3E) // right Shift, right Control
+                #expect(rd16(p + 132) == 0) // no exceptions
+            }
+        }
+
         /// A program moving the cursor itself (RawMouse and MTemp, then
         /// CrsrNew, as games recentring it do) moves the mouse: the host
         /// hears of it, and captured motion is added to where it put it.
