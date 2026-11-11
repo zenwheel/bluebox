@@ -41,6 +41,16 @@ enum { TRAILER = 12 }; /* the zone's last block, in both formats */
 #define HDR (g_mem_24bit ? 8u : 12u)
 #define MIN_BLOCK (g_mem_24bit ? 12u : 16u)
 #define MAX_SIZEC (g_mem_24bit ? 15u : 255u)
+/* Blocks are whole multiples of GRAIN, so that in a zone whose first
+ * block's data is 16-byte aligned (a zone at a 16-byte boundary: its
+ * 52-byte header and a 12-byte block header) every block's data is.  On
+ * a 68040 or PowerPC Mac, and from System 7.5 on every Mac, blocks were
+ * aligned on 16-byte boundaries (Inside Macintosh: Memory errata, 1994),
+ * and programs counted on it: Escape Velocity's PowerPC sprite blitter
+ * finds a sprite's mask bit from its pixels' address mod 8, and from
+ * blocks only 4-byte aligned it drew every other sheet four pixels to the
+ * left, leaving trails.  The 24-bit Memory Manager's were longs. */
+#define GRAIN (g_mem_24bit ? 4u : 16u)
 
 /* What the Memory Manager reports at most (free space, Gestalt's RAM):
  * 128 MB, about what the Quadra 800 we answer as could hold (136 MB).
@@ -183,11 +193,11 @@ static inline gaddr pick_zone(bool sys) { return sys ? sys_zone() : cur_zone(); 
 
 static uint32_t cap(uint32_t v) { return v > g_mem_report_cap ? g_mem_report_cap : v; }
 
-/* Physical size for a logical size: header + data, 4-byte aligned, at
+/* Physical size for a logical size: header + data, a multiple of GRAIN, at
  * least MIN_BLOCK; 0 when it can't be had (a 24-bit header holds 24 bits). */
 static uint32_t phys_for(uint32_t logical)
 {
-    uint64_t p = ((uint64_t)logical + HDR + 3) & ~(uint64_t)3;
+    uint64_t p = ((uint64_t)logical + HDR + GRAIN - 1) & ~(uint64_t)(GRAIN - 1);
     if (p < MIN_BLOCK)
         p = MIN_BLOCK;
     return p > (g_mem_24bit ? 0x00FFFFFCu : 0xFFFFFFF0u) ? 0 : (uint32_t)p;
@@ -345,6 +355,10 @@ static gaddr handle_block(gaddr h, int16_t *err)
 /* ---------------------------------------------------------------------- */
 /* Zone setup and growth */
 
+/* The furthest end at or before `to` for blocks starting at `from`: whole
+ * GRAINs from it, so the blocks after keep their alignment. */
+static inline gaddr grain_end(gaddr from, gaddr to) { return to > from ? from + ((to - from) & ~(GRAIN - 1)) : to; }
+
 static void write_trailer(gaddr lim)
 {
     b_set(lim, USE_FREE, 0, 0, TRAILER, 0);
@@ -365,11 +379,11 @@ void mm_init_zone(gaddr z, gaddr limit, uint16_t more_masters)
 {
     limit &= ~3u;
     gmemset(z, 0, Zone_SIZEOF);
-    gaddr lim = limit - TRAILER;
+    gaddr first = z_first(z);
+    gaddr lim = grain_end(first, limit - TRAILER);
     forget_subzones(z, limit);
     Zone_set_bkLim(z, lim);
     Zone_set_moreMast(z, more_masters ? more_masters : 32);
-    gaddr first = z_first(z);
     b_set(first, USE_FREE, 0, 0, lim - first, 0);
     write_trailer(lim);
     Zone_set_zcbFree(z, (int32_t)(lim - first));
@@ -389,7 +403,7 @@ static bool grow_zone_by(gaddr z, uint32_t need, bool exact)
         return false;
     gaddr lim = z_lim(z);
     uint64_t want = (uint64_t)need + (1u << 20);
-    want = exact ? need & ~3u : (want + 0xFFFF) & ~(uint64_t)0xFFFF;
+    want = exact ? ((uint64_t)need + GRAIN - 1) & ~(uint64_t)(GRAIN - 1) : (want + 0xFFFF) & ~(uint64_t)0xFFFF;
     gaddr limit = rd32(LM_ApplLimit);
     if (limit > appl_max_limit || limit == 0)
         limit = appl_max_limit;
@@ -403,7 +417,7 @@ static bool grow_zone_by(gaddr z, uint32_t need, bool exact)
      * zone makes up the rest, as MaxMem counted it (Vampire Castle asks
      * for nearly what MaxMem said and makes its own heap at address 0 if
      * it doesn't get it). */
-    uint64_t room = (limit - TRAILER - lim) & ~(uint64_t)3;
+    uint64_t room = (limit - TRAILER - lim) & ~(uint64_t)(GRAIN - 1);
     if (room < MIN_BLOCK)
         return false;
     if (want > room)
@@ -424,19 +438,21 @@ static bool grow_zone_by(gaddr z, uint32_t need, bool exact)
             break;
         }
     if (io_hi) {
-        if (io_hi + MIN_BLOCK + HDR <= limit) {
+        /* the blocks past it keep the zone's alignment */
+        gaddr past = io_hi + (lim & (GRAIN - 1));
+        if (past + MIN_BLOCK + HDR <= limit) {
             /* across it: the hole, and all the growth asked for above */
-            uint64_t top = (uint64_t)io_hi + (newlim - lim);
-            newlim = top + HDR <= limit ? (gaddr)top : (limit - HDR) & ~3u;
-            gaddr hole = io_lo >= lim + MIN_BLOCK ? io_lo : lim;
+            uint64_t top = (uint64_t)past + (newlim - lim);
+            newlim = top + HDR <= limit ? (gaddr)top : grain_end(past, limit - HDR);
+            gaddr hole = io_lo >= lim + MIN_BLOCK ? grain_end(lim, io_lo) : lim;
             if (hole > lim) {
                 b_set(lim, USE_FREE, 0, 0, hole - lim, 0);
                 zone_free_add(z, hole - lim);
             }
-            b_set(hole, USE_NREL, 0, 0, io_hi - hole, z);
-            lim = io_hi;
+            b_set(hole, USE_NREL, 0, 0, past - hole, z);
+            lim = past;
         } else if (io_lo >= lim + MIN_BLOCK + HDR) {
-            newlim = io_lo - HDR; /* up to it */
+            newlim = grain_end(lim, io_lo - HDR); /* up to it */
         } else {
             return false;
         }
@@ -1280,7 +1296,7 @@ static uint32_t growth_room(gaddr z)
     if (limit > appl_max_limit || !limit)
         limit = appl_max_limit;
     limit &= ~3u; /* blocks are whole longs, as grow_zone makes them */
-    return limit > z_lim(z) + TRAILER ? limit - TRAILER - z_lim(z) : 0;
+    return limit > z_lim(z) + TRAILER ? (limit - TRAILER - z_lim(z)) & ~(GRAIN - 1) : 0;
 }
 
 /* Largest block obtainable by compaction (and purging, if purge is set),
