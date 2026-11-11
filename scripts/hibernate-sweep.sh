@@ -32,6 +32,41 @@
 #   (default 24000000000), WALK_TIMEOUT=s seconds for each run (default
 #   600), HEAPCHECK=n as walk-corpus.sh's (default 0), KEEP=1 keeps every
 #   snapshot (otherwise only those of programs that did not pass).
+#
+# PLAY=1 sweeps games in play instead (PLAY=file: another table than
+# scripts/hibernate-play.tsv beside this script).  Each row there gives a
+# program, the K to hibernate it at, the scripted input (--keys) that
+# starts a game before K and has it busy at K (keys held, sound playing,
+# its timers and VBL tasks running), the input to give it once resumed,
+# and run flags.  For each:
+#
+#   H  plays to K and on to the next safe point, saves and ends;
+#   B  resumes H's snapshot in a new process (folder and home as H left
+#      them) and runs on to K + AFTER (default 300000000), its screen saved
+#      at K + MID (default 20000000), K + MID + WIN (default 100000000) and
+#      just before the end, the input after the resume given after the
+#      first;
+#   B0 the same without that input (a sync step in place of each);
+#   C  plays from a fresh folder and home, never hibernating, with the
+#      same input at the same counts and its screens saved at them;
+#   C2 C again, which says whether the game plays the same each time.
+# Each run is given the whole script (H's part after K never comes): a
+# program idle in GetNextEvent has its clock move on to the next input, so
+# input to come changes how a run goes before it.  From K on the script
+# has a sync step every GRID instructions (default 1000000), so that no
+# run's clock jumps further than that, the drain's included.  The table's
+# keys may use pace:N for the same before K.  Every run starts at
+# the same date (DATE, default 2000-01-01T12:00:00), as programs seed
+# their random numbers with it.
+#
+# Writes <work dir>/play.tsv: program, K, hibernate, why, snapshot bytes,
+# resume, B's end, animates (B0's first and last screens differ), input
+# (B's second screen differs from B0's), deterministic (C's screens are
+# C2's), match (B's screens are C's, or the first that differs), seconds
+# for H, B and C, and the class (pass, pass but not deterministic,
+# refused, not hibernated, save failure, resume crash, stopped after
+# resume, input ignored, differs from unhibernated); and
+# <work dir>/play-report.txt.  Its screens are kept in <work dir>/logs.
 set -eu
 LC_ALL=C
 export LC_ALL
@@ -74,20 +109,25 @@ host_end() {
 # Seconds since the epoch.
 now() { date +%s; }
 
-sweep_one() {
-	rel=$1
-	k=$2
-	name=$(printf '%s' "$rel" | tr '/ ' '__')
+# A program's work folder's name, from its path.
+name_of() {
+	name=$(printf '%s' "$1" | tr '/ ' '__')
 	# Paths the mapping makes the same ("interfazed 680x0/..." and
 	# "interfazed_680x0/...") would share a work folder, and parallel runs
 	# delete each other's: kept apart by the path's checksum.
 	if [ -f "$work/ambiguous.txt" ] && grep -Fqx -- "$name" "$work/ambiguous.txt"; then
-		name=${name}_$(printf '%s' "$rel" | cksum | cut -d ' ' -f 1)
+		name=${name}_$(printf '%s' "$1" | cksum | cut -d ' ' -f 1)
 	fi
 	if [ "$(printf '%s' "$name" | wc -c)" -gt 200 ]; then
 		name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-160)_$(printf '%s' "$name" | cksum | cut -d ' ' -f 1)
 	fi
-	name=${name}_k$k
+	printf '%s' "$name"
+}
+
+sweep_one() {
+	rel=$1
+	k=$2
+	name=$(name_of "$rel")_k$k
 	w=$work/runs/$name
 	logs=$work/logs/$name
 	folder=$(dirname "$dir/corpus/$rel")
@@ -241,14 +281,218 @@ classify() {
 	fi
 }
 
-# One program at one K, the sixth and fifth arguments: what each of the
-# parallel runs below does.
+# The same screen: the two files are there and alike.
+same_screen() { [ -f "$1" ] && [ -f "$2" ] && cmp -s "$1" "$2"; }
+
+# The part of a play's script after K, for a run whose script starts at
+# instruction $1 (0, or where a resumed one resumed): its screens saved as
+# $2-mid.png, $2-post.png and $2-end.png, the input $3 given after the
+# first.
+screens() {
+	printf 'pace:0,at:%s,snap:%s-mid.png,%s%sat:%s,snap:%s-post.png,at:%s,snap:%s-end.png,%s' \
+		"$(since "$1" $((k + mid)))" "$2" "$3" "${3:+,}" "$(since "$1" $((k + mid + win)))" "$2" \
+		"$(since "$1" $((k + after - 1000000)))" "$2" "$(grid "$1")"
+}
+
+# Sync steps every GRID instructions from K on (default 1000000), for a
+# run whose script starts at $1: a program idle in GetNextEvent has its
+# clock move on no further than the next, in every run alike, wherever
+# the input after the resume is (and a drain, which does not stop at the
+# polls some games make, runs on no further either).
+grid() {
+	awk -v s="$1" -v k="$k" -v g="${GRID:-1000000}" -v n="$after" 'BEGIN {
+		out = ""
+		for (t = k + g; t < k + n; t += g)
+			if (t > s)
+				out = out (out == "" ? "" : ",") "at:" (t - s) ",sync"
+		print out
+	}'
+}
+
+# A run's script ($2), kept as <logs>/$1.keys too (to run it again by hand).
+keys_for() {
+	printf '%s\n' "$2" >"$logs/$1.keys"
+	printf '%s' "$2"
+}
+
+# Instruction $2 counted from $1 (0 when $1 is past it).
+since() { if [ "$2" -gt "$1" ]; then echo $(($2 - $1)); else echo 0; fi; }
+
+# A script's input steps made sync steps: the same points for the clock,
+# no input.
+no_input() {
+	printf '%s' "$1" | tr ',' '\n' | sed -E '/^(wait|at|pace|snap):|^sync$|^$/!s/.*/sync/' | paste -s -d , -
+}
+
+# One game of the PLAY table, played, hibernated and resumed (see the top).
+play_one() {
+	rel=$1
+	row=$(awk -F '\t' -v p="$rel" '$1 == p { print; exit }' "$table")
+	k=$(printf '%s' "$row" | cut -f2)
+	keys=$(printf '%s' "$row" | cut -f3)
+	post=$(printf '%s' "$row" | cut -f4)
+	flags=$(printf '%s' "$row" | cut -f5)
+	after=${AFTER:-300000000}
+	mid=${MID:-20000000}
+	win=${WIN:-100000000}
+	date=${DATE:-2000-01-01T12:00:00}
+	limit=${WALK_TIMEOUT:-600}
+	name=$(name_of "$rel")
+	w=$work/runs/$name
+	logs=$work/logs/$name
+	case $rel in
+	/*) folder=$(dirname "$rel") ;;
+	*) folder=$(dirname "$dir/corpus/$rel") ;;
+	esac
+	if [ ! -d "$folder" ]; then
+		printf '%s\t%s\tnot hibernated\tnot in corpus/\t\t\t\t\t\t\t\t\t\t\tnot hibernated\n' "$rel" "$k"
+		return
+	fi
+	rm -rf "$w" "$logs"
+	mkdir -p "$w/orig" "$w/h" "$logs"
+	d=$(basename "$folder")
+	cp -cR "$folder" "$w/orig/$d" 2>/dev/null || cp -R "$folder" "$w/orig/$d"
+	cp -cR "$w/orig/$d" "$w/$d"
+	app=$w/$d/$(basename "$rel")
+
+	# H: played to K, saved.
+	t0=$(now)
+	st=0
+	# shellcheck disable=SC2086 # the table's flags are words
+	HOME=$w/h timeout "$limit" "$bin" run "$app" --headless --max $((k + 400000000)) \
+		--keys "$(keys_for h "$keys,$(screens 0 "$logs/h" "$post")")" --hibernate-at "$k" --hibernate-to "$w/k.bbhib" --then 1 --date "$date" $flags >"$logs/h.out" 2>"$logs/h.err" || st=$?
+	th=$(($(now) - t0))
+	bytes='' why='' resume='' bend='' anim='' input='' det='' match='' tb='' tc=''
+	line=$(grep -a -m 1 -E '^(hibernated|hibernate refused|hibernate failed)' "$logs/h.out" || true)
+	case $line in
+	hibernated:*)
+		hib=saved
+		bytes=$(printf '%s' "$line" | sed -E 's/.*\(([0-9]+) bytes.*/\1/')
+		why=$(printf '%s' "$line" | sed -E 's/.*stopped at (.*) after [0-9]+ instructions\)$/\1/')
+		n=$(printf '%s' "$line" | sed -E 's/.* after ([0-9]+) instructions\)$/\1/')
+		;;
+	"hibernate refused:"*)
+		hib=refused
+		why=${line#hibernate refused: }
+		;;
+	"hibernate failed:"*)
+		hib=failed
+		why=${line#hibernate failed: }
+		;;
+	*)
+		hib="not hibernated"
+		why=$(host_end "$st")
+		[ -n "$why" ] || why=$(end_of "$logs/h.out")
+		;;
+	esac
+	[ -f "$w/k.bbhib" ] || [ "$hib" != saved ] || { hib=failed why="no snapshot written"; }
+
+	if [ "$hib" = saved ]; then
+		# The folder and home as H left them, for each resume.
+		mv "$w/$d" "$w/$d.h"
+		mv "$w/h" "$w/h.h"
+		t0=$(now)
+		for r in b b0; do
+			rm -rf "${w:?}/$d" "$w/h"
+			cp -cR "$w/$d.h" "$w/$d"
+			cp -cR "$w/h.h" "$w/h"
+			p=$post
+			[ "$r" = b ] || p=$(no_input "$post")
+			st=0
+			HOME=$w/h BLUEBOX_CRASH_TRACE=1 timeout "$limit" "$bin" resume "$w/k.bbhib" --headless \
+				--max $((k + after - n)) --keys "$(keys_for "$r" "$(screens "$n" "$logs/$r" "$p")")" >"$logs/$r.out" 2>"$logs/$r.err" || st=$?
+			[ "$r" = b ] && bst=$st
+		done
+		tb=$(($(now) - t0))
+		bend=$(host_end "$bst")
+		if [ -n "$bend" ]; then
+			resume=$bend
+		elif ! grep -a -q '^resumed: ' "$logs/b.out"; then
+			resume="not resumed: $(grep -a -m 1 -E '^bluebox:|error' "$logs/b.out" "$logs/b.err" | cut -c1-120 || true)"
+			bend=$(end_of "$logs/b.out")
+		else
+			resume=ok
+			bend=$(end_of "$logs/b.out")
+		fi
+		if same_screen "$logs/b0-mid.png" "$logs/b0-end.png"; then anim=still; else anim=animates; fi
+		if [ -z "$post" ]; then
+			input='none given'
+		elif same_screen "$logs/b-post.png" "$logs/b0-post.png"; then
+			input='no change'
+		else
+			input='changes screen'
+		fi
+
+		# C and C2: never hibernated, the same input at the same counts.
+		t0=$(now)
+		for r in c c2; do
+			rm -rf "${w:?}/$d" "$w/h"
+			cp -cR "$w/orig/$d" "$w/$d"
+			mkdir -p "$w/h"
+			# shellcheck disable=SC2086 # the table's flags are words
+			HOME=$w/h timeout "$limit" "$bin" run "$app" --headless --max $((k + after)) \
+				--keys "$(keys_for "$r" "$keys,$(screens 0 "$logs/$r" "$post")")" --date "$date" $flags >"$logs/$r.out" 2>"$logs/$r.err" || true
+		done
+		tc=$(($(now) - t0))
+		det=yes
+		match=same
+		for s in mid post end; do
+			same_screen "$logs/c-$s.png" "$logs/c2-$s.png" || det=no
+			[ "$match" != same ] || same_screen "$logs/b-$s.png" "$logs/c-$s.png" || match="differ from $s"
+		done
+	fi
+
+	if [ "$hib" = refused ]; then
+		class=refused
+	elif [ "$hib" = failed ]; then
+		class='save failure'
+	elif [ "$hib" != saved ]; then
+		class='not hibernated'
+	elif [ "$resume" != ok ]; then
+		class='resume crash'
+	elif ! printf '%s' "$bend" | grep -q 'instruction limit'; then
+		class='stopped after resume'
+	elif [ "$input" = 'no change' ]; then
+		class='input ignored'
+	elif [ "$det" = no ]; then
+		class='pass but not deterministic'
+	elif [ "$match" != same ]; then
+		class='differs from unhibernated'
+	else
+		class=pass
+	fi
+	# What a resume needs (the snapshot, the folder and home as H left
+	# them, at their paths) kept when it did not pass.
+	if [ -n "${KEEP:-}" ] || [ "${class%% *}" != pass ]; then
+		rm -rf "${w:?}/$d" "$w/h" "$w/orig"
+	else
+		rm -rf "$w"
+	fi
+	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$rel" "$k" "$hib" "$why" "$bytes" \
+		"$resume" "$bend" "$anim" "$input" "$det" "$match" "$th" "$tb" "$tc" "$class"
+}
+
+table=${PLAY:-}
+[ "$table" != 1 ] || table=$root/scripts/hibernate-play.tsv
+
+# One program at one K, the sixth and fifth arguments (or one game, with
+# play the fifth): what each of the parallel runs below does.
+if [ $# -ge 6 ] && [ "$5" = play ]; then
+	play_one "$6"
+	exit 0
+fi
 if [ $# -ge 6 ]; then
 	sweep_one "$6" "$5"
 	exit 0
 fi
 
-list=${LIST:-$dir/census_list.txt}
+if [ -n "$table" ]; then
+	# The table's programs (or LIST's, those of them in it).
+	list=${LIST:-$work/play-list.txt}
+	[ -n "${LIST:-}" ] || grep -v -e '^#' -e '^$' "$table" | cut -f1 >"$list"
+else
+	list=${LIST:-$dir/census_list.txt}
+fi
 # The names two or more paths map to (see sweep_one).
 grep -v '^$' "$list" | tr '/ ' '__' | sort | uniq -d >"$work/ambiguous.txt"
 pass() {
@@ -256,6 +500,15 @@ pass() {
 		printf '%s\0' "$rel"
 	done | xargs -0 -n 1 -P "$jobs" sh "$0" "$dir" "$work" "$bin" "$jobs" "$2" || true
 }
+if [ -n "$table" ]; then
+	pass "$list" play >"$work/play.tsv"
+	{
+		printf '%s games\n' "$(wc -l <"$work/play.tsv" | tr -d ' ')"
+		cut -f15 "$work/play.tsv" | sort | uniq -c | sort -rn
+	} >"$work/play-report.txt"
+	cat "$work/play-report.txt"
+	exit 0
+fi
 pass "$list" "$K" >"$work/sweep.tsv"
 if [ "$K2" -gt 0 ]; then
 	awk -F '\t' '$17 == "pass" { print $1 }' "$work/sweep.tsv" >"$work/pass2.txt"
