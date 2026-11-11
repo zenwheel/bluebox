@@ -253,16 +253,17 @@ func requiredMachine(application path: String) -> String? {
     return knownMachineRequirements[mac_file_creator(&mf)]
 }
 
-/// Programs that need the screen they were written for, by creator: they
-/// centre what they draw on the screen but place part of it as if the
-/// screen were that size, and on a bigger one drew it in the wrong place
-/// or not at all.  They get that screen, shown whole in a window, unless
-/// a size is chosen.
-let knownScreenRequirements: [UInt32: (Int32, Int32)] = [
+/// Programs that need the screen they were written for, by creator and the
+/// version in their 'vers' 1 resource (major, BCD minor): they centre what
+/// they draw on the screen but place part of it as if the screen were that
+/// size, and on a bigger one drew it in the wrong place or not at all.
+/// They get that screen, shown whole in a window, unless a size is chosen.
+let knownScreenRequirements: [(creator: UInt32, version: UInt16, size: (Int32, Int32))] = [
     /* Spe2 Spectre 1.1 (1.1d16): the end-of-level statistics' numbers are
      * drawn in a rectangle at the centred panel but also offset by the
-     * panel's own left edge, which is right only on a 640-wide screen */
-    0x5370_6532: (640, 480),
+     * panel's own left edge, which is right only on a 640-wide screen.
+     * Spectre 1.0 and Supreme (2.0) share the creator and are right. */
+    (0x5370_6532, 0x0101, (640, 480)),
 ]
 
 func requiredScreen(application path: String) -> (Int32, Int32)? {
@@ -270,7 +271,25 @@ func requiredScreen(application path: String) -> (Int32, Int32)? {
     var err = [CChar](repeating: 0, count: 256)
     guard appledouble_read(path, &mf, &err, err.count) else { return nil }
     defer { mac_file_free(&mf) }
-    return knownScreenRequirements[mac_file_creator(&mf)]
+    let creator = mac_file_creator(&mf)
+    let known = knownScreenRequirements.filter { $0.creator == creator }
+    guard !known.isEmpty, let version = programVersion(fork: mf.rsrc, length: mf.rsrc_len) else { return nil }
+    return known.first { $0.version == version }?.size
+}
+
+/// The major and BCD minor version from a resource fork's 'vers' 1.
+private func programVersion(fork: UnsafePointer<UInt8>?, length: Int) -> UInt16? {
+    guard let fork, length > 0 else { return nil }
+    var idx = rsrc_index()
+    var err = [CChar](repeating: 0, count: 256)
+    guard rsrc_parse(fork, length, &idx, &err, err.count) else { return nil }
+    defer { rsrc_index_free(&idx) }
+    for i in 0..<idx.count where idx.entries[i].type == 0x7665_7273 && idx.entries[i].id == 1 {
+        var e = idx.entries[i]
+        guard e.data_len >= 2, let d = rsrc_data(fork, &idx, &e) else { return nil }
+        return UInt16(d[0]) << 8 | UInt16(d[1])
+    }
+    return nil
 }
 
 /// An RGB highlight colour from "#RRGGBB" as 16-bit components.
