@@ -132,6 +132,21 @@ extension BlueBox {
             machine_post_mouse(120, 80, 0)
         }
 
+        /// A program summing Ticks as it runs: its slices (where Ticks moves
+        /// on) end at whole multiples of the instruction count, so a run
+        /// stopped and gone on with, as a resumed one is, sees Ticks change
+        /// at the same instructions as one run straight through.
+        @Test func slicesEndWhereTheyWouldHaveUnbroken() {
+            func sum(_ runs: [UInt64]) -> UInt32 {
+                launchTestApp()
+                _ = start([0xDCB8, 0x016A, 0x5287, 0x60F8]) // ADD.L Ticks,D6; ADDQ.L #1,D7; BRA.S loop
+                g_cpu!.pointee.d.6 = 0
+                for n in runs { _ = machine_run(n) }
+                return g_cpu!.pointee.d.6
+            }
+            #expect(sum([1_000_003, 2_000_000]) == sum([3_000_003]))
+        }
+
         /// A drain is refused when its time is up only once the machine has
         /// also run its least: a busy host's slow machine gets as far as a
         /// fast one's.

@@ -1113,7 +1113,12 @@ run_status machine_run(uint64_t max)
     uint64_t done = 0;
     while (!cpu.halted && done < max) {
         machine_pause_point(); /* suspended: no instructions, no time */
-        uint64_t n = max - done < slice ? max - done : slice, ran = 0;
+        /* Slices end at whole multiples of the instruction count, not a
+         * slice from where this run began: a program resumed from its
+         * snapshot (or run on after one, --then) has its interrupts at the
+         * instructions they would have come at had it never stopped. */
+        uint64_t edge = slice - cpu.icount % slice;
+        uint64_t n = max - done < edge ? max - done : edge, ran = 0;
         /* A PowerPC program's call into 68k code at its own level, and its
          * return, switch processors within the slice (mixedmode.c). */
         do {
