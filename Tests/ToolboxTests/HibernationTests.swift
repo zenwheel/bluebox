@@ -209,6 +209,7 @@ extension BlueBox {
             #expect(s.isHibernated("/lib/TeachText") && !s.isRunning("/lib/TeachText"))
             #expect(!s.isSuspended("/lib/TeachText"))
             #expect(s.hibernated["/lib/TeachText"]?.snapshot == "/s/b.bbhib") // the newest
+            #expect(s.snapshots["/lib/TeachText"] == ["/s/b.bbhib", "/s/a.bbhib"]) // all, newest first
             #expect(s.action(for: "/lib/TeachText") == .wake && s.action(for: "/lib/TeachText").title == "Resume")
             #expect(s.open("/lib/TeachText") == .launch) // the run resumes it
             #expect(s.hibernatedPaths == ["/lib/TeachText"] && s.runningPaths.isEmpty)
@@ -221,30 +222,178 @@ extension BlueBox {
 
         // MARK: Opening a hibernated program
 
+        /// An interactive run with snapshots asks which (all of them, newest
+        /// first); a headless one with --resume takes the newest, or the one
+        /// named; --fresh and --new launch, keeping them.
         @Test func resumeOrFresh() {
-            let t = Date(timeIntervalSince1970: 1_800_000_000)
-            var e = entry("/lib/TeachText")
-            e.state = .hibernated
-            e.snapshot = "/s/a.bbhib"
-            e.hibernatedAt = t
-            func choose(_ status: SnapshotStatus, entries: [RunningProgram]? = nil, resumes: Bool = true,
-                        fresh: Bool = false, new: Bool = false) -> ResumeChoice {
-                ResumePolicy.choose(hibernated: entries ?? [e], resumes: resumes, fresh: fresh, newCopy: new) { _ in status }
+            let snaps = ["/s/b.bbhib", "/s/a.bbhib"]
+            func choose(_ status: SnapshotStatus, _ list: [String]? = nil, resumes: Bool = true, interactive: Bool = false,
+                        fresh: Bool = false, new: Bool = false, named: String? = nil) -> ResumeChoice {
+                ResumePolicy.choose(snapshots: list ?? snaps, resumes: resumes, interactive: interactive, fresh: fresh,
+                                    newCopy: new, named: named) { _ in status }
             }
-            #expect(choose(.resumable) == .resume(snapshot: "/s/a.bbhib"))
-            #expect(choose(.resumable, entries: []) == .launch)
-            #expect(choose(.resumable, resumes: false) == .launch)       // headless, without --resume
-            #expect(choose(.resumable, new: true) == .launch)            // --new: kept
-            #expect(choose(.resumable, fresh: true) == .discard(snapshot: "/s/a.bbhib"))
-            #expect(choose(.resumable, resumes: false, fresh: true) == .discard(snapshot: "/s/a.bbhib"))
-            #expect(choose(.missing) == .missing(snapshot: "/s/a.bbhib"))
+            #expect(choose(.resumable, interactive: true) == .pick(snaps))
+            #expect(choose(.cannotResume(SnapshotProblem.otherBuild), interactive: true) == .pick(snaps)) // it says so
+            #expect(choose(.resumable) == .resume(snapshot: "/s/b.bbhib"))             // --resume: the newest
+            #expect(choose(.resumable, []) == .launch)
+            #expect(choose(.resumable, [], interactive: true) == .launch)
+            #expect(choose(.resumable, resumes: false) == .launch)                      // headless, without --resume
+            #expect(choose(.resumable, interactive: true, new: true) == .launch)        // --new: kept
+            #expect(choose(.resumable, interactive: true, fresh: true) == .launch)      // --fresh: kept too
+            #expect(choose(.missing) == .missing(snapshot: "/s/b.bbhib"))
             #expect(choose(.cannotResume(SnapshotProblem.otherBuild))
-                == .ask(snapshot: "/s/a.bbhib", reason: SnapshotProblem.otherBuild))
-            // Another build's with --fresh: the user chose.
-            #expect(choose(.cannotResume(SnapshotProblem.otherBuild), fresh: true) == .discard(snapshot: "/s/a.bbhib"))
-            var bare = e
-            bare.snapshot = nil
-            #expect(choose(.resumable, entries: [bare]) == .launch)
+                == .ask(snapshot: "/s/b.bbhib", reason: SnapshotProblem.otherBuild))
+            // --resume FILE: that one, whatever else there is.
+            #expect(choose(.resumable, [], named: "/s/a.bbhib") == .resume(snapshot: "/s/a.bbhib"))
+            #expect(choose(.missing, named: "/s/c.bbhib") == .missing(snapshot: "/s/c.bbhib"))
+        }
+
+        /// A record with a thumbnail and the machine, written and read back;
+        /// a PNG's size from its header.
+        @Test func thumbnailRecords() {
+            withFolder { root in
+                let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+                                0, 0, 0, 160, 0, 0, 0, 120, 8, 2, 0, 0, 0])
+                #expect(SnapshotThumbnail.size(png)?.width == 160 && SnapshotThumbnail.size(png)?.height == 120)
+                #expect(SnapshotThumbnail.size(Data("not a png at all, no".utf8)) == nil)
+                var r = record("TeachText")
+                r.machine = "Macintosh Quadra 800"
+                r.thumbnail = png
+                writeSnapshot(root + "/t.bbhib", r)
+                guard case .success(let back) = SnapshotFile.read(root + "/t.bbhib") else {
+                    Issue.record("not read")
+                    return
+                }
+                #expect(back.record == r && back.record.thumbnail == png)
+            }
+        }
+
+        /// The screen's thumbnail: at most 160 pixels wide, its height in
+        /// proportion, a PNG the host reads, each pixel the screen's average
+        /// under it.
+        @Test func screenThumbnail() {
+            _ = launchTestApp()
+            var w: Int32 = 0, h: Int32 = 0
+            machine_screen_size(&w, &h)
+            var png: UnsafeMutablePointer<UInt8>?
+            var len = 0
+            #expect(machine_screen_thumbnail(SnapshotThumbnail.width, &png, &len))
+            guard let png else { return }
+            let data = Data(bytes: png, count: len)
+            free(png)
+            let size = SnapshotThumbnail.size(data)
+            #expect(size?.width == 160)
+            #expect(size?.height == Int((Int64(h) * 160 + Int64(w) / 2) / Int64(w)))
+            #expect(len < 160 * 120 * 3) // deflated
+            #if canImport(AppKit)
+            let rep = NSBitmapImageRep(data: data)
+            #expect(rep?.pixelsWide == 160)
+            #endif
+        }
+
+        /// One program's snapshots, newest first (its entries'; one whose
+        /// file is gone forgotten); the picker's rows, its choice, its
+        /// thumbnails and placeholders, and deleting from it.
+        @Test func pickerModel() throws {
+            try withFolder { root in
+                let folder = root + "/Blue Box/Hibernated"
+                try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+                let registry = ProgramRegistry(library: root + "/Blue Box/Library")
+                let t = Date(timeIntervalSince1970: 1_800_000_000)
+                let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+                                0, 0, 0, 160, 0, 0, 0, 120, 8, 2, 0, 0, 0])
+                func make(_ name: String, _ at: Date, thumbnail: Bool = true, sameBuild: Bool = true) throws {
+                    var r = record("TeachText", saved: at)
+                    r.thumbnail = thumbnail ? png : nil
+                    r.machine = "Macintosh Quadra 800"
+                    writeSnapshot(folder + "/" + name, r, sameBuild: sameBuild)
+                    try hibernate(registry, "/lib/TeachText", snapshot: folder + "/" + name, at: at)
+                }
+                try make("one.bbhib", t, thumbnail: false)                           // before thumbnails
+                try make("two.bbhib", t.addingTimeInterval(60))
+                try make("three.bbhib", t.addingTimeInterval(120), sameBuild: false) // another build's
+                try make("four.bbhib", t.addingTimeInterval(180))
+                try make("gone.bbhib", t.addingTimeInterval(240))
+                try FileManager.default.removeItem(atPath: folder + "/gone.bbhib")
+                try hibernate(registry, "/lib/Bolo", snapshot: folder + "/bolo.bbhib", at: t)
+
+                let list = HibernatedSnapshots.snapshots(of: "/lib/TeachText", registry: registry)
+                #expect(list.map { ($0.path as NSString).lastPathComponent } == ["four.bbhib", "three.bbhib", "two.bbhib", "one.bbhib"])
+                #expect(registry.hibernated(for: "/lib/TeachText").count == 4) // the gone one forgotten
+
+                let now = t.addingTimeInterval(3600)
+                var picker = SnapshotPicker(title: "TeachText", snapshots: list, now: now, timeZone: TimeZone(identifier: "UTC")!)
+                #expect(picker.rows.map(\.path) == list.map(\.path))
+                #expect(picker.rows.map(\.placeholder) == [false, false, false, true])
+                #expect(picker.rows.map(\.resumable) == [true, false, true, true])
+                #expect(picker.rows[1].problem == SnapshotProblem.otherBuild)
+                #expect(picker.rows[0].details.hasPrefix("Macintosh Quadra 800 · 1024×768, 256 colors · "))
+                #expect(picker.rows[0].when == "Today 08:03" && picker.rows[3].when == "Today 08:00")
+                #expect(picker.selection == folder + "/four.bbhib")                  // the newest
+                #expect(picker.resume() == .resume(folder + "/four.bbhib"))
+                picker.selection = folder + "/three.bbhib"
+                #expect(!picker.canResume && picker.resume() == nil)                 // another build's: delete only
+
+                // Move to Trash: gone, its entry forgotten, the next one chosen.
+                try picker.deleteSelected(registry: registry, toTrash: false)
+                #expect(!FileManager.default.fileExists(atPath: folder + "/three.bbhib"))
+                #expect(picker.rows.count == 3 && picker.selection == folder + "/two.bbhib")
+                #expect(registry.hibernated(for: "/lib/TeachText").count == 3)
+                picker.selection = folder + "/one.bbhib"
+                try picker.deleteSelected(registry: registry, toTrash: false)        // the last: the one before
+                #expect(picker.selection == folder + "/two.bbhib")
+                #expect(registry.hibernated(for: "/lib/Bolo").count == 1)            // another program's untouched
+
+                // Loaded as the run does.
+                let loaded = SnapshotPicker(program: "/lib/./TeachText", title: "TeachText", registry: registry)
+                #expect(loaded.rows.map(\.path) == [folder + "/four.bbhib", folder + "/two.bbhib"])
+                // Another build's only: nothing chosen that resumes, but it is listed.
+                let foreign = SnapshotPicker(title: "X", snapshots: [HibernatedSnapshots.info(folder + "/four.bbhib", entered: true)])
+                #expect(foreign.selection == folder + "/four.bbhib")
+            }
+        }
+
+        /// Dates as the picker words them.
+        @Test func pickerDates() {
+            let utc = TimeZone(identifier: "UTC")!
+            let now = Date(timeIntervalSince1970: 1_800_000_000) // 2027-01-15 08:00 UTC
+            #expect(SnapshotPicker.when(now.addingTimeInterval(-60), now: now, timeZone: utc) == "Today 07:59")
+            #expect(SnapshotPicker.when(now.addingTimeInterval(-86400), now: now, timeZone: utc) == "Yesterday 08:00")
+            #expect(SnapshotPicker.when(now.addingTimeInterval(-3 * 86400), now: now, timeZone: utc) == "2027-01-12 08:00")
+        }
+
+        /// Hibernating again keeps the program's newest few: the oldest in
+        /// the Hibernated folder go, one saved elsewhere stays, and another
+        /// program's are not counted.
+        @Test func tidying() throws {
+            try withFolder { root in
+                let folder = root + "/Blue Box/Hibernated", elsewhere = root + "/elsewhere"
+                try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+                try FileManager.default.createDirectory(atPath: elsewhere, withIntermediateDirectories: true)
+                let registry = ProgramRegistry(library: root + "/Blue Box/Library")
+                let t = Date(timeIntervalSince1970: 1_800_000_000)
+                for i in 0..<6 {
+                    let at = t.addingTimeInterval(Double(i) * 60)
+                    let dir = i == 0 ? elsewhere : folder
+                    writeSnapshot(dir + "/\(i).bbhib", record("TeachText", saved: at))
+                    try hibernate(registry, "/lib/TeachText", snapshot: dir + "/\(i).bbhib", at: at)
+                }
+                writeSnapshot(folder + "/bolo.bbhib", record("Bolo", saved: t))
+                try hibernate(registry, "/lib/Bolo", snapshot: folder + "/bolo.bbhib", at: t)
+                #expect(HibernatedSnapshots.tidy(program: "/lib/TeachText", keep: 5, folders: [folder], registry: registry,
+                                                 toTrash: false).isEmpty)  // 5 in the folder, 1 elsewhere
+                let gone = HibernatedSnapshots.tidy(program: "/lib/TeachText", keep: 3, folders: [folder],
+                                                    registry: registry, toTrash: false)
+                #expect(gone == [folder + "/1.bbhib", folder + "/2.bbhib"])     // oldest first
+                #expect(!FileManager.default.fileExists(atPath: folder + "/1.bbhib"))
+                #expect(FileManager.default.fileExists(atPath: elsewhere + "/0.bbhib"))
+                #expect(registry.hibernated(for: "/lib/TeachText").compactMap(\.snapshot)
+                    == [folder + "/5.bbhib", folder + "/4.bbhib", folder + "/3.bbhib", elsewhere + "/0.bbhib"])
+                #expect(registry.hibernated(for: "/lib/Bolo").count == 1)
+                // Never fewer than one.
+                HibernatedSnapshots.tidy(program: "/lib/TeachText", keep: 0, folders: [folder], registry: registry, toTrash: false)
+                #expect(registry.hibernated(for: "/lib/TeachText").compactMap(\.snapshot) == [folder + "/5.bbhib", elsewhere + "/0.bbhib"])
+            }
         }
 
         /// A snapshot's record read back; another build's is told apart; a

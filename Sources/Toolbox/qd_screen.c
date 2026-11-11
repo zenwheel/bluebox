@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zlib.h>
 
 #include "machine.h"
 #include "qd_internal.h"
@@ -490,6 +491,82 @@ bool machine_screenshot(const char *path)
     bool ok = machine_write_png(path, rgba, w, h);
     bb_free(rgba);
     return ok;
+}
+
+/* A small picture of the screen, for a hibernated snapshot's picker: at
+ * most max_w pixels wide, its height in proportion, each pixel the average
+ * of the screen's under it (a dithered grey stays grey), as an RGB PNG in
+ * memory (bb_host_free it).  Deflated, as a thumbnail rides in every snapshot's
+ * launch record. */
+bool machine_screen_thumbnail(int max_w, uint8_t **png, size_t *len)
+{
+    *png = NULL;
+    *len = 0;
+    int w = g_screen_width, h = g_screen_height;
+    if (w <= 0 || h <= 0 || max_w <= 0)
+        return false;
+    int tw = w < max_w ? w : max_w;
+    int th = (int)(((int64_t)h * tw + w / 2) / w);
+    if (th < 1)
+        th = 1;
+    uint8_t *rgba = bb_host_malloc((size_t)w * (size_t)h * 4);
+    size_t raw_row = (size_t)tw * 3 + 1;
+    uint8_t *raw = bb_host_malloc(raw_row * (size_t)th);
+    uLongf zlen = compressBound((uLong)(raw_row * (size_t)th));
+    uint8_t *z = bb_host_malloc(zlen);
+    bool ok = rgba && raw && z;
+    if (ok) {
+        machine_screen_rgba(0, 0, w, h, rgba);
+        for (int ty = 0; ty < th; ty++) {
+            int y0 = (int)((int64_t)ty * h / th), y1 = (int)((int64_t)(ty + 1) * h / th);
+            if (y1 <= y0)
+                y1 = y0 + 1;
+            uint8_t *o = raw + (size_t)ty * raw_row;
+            *o++ = 0; /* no filter */
+            for (int tx = 0; tx < tw; tx++) {
+                int x0 = (int)((int64_t)tx * w / tw), x1 = (int)((int64_t)(tx + 1) * w / tw);
+                if (x1 <= x0)
+                    x1 = x0 + 1;
+                uint32_t sum[3] = { 0, 0, 0 }, n = 0;
+                for (int y = y0; y < y1; y++)
+                    for (int x = x0; x < x1; x++, n++) {
+                        const uint8_t *p = rgba + ((size_t)y * (size_t)w + (size_t)x) * 4;
+                        sum[0] += p[0];
+                        sum[1] += p[1];
+                        sum[2] += p[2];
+                    }
+                for (int k = 0; k < 3; k++)
+                    *o++ = (uint8_t)((sum[k] + n / 2) / n);
+            }
+        }
+        ok = compress2(z, &zlen, raw, (uLong)(raw_row * (size_t)th), 9) == Z_OK;
+    }
+    char *buf = NULL;
+    size_t blen = 0;
+    FILE *fp = ok ? open_memstream(&buf, &blen) : NULL;
+    if (fp) {
+        static const uint8_t sig[8] = { 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n' };
+        uint8_t ihdr[13] = { 0 };
+        put32be(ihdr, (uint32_t)tw);
+        put32be(ihdr + 4, (uint32_t)th);
+        ihdr[8] = 8; /* bit depth */
+        ihdr[9] = 2; /* RGB */
+        ok = fwrite(sig, 1, 8, fp) == 8 && chunk(fp, "IHDR", ihdr, 13) && chunk(fp, "IDAT", z, zlen) &&
+             chunk(fp, "IEND", NULL, 0);
+        ok = fclose(fp) == 0 && ok;
+    } else {
+        ok = false;
+    }
+    bb_host_free(rgba);
+    bb_host_free(raw);
+    bb_host_free(z);
+    if (!ok) {
+        bb_host_free(buf); /* open_memstream's: plain malloc */
+        return false;
+    }
+    *png = (uint8_t *)buf;
+    *len = blen;
+    return true;
 }
 
 /* An RGBA image as an uncompressed PNG: RGB, or RGBA keeping the alpha. */

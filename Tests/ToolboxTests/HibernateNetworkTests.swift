@@ -114,6 +114,10 @@ extension BlueBox {
             return fd
         }
 
+        /// An address no one answers on (on the loopback interface, but not
+        /// its own): a connection made to it stays being made.
+        static let silent: UInt32 = 0x7F00_0002
+
         func sendDatagram(_ text: String, to port: UInt16) {
             let fd = socket(AF_INET, SOCK_DGRAM, 0)
             defer { close(fd) }
@@ -285,6 +289,48 @@ extension BlueBox {
             #expect(tb_PBControl(tcpPB(conn, 42), false) == 0)
         }
 
+        /// MacTCP resumed while an active open was still being made (its SYN
+        /// unanswered): it is not made again hours later; it fails at the
+        /// next poll with openFailed, its notification routine hearing
+        /// TCPTerminate, and the program can open again.
+        @Test func anActiveOpenBeingMadeFails() {
+            let dir = launchTestApp()
+            startLoop()
+            _ = ipp()
+            asrEvents = []
+            completions = []
+            let asr = native_register(Self.asr, "hibernate ASR (open)", 0)
+            let done = native_register(Self.completion, "hibernate MacTCP completion (open)", 0)
+            let (conn, _) = newStream(udp: false, notify: asr)
+            let active = tcpPB(conn, 32, completion: done)                    // TCPActiveOpen
+            wr32(active + 32 + UInt32(TCPOpenPB_remoteHost_off), Self.silent)
+            wr16(active + 32 + UInt32(TCPOpenPB_remotePort_off), 4567)
+            #expect(tb_PBControl(active, true) == 1)
+            mactcp_poll()
+            #expect(completions.isEmpty)                                      // still being made
+
+            let snap = hibernate(dir, "tcpopen.bbhib")
+            resume(snap)
+            #expect(completions.isEmpty)                                      // nothing during the restore
+            mactcp_poll()
+            #expect(completions == [-23015])                                  // openFailed
+            #expect(asrEvents.count == 1 && asrEvents.first?.event == 3)      // TCPTerminate
+            let status = tcpPB(conn, 39)                                      // TCPStatus
+            #expect(tb_PBControl(status, false) == 0)
+            #expect(rd8(status + 32 + UInt32(TCPStatusPB_connectionState_off)) == 0)
+            // Opened again by the program, it connects.
+            let (lfd2, port2) = listener()
+            defer { close(lfd2) }
+            let again = tcpPB(conn, 32)
+            wr32(again + 32 + UInt32(TCPOpenPB_remoteHost_off), 0x7F00_0001)
+            wr16(again + 32 + UInt32(TCPOpenPB_remotePort_off), port2)
+            #expect(tb_PBControl(again, false) == 0)
+            let peer = accept(lfd2, nil, nil)
+            #expect(peer >= 0)
+            close(peer)
+            #expect(tb_PBControl(tcpPB(conn, 42), false) == 0)
+        }
+
         // ---- Open Transport
 
         @discardableResult
@@ -393,6 +439,52 @@ extension BlueBox {
             usleep(20_000)
             #expect(ot("OTLook", server) == 0x01)                             // T_LISTEN
             for ep in [udp, server, conn] { #expect(ot("OTCloseProvider", ep) == 0) }
+        }
+
+        /// Open Transport resumed while a connection was still being made: it
+        /// is not made again; T_DISCONNECT comes at the next poll, its reason
+        /// ETIMEDOUT, and once taken the endpoint is idle and can connect.
+        @Test func anOTConnectBeingMadeFails() {
+            let dir = launchTestApp()
+            _ = cfm_ppc_cpu()                                                 // for the notifier
+            g_ppc.halted = false
+            startLoop()
+            notified = []
+            let conn = endpoint("tcp")
+            #expect(ot("OTBind", conn, 0, 0) == 0)
+            #expect(ot("OTSetNonBlocking", conn) == 0)
+            let tcall = tb_NewPtr(40, false, true)
+            let silent = rd32(tbind(4567) + 8)
+            wr32(silent + 4, Self.silent)
+            wr32(tcall, 16); wr32(tcall + 4, 16); wr32(tcall + 8, silent)
+            #expect(Int32(bitPattern: ot("OTConnect", conn, tcall, 0)) == -3162) // kOTNoDataErr: T_CONNECT to come
+            let tv = cfm_native_tvector(Self.notifier, "hibernate OT notifier (connect)")
+            #expect(ot("OTInstallNotifier", conn, tv, 0) == 0)
+            opentransport_poll()
+            #expect(notified.isEmpty)
+            #expect(ot("OTGetEndpointState", conn) == 3)                      // T_OUTCON
+
+            let snap = hibernate(dir, "otconnect.bbhib")
+            resume(snap)
+            #expect(notified.isEmpty)
+            opentransport_poll()
+            #expect(notified == [0x10])                                       // T_DISCONNECT
+            #expect(ot("OTLook", conn) == 0x10)
+            let discon = tb_NewPtr(20, false, true)
+            #expect(ot("OTRcvDisconnect", conn, discon) == 0)
+            #expect(rd32(discon + 12) == UInt32(ETIMEDOUT))
+            #expect(ot("OTGetEndpointState", conn) == 2)                      // T_IDLE
+            opentransport_poll()
+            #expect(notified == [0x10] && ot("OTGetEndpointState", conn) == 2) // not made again
+            let (lfd2, port2) = listener()
+            defer { close(lfd2) }
+            wr32(tcall + 8, rd32(tbind(port2) + 8))
+            #expect(ot("OTSetBlocking", conn) == 0)
+            #expect(ot("OTConnect", conn, tcall, 0) == 0)                     // and again, by the program
+            let peer = accept(lfd2, nil, nil)
+            #expect(peer >= 0)
+            close(peer)
+            #expect(ot("OTCloseProvider", conn) == 0)
         }
 
         /// Open Transport's AppleTalk resumed: an adsp connection is over,
@@ -784,6 +876,42 @@ extension BlueBox {
             #expect(rd8(client.ccb + 8) & 0x40 != 0 && rd8(server.ccb + 8) & 0x40 != 0) // eTearDown
             #expect(rd16(r + 16) == 0 && rd16(r + 36) == 0)
             #expect(rd16(listener.ccb + 6) == 1)                              // the listener goes on: sListening
+        }
+
+        /// ADSP resumed while an open request was still being asked (the
+        /// other end not answering): it is not asked again hours later; it
+        /// ends with errOpening at the next poll, its end closed.
+        @Test func anADSPOpenBeingMadeFails() {
+            #expect(machine_set_appletalk("local"))
+            let dir = launchTestApp()
+            startLoop()
+            let mpp = atOpen(".MPP"), dsp = atOpen(".DSP")
+            let pb = tb_NewPtr(80, false, true)
+            wr8(pb + 28, 1)
+            #expect(atCall(mpp, 256, pb) == 0)                                // setSelfSend
+            let p = tb_NewPtr(80, false, true), ccb = tb_NewPtr(242, false, true)
+            wr32(p + 34, ccb)
+            wr16(p + 42, 600)
+            wr16(p + 48, 600)
+            wr32(p + 54, tb_NewPtr(570, false, true))
+            #expect(atCall(dsp, 255, p) == 0)                                 // dspInit
+            let req = tb_NewPtr(80, false, true)
+            wr16(req + 32, rd16(p + 32))
+            wr8(req + 40, at_node())
+            wr8(req + 41, 201)                                                // no one there
+            wr8(req + 64, 1)                                                  // ocRequest
+            wr8(req + 65, 255)                                                // every 42 s
+            wr8(req + 66, 10)
+            #expect(atCall(dsp, 253, req, async: true) == 1)
+            appletalk_poll()
+            #expect(rd16(req + 16) == 1 && rd16(ccb + 6) == 3)                // sOpening
+
+            let snap = hibernate(dir, "adspopen.bbhib")
+            resume(snap)
+            #expect(rd16(req + 16) == 1)                                      // nothing during the restore
+            appletalk_poll()
+            #expect(Int16(bitPattern: rd16(req + 16)) == -1277)               // errOpening
+            #expect(rd16(ccb + 6) == 6)                                       // sClosed
         }
 
         /// A synchronous ATP SendRequest gives its call up for the drain; made

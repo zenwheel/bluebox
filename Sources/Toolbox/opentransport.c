@@ -1858,8 +1858,9 @@ static void lose_connection(provider *p)
 /* The descriptors are the old process's: forgotten (never closed: here
  * they may be another file's), and each TCP or UDP endpoint has a new
  * socket with the options it had, bound again to its old address when it
- * was bound to one, listening again with its queue; a connection being
- * made is made again (the other end never had it); one made is lost.
+ * was bound to one, listening again with its queue; a connection made is
+ * lost, and one being made failed (kETIMEDOUTErr, T_DISCONNECT): it is
+ * not made again hours later, the program tries again if it wants to.
  * A connection waiting for OTAccept is gone with the old process. */
 void ot_after_resume(void)
 {
@@ -1901,13 +1902,13 @@ void ot_after_resume(void)
         if (p->kind != P_TCP)
             continue;
         if (p->state == T_OUTCON && p->connecting) {
-            int r = connect(p->fd, (struct sockaddr *)&p->peer, sizeof p->peer);
-            if (r < 0 && errno != EINPROGRESS) {
-                lose_connection(p);
-                continue;
-            }
-            p->connecting = r < 0;
-            p->connected = r == 0;
+            /* As when the other end never answers: T_DISCONNECT and back
+             * to T_IDLE; a blocking OTConnect that gave up for the drain
+             * stays in T_OUTCON, and made again it ends with the error. */
+            lose_connection(p);
+            p->disc_reason = ETIMEDOUT;
+            if (p->gave_call != GAVE_CONNECT)
+                p->state = T_IDLE;
             connecting++;
         } else if (p->state == T_OUTCON || p->state == T_DATAXFER || p->state == T_OUTREL || p->state == T_INREL) {
             lose_connection(p);
@@ -1915,7 +1916,7 @@ void ot_after_resume(void)
         }
     }
     if (n)
-        LOGF(LOG_IDLE, "resume: Open Transport: %d provider%s: %d bound again, %d listening again, %d connect%s made "
-             "again, %d TCP connection%s ended\n", n, n == 1 ? "" : "s", bound_again, listening, connecting,
+        LOGF(LOG_IDLE, "resume: Open Transport: %d provider%s: %d bound again, %d listening again, %d connect%s "
+             "failed, %d TCP connection%s ended\n", n, n == 1 ? "" : "s", bound_again, listening, connecting,
              connecting == 1 ? "" : "s", ended, ended == 1 ? "" : "s");
 }

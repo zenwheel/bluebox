@@ -427,12 +427,19 @@ void adsp_reset(void) { memset(ends, 0, sizeof ends); }
 /* Resumed (appletalk_after_resume): an open connection is over, its other
  * end long since gone or gone on without it.  It is told so (close advice,
  * in case the other end is still there) and torn down at the next poll,
- * its reads finishing as for a close.  An open being made goes on asking,
- * a passive one and a listener go on waiting. */
+ * its reads finishing as for a close.  An open being made fails at the
+ * next poll with errOpening, as when the other end never answers (not
+ * asked again hours later: the program tries again if it wants to); a
+ * passive one and a listener go on waiting. */
 void adsp_after_resume(void)
 {
     for (int i = 0; i < MAX_ENDS; i++) {
         dsp_end *e = &ends[i];
+        if (e->used && e->state == sOpening && e->open_pb) {
+            e->oc_tries = 0;
+            e->oc_next = 0;
+            continue;
+        }
         if (!e->used || e->listener || (e->state != sOpen && e->state != sClosing))
             continue;
         send_control(e, C_CLOSE, false);

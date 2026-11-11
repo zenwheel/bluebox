@@ -1,17 +1,21 @@
 // Hibernated programs, as `bluebox run`, the shell and a program's own
 // process all see them: a snapshot file (hibernate.c's, with the run's
-// launch record in its head) and an entry in the registry of running
-// programs with the state hibernated, which outlives the process.
+// launch record in its head, a thumbnail of the screen among it) and an
+// entry in the registry of running programs with the state hibernated,
+// which outlives the process.  Each hibernation adds a snapshot and an
+// entry; resuming one keeps both, so a program can go back to any of its
+// snapshots until it is deleted (to the Trash).  A program keeps its newest
+// few (HibernatedSnapshots.tidy, after each hibernation).
 //
 // What opening a hibernated program does (ResumePolicy): an interactive
 // run of it (a double-click in the shell, its bundle, the Dock, an exported
-// application, a login item, `bluebox run` from a terminal) resumes its
-// newest snapshot instead of launching it; --fresh starts it fresh and
-// moves the snapshot to the Trash; --new starts another copy and leaves the
-// snapshot alone.  A headless run never resumes unless asked (--resume), so
-// a census or a menu walk of a program the user hibernated leaves it be.
-// A snapshot another build wrote is never resumed or deleted without the
-// user choosing: the run asks.
+// application, a login item, `bluebox run` from a terminal) shows its
+// snapshots (SnapshotPicker) to resume one, start fresh or delete some;
+// --fresh starts it fresh and --new starts another copy, both leaving the
+// snapshots alone.  A headless run never resumes unless asked (--resume
+// takes the newest, --resume FILE that one), so a census or a menu walk of
+// a program the user hibernated leaves it be.  A snapshot another build
+// wrote is never resumed: the picker says so, and it can be deleted there.
 
 import Foundation
 import Toolbox
@@ -35,9 +39,16 @@ public struct HibernateRecord: Codable, Equatable, Sendable {
     public var depth: Int32?
     /// How it was shown: rootless, screen, background or headless.
     public var display: String?
+    /// The Mac it was presented as ("Macintosh Quadra 800").
+    public var machine: String?
+    /// The screen when it hibernated, small (a PNG at most
+    /// SnapshotThumbnail.width pixels wide), for choosing between
+    /// snapshots.  Older snapshots have none.
+    public var thumbnail: Data?
 
     public init(args: [String], program: String, title: String, saved: Date, instructions: UInt64, drainedAt: String,
-                screen: [Int32]? = nil, depth: Int32? = nil, display: String? = nil) {
+                screen: [Int32]? = nil, depth: Int32? = nil, display: String? = nil, machine: String? = nil,
+                thumbnail: Data? = nil) {
         self.args = args
         self.program = program
         self.title = title
@@ -47,6 +58,8 @@ public struct HibernateRecord: Codable, Equatable, Sendable {
         self.screen = screen
         self.depth = depth
         self.display = display
+        self.machine = machine
+        self.thumbnail = thumbnail
     }
 
     public var json: String {
@@ -117,32 +130,41 @@ public enum SnapshotStatus: Equatable, Sendable {
     case cannotResume(String)
 }
 
-/// What a run of a program does about its hibernated snapshot.
+/// What a run of a program does about its hibernated snapshots.
 public enum ResumeChoice: Equatable, Sendable {
-    /// Launched fresh (nothing hibernated, or a run that never resumes).
+    /// Launched fresh (nothing hibernated, --fresh or --new, or a run that
+    /// never resumes); the snapshots are kept.
     case launch
     case resume(snapshot: String)
-    /// The entry's file is gone: the entry is forgotten and the program
-    /// launched fresh.
+    /// The snapshot's file is gone: a headless run says so (its entry
+    /// forgotten; one named with --resume FILE ends the run).
     case missing(snapshot: String)
-    /// It cannot resume here (another build's, or unreadable): ask whether to
-    /// start fresh (the snapshot to the Trash) or keep it (nothing started).
+    /// It cannot resume here (another build's, or unreadable): a headless
+    /// run says so and ends.
     case ask(snapshot: String, reason: String)
-    /// --fresh: the snapshot to the Trash, its entry forgotten, a fresh launch.
-    case discard(snapshot: String)
+    /// An interactive run: the user picks one of these (newest first) or
+    /// starts fresh (SnapshotPicker).
+    case pick([String])
 }
 
 public enum ResumePolicy {
-    /// `hibernated`: the program's hibernated entries, newest first.
-    /// `resumes`: the run resumes a hibernated program (an interactive run,
-    /// or a headless one with --resume); `fresh` and `newCopy` are --fresh and
-    /// --new.  A program running already is brought forward before this is
-    /// asked (registerRun), so its live entry never gets here.
-    public static func choose(hibernated: [RunningProgram], resumes: Bool, fresh: Bool, newCopy: Bool,
+    /// `snapshots`: the program's hibernated snapshots, newest first (their
+    /// files there: HibernatedSnapshots.snapshots(of:)).  `resumes`: the run
+    /// resumes a hibernated program (an interactive run, or a headless one
+    /// with --resume); `interactive` runs ask which; `named` is --resume
+    /// FILE's; `fresh` and `newCopy` are --fresh and --new.  A program
+    /// running already is brought forward before this is asked
+    /// (registerRun), so its live entry never gets here.
+    public static func choose(snapshots: [String], resumes: Bool, interactive: Bool, fresh: Bool, newCopy: Bool,
+                              named: String? = nil,
                               status: (String) -> SnapshotStatus = SnapshotFile.problem) -> ResumeChoice {
-        guard resumes || fresh, !newCopy, let entry = hibernated.first else { return .launch }
-        guard let snapshot = entry.snapshot else { return .launch }
-        if fresh { return .discard(snapshot: snapshot) }
+        if let named { return verdict(named, status) }
+        guard resumes, !fresh, !newCopy, let newest = snapshots.first else { return .launch }
+        if interactive { return .pick(snapshots) }
+        return verdict(newest, status)
+    }
+
+    static func verdict(_ snapshot: String, _ status: (String) -> SnapshotStatus) -> ResumeChoice {
         switch status(snapshot) {
         case .resumable: return .resume(snapshot: snapshot)
         case .missing: return .missing(snapshot: snapshot)
@@ -238,9 +260,137 @@ public struct SnapshotInfo: Equatable, Sendable {
     /// A hibernated entry names it: opening its program resumes it.
     public var entered: Bool
 
+    /// When its entry says it hibernated (a program's own listing).
+    public var hibernatedAt: Date?
+
     /// What it is of: the record's title, else the file's name.
     public var title: String { record?.title ?? (path as NSString).lastPathComponent }
-    public var saved: Date { record?.saved ?? modified }
+    public var saved: Date { record?.saved ?? hibernatedAt ?? modified }
+    public var thumbnail: Data? { record?.thumbnail }
+    /// Why it cannot be resumed here, or nil.
+    public var unresumable: String? { problem ?? (sameBuild ? nil : SnapshotProblem.otherBuild) }
+
+    /// "Macintosh Quadra 800 · 640×480, 256 colors · 3.2 MB": what the
+    /// picker says under its date.
+    public var details: String {
+        var parts: [String] = []
+        if let m = record?.machine { parts.append(m) }
+        if let sc = record?.screen, sc.count == 2 {
+            parts.append("\(sc[0])×\(sc[1])" + (record?.depth.map { ", " + Self.colors($0) } ?? ""))
+        }
+        parts.append(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
+        return parts.joined(separator: " · ")
+    }
+
+    /// A screen depth in words.
+    public static func colors(_ depth: Int32) -> String {
+        switch depth {
+        case 1: return "black and white"
+        case 2: return "4 colors"
+        case 4: return "16 colors"
+        case 8: return "256 colors"
+        case 16: return "thousands of colors"
+        case 32, 24: return "millions of colors"
+        default: return "\(depth)-bit"
+        }
+    }
+}
+
+/// The picture of the screen each snapshot carries.
+public enum SnapshotThumbnail {
+    /// Its width at most, in pixels (its height in proportion).
+    public static let width: Int32 = 160
+
+    /// A PNG's width and height (from its header), or nil if it is none.
+    public static func size(_ png: Data) -> (width: Int, height: Int)? {
+        let b = [UInt8](png.prefix(24))
+        guard b.count == 24, b[0..<8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+              b[12..<16] == [0x49, 0x48, 0x44, 0x52] else { return nil } // IHDR
+        func be(_ i: Int) -> Int { Int(b[i]) << 24 | Int(b[i + 1]) << 16 | Int(b[i + 2]) << 8 | Int(b[i + 3]) }
+        return (be(16), be(20))
+    }
+}
+
+/// Choosing a snapshot when a program with several (or one) is opened: one
+/// row each, newest first, with its thumbnail (or a placeholder), when it
+/// hibernated and on what; Resume goes on from the chosen one, Start Fresh
+/// launches the program anew (the snapshots kept), Move to Trash deletes
+/// the chosen one there and then.  The model of the window the run shows
+/// (Hibernate.swift), without AppKit.
+public struct SnapshotPicker: Equatable {
+    public enum Choice: Equatable, Sendable {
+        case resume(String)
+        case startFresh
+        /// Nothing started (the window closed, or Cancel).
+        case cancel
+    }
+
+    public struct Row: Equatable, Identifiable, Sendable {
+        public var info: SnapshotInfo
+        public var id: String { info.path }
+        public var path: String { info.path }
+        /// "Today 14:05", "Yesterday 09:30", "2026-11-06 01:23".
+        public var when: String
+        public var details: String { info.details }
+        public var thumbnail: Data? { info.thumbnail }
+        /// No thumbnail (a snapshot from before they were kept): the
+        /// window draws a placeholder.
+        public var placeholder: Bool { thumbnail == nil }
+        public var resumable: Bool { info.unresumable == nil }
+        public var problem: String? { info.unresumable }
+    }
+
+    public let title: String
+    public private(set) var rows: [Row]
+    /// The chosen row's path.
+    public var selection: String?
+
+    public init(title: String, snapshots: [SnapshotInfo], now: Date = Date(), timeZone: TimeZone = .current) {
+        self.title = title
+        rows = HibernatedSnapshots.newestFirst(snapshots).map {
+            Row(info: $0, when: Self.when($0.saved, now: now, timeZone: timeZone))
+        }
+        selection = rows.first { $0.resumable }?.path ?? rows.first?.path
+    }
+
+    /// The program's snapshots, as opening it finds them.
+    public init(program: String, title: String, registry: ProgramRegistry) {
+        self.init(title: title, snapshots: HibernatedSnapshots.snapshots(of: program, registry: registry))
+    }
+
+    public var selected: Row? { rows.first { $0.path == selection } }
+    /// Resume is offered: the chosen one resumes here.
+    public var canResume: Bool { selected?.resumable ?? false }
+
+    /// Resume: the chosen snapshot, if it resumes here.
+    public func resume() -> Choice? {
+        guard let s = selected, s.resumable else { return nil }
+        return .resume(s.path)
+    }
+
+    /// Move to Trash: the chosen one deleted (delete's way) and its row
+    /// gone, the one after it chosen (or before it, at the end).
+    public mutating func deleteSelected(registry: ProgramRegistry, toTrash: Bool = true) throws {
+        guard let path = selection, let i = rows.firstIndex(where: { $0.path == path }) else { return }
+        try HibernatedSnapshots.delete(path, registry: registry, toTrash: toTrash)
+        rows.remove(at: i)
+        selection = rows.isEmpty ? nil : rows[min(i, rows.count - 1)].path
+    }
+
+    /// When it hibernated, in words relative to now.
+    public static func when(_ date: Date, now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = timeZone
+        f.dateFormat = "HH:mm"
+        let time = f.string(from: date)
+        if cal.isDate(date, inSameDayAs: now) { return "Today \(time)" }
+        if let y = cal.date(byAdding: .day, value: -1, to: now), cal.isDate(date, inSameDayAs: y) { return "Yesterday \(time)" }
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f.string(from: date)
+    }
 }
 
 public enum HibernatedSnapshots {
@@ -256,20 +406,68 @@ public enum HibernatedSnapshots {
         }
         let entered = Set(registry.hibernatedEntries().compactMap(\.snapshot).map(RunningProgram.canonical))
         for p in entered where !paths.contains(p) && fm.fileExists(atPath: p) { paths.append(p) }
-        return paths.map { path in
-            let attrs = (try? fm.attributesOfItem(atPath: path)) ?? [:]
-            var info = SnapshotInfo(path: path, bytes: (attrs[.size] as? NSNumber)?.uint64Value ?? 0,
-                                    modified: attrs[.modificationDate] as? Date ?? .distantPast, record: nil,
-                                    sameBuild: false, problem: nil, entered: entered.contains(path))
-            switch SnapshotFile.read(path) {
-            case .success(let r):
-                info.record = r.record
-                info.sameBuild = r.sameBuild
-            case .failure(let p):
-                info.problem = p.message
+        return newestFirst(paths.map { info($0, entered: entered.contains($0)) })
+    }
+
+    /// One program's snapshots, those its hibernated entries name, newest
+    /// first: what opening it offers.  An entry whose file is gone is
+    /// forgotten.
+    public static func snapshots(of program: String, registry: ProgramRegistry) -> [SnapshotInfo] {
+        var out: [SnapshotInfo] = []
+        var seen = Set<String>()
+        for e in registry.hibernated(for: program) {
+            guard let s = e.snapshot.map(RunningProgram.canonical), seen.insert(s).inserted else { continue }
+            guard FileManager.default.fileExists(atPath: s) else {
+                registry.forget(snapshot: s)
+                continue
             }
-            return info
-        }.sorted { $0.saved == $1.saved ? $0.path < $1.path : $0.saved > $1.saved }
+            var i = info(s, entered: true)
+            i.hibernatedAt = e.hibernatedDate
+            out.append(i)
+        }
+        return newestFirst(out)
+    }
+
+    /// The file's size, date and launch record.
+    public static func info(_ path: String, entered: Bool) -> SnapshotInfo {
+        let attrs = (try? FileManager.default.attributesOfItem(atPath: path)) ?? [:]
+        var info = SnapshotInfo(path: path, bytes: (attrs[.size] as? NSNumber)?.uint64Value ?? 0,
+                                modified: attrs[.modificationDate] as? Date ?? .distantPast, record: nil,
+                                sameBuild: false, problem: nil, entered: entered)
+        switch SnapshotFile.read(path) {
+        case .success(let r):
+            info.record = r.record
+            info.sameBuild = r.sameBuild
+        case .failure(let p):
+            info.problem = p.message
+        }
+        return info
+    }
+
+    static func newestFirst(_ list: [SnapshotInfo]) -> [SnapshotInfo] {
+        list.sorted { $0.saved == $1.saved ? $0.path < $1.path : $0.saved > $1.saved }
+    }
+
+    /// How many of a program's snapshots are kept when it hibernates again
+    /// (AppSettings.keepSnapshots overrides it).
+    public static let defaultKeep = 5
+
+    /// After a program hibernates: its snapshots in the Hibernated folders
+    /// beyond the newest `keep` deleted (to the Trash, see delete), oldest
+    /// first, so they never pile up unseen; one saved elsewhere
+    /// (--hibernate-to) is the user's own and left alone.  Returns those
+    /// deleted.
+    @discardableResult
+    public static func tidy(program: String, keep: Int, folders: [String], registry: ProgramRegistry,
+                            toTrash: Bool = true) -> [String] {
+        let roots = folders.map { RunningProgram.canonical($0) + "/" }
+        let mine = snapshots(of: program, registry: registry).filter { s in roots.contains { s.path.hasPrefix($0) } }
+        guard mine.count > max(keep, 1) else { return [] }
+        var gone: [String] = []
+        for s in mine.dropFirst(max(keep, 1)).reversed() {
+            if (try? delete(s.path, registry: registry, toTrash: toTrash)) != nil { gone.append(s.path) }
+        }
+        return gone
     }
 
     /// A snapshot deleted, to the Trash (where it can be put back from)
