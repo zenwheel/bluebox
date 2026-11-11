@@ -23,6 +23,9 @@ bool fm_path_of_node(int32_t node, char *out, size_t outsize);
 int16_t fm_vref_of_path(const char *host);
 /* Whether a host path is a volume's root (and so has no parent). */
 bool fm_is_volume_root(const char *host);
+/* Whether it is a folder at the main volume's root that stands for the
+ * host's (Host, or ~ for the home folder): fixed, in the root. */
+bool fm_is_host_root(const char *host);
 /* A directory's ID or a file's number, as its volume reports it. */
 uint32_t fm_cat_id(const char *host);
 /* The ID of the folder an object is in; 1 for a volume's root. */

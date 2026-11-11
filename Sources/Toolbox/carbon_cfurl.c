@@ -639,13 +639,13 @@ bool cfurl_host_path(gaddr ref, char *out, size_t outsize)
     return ok;
 }
 
-/* A host path's parent as the File Manager sees it: the Host folder's
- * is the volume it is shown in. */
+/* A host path's parent as the File Manager sees it: the Host and ~ folders are
+ * in the volume they are shown in. */
 static bool host_parent(const char *host, char *out, size_t outsize)
 {
     if (fm_is_volume_root(host))
         return false;
-    if (!strcmp(host, "/")) {
+    if (fm_is_host_root(host)) {
         int16_t vref;
         uint8_t name[32];
         int16_t drive, driver;

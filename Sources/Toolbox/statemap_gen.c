@@ -1637,6 +1637,8 @@ const hb_static hb_statics[] = {
     { "Toolbox/filemgr.c", "fcb_table", 4, 0 },
     { "Toolbox/filemgr.c", "fcbs", 336000, 57 },
     { "Toolbox/filemgr.c", "grants", 2048, 58 },
+    { "Toolbox/filemgr.c", "home_override", 1024, 0 },
+    { "Toolbox/filemgr.c", "home_path", 1024, 0 },
     { "Toolbox/filemgr.c", "last_data_open", 1024, 0 },
     { "Toolbox/filemgr.c", "mounts", 18368, 0 },
     { "Toolbox/filemgr.c", "nappls", 4, 0 },
