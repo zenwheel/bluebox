@@ -1580,7 +1580,8 @@ const hb_static hb_statics[] = {
     { "Toolbox/events.c", "key_new", 1, 0 },
     { "Toolbox/events.c", "key_presses", 4, 0 },
     { "Toolbox/events.c", "keymap", 16, 0 },
-    { "Toolbox/events.c", "keys_tapped", 16, 0 },
+    { "Toolbox/events.c", "keys_polled", 1, 0 },
+    { "Toolbox/events.c", "keys_tapped", 32, 0 },
     { "Toolbox/events.c", "last_relative_ns", 8, 12 },
     { "Toolbox/events.c", "last_warp_ns", 8, 12 },
     { "Toolbox/events.c", "mirrored", 4, 0 },
@@ -2294,6 +2295,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/qd_cqd.c", "ngworlds", 8, 12 },
     { "Toolbox/qd_cqd.c", "palette_updates", 2, 0 },
     { "Toolbox/qd_cqd.c", "qd_search_color.busy", 1, 0 },
+    { "Toolbox/qd_cqd.c", "reserved", 256, 0 },
     { "Toolbox/qd_cqd.c", "system_palette", 4, 0 },
     { "Toolbox/qd_cqd.c", "tb_GetCTSeed.seed", 4, 0 },
     { "Toolbox/qd_cqd.c", "window_pal", 512, 0 },
@@ -2699,7 +2701,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1693;
+const unsigned hb_nstatics = 1695;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

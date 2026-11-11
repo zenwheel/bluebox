@@ -958,6 +958,7 @@ static int entries(gaddr pal) { return pal && rd32(pal) ? (int16_t)rd16(rd32(pal
  * kept in the entry's ciPrivate as (generation << 16 | index + 1), so a new
  * table (a depth change, RestoreDeviceClut) ends them all. */
 static bool claimed[256];
+static bool reserved[256]; /* of those, the animated entries' */
 static gaddr claimed_for; /* the table the slots belong to */
 static uint16_t generation = 1;
 
@@ -971,6 +972,7 @@ static gaddr indexed_table(void)
     gaddr dt = device_table();
     if (dt != claimed_for) {
         memset(claimed, 0, sizeof claimed);
+        memset(reserved, 0, sizeof reserved);
         claimed_for = dt;
         generation++;
     }
@@ -992,8 +994,9 @@ static void set_slot_color(gaddr dt, int idx, gaddr rgb)
 }
 
 /* Give an entry a slot: its own index if explicit, else a free one from the
- * top; never the first (white) or last (black). */
-static int claim_slot(gaddr pal, int i, bool explicit_)
+ * top; never the first (white) or last (black).  An animated entry's slot
+ * is reserved: no tolerant entry is given it. */
+static int claim_slot(gaddr pal, int i, bool explicit_, bool animated)
 {
     gaddr dt = indexed_table();
     int n = table_size(dt);
@@ -1014,6 +1017,7 @@ static int claim_slot(gaddr pal, int i, bool explicit_)
     if (idx < 0)
         return -1;
     claimed[idx] = true;
+    reserved[idx] = animated;
     wr32(entry(pal, i) + ColorInfo_ciPrivate_off, (uint32_t)generation << 16 | (uint32_t)(idx + 1));
     return idx;
 }
@@ -1023,7 +1027,7 @@ static void release_slots(gaddr pal)
     for (int i = 0; i < entries(pal); i++) {
         int idx = slot_of(pal, i);
         if (idx >= 0)
-            claimed[idx] = false;
+            claimed[idx] = reserved[idx] = false;
         wr32(entry(pal, i) + ColorInfo_ciPrivate_off, 0);
     }
 }
@@ -1043,35 +1047,118 @@ static uint16_t color_distance(gaddr a, gaddr b)
     return d;
 }
 
+/* The nearest colour in the table: its index and how far it is.  Ties go
+ * to the higher index, as an inverse table built from the top gives black
+ * its usual last place rather than another black slot. */
+static int nearest_index(gaddr dt, gaddr rgb, uint16_t *dist)
+{
+    int best = 0;
+    uint16_t bd = 0xFFFF;
+    for (int k = table_size(dt) - 1; k >= 0; k--) {
+        uint16_t d = color_distance(rd32(dt) + 8 + (uint32_t)k * 8 + 2, rgb);
+        if (d < bd) {
+            bd = d;
+            best = k;
+        }
+    }
+    *dist = bd;
+    return best;
+}
+
+/* Tolerant entries with no colour close enough take indexes as the
+ * Palette Manager's arbitration gave them out: its nearest colour's index
+ * if no other entry has it yet, else the next on a list of the indexes no
+ * palette owns, then those owned by tolerant entries (not animated ones),
+ * each walked from black down to white; on an 8-bit screen an index's
+ * nibbles are swapped, which spreads them over the table.  Once one has
+ * missed, a palette of 33 or more tolerant entries with tolerances of
+ * $400 or less takes the list's next index without looking for a near
+ * colour.  S.C.OUT's sprites hold the indexes this gives its 'pltt' 128. */
 static void activate(gaddr pal)
 {
     gaddr dt = indexed_table();
     if (!pal || !rd32(pal) || !dt)
         return;
-    bool changed = false;
+    int n = table_size(dt), black = n - 1;
+    bool changed = false, taken[256] = { false };
+    taken[0] = taken[black] = true;
+    int tolerators = 0;
+    /* Explicit and animated entries first: their own index, or a slot. */
     for (int i = 0; i < entries(pal); i++) {
         gaddr e = entry(pal, i);
         uint16_t usage = rd16(e + ColorInfo_ciUsage_off);
         int idx = slot_of(pal, i);
         if (usage & pmAnimated) {
             if (idx < 0)
-                idx = claim_slot(pal, i, usage & pmExplicit);
+                idx = claim_slot(pal, i, usage & pmExplicit, true);
         } else if (usage & pmTolerant) {
-            if (idx < 0) {
-                uint16_t best = 0xFFFF;
-                for (int k = 0; k < table_size(dt); k++) {
-                    uint16_t d = color_distance(rd32(dt) + 8 + (uint32_t)k * 8 + 2, e + ColorInfo_ciRGB_off);
-                    if (d < best)
-                        best = d;
-                }
-                if (best > rd16(e + ColorInfo_ciTolerance_off))
-                    idx = claim_slot(pal, i, usage & pmExplicit);
+            if (!(usage & pmExplicit)) {
+                tolerators++;
+                continue;
             }
+            if (idx < 0)
+                idx = claim_slot(pal, i, true, false);
+        } else {
+            continue;
         }
         if (idx >= 0) {
+            taken[idx] = true;
             set_slot_color(dt, idx, e + ColorInfo_ciRGB_off);
             changed = true;
         }
+    }
+    /* The list of indexes to give out. */
+    int list[256], nlist = 0, next = 0;
+    for (int pass = 0; pass < 2; pass++)
+        for (int d = black; d >= 0; d--) {
+            int k = black & 0x10 ? ((d >> 4) | (d << 4)) & 0xFF : d;
+            if (k >= n || taken[k] || (pass == 0 ? claimed[k] : !claimed[k] || reserved[k]))
+                continue;
+            bool listed = false;
+            for (int j = 0; j < nlist && !listed; j++)
+                listed = list[j] == k;
+            if (!listed)
+                list[nlist++] = k;
+        }
+    bool missed = false;
+    for (int i = 0; i < entries(pal); i++) {
+        gaddr e = entry(pal, i);
+        uint16_t usage = rd16(e + ColorInfo_ciUsage_off);
+        if ((usage & (pmAnimated | pmTolerant | pmExplicit)) != pmTolerant)
+            continue;
+        uint16_t tolerance = rd16(e + ColorInfo_ciTolerance_off);
+        int idx = slot_of(pal, i);
+        if (idx >= 0)
+            claimed[idx] = false; /* given out again below */
+        wr32(e + ColorInfo_ciPrivate_off, 0);
+        int k = -1;
+        if (tolerators < 33 || !missed || tolerance > 0x400) {
+            uint16_t dist;
+            k = nearest_index(dt, e + ColorInfo_ciRGB_off, &dist);
+            if (dist <= tolerance) {
+                taken[k] = true; /* close enough: nothing changes */
+                if (k == idx) { /* its own slot still: it keeps it */
+                    claimed[k] = true;
+                    wr32(e + ColorInfo_ciPrivate_off, (uint32_t)generation << 16 | (uint32_t)(k + 1));
+                }
+                continue;
+            }
+            if (taken[k] || reserved[k]) /* another's, or animating */
+                k = -1;
+        }
+        while (k < 0 && next < nlist)
+            if (!taken[list[next]])
+                k = list[next++];
+            else
+                next++;
+        if (k < 0)
+            continue; /* no index left: the nearest colour draws it */
+        missed = true;
+        taken[k] = claimed[k] = true;
+        reserved[k] = false;
+        wr32(e + ColorInfo_ciPrivate_off, (uint32_t)generation << 16 | (uint32_t)(k + 1));
+        set_slot_color(dt, k, e + ColorInfo_ciRGB_off);
+        changed = true;
     }
     if (changed)
         bump_seed(dt);
@@ -1138,6 +1225,7 @@ void tb_RestoreDeviceClut(gaddr gdh)
             wr16(rd32(dt) + 8 + (uint32_t)k * 8 + 2 + (uint32_t)c * 2, rgb[c]);
     }
     memset(claimed, 0, sizeof claimed);
+    memset(reserved, 0, sizeof reserved);
     generation++;
     bump_seed(dt);
 }

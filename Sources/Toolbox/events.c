@@ -67,18 +67,23 @@ static bool button_down;
 static uint32_t presses, key_presses; /* counted, so a quick click is never missed */
 static uint16_t key_mods;
 static uint8_t keymap[16];
-/* Keys pressed since the program last looked at the keyboard (GetKeys or
- * KeyMap): a tap let go of before it looks still shows once, as the
- * key-down event it gets for it says it should. */
-static uint8_t keys_tapped[16];
+/* Keys pressed since the program last looked at the keyboard: a tap let
+ * go of before it looks still shows once, as the key-down event it gets
+ * for it says it should.  Kept apart for GetKeys and for the KeyMap in low
+ * memory, written between slices: that write must not use up a tap that
+ * a program polling GetKeys has yet to see (S.C.OUT's opening picture waits so). */
+enum { TAP_GETKEYS, TAP_KEYMAP };
+static uint8_t keys_tapped[2][16];
+static bool keys_polled; /* the program has called GetKeys */
 
-/* The keyboard as the program sees it: what is down, and what was tapped
- * since it last looked; then forget the taps.  The lock is held. */
-static void keys_seen(uint8_t out[16])
+/* The keyboard as the program sees it through one of them: what is down,
+ * and what was tapped since it last looked; then forget those taps.  The
+ * lock is held. */
+static void keys_seen(uint8_t out[16], int via)
 {
     for (int i = 0; i < 16; i++) {
-        out[i] = keymap[i] | keys_tapped[i];
-        keys_tapped[i] = 0;
+        out[i] = keymap[i] | keys_tapped[via][i];
+        keys_tapped[via][i] = 0;
     }
 }
 BB_HOST static bool host_attached;
@@ -300,7 +305,7 @@ void events_sync_lowmem(void)
         written_pt = pt;
     bool down = button_down;
     uint8_t keys[16];
-    keys_seen(keys);
+    keys_seen(keys, TAP_KEYMAP);
     bool key_changed = key_new, button_changed = button_new, elsewhere = elsewhere_new;
     uint16_t last = key_last;
     key_new = button_new = elsewhere_new = false;
@@ -505,7 +510,8 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
     if (keycode >= 0 && keycode < 128) {
         if (down) {
             keymap[keycode / 8] |= (uint8_t)(1u << (keycode % 8));
-            keys_tapped[keycode / 8] |= (uint8_t)(1u << (keycode % 8));
+            for (int via = 0; via < 2; via++)
+                keys_tapped[via][keycode / 8] |= (uint8_t)(1u << (keycode % 8));
         }
         else
             keymap[keycode / 8] &= (uint8_t)~(1u << (keycode % 8));
@@ -871,8 +877,10 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     }
     uint8_t keys[16];
     bool key_event = found && remove && (e.what == keyDown || e.what == autoKey || e.what == keyUp);
-    if (key_event)
-        keys_seen(keys);
+    if (key_event) {
+        keys_seen(keys, TAP_KEYMAP);
+        memset(keys_tapped[TAP_GETKEYS], 0, sizeof keys_tapped[TAP_GETKEYS]); /* it has its event */
+    }
     pthread_mutex_unlock(&lock);
     if (key_event)
         gput(LM_KeyMap, keys, sizeof keys);
@@ -1258,7 +1266,17 @@ int8_t tb_Button(void)
             }
         pthread_mutex_unlock(&lock);
     }
-    if (!down && !host_attached)
+    /* Headless, a key pressed since a program polling the keyboard last
+     * looked is its to see before the clock moves on to the key's release:
+     * S.C.OUT waits for a key by calling Button and GetKeys in turn. */
+    bool key_unseen = false;
+    if (!down && !host_attached && keys_polled) {
+        pthread_mutex_lock(&lock);
+        for (int i = 0; i < 16 && !key_unseen; i++)
+            key_unseen = keys_tapped[TAP_GETKEYS][i] != 0;
+        pthread_mutex_unlock(&lock);
+    }
+    if (!down && !host_attached && !key_unseen)
         machine_idle();
     if (down)
         idle_work();
@@ -1384,9 +1402,10 @@ void events_start_stall_log(void)
 void tb_GetKeys(gaddr keys)
 {
     note_poll();
+    keys_polled = true;
     uint8_t now[16];
     pthread_mutex_lock(&lock);
-    keys_seen(now);
+    keys_seen(now, TAP_GETKEYS);
     pthread_mutex_unlock(&lock);
     gput(keys, now, 16);
     /* A program waiting for a key by polling (Diamonds' title, which never
@@ -1445,6 +1464,8 @@ void events_reset(void)
     relative_read = false;
     key_mods = 0;
     memset(keymap, 0, sizeof keymap);
+    memset(keys_tapped, 0, sizeof keys_tapped);
+    keys_polled = false;
     key_last = 0;
     key_new = button_new = false;
     mouse_h = 100;

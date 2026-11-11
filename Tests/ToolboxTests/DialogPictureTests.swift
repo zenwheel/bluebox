@@ -707,6 +707,45 @@ extension BlueBox {
             #expect(rgba(110, 110) == [255, 0, 0])
         }
 
+        /// A tolerant palette's colours go where the Palette Manager's
+        /// arbitration put them: with none near enough, the indexes come
+        /// from black down to white with their nibbles swapped, once one
+        /// has missed in a palette of 33 or more.  S.C.OUT clears the
+        /// screen's table to black and activates its 'pltt' 128 so, and its
+        /// sprites hold the indexes that gives.
+        @Test func tolerantColoursTakeTheArbitratedIndexes() {
+            machine_set_screen_depth(8)
+            defer { machine_set_screen_depth(1) }
+            launchTestApp()
+            let w = initToolbox()
+            let ct = rd32(PixMap_pmTable(rd32(GDevice_gdPMap(rd32(tb_GetMainDevice())))))
+            func color(_ k: Int) -> [UInt16] { (0..<3).map { rd16(ct + 8 + UInt32(k * 8 + 2 + $0 * 2)) } }
+            for k in 1..<256 { for c in 0..<3 { wr16(ct + 8 + UInt32(k * 8 + 2 + c * 2), 0) } }
+            func rgb(_ r: UInt16, _ g: UInt16, _ b: UInt16) -> UInt32 {
+                let p = tb_NewPtr(6, false, true)
+                wr16(p, r); wr16(p + 2, g); wr16(p + 4, b)
+                return p
+            }
+            let pal = tb_NewPalette(256, 0, 2, 0) // pmTolerant, tolerance 0
+            func rgbOf(_ i: Int) -> [UInt16] { i == 0 ? [0xFFFF, 0xFFFF, 0xFFFF] : i == 1 ? [0, 0, 0] : [UInt16(i) << 8, 0x1234, UInt16(i)] }
+            for i in 0..<256 { tb_SetEntryColor(pal, Int16(i), rgb(rgbOf(i)[0], rgbOf(i)[1], rgbOf(i)[2])) }
+            tb_SetPalette(w, pal, 1)
+            tb_ActivatePalette(w)
+            #expect(color(0) == [0xFFFF, 0xFFFF, 0xFFFF] && color(255) == [0, 0, 0])
+            #expect(color(0xEF) == rgbOf(2) && color(0xDF) == rgbOf(3) && color(0x0F) == rgbOf(16))
+            #expect(color(0xFE) == rgbOf(17) && color(0x1E) == rgbOf(31))
+            tb_DisposePalette(pal)
+            // A small palette's colour takes the index of its nearest.
+            tb_RestoreDeviceClut(0)
+            let small = tb_NewPalette(4, 0, 2, 0)
+            tb_SetEntryColor(small, 2, rgb(0xFFFF, 0xFFFF, 0xC000)) // nearest: 1, FFFF FFFF CCCC
+            tb_SetPalette(w, small, 1)
+            tb_ActivatePalette(w)
+            #expect(color(1) == [0xFFFF, 0xFFFF, 0xC000])
+            tb_DisposePalette(small)
+            tb_RestoreDeviceClut(0)
+        }
+
         /// Moving or sizing a hidden window leaves the windows under it as
         /// they were (Solitaire Till Dawn sizes its game window while its
         /// splash dialog shows, and never redraws the dialog).

@@ -123,6 +123,72 @@ extension BlueBox {
             tb_FlushEvents(-1, 0)
         }
 
+        /// Low memory's KeyMap, written between emulation slices, doesn't
+        /// use up a tap a program polling GetKeys has yet to see (S.C.OUT
+        /// waits for a key at its opening picture with Button and GetKeys);
+        /// the key's event handed over does.
+        @Test func tapsOutlastTheLowMemoryKeyMap() {
+            tb_FlushEvents(-1, 0)
+            let keys = tb_NewPtr(16, false, true)
+            machine_post_key(0x0D, 36, 0, 1, 0) // Return down and up
+            machine_post_key(0x0D, 36, 0, 0, 0)
+            events_sync_lowmem()
+            #expect(rd8(UInt32(LM_KeyMap) + 4) & 0x10 != 0) // key code 36: byte 4, bit 4
+            events_sync_lowmem()
+            #expect(rd8(UInt32(LM_KeyMap) + 4) & 0x10 == 0)
+            tb_GetKeys(keys)
+            #expect(rd8(keys + 4) & 0x10 != 0)
+            tb_GetKeys(keys)
+            #expect(rd8(keys + 4) & 0x10 == 0)
+            machine_post_key(0x0D, 36, 0, 1, 0)
+            machine_post_key(0x0D, 36, 0, 0, 0)
+            let evt = tb_NewPtr(16, false, true)
+            #expect(tb_GetOSEvent(8, evt)) // keyDownMask
+            tb_GetKeys(keys)
+            #expect(rd8(keys + 4) & 0x10 == 0)
+            tb_FlushEvents(-1, 0)
+        }
+
+        /// Headless, Button waiting for input lets the clock move on to the
+        /// next scripted input, but not past a key a program polling
+        /// GetKeys has yet to see: S.C.OUT calls Button and GetKeys in turn,
+        /// and the key's release would come before it looked.
+        @Test func buttonWaitsForAnUnseenKey() {
+            tb_FlushEvents(-1, 0)
+            let keys = tb_NewPtr(16, false, true)
+            tb_GetKeys(keys)
+            machine_post_key(0x0D, 36, 0, 1, 0)
+            machine_post_key(0x0D, 36, 0, 0, 0)
+            let before = g_cpu!.pointee.icount
+            #expect(tb_Button() == 0)
+            #expect(g_cpu!.pointee.icount == before)
+            tb_GetKeys(keys)
+            #expect(rd8(keys + 4) & 0x10 != 0)
+            #expect(tb_Button() == 0)
+            #expect(g_cpu!.pointee.icount > before)
+            tb_FlushEvents(-1, 0)
+        }
+
+        /// The System's key maps ('KMAP' 0, and 2 for the Extended Keyboard
+        /// KbdType says): raw key codes to virtual ones, the arrows and
+        /// Control moved, the right-hand modifiers their own.  S.C.OUT looks
+        /// the keys it reads with GetKeys up in KMAP KbdType.
+        @Test func theSystemHasKeyMaps() {
+            launchTestApp()
+            #expect(rd8(0x21E) == 2) // KbdType
+            for id: Int16 in [0, 2] {
+                let h = tb_GetResource(Int32(bitPattern: fourCC("KMAP")), id)
+                #expect(h != 0 && tb_GetHandleSize(h) == 134)
+                let p = rd32(h)
+                #expect(Int16(bitPattern: rd16(p)) == id)
+                let map = { (raw: UInt32) in rd8(p + 4 + raw) }
+                #expect(map(0x00) == 0x00 && map(0x5B) == 0x5B && map(0x24) == 0x24) // a, keypad 8, Return
+                #expect(map(0x3B) == 0x7B && map(0x3E) == 0x7E && map(0x36) == 0x3B) // left, up, Control
+                #expect(map(0x7B) == 0x3C && map(0x7D) == 0x3E) // right Shift, right Control
+                #expect(rd16(p + 132) == 0) // no exceptions
+            }
+        }
+
         /// A program moving the cursor itself (RawMouse and MTemp, then
         /// CrsrNew, as games recentring it do) moves the mouse: the host
         /// hears of it, and captured motion is added to where it put it.

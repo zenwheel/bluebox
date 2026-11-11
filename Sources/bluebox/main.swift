@@ -197,7 +197,8 @@ func usage() -> Never {
           --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
                      keydown:K and keyup:K (K a character, space, return, tab,
-                     escape, delete or an arrow: left, right, up, down; or shift,
+                     escape, delete, an arrow: left, right, up, down, or the keypad's
+                     kp0-kp9, kp., kp+, kp-, kp*, kp/, kp=, clear and enter; or shift,
                      option, control, command or capslock, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      the scroll wheel: wheel:x/y/n (n lines up, down when negative),
@@ -383,19 +384,27 @@ let scriptKeyCodes: [String: Int32] = {
                       ("left", 123), ("right", 124), ("down", 125), ("up", 126)] as [(String, Int32)] {
         codes[name] = k
     }
+    // The keypad: games that read GetKeys tell its keys from the main ones.
+    for (name, k) in [("kp0", 82), ("kp1", 83), ("kp2", 84), ("kp3", 85), ("kp4", 86), ("kp5", 87), ("kp6", 88),
+                      ("kp7", 89), ("kp8", 91), ("kp9", 92), ("kp.", 65), ("kp*", 67), ("kp+", 69), ("clear", 71),
+                      ("kp/", 75), ("enter", 76), ("kp-", 78), ("kp=", 81)] as [(String, Int32)] {
+        codes[name] = k
+    }
     return codes
 }()
 
 /// The character a scripted key name types.
 func scriptKeyChar(_ name: String) -> Int32 {
-    name.count == 1 ? Int32(name.utf8.first!) :
+    if name.count == 3, name.hasPrefix("kp") { return Int32(name.utf8.last!) } // the character it types
+    return name.count == 1 ? Int32(name.utf8.first!) :
         ["return": 13, "tab": 9, "space": 32, "delete": 8, "escape": 27, "left": 28, "right": 29,
-         "up": 30, "down": 31][name] ?? 0
+         "up": 30, "down": 31, "enter": 3, "clear": 27][name] ?? 0
 }
 
 /// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item,
 /// keydown:K and keyup:K (K a character or return, tab, space, delete, escape,
-/// left, right, up, down: held for games that poll the keyboard; or shift,
+/// left, right, up, down, a keypad key (kp0-kp9, kp., enter ...): held for
+/// games that poll the keyboard; or shift,
 /// option, control, command, capslock, held for the clicks and keys after them), and the mouse.  Each step is queued at an instruction count (the waits
 /// add up; other steps are spaced a little apart) and applied by the
 /// emulator when due, even while the application waits in the Toolbox.
