@@ -114,6 +114,60 @@ extension BlueBox {
             machine_post_mouse(120, 80, 0)
         }
 
+        /// The program's own Button poll at its own level is told the truth
+        /// while the machine drains: a game firing while its button is held
+        /// (Snood, Star Chaos, Shufflepuck's paddle) would otherwise see the
+        /// press end at the snapshot, which a run that never stopped did not.
+        @Test func theProgramsOwnButtonPollSeesItHeld() {
+            launchTestApp()
+            // CLR.B -(SP); _Button; MOVE.B (SP)+,D6; ADDQ.L #1,D7; BRA.S loop
+            _ = start([0x4227, 0xA974, 0x1C1F, 0x5287, 0x60F6])
+            machine_post_mouse(120, 80, 1)
+            _ = machine_run(100_000)
+            #expect(g_cpu!.pointee.d.6 & 0xFF != 0)
+            machine_drain_begin(true)
+            #expect(machine_run(50_000_000) == RUN_DRAINED) // no idle call: between slices
+            #expect(g_cpu!.pointee.d.6 & 0xFF != 0)         // still held as it drained
+            machine_drain_end()
+            machine_post_mouse(120, 80, 0)
+        }
+
+        /// A program summing Ticks as it runs: its slices (where Ticks moves
+        /// on) end at whole multiples of the instruction count, so a run
+        /// stopped and gone on with, as a resumed one is, sees Ticks change
+        /// at the same instructions as one run straight through.
+        @Test func slicesEndWhereTheyWouldHaveUnbroken() {
+            func sum(_ runs: [UInt64]) -> UInt32 {
+                launchTestApp()
+                _ = start([0xDCB8, 0x016A, 0x5287, 0x60F8]) // ADD.L Ticks,D6; ADDQ.L #1,D7; BRA.S loop
+                g_cpu!.pointee.d.6 = 0
+                for n in runs { _ = machine_run(n) }
+                return g_cpu!.pointee.d.6
+            }
+            #expect(sum([1_000_003, 2_000_000]) == sum([3_000_003]))
+        }
+
+        /// A snapshot between slices is taken once the slice's end is done
+        /// (Ticks moved on): the machine going on from it sees what one
+        /// that never stopped did.
+        @Test func goingOnFromBetweenSlicesMatchesAnUnbrokenRun() {
+            func sum(drain: Bool) -> UInt32 {
+                launchTestApp()
+                _ = start([0xDCB8, 0x016A, 0x5287, 0x60F8]) // ADD.L Ticks,D6; ADDQ.L #1,D7; BRA.S loop
+                g_cpu!.pointee.d.6 = 0
+                let end = machine_instruction_count() + 20_000_000
+                if drain {
+                    machine_drain_begin(true)
+                    #expect(machine_run(50_000_000) == RUN_DRAINED)
+                    #expect(String(cString: machine_drain_point()).hasPrefix("between instructions"))
+                    machine_drain_end()
+                }
+                _ = machine_run(end - machine_instruction_count())
+                return g_cpu!.pointee.d.6
+            }
+            #expect(sum(drain: true) == sum(drain: false))
+        }
+
         /// A drain is refused when its time is up only once the machine has
         /// also run its least: a busy host's slow machine gets as far as a
         /// fast one's.

@@ -71,6 +71,7 @@ BB_HOST static uint64_t deadline;              /* the host's monotonic clock */
 BB_HOST static uint64_t begun_ns, begun_at;    /* the host's clock and the instruction count when asked */
 BB_HOST static uint64_t grace_until;           /* the instruction count */
 BB_HOST static bool stopped_here;              /* the CPU stopped at a trap for the drain */
+BB_HOST static bool between;                   /* parked at a slice boundary, not a trap */
 BB_HOST static bool rewind_wanted;             /* a native abandoned its call */
 BB_HOST static char why[256];
 BB_HOST static uint64_t hibernate_at;          /* --hibernate-at: the instruction count, or 0 */
@@ -386,6 +387,7 @@ bool drain_slice_point(void)
         return true;
     }
     bool here = stopped_here;
+    between = !here;
     if (here) {
         c->stopped = false;
         g_ppc.stop = false;
@@ -411,3 +413,4 @@ bool drain_slice_point(void)
 }
 
 bool drain_exits(void) { return exits; }
+bool drain_between(void) { return between; }

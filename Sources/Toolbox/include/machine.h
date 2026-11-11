@@ -1010,6 +1010,9 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen);
 /* Whether a resumed program's date catches up to the host's (the default)
  * or goes on from where it stopped. */
 void machine_set_resume_date_catch_up(bool on);
+/* Before machine_boot: the machine's clock starts at unix_secs (seconds
+ * since 1970) instead of the host's date. */
+void machine_set_date(int64_t unix_secs);
 /* After a restore: the JITs on, if the run asked for them (--jit). */
 void machine_jit_resume(const char *app_path);
 /* A host monotonic time (ns) less the time spent suspended. */

@@ -29,6 +29,17 @@ uint32_t mac_now(void)
  * clock as it was when it hibernated, the seconds away taken off. */
 void osutil_clock_back(int64_t secs) { clock_set -= secs; }
 
+/* --date, before machine_boot: the clock starts at that moment (a time
+ * since 1970, as the host's), not at the host's date, so that a run that
+ * reads the date (or seeds its random numbers from it) repeats exactly. */
+void machine_set_date(int64_t unix_secs)
+{
+    time_t t = (time_t)unix_secs;
+    struct tm lt;
+    localtime_r(&t, &lt);
+    clock_set += unix_secs + lt.tm_gmtoff + MAC_EPOCH_OFFSET - (int64_t)mac_now();
+}
+
 /* SetDateTime: the clock set, for the session (the host's stays). */
 int16_t tb_SetDateTime(uint32_t secs)
 {

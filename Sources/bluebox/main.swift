@@ -194,18 +194,30 @@ func usage() -> Never {
                      them (.sit etc., "archive.sit:Name" picks one), or the name
                      of an imported one (bluebox themes lists them); themes use a
                      32-bit screen
-          --keys S   scripted input, comma separated: wait:N (instructions), cmd-x,
+          --keys S   scripted input, comma separated: wait:N (instructions), at:N (the
+                     steps after it from N instructions after the start), cmd-x,
                      text:abc, return, tab, menu:ID/item (e.g. menu:128/1),
                      keydown:K and keyup:K (K a character, space, return, tab,
-                     escape, delete, an arrow: left, right, up, down, or the keypad's
-                     kp0-kp9, kp., kp+, kp-, kp*, kp/, kp=, clear and enter; or shift,
+                     escape, delete, an arrow: left, right, up, down, a keypad key:
+                     kp0-kp9, kp., kp*, kp+, kp-, kp/, kp=, kpenter (enter), kpclear (clear), a
+                     function key f1-f15, help, home, end, pageup, pagedown,
+                     fwddelete; or shift,
                      option, control, command or capslock, held for what follows), and
                      the mouse: click:x/y, down:x/y, move:x/y, up:x/y, drag:x1/y1/x2/y2;
                      the scroll wheel: wheel:x/y/n (n lines up, down when negative),
                      hwheel:x/y/n (n columns left);
                      pause:N suspends the program (as Suspend in its menu) for N ms
-                     of real time; snap:F.png saves the screen; in a window, wait:N is N/1000 ms
+                     of real time; snap:F.png saves the screen; sync gives no input but
+                     wakes a program sleeping until the next input there (wait:N,sync
+                     lets a title timed by the clock go on while it sleeps); pace:N
+                     puts a sync every N instructions into the waits after it
+                     (pace:0 ends that); in a
+                     window, wait:N is N/1000 ms
     \(screensaverUsage)
+          --date D   the machine's clock starts at D (YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS
+                     local time, or seconds since 1970), not the host's date: a run
+                     that reads the date, or seeds its random numbers with it,
+                     repeats exactly; resumed, its date goes on from where it stopped
           --hibernate-at K  after K instructions, run on to the program's event loop, save
                  it (Application Support/Blue Box/Hibernated, or --hibernate-to FILE) and end;
                  --then N goes on N more instead of ending, --snapshot-end FILE saves the end
@@ -343,6 +355,19 @@ func parseNumber(_ s: String) -> UInt64? {
     return UInt64(s)
 }
 
+/// A date for --date: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS in local time, or
+/// seconds since 1970.
+func parseDate(_ s: String) -> Int64? {
+    if let n = Int64(s) { return n }
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"] {
+        f.dateFormat = format
+        if let d = f.date(from: s) { return Int64(d.timeIntervalSince1970) }
+    }
+    return nil
+}
+
 /// Read any supported file into a mac_file (MacBinary or AppleDouble).
 func loadMacFile(_ path: String) -> mac_file {
     var mf = mac_file()
@@ -384,27 +409,33 @@ let scriptKeyCodes: [String: Int32] = {
     }
     codes["`"] = 50
     for (name, k) in [("return", 36), ("tab", 48), ("space", 49), ("delete", 51), ("escape", 53),
-                      ("left", 123), ("right", 124), ("down", 125), ("up", 126)] as [(String, Int32)] {
+                      ("left", 123), ("right", 124), ("down", 125), ("up", 126),
+                      // The keypad (games steer with it) and the extended keyboard's.
+                      ("kp.", 65), ("kp*", 67), ("kp+", 69), ("kpclear", 71), ("kp/", 75), ("kpenter", 76),
+                      ("kp-", 78), ("kp=", 81), ("kp0", 82), ("kp1", 83), ("kp2", 84), ("kp3", 85), ("kp4", 86),
+                      ("kp5", 87), ("kp6", 88), ("kp7", 89), ("kp8", 91), ("kp9", 92),
+                      ("f1", 122), ("f2", 120), ("f3", 99), ("f4", 118), ("f5", 96), ("f6", 97), ("f7", 98),
+                      ("f8", 100), ("f9", 101), ("f10", 109), ("f11", 103), ("f12", 111), ("f13", 105),
+                      ("f14", 107), ("f15", 113), ("help", 114), ("home", 115), ("pageup", 116),
+                      ("fwddelete", 117), ("end", 119), ("pagedown", 121)] as [(String, Int32)] {
         codes[name] = k
     }
-    // The keypad: games that read GetKeys tell its keys from the main ones.
-    for (name, k) in [("kp0", 82), ("kp1", 83), ("kp2", 84), ("kp3", 85), ("kp4", 86), ("kp5", 87), ("kp6", 88),
-                      ("kp7", 89), ("kp8", 91), ("kp9", 92), ("kp.", 65), ("kp*", 67), ("kp+", 69), ("clear", 71),
-                      ("kp/", 75), ("enter", 76), ("kp-", 78), ("kp=", 81)] as [(String, Int32)] {
-        codes[name] = k
-    }
+    codes["enter"] = codes["kpenter"] // also spelt so
+    codes["clear"] = codes["kpclear"]
     return codes
 }()
 
 /// The character a scripted key name types.
 func scriptKeyChar(_ name: String) -> Int32 {
-    if name.count == 3, name.hasPrefix("kp") { return Int32(name.utf8.last!) } // the character it types
-    return name.count == 1 ? Int32(name.utf8.first!) :
-        ["return": 13, "tab": 9, "space": 32, "delete": 8, "escape": 27, "left": 28, "right": 29,
-         "up": 30, "down": 31, "enter": 3, "clear": 27][name] ?? 0
+    if name.count == 1 { return Int32(name.utf8.first!) }
+    if name.hasPrefix("kp"), name.count == 3 { return Int32(name.utf8.last!) } // kp5 types 5
+    if name.hasPrefix("f"), Int(name.dropFirst()) != nil { return 0x10 } // a function key
+    return ["return": 13, "tab": 9, "space": 32, "delete": 8, "escape": 27, "left": 28, "right": 29,
+            "up": 30, "down": 31, "kpenter": 3, "enter": 3, "kpclear": 27, "clear": 27, "help": 5, "home": 1, "end": 4,
+            "pageup": 11, "pagedown": 12, "fwddelete": 127][name] ?? 0
 }
 
-/// Scripted input: wait:N (instructions), cmd-x, text:..., return, tab, menu:ID/item,
+/// Scripted input: wait:N (instructions), at:N (from the start), cmd-x, text:..., return, tab, menu:ID/item,
 /// keydown:K and keyup:K (K a character or return, tab, space, delete, escape,
 /// left, right, up, down, a keypad key (kp0-kp9, kp., enter ...): held for
 /// games that poll the keyboard; or shift,
@@ -417,9 +448,28 @@ func queueScript(_ script: [String], start: UInt64) {
         machine_script_add(at, kind, a, b, c)
         at += gap
     }
+    var pace: UInt64 = 0
     for step in script {
         if step.hasPrefix("wait:"), let n = UInt64(step.dropFirst(5)) {
+            // pace:P: the waits after it stop the clock every P instructions.
+            if pace > 0 {
+                var t = at + pace
+                while t < at + n {
+                    machine_script_add(t, 10, 0, 0, 0)
+                    t += pace
+                }
+            }
             at += n
+            continue
+        }
+        if step.hasPrefix("pace:"), let n = UInt64(step.dropFirst(5)) {
+            pace = n
+            continue
+        }
+        // at:N: what follows from N instructions after the start (a later
+        // part of a run, lined up with another run's).
+        if step.hasPrefix("at:"), let n = UInt64(step.dropFirst(3)) {
+            at = start + n
             continue
         }
         if let (menu, item) = menuStep(step) {
@@ -428,6 +478,12 @@ func queueScript(_ script: [String], start: UInt64) {
         }
         if step.hasPrefix("snap:") {
             machine_script_add_snap(at, String(step.dropFirst(5)))
+            continue
+        }
+        // sync: no input, but a program sleeping in WaitNextEvent wakes
+        // here rather than when the next input comes.
+        if step == "sync" {
+            add(10, 0, 0, after: 0)
             continue
         }
         // Mouse: down:x/y, move:x/y, up:x/y, click:x/y (press and release),
@@ -575,6 +631,14 @@ func runCommand(_ args: [String], resume: String? = nil) {
             if a == "--snapshot-end" { snapshotEnd = p } else { hibernateTo = p }
         case "--background": background = true
         case "--realtime": machine_set_realtime(true)
+        case "--date":
+            i += 1
+            guard i < args.count, let secs = parseDate(args[i]) else {
+                fail("--date expects YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS (local time) or seconds since 1970")
+            }
+            // A resumed run goes on from the date it stopped at, as its
+            // first part's did from this one: the two then repeat exactly.
+            if resume != nil { machine_set_resume_date_catch_up(false) } else { machine_set_date(secs) }
         case "--walk-menus":
             machine_set_menu_walk(true)
             walkMenus = true

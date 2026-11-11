@@ -1106,7 +1106,8 @@ int trap_call_depth(void);
  * should), and the dispatcher makes the program call it again after
  * resuming (drain_take_rewind).  drain_at_trap: the CPU stops at an idle
  * call at the program's level.  drain_slice_point, between machine_run's
- * slices: stopped at a safe point; drain_exits: machine_run returns there.
+ * slices: stopped at a safe point; drain_exits: machine_run returns there;
+ * drain_between: that point is the slice boundary itself, not an idle call.
  * drain_expired: past the time a drain may take (then refused). */
 bool drain_wanted(void);
 bool drain_abandon(void);
@@ -1119,6 +1120,7 @@ bool drain_give_up(void);
 bool drain_at_trap(cpu68k *c, uint16_t op);
 bool drain_slice_point(void);
 bool drain_exits(void);
+bool drain_between(void);
 bool drain_expired(void);
 void drain_poll(void);
 /* The PowerPC side (cfm.c's dispatcher): drain_program_level, whether a

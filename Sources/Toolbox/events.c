@@ -157,7 +157,14 @@ static int nscript, script_next;
 void machine_script_add(uint64_t at, int kind, int a, int b, int c)
 {
     script = bb_realloc(script, (size_t)(nscript + 1) * sizeof *script, BB_TAG(script_step));
-    script[nscript++] = (script_step){ at, kind, a, b, c };
+    /* In order of time, after any step due at the same count (an at: step
+     * may go back before steps already queued). */
+    int i = nscript++;
+    while (i > script_next && script[i - 1].at > at) {
+        script[i] = script[i - 1];
+        i--;
+    }
+    script[i] = (script_step){ at, kind, a, b, c };
 }
 
 static char **snap_paths;
@@ -190,7 +197,10 @@ void events_script_clear(void)
  * screenshot is no input: the clock of a program waiting for input moves
  * on to the next key or click, not to a snapshot, which would otherwise
  * be taken at the program's first wait however much it had yet to draw
- * (SmallTalk polls for events once before loading its Prelude). */
+ * (SmallTalk polls for events once before loading its Prelude).  A sync
+ * step is no input either, but the clock stops at it: a program sleeping
+ * as long as it can then goes on in steps, a title timed by Ticks has its
+ * time before the next click comes. */
 uint64_t events_script_next_at(void)
 {
     for (int i = script_next; i < nscript; i++)
@@ -226,6 +236,7 @@ void events_script_pump(uint64_t now)
         case 7: machine_post_wheel(s.a, s.b, 0, s.c); break; /* the scroll wheel, c lines (up) */
         case 8: machine_post_wheel(s.a, s.b, s.c, 0); break; /* sideways, c columns (left) */
         case 9: machine_pause_for((uint32_t)s.a); break; /* held still from the next pause point */
+        case 10: break; /* sync: no input, only a point the clock stops at */
         }
     }
 }
@@ -554,7 +565,32 @@ void machine_pass_tick(void);
  * and the mouse, if it was down, far outside everything: each tracking
  * loop (a control, a menu, a window's drag) ends as if released where it
  * does nothing. */
-static bool drain_released(void) { return drain_wanted(); }
+/* The program's own reading of the mouse at its own level (a game polling
+ * the button held down to fire, or GetMouse for its paddle) is told the
+ * truth: let go, a resumed game would see the press end and start again
+ * at the snapshot, which a run that never stopped did not.  A loop of the
+ * program's own that only ends on a release comes to the drain's slice
+ * boundary instead (drain.c). */
+static bool program_reads_mouse(void)
+{
+    if (!drain_program_level())
+        return false;
+    switch (trap_current_word() & 0xFBFF) { /* without the auto-pop bit */
+    case 0xA972: /* GetMouse */
+    case 0xA973: /* StillDown */
+    case 0xA974: /* Button */
+    case 0xA977: /* WaitMouseUp */
+        return true;
+    }
+    int native = cfm_level_call();
+    if (native < 0)
+        return false;
+    const char *name = cfm_native_name((uint32_t)native);
+    return !strcmp(name, "GetMouse") || !strcmp(name, "StillDown") || !strcmp(name, "Button") ||
+           !strcmp(name, "WaitMouseUp");
+}
+
+static bool drain_released(void) { return drain_wanted() && !program_reads_mouse(); }
 
 static bool button_now(void)
 {
