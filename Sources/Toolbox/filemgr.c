@@ -9,7 +9,16 @@
  * application's own folder, the documents it was opened with, and the
  * files chosen in the Open and Save panels (with their folders, so saving
  * through a temporary file works).  Elsewhere the host is invisible and
- * read-only.  Directory IDs are assigned on first use (the root is 2).  Working directories
+ * read-only.  The user's home folder ($HOME) is a second folder at the
+ * root, "~", so that the paths of the files in it stay short: a program in
+ * ~/Games/X sees "Macintosh HD:~:Games:X:", not "Macintosh HD:Host:Users:
+ * me:Games:X:" (Alpha reads its folder's path length as a signed byte, and
+ * from 128 characters overran a buffer).  Each host object keeps one Mac
+ * place and one ID: Host does not list the home folder, and an old path
+ * through it ("Host:Users:me:...") resolves to the same objects, whose
+ * parents lead up through ~.
+ *
+ * Directory IDs are assigned on first use (the root is 2).  Working directories
  * give old-style vRefNums.  Files are AppleDouble: the data fork is the host
  * file, the resource fork and Finder info live in the "._" sidecar.  An open
  * fork is held in host memory and written back atomically on close/flush.
@@ -191,6 +200,35 @@ static int16_t vref_of_path(const char *host)
 
 /* The folder at the volume's root standing for the host's "/". */
 static const char host_folder[] = "Host";
+
+/* The folder at the volume's root standing for the user's home folder,
+ * and that folder's canonical host path ("" when there is none to show:
+ * no $HOME, "/", or one on the volume). */
+static const char home_folder[] = "~";
+static char home_path[PATH_MAX];
+static char home_override[PATH_MAX];
+
+void machine_set_home_folder(const char *path)
+{
+    snprintf(home_override, sizeof home_override, "%s", path ? path : "");
+}
+
+static bool is_home(const char *host) { return home_path[0] && !strcmp(host, home_path); }
+
+/* A host folder shown at the volume's root: Host ("/") or ~. */
+static bool at_root(const char *host) { return !strcmp(host, "/") || is_home(host); }
+
+/* The name a host path has inside the Mac: the root's two folders have
+ * theirs, others their own last component. */
+static const char *mac_base(const char *host)
+{
+    if (!strcmp(host, "/"))
+        return host_folder;
+    if (is_home(host))
+        return home_folder;
+    const char *base = strrchr(host, '/');
+    return base ? base + 1 : host;
+}
 
 /* Where host paths may be seen and changed. */
 typedef enum { GRANT_TREE, GRANT_FILE } grant_kind;
@@ -638,8 +676,23 @@ static bool visible(const char *path)
 static void put_name(gaddr namep, const char *host);
 static void put_name_fwd(gaddr namep, const char *host) { put_name(namep, host); }
 
+/* Whether the root lists the Host folder: some granted place is outside
+ * the home folder (inside it, all is shown in ~). */
+static bool host_listed(void)
+{
+    for (int i = 0; i < ngrants; i++)
+        if (!home_path[0] || !under(grants[i].path, home_path))
+            return true;
+    return false;
+}
+
+/* Whether it lists ~: something in the home folder is visible. */
+static bool home_listed(void) { return home_path[0] && ngrants && visible(home_path); }
+
 static int32_t parent_id_of(const char *host)
 {
+    if (is_home(host))
+        return ROOT_ID; /* ~ sits at the root, as Host does */
     char tmp[PATH_MAX + 2];
     snprintf(tmp, sizeof tmp, "%s", rel_of(host));
     if (tmp[0] == HOST_MARK && !tmp[1])
@@ -736,7 +789,7 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
             i++;
         int len = i - start;
         if (len == 0) { /* "::" goes up, no further than the volume's root */
-            if (!strcmp(path, "/")) {
+            if (at_root(path)) {
                 snprintf(path, sizeof path, "%s", root_path);
             } else if (strcmp(path, root_path) && !(mount_of_path(path) && !strcmp(mount_of_path(path)->root, path))) {
                 char *slash = strrchr(path, '/');
@@ -748,6 +801,9 @@ static int16_t resolve(int16_t vref, int32_t dirid, gaddr namep, bool hfs, char 
         } else if (!strcmp(path, root_path) && len == (int)strlen(host_folder) &&
                    !mac_char_cmp(name + start, (const uint8_t *)host_folder, len)) {
             snprintf(path, sizeof path, "/");
+        } else if (!strcmp(path, root_path) && home_path[0] && len == (int)strlen(home_folder) &&
+                   !mac_char_cmp(name + start, (const uint8_t *)home_folder, len)) {
+            snprintf(path, sizeof path, "%s", home_path);
         } else {
             char comp[256];
             host_component(path, name + start, len, comp, sizeof comp);
@@ -852,8 +908,12 @@ static int list_entries(const char *dir, bool files_only, char ***out)
         mount *m = mount_of_path(full);
         if (m && !strcmp(m->root, full) && mount_of_path(dir) != m)
             continue;
-        if (root && !strcmp(name, host_folder))
-            continue; /* the Host folder's name is taken */
+        if (root && (!strcmp(name, host_folder) || !strcmp(name, home_folder)))
+            continue; /* the Host and ~ folders' names are taken */
+        /* The home folder is ~, at the root, and nowhere else: listed in
+         * Host:Users too, its files had two paths and two parents. */
+        if (is_home(full))
+            continue;
         if (count == cap) {
             cap = cap ? cap * 2 : 32;
             names = bb_realloc(names, (size_t)cap * sizeof *names, BB_TAG(char *));
@@ -862,10 +922,12 @@ static int list_entries(const char *dir, bool files_only, char ***out)
     }
     if (d)
         closedir(d);
-    if (root && !files_only && ngrants) {
+    for (int k = 0; root && !files_only && k < 2; k++) {
+        if (!(k ? home_listed() : host_listed()))
+            continue;
         if (count == cap)
             names = bb_realloc(names, (size_t)(cap = cap ? cap * 2 : 32) * sizeof *names, BB_TAG(char *));
-        names[count++] = bb_strdup(host_folder);
+        names[count++] = bb_strdup(k ? home_folder : host_folder);
     }
     if (count)
         qsort(names, (size_t)count, sizeof *names, cmp_names);
@@ -873,17 +935,25 @@ static int list_entries(const char *dir, bool files_only, char ***out)
     return count;
 }
 
+/* The host path of a name list_entries gave: at the root, Host is "/"
+ * and ~ the home folder. */
+static void entry_path(const char *dir, const char *name, char *out, size_t outsize)
+{
+    if (!strcmp(dir, root_path) && !strcmp(name, host_folder))
+        snprintf(out, outsize, "/");
+    else if (!strcmp(dir, root_path) && !strcmp(name, home_folder) && home_path[0])
+        snprintf(out, outsize, "%s", home_path);
+    else
+        snprintf(out, outsize, "%s/%s", strcmp(dir, "/") ? dir : "", name);
+}
+
 static bool nth_entry(const char *dir, int n, bool files_only, char *out, size_t outsize)
 {
     char **names;
     int count = list_entries(dir, files_only, &names);
     bool ok = n >= 1 && n <= count;
-    if (ok) {
-        if (!strcmp(dir, root_path) && !strcmp(names[n - 1], host_folder) && ngrants)
-            snprintf(out, outsize, "/");
-        else
-            snprintf(out, outsize, "%s/%s", strcmp(dir, "/") ? dir : "", names[n - 1]);
-    }
+    if (ok)
+        entry_path(dir, names[n - 1], out, outsize);
     for (int i = 0; i < count; i++)
         bb_free(names[i]);
     bb_free(names);
@@ -903,11 +973,7 @@ static int count_entries(const char *dir)
 /* A host path's Mac name as a Pascal string (host memory, Str31). */
 static void host_pname(uint8_t out[32], const char *host)
 {
-    const char *base = strrchr(host, '/');
-    base = base ? base + 1 : host;
-    if (!strcmp(host, "/"))
-        base = host_folder;
-    out[0] = (uint8_t)host_to_mac(base, out + 1);
+    out[0] = (uint8_t)host_to_mac(mac_base(host), out + 1);
 }
 
 void fm_mac_name(const char *host, uint8_t out[32]) { host_pname(out, host); }
@@ -916,12 +982,8 @@ static void put_name(gaddr namep, const char *host)
 {
     if (!namep)
         return;
-    const char *base = strrchr(host, '/');
-    base = base ? base + 1 : host;
-    if (!strcmp(host, "/"))
-        base = host_folder;
     uint8_t mac[32];
-    int n = host_to_mac(base, mac);
+    int n = host_to_mac(mac_base(host), mac);
     wr8(namep, (uint8_t)n);
     gput(namep + 1, mac, (uint32_t)n);
 }
@@ -1092,6 +1154,12 @@ void fm_init(const char *app_dir)
     if (!realpath(disk_path(), disk))
         snprintf(disk, sizeof disk, "%s", disk_path());
     snprintf(root_path, sizeof root_path, "%s", disk);
+    /* The home folder, as ~ (machine_set_home_folder, else $HOME); none
+     * when it is the host's root or inside the volume's folder. */
+    const char *home = home_override[0] ? home_override : getenv("HOME");
+    if (!home || !*home || !realpath(home, home_path) || !strcmp(home_path, "/") || on_volume(home_path) ||
+        !is_dir(home_path))
+        home_path[0] = 0;
     for (int i = 0; i < ngrants; i++) {
         bb_free(grants[i].path);
         grants[i].path = NULL;
@@ -1181,13 +1249,8 @@ void fm_spec_for_path(const char *path, gaddr spec)
 {
     char full[PATH_MAX];
     canonical_path(path, full, sizeof full);
-    char parent[PATH_MAX];
-    snprintf(parent, sizeof parent, "%s", full);
-    char *slash = strrchr(parent, '/');
-    if (slash)
-        *slash = 0;
     wr16(spec + FSSpec_vRefNum_off, (uint16_t)vref_of_path(full));
-    wr32(spec + FSSpec_parID_off, (uint32_t)out_id(dir_id_for(rel_of(parent))));
+    wr32(spec + FSSpec_parID_off, (uint32_t)out_id(parent_id_of(full))); /* ~'s is the root */
     put_name_fwd(spec + FSSpec_name_off, full);
 }
 
@@ -2073,7 +2136,7 @@ static int16_t delete_path(const char *path)
 {
     if (!exists(path))
         return fnfErrF;
-    if (!writable(path) || !strcmp(path, "/"))
+    if (!writable(path) || at_root(path))
         return wPrErr;
     if (is_open(path))
         return fBsyErr;
@@ -2121,7 +2184,7 @@ static int16_t rename_host(const char *from, const char *to)
     bool same = there && lstat(to, &st) == 0 && sf.st_dev == st.st_dev && sf.st_ino == st.st_ino;
     if (exists(to) && !same)
         return dupFNErr;
-    if (!writable(from) || !writable(to) || !strcmp(from, "/"))
+    if (!writable(from) || !writable(to) || at_root(from))
         return wPrErr;
     if (there && rename(from, to) != 0) /* not there: only its sidecar is */
         return ioErrF;
@@ -2421,7 +2484,7 @@ static bool vinfo_volume(int16_t idx, int16_t vref, gaddr namep, mount **m)
     return false;
 }
 
-/* The files and folders on a volume (the root and the Host folder not
+/* The files and folders on a volume (the root and the Host and ~ folders not
  * counted), as its catalog kept them: programs show a search's progress
  * as a share of their sum (CatFinder divided by it).  Counted up to a
  * limit, and kept for a few seconds for programs that ask often. */
@@ -2430,7 +2493,7 @@ static void count_tree(const char *dir, bool root, uint32_t *files, uint32_t *di
     char **names;
     int n = list_entries(dir, false, &names);
     for (int i = 0; i < n; i++) {
-        if (*budget && !(root && !strcmp(names[i], host_folder))) {
+        if (*budget && !(root && (!strcmp(names[i], host_folder) || !strcmp(names[i], home_folder)))) {
             char full[PATH_MAX];
             snprintf(full, sizeof full, "%s/%s", dir, names[i]);
             (*budget)--;
@@ -2799,7 +2862,7 @@ static int16_t move_host(const char *from, const char *dir, char *dest, size_t d
         return badMovErr;
     const char *base = strrchr(from, '/');
     snprintf(dest, destsize, "%s%s", strcmp(dir, "/") ? dir : "", base);
-    if (!strcmp(from, "/"))
+    if (at_root(from))
         return wPrErr;
     return rename_host(from, dest);
 }
@@ -3154,13 +3217,9 @@ int16_t tb_FSpDirCreate(gaddr spec, int16_t script, gaddr created_dir_id)
 /* Old-style (vRefNum, name) for a host file: a working directory for its folder. */
 int16_t fm_wd_for_path(const char *path, gaddr name_out)
 {
-    char full[PATH_MAX], parent[PATH_MAX];
+    char full[PATH_MAX];
     canonical_path(path, full, sizeof full);
-    snprintf(parent, sizeof parent, "%s", full);
-    char *slash = strrchr(parent, '/');
-    if (slash)
-        *slash = 0;
-    int32_t id = dir_id_for(rel_of(parent));
+    int32_t id = parent_id_of(full);
     put_name(name_out, full);
     for (int i = 0; i < MAX_WDS; i++)
         if (wds[i].used && wds[i].dirid == id)
@@ -3205,7 +3264,9 @@ size_t fm_mac_path_of_host(const char *host, uint8_t *out, size_t outsize)
     memcpy(out, vol_name + 1, n = (size_t)vol_name[0]);
     char rel[PATH_MAX + 16];
     snprintf(rel, sizeof rel, "%s", rel_of(full));
-    if (rel[0] == HOST_MARK) /* Host:... */
+    if (rel[0] == HOST_MARK && home_path[0] && under(full, home_path)) /* ~:... */
+        snprintf(rel, sizeof rel, "%s%s", home_folder, full + strlen(home_path));
+    else if (rel[0] == HOST_MARK) /* Host:... */
         snprintf(rel, sizeof rel, "%s%s", host_folder, strcmp(full, "/") ? full : "");
     const char *p = rel;
     while (*p) {
@@ -3249,6 +3310,9 @@ bool fm_host_of_mac_path(const uint8_t *mac, size_t n, char *out, size_t outsize
         if (i > start && !strcmp(path, root_path) && i - start == strlen(host_folder) &&
             !mac_char_cmp(mac + start, (const uint8_t *)host_folder, (int)(i - start))) {
             snprintf(path, sizeof path, "/");
+        } else if (i > start && !strcmp(path, root_path) && home_path[0] && i - start == strlen(home_folder) &&
+                   !mac_char_cmp(mac + start, (const uint8_t *)home_folder, (int)(i - start))) {
+            snprintf(path, sizeof path, "%s", home_path);
         } else if (i > start) {
             char comp[256];
             host_component(path, mac + start, (int)(i - start), comp, sizeof comp);
@@ -4748,25 +4812,22 @@ void fm_display_name(const char *host, char *out, size_t outsize)
     if (!strcmp(host, root_path) || (m && !strcmp(m->root, host))) {
         const char *n = m ? m->name : vol_name;
         macroman_to_utf8((const uint8_t *)n + 1, (uint8_t)n[0], out, outsize);
-    } else if (!strcmp(host, "/")) {
-        snprintf(out, outsize, "%s", host_folder);
     } else {
-        const char *base = strrchr(host, '/');
-        snprintf(out, outsize, "%s", base ? base + 1 : host);
+        snprintf(out, outsize, "%s", mac_base(host));
     }
 }
+
+/* Whether a host path is one of the folders at the main volume's root
+ * standing for the host's (Host, ~): fixed, and their parent the root. */
+bool fm_is_host_root(const char *host) { return at_root(host); }
 
 int fm_list_dir(const char *dir, char ***paths)
 {
     char **names;
     int count = list_entries(dir, false, &names);
-    bool root = !strcmp(dir, root_path);
     for (int i = 0; i < count; i++) {
         char full[PATH_MAX];
-        if (root && !strcmp(names[i], host_folder) && ngrants)
-            snprintf(full, sizeof full, "/");
-        else
-            snprintf(full, sizeof full, "%s/%s", strcmp(dir, "/") ? dir : "", names[i]);
+        entry_path(dir, names[i], full, sizeof full);
         bb_free(names[i]);
         names[i] = bb_strdup(full);
     }
@@ -4778,6 +4839,10 @@ void fm_child_path(const char *dir, const char *name, char *out, size_t outsize)
 {
     if (!strcmp(dir, root_path) && ngrants && !strcasecmp(name, host_folder)) {
         snprintf(out, outsize, "/");
+        return;
+    }
+    if (!strcmp(dir, root_path) && home_path[0] && !strcmp(name, home_folder)) {
+        snprintf(out, outsize, "%s", home_path);
         return;
     }
     /* The entry's own spelling, so that one object has one node. */

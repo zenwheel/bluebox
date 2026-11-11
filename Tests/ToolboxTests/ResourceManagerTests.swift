@@ -677,6 +677,124 @@ extension BlueBox {
             }
             #expect(names.contains("Doc") && !names.contains("Vol"))
         }
+
+        /// The home folder is "~" at the volume's root, so its files' paths
+        /// stay short: Alpha reads its folder's full path length as a
+        /// signed byte, and from 128 characters overran a buffer.  Each
+        /// object keeps one place: Host does not list the home folder, an
+        /// old path through Host leads to the same IDs, and the parents of
+        /// the files in it lead up through ~ to the root.
+        @Test func homeFolderIsTilde() throws {
+            let tmp = realpath("/tmp", nil).map { p in defer { free(p) }; return String(cString: p) } ?? "/tmp"
+            let base = URL(fileURLWithPath: tmp + "/bluebox-\(UUID().uuidString.prefix(8))")
+            defer { try? FileManager.default.removeItem(at: base) }
+            let home = base.appendingPathComponent("home")
+            let inner = home.appendingPathComponent("a/b")
+            try FileManager.default.createDirectory(at: inner, withIntermediateDirectories: true)
+            let doc = inner.appendingPathComponent("Doc")
+            try Data("x".utf8).write(to: doc)
+            let out = base.appendingPathComponent("out")
+            try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+            let other = out.appendingPathComponent("Other")
+            try Data("y".utf8).write(to: other)
+            machine_set_home_folder(home.path)
+            defer { machine_set_home_folder(nil) }
+            launchTestApp(documents: [doc.path, other.path])
+            let viaHost = "Host" + base.path.replacingOccurrences(of: "/", with: ":")
+
+            // Host paths as Mac paths and back.
+            func macPath(_ host: String) -> String {
+                var buf = [UInt8](repeating: 0, count: 1024)
+                let n = fm_mac_path_of_host(host, &buf, buf.count)
+                return String(decoding: buf.prefix(n), as: UTF8.self)
+            }
+            func hostPath(_ mac: String) -> String? {
+                let bytes = Array(mac.utf8)
+                var out = [CChar](repeating: 0, count: 1024)
+                guard fm_host_of_mac_path(bytes, bytes.count, &out, out.count) else { return nil }
+                return String(cString: out)
+            }
+            #expect(macPath(doc.path) == "Macintosh HD:~:a:b:Doc")
+            #expect(macPath(home.path) == "Macintosh HD:~")
+            #expect(macPath(other.path) == "Macintosh HD:" + viaHost + ":out:Other")
+            #expect(hostPath("Macintosh HD:~:a:b:Doc") == doc.path)
+            #expect(hostPath("Macintosh HD:" + viaHost + ":home:a:b:Doc") == doc.path)
+            #expect(hostPath("Macintosh HD:" + viaHost + ":out:Other") == other.path)
+
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(256, false, true)
+            func dirID(_ path: String) -> UInt32? {
+                guestPString(path, at: name)
+                wr32(pb + 18, name)
+                wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, 0); wr32(pb + 48, 2)
+                return tb_PBGetCatInfo(pb, false) == 0 ? rd32(pb + 48) : nil
+            }
+            // One folder, one ID, by either path.
+            let b = try #require(dirID(":~:a:b"))
+            #expect(dirID(":" + viaHost + ":home:a:b") == b)
+            #expect(dirID(":~") == dirID(":" + viaHost + ":home"))
+            #expect(dirID(":~:a:b:::") == dirID(":~") && dirID(":~:a:b::::") == 2) // up from ~ is the root
+
+            // Up from a folder by index -1: through ~ to the root, whose
+            // parent is 1.
+            func walk(from start: UInt32) -> [String] {
+                var names: [String] = [], id = start
+                for _ in 0..<64 {
+                    wr32(pb + 18, name)
+                    wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, UInt16(bitPattern: -1)); wr32(pb + 48, id)
+                    guard tb_PBGetCatInfo(pb, false) == 0 else { return names + ["error"] }
+                    names.append(pstring(at: name))
+                    if id == 2 {
+                        #expect(rd32(pb + 100) == 1)
+                        break
+                    }
+                    id = rd32(pb + 100)
+                }
+                return names
+            }
+            #expect(walk(from: b) == ["b", "a", "~", "Macintosh HD"])
+            // A file outside the home folder: up through Host.
+            let outID = try #require(dirID(":" + viaHost + ":out"))
+            let outside = walk(from: outID)
+            #expect(outside.first == "out" && outside.contains(base.lastPathComponent))
+            #expect(outside.suffix(2) == ["Host", "Macintosh HD"] && !outside.contains("~"))
+
+            // An FSSpec: the file's folder is b; ~'s is the root, by its name.
+            let spec = tb_NewPtr(80, false, true)
+            guestPString(":~:a:b:Doc", at: name)
+            #expect(tb_FSMakeFSSpec(-1, 2, name, spec) == 0)
+            #expect(rd32(spec + 2) == b && pstring(at: spec + 6) == "Doc")
+            fm_spec_for_path(home.path, spec)
+            #expect(rd32(spec + 2) == 2 && pstring(at: spec + 6) == "~")
+            fm_spec_for_path(doc.path, spec)
+            #expect(rd32(spec + 2) == b)
+
+            // The root lists ~ and Host; Host does not list the home folder.
+            func list(_ id: UInt32) -> [String] {
+                var names: [String] = []
+                for idx in 1...64 {
+                    wr32(pb + 18, name)
+                    wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, UInt16(idx)); wr32(pb + 48, id)
+                    if tb_PBGetCatInfo(pb, false) != 0 { break }
+                    names.append(pstring(at: name))
+                    if pstring(at: name) == "~" { #expect(rd32(pb + 48) == dirID(":~")) }
+                }
+                return names
+            }
+            let root = list(2)
+            #expect(root.contains("~") && root.contains("Host"))
+            let baseID = try #require(dirID(":" + viaHost))
+            let inBase = list(baseID)
+            #expect(inBase.contains("out") && !inBase.contains("home"))
+            // ~ can be neither renamed nor deleted.
+            guestPString(":~", at: name)
+            let newName = tb_NewPtr(32, false, true)
+            guestPString("Away", at: newName)
+            wr32(pb + 18, name); wr16(pb + 22, UInt16(bitPattern: -1)); wr32(pb + 28, newName); wr32(pb + 48, 2)
+            #expect(tb_PBHRename(pb, false) != 0)
+            wr32(pb + 18, name); wr16(pb + 22, UInt16(bitPattern: -1)); wr32(pb + 48, 2)
+            #expect(tb_PBHDelete(pb, false) != 0)
+            #expect(FileManager.default.fileExists(atPath: home.path))
+        }
     }
 }
 }

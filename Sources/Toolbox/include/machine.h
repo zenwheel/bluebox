@@ -797,6 +797,9 @@ void machine_set_launch_documents(const char *const *paths, int n);
  * ~/Library/Application Support/Blue Box/System Folder on macOS and
  * $XDG_DATA_HOME/classic/System Folder elsewhere. */
 void machine_set_system_folder(const char *path);
+/* The host folder shown as "~" at the volume's root (the user's home
+ * folder): NULL or "" for $HOME, read at each launch. */
+void machine_set_home_folder(const char *path);
 /* The folder that is the Mac's volume ("Macintosh HD"); by default
  * Application Support/Blue Box/Macintosh HD.  Before machine_launch. */
 void machine_set_disk(const char *path);

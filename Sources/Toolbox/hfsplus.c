@@ -465,8 +465,8 @@ int16_t tb_FSRenameUnicode(gaddr ref, uint32_t nameLength, gaddr name, uint32_t 
         err = uni_to_host(name, nameLength, host, sizeof host);
     if (err)
         return err;
-    if (fm_is_volume_root(from) || !strcmp(from, "/"))
-        return wPrErr; /* the volume's name and the Host folder's are fixed */
+    if (fm_is_volume_root(from) || fm_is_host_root(from))
+        return wPrErr; /* the volume's name and the Host and ~ folders' are fixed */
     char to[PATH_MAX];
     const char *slash = strrchr(from, '/');
     snprintf(to, sizeof to, "%.*s/%s", (int)(slash - from), from, host);
@@ -504,11 +504,11 @@ int16_t tb_PBExchangeObjects(gaddr pb, bool async)
 /* ---------------------------------------------------------------------- */
 /* Catalog information */
 
-/* The folder an object is in: the Host folder ("/") is in the main
+/* The folder an object is in: the Host folder ("/") and ~ are in the main
  * volume's root. */
 static void parent_path(const char *path, char *out, size_t outsize)
 {
-    if (!strcmp(path, "/")) {
+    if (fm_is_host_root(path)) {
         int16_t vref, drive, driver;
         uint8_t name[32];
         fm_volume(1, 0, &vref, out, outsize, name, &drive, &driver);
@@ -791,14 +791,14 @@ static bool matches(search *s, const char *path)
 }
 
 /* Depth first under a folder; false once enough are found.  The Host
- * folder (the host's whole disk) is not gone into. */
+ * folder (the host's whole disk) and ~ are not gone into. */
 static bool search_under(search *s, const char *dir, int depth)
 {
     char **paths;
     int n = fm_list_dir(dir, &paths);
     bool go_on = true;
     for (int i = 0; i < n; i++) {
-        if (go_on && strcmp(paths[i], "/")) {
+        if (go_on && !fm_is_host_root(paths[i])) {
             if (s->seen++ >= s->skip && matches(s, paths[i])) {
                 put_item(paths[i], s->found++, s->which, s->cis, s->refs, s->specs, s->names);
                 go_on = s->found < s->want;

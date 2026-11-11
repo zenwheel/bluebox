@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "filemgr_internal.h"
 #include "tb_internal.h"
 
 enum { fnfErrA = -43, paramErrA = -50, nsvErrA = -35 };
@@ -300,8 +301,16 @@ static bool relative_host(gaddr fromFile, gaddr alias, char *host, size_t hostsi
     if (!fm_host_path((int16_t)rd16(fromFile), (int32_t)rd32(fromFile + 2), fromFile + 6, true, fromhost,
                       sizeof fromhost))
         return false;
-    /* The folder: fromFile's, then up. */
+    /* The folder: fromFile's, then up, as the Mac sees it (Host and ~ are
+     * in the volume's root, which is the top). */
     for (int up = 0; up < from; up++) {
+        if (fm_is_volume_root(fromhost))
+            return false;
+        if (fm_is_host_root(fromhost)) {
+            if (!fm_path_of_node(2, fromhost, sizeof fromhost))
+                return false;
+            continue;
+        }
         char *slash = strrchr(fromhost, '/');
         if (!slash || slash == fromhost)
             return false;
