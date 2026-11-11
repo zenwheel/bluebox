@@ -85,10 +85,10 @@ func usage() -> Never {
           --new      start another copy even if the program is running already
                      (otherwise that one comes to the front, resumed if suspended,
                      and is given the documents), or hibernated (its snapshot kept)
-          --fresh    a hibernated program starts fresh, its snapshot moved to the
-                     Trash (otherwise an interactive run resumes it)
-          --resume   a headless run of a hibernated program resumes it, as an
-                     interactive run does
+          --fresh    a hibernated program starts fresh, its snapshots kept (otherwise
+                     an interactive run asks which snapshot to resume)
+          --resume [FILE.bbhib]  a headless run of a hibernated program resumes
+                     its newest snapshot, or the one named
           --background  run in the background: no Dock icon or menu bar; the
                      program's menus are in a menu bar status item (with Open at
                      Login and Quit), its windows and what an INIT or desk accessory
@@ -208,8 +208,11 @@ func usage() -> Never {
           (the same build only)
       bluebox snapshots [list]
       bluebox snapshots delete <snapshot|program>... [--permanently]
-          The hibernated snapshots kept (a resumed one stays until deleted), and
-          deleting them: to the Trash, or at once with --permanently
+      bluebox snapshots thumbnail <snapshot> <file.png>
+          The hibernated snapshots kept (a resumed one stays until deleted; each
+          program keeps its newest 5, or its keep-snapshots setting), deleting
+          them: to the Trash, or at once with --permanently, and the picture of
+          the screen one was saved with
       bluebox hibernate-diff <snapshot> <snapshot> [N]
           Where two snapshots differ (up to N places)
       bluebox chooser [run options]
@@ -514,6 +517,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var newCopy = false
     var startFresh = false
     var resumeHibernated = false
+    var resumeNamed: String? // --resume FILE
     var appArgument: String? // the application as given, before it is resolved
     var appIndex = 0 // where in args
     var screenWindow = false
@@ -562,7 +566,12 @@ func runCommand(_ args: [String], resume: String? = nil) {
             walkMenus = true
         case "--new": newCopy = true
         case "--fresh": startFresh = true
-        case "--resume": resumeHibernated = true
+        case "--resume":
+            resumeHibernated = true
+            if resumeTakesFile(args, at: i) {
+                i += 1
+                resumeNamed = URL(fileURLWithPath: args[i]).standardizedFileURL.path
+            }
         case "--walk-avoid":
             i += 1
             guard i < args.count else { usage() }
@@ -817,9 +826,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
     if resume == nil {
         var extra = args
         extra.remove(at: appIndex)
+        let fresh = startFresh || ProcessInfo.processInfo.environment[startFreshVariable] == "1"
         resumeIfHibernated(app: app, program: Registration.current?.entry.program ?? RunningProgram.canonical(app),
-                           extra: extra, resumes: interactive || resumeHibernated, fresh: startFresh,
-                           newCopy: newCopy, interactive: interactive)
+                           extra: extra, resumes: interactive || resumeHibernated, named: resumeNamed, fresh: fresh,
+                           newCopy: newCopy, interactive: interactive && resumeNamed == nil)
     }
     // A game known to need a 13-inch monitor's screen gets it, unless a size is
     // given, it resumes on the one it hibernated with, or it is to stay rootless.
@@ -1011,7 +1021,6 @@ func runCommand(_ args: [String], resume: String? = nil) {
         guard machine_hibernate_restore(resume, &err, err.count) else { fail("\(resume): \(str(err))") }
         machine_jit_resume(app)
         print("resumed: \(resume) at instruction \(machine_instruction_count())")
-        forgetHibernated(snapshot: resume)
     } else {
         guard machine_launch(app, &err, err.count) else { fail(str(err)) }
     }

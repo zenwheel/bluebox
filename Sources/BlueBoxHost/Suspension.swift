@@ -47,7 +47,7 @@ public enum SuspendNotice {
 public struct ProgramStates: Equatable {
     public enum Action: Equatable {
         case launch, suspend, resume
-        /// Hibernated: launching it resumes its snapshot (ResumePolicy).
+        /// Hibernated: launching it offers its snapshots (ResumePolicy).
         case wake
         public var title: String {
             switch self {
@@ -75,6 +75,9 @@ public struct ProgramStates: Equatable {
     private var noted: [Int32: Bool] = [:]
     /// The registry's hibernated programs, by path (the newest of a path's).
     public private(set) var hibernated: [String: RunningProgram] = [:]
+    /// Each hibernated program's snapshots, newest first (opening it offers
+    /// them all).
+    public private(set) var snapshots: [String: [String]] = [:]
 
     public init() {}
 
@@ -123,11 +126,16 @@ public struct ProgramStates: Equatable {
         for e in entries where e.state != .hibernated && byPath[e.program] == nil { byPath[e.program] = e }
         registered = byPath
         var sleeping: [String: RunningProgram] = [:]
+        var all: [String: [RunningProgram]] = [:]
         for e in entries where e.state == .hibernated {
+            all[e.program, default: []].append(e)
             if let other = sleeping[e.program], other.hibernatedDate >= e.hibernatedDate { continue }
             sleeping[e.program] = e
         }
         hibernated = sleeping
+        snapshots = all.mapValues { list in
+            list.sorted { $0.hibernatedDate > $1.hibernatedDate }.compactMap(\.snapshot)
+        }
         noted = noted.filter { pid, _ in !entries.contains { $0.pid == pid } }
         let known = Set(pids.values)
         noted = noted.filter { known.contains($0.key) }

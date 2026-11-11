@@ -44,12 +44,14 @@ struct AppSettings: Codable {
     var display: String? /* rootless, or screen (the whole Mac screen in one window); chosen by itself when unset */
     var jit: Bool? /* translate the program's code to host code (--jit) */
     var internet: InternetSettings? /* Internet Config's preferences */
+    var keepSnapshots: Int? /* hibernated snapshots kept per program; unset: HibernatedSnapshots.defaultKeep */
     var isEmpty: Bool {
         depth == nil && cpu == nil && fpu == nil && addressing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
             && appleShare == nil && display == nil
             && jit == nil
             && (internet?.isEmpty ?? true)
+            && keepSnapshots == nil
     }
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
@@ -65,7 +67,8 @@ struct AppSettings: Codable {
             + "user-name \(userName.map { "\"\($0)\"" } ?? "default (this account's full name)"), "
             + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)"), "
             + "display \(display ?? "default (rootless, the whole screen when the program wants it)"), "
-            + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (off)")"
+            + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (off)"), "
+            + "keep-snapshots \(keepSnapshots.map(String.init) ?? "default (\(HibernatedSnapshots.defaultKeep))")"
             + (internet.map { $0.isEmpty ? "" : ", " + $0.summary } ?? "")
     }
 
@@ -79,7 +82,8 @@ struct AppSettings: Codable {
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
                            printer: printer ?? f.printer, userName: userName ?? f.userName,
                            appleShare: appleShare ?? f.appleShare, display: display ?? f.display, jit: jit ?? f.jit,
-                           internet: internet.map { $0.over(f.internet) } ?? f.internet)
+                           internet: internet.map { $0.over(f.internet) } ?? f.internet,
+                           keepSnapshots: keepSnapshots ?? f.keepSnapshots)
     }
 }
 
@@ -341,7 +345,7 @@ func settings(for app: String) -> AppSettings? {
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
 ///     [print-folder <folder>|panel|default] [printer <spec>|default] [user-name <name>|default]
 ///     [appleshare <spec>|none|default] [display rootless|screen|default]
-///     [jit on|off|default]
+///     [jit on|off|default] [keep-snapshots N|default]
 ///     [real-name|email|organization|mail-account|smtp-host|news-host|home-page|search-page <text>|default]
 ///     [http-proxy|ftp-proxy|gopher-proxy|socks <host:port>|none|default] [no-proxy <domains>|default]
 ///     [passive-ftp on|off|default]
@@ -473,6 +477,14 @@ func setCommand(_ args: [String]) {
         case "jit":
             guard ["on", "off", "default"].contains(value) else { fail("jit expects on, off or default") }
             s.jit = value == "default" ? nil : value == "on"
+        case "keep-snapshots":
+            if value == "default" {
+                s.keepSnapshots = nil
+            } else if let n = Int(value), n >= 1 {
+                s.keepSnapshots = n
+            } else {
+                fail("keep-snapshots expects a number of snapshots (1 or more) or default")
+            }
         case "passive-ftp":
             guard ["on", "off", "default"].contains(value) else { fail("passive-ftp expects on, off or default") }
             var i = s.internet ?? InternetSettings()
@@ -488,7 +500,7 @@ func setCommand(_ args: [String]) {
             s.internet = i.isEmpty ? nil : i
         default:
             fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
-                 + "modem-port, printer-port, print-folder, printer, user-name, appleshare, display, jit, "
+                 + "modem-port, printer-port, print-folder, printer, user-name, appleshare, display, jit, keep-snapshots, "
                  + InternetSettings.fields.map(\.name).joined(separator: ", ") + ", passive-ftp)")
         }
     }

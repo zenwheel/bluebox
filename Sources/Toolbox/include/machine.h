@@ -222,6 +222,9 @@ int machine_wanted_depth(void);
 uint64_t machine_alert_depths(const char *message);
 /* Write the screen to a PNG file. */
 bool machine_screenshot(const char *path);
+/* The screen as a small PNG in memory, at most max_w pixels wide (bb_host_free
+ * it): a hibernated snapshot's thumbnail. */
+bool machine_screen_thumbnail(int max_w, uint8_t **png, size_t *len);
 bool machine_write_png(const char *path, const uint8_t *rgba, int w, int h);
 /* The same keeping the alpha (icons' masks). */
 bool machine_write_png_alpha(const char *path, const uint8_t *rgba, int w, int h);
