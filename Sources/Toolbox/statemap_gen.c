@@ -2699,7 +2699,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1691;
+const unsigned hb_nstatics = 1693;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
