@@ -28,6 +28,7 @@ extension BlueBox {
             }
             #expect(ptrs.last ?? 0 > 0x5100_0000)
             #expect(ptrs.allSatisfy { $0 + (64 << 20) <= 0x50F0_0000 || $0 >= 0x5100_0000 })
+            #expect(ptrs.allSatisfy { $0 & 15 == 0 })
             #expect(mm_check_zone(appZone))
         }
 
@@ -156,6 +157,53 @@ extension BlueBox {
             wr32(h, 0x4EF9_0042)  // not a master pointer at all
             #expect(tb_GetHandleSize(h) < 0)
             wr32(h, p)
+        }
+
+        /// Blocks are 16-byte aligned, as on a 68040 or PowerPC Mac and on
+        /// every Mac from System 7.5: through odd sizes, resizing,
+        /// compaction and in a zone made with InitZone at such a boundary
+        /// (Escape Velocity's PowerPC blitter finds a sprite's mask bits
+        /// from its pixels' address mod 8, and left trails otherwise).
+        @Test func blocksAreSixteenByteAligned() {
+            var ptrs: [UInt32] = [], handles: [UInt32] = []
+            defer {
+                ptrs.forEach { tb_DisposePtr($0) }
+                handles.forEach { tb_DisposeHandle($0) }
+            }
+            for n in 0..<64 {
+                ptrs.append(tb_NewPtr(Int32(n * 7 + 1), false, false))
+                handles.append(tb_NewHandle(Int32(n * 13 + 3), false, false))
+                handles.append(tb_NewHandle(Int32(n * 5 + 1), true, false))
+            }
+            #expect(ptrs.allSatisfy { $0 != 0 && $0 & 15 == 0 })
+            #expect(handles.allSatisfy { $0 != 0 && rd32($0) & 15 == 0 })
+            for (i, h) in handles.enumerated() where i % 3 == 0 { tb_SetHandleSize(h, Int32(i * 11 + 5)) }
+            for (i, p) in ptrs.enumerated() where i % 2 == 0 { tb_SetPtrSize(p, 2) }
+            for (i, h) in handles.enumerated() where i % 4 == 1 { tb_DisposeHandle(h); handles[i] = 0 }
+            handles.removeAll { $0 == 0 }
+            _ = tb_CompactMem(0x7FFF_FFFF, false)
+            _ = tb_CompactMem(0x7FFF_FFFF, true)
+            #expect(handles.allSatisfy { rd32($0) & 15 == 0 })
+            let late = tb_NewHandle(1000, false, false)
+            #expect(late != 0 && rd32(late) & 15 == 0)
+            tb_DisposeHandle(late)
+            #expect(mm_check_zone(appZone) && mm_check_zone(sysZone))
+
+            // A zone of a program's own, at a 16-byte boundary.
+            let sub = tb_NewPtr(4096, false, true)
+            let args = tb_NewPtr(14, false, true)
+            wr32(args, sub)
+            wr32(args + 4, sub + 4093)
+            wr16(args + 8, 4)
+            var c = cpu68k()
+            c.a.0 = args
+            raw_InitZone(&c, 0xA019)
+            let inner = (1..<20).map { tb_NewPtr(Int32($0 * 9), false, false) }
+            #expect(inner.allSatisfy { $0 != 0 && $0 & 15 == 0 })
+            #expect(mm_check_zone(sub))
+            tb_SetZone(appZone)
+            tb_DisposePtr(sub)
+            tb_DisposePtr(args)
         }
 
         @Test func clearedAllocationsAreZero() {
@@ -478,7 +526,7 @@ extension BlueBox {
 
             // Handles: the master pointers stay; the rest comes back.
             let h = tb_NewHandle(300, false, false)
-            let withMasters = zcbFree(sub) + 312
+            let withMasters = zcbFree(sub) + 320 // 300 bytes and a header, in 16-byte multiples
             let blocker = tb_NewPtr(16, false, false)
             tb_SetHandleSize(h, 5000) // moves past the pointer
             #expect(zcbFree(sub) == freeBytes(sub))
