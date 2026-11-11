@@ -114,6 +114,24 @@ extension BlueBox {
             machine_post_mouse(120, 80, 0)
         }
 
+        /// The program's own Button poll at its own level is told the truth
+        /// while the machine drains: a game firing while its button is held
+        /// (Snood, Star Chaos, Shufflepuck's paddle) would otherwise see the
+        /// press end at the snapshot, which a run that never stopped did not.
+        @Test func theProgramsOwnButtonPollSeesItHeld() {
+            launchTestApp()
+            // CLR.B -(SP); _Button; MOVE.B (SP)+,D6; ADDQ.L #1,D7; BRA.S loop
+            _ = start([0x4227, 0xA974, 0x1C1F, 0x5287, 0x60F6])
+            machine_post_mouse(120, 80, 1)
+            _ = machine_run(100_000)
+            #expect(g_cpu!.pointee.d.6 & 0xFF != 0)
+            machine_drain_begin(true)
+            #expect(machine_run(50_000_000) == RUN_DRAINED) // no idle call: between slices
+            #expect(g_cpu!.pointee.d.6 & 0xFF != 0)         // still held as it drained
+            machine_drain_end()
+            machine_post_mouse(120, 80, 0)
+        }
+
         /// A drain is refused when its time is up only once the machine has
         /// also run its least: a busy host's slow machine gets as far as a
         /// fast one's.

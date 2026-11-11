@@ -555,7 +555,32 @@ void machine_pass_tick(void);
  * and the mouse, if it was down, far outside everything: each tracking
  * loop (a control, a menu, a window's drag) ends as if released where it
  * does nothing. */
-static bool drain_released(void) { return drain_wanted(); }
+/* The program's own reading of the mouse at its own level (a game polling
+ * the button held down to fire, or GetMouse for its paddle) is told the
+ * truth: let go, a resumed game would see the press end and start again
+ * at the snapshot, which a run that never stopped did not.  A loop of the
+ * program's own that only ends on a release comes to the drain's slice
+ * boundary instead (drain.c). */
+static bool program_reads_mouse(void)
+{
+    if (!drain_program_level())
+        return false;
+    switch (trap_current_word() & 0xFBFF) { /* without the auto-pop bit */
+    case 0xA972: /* GetMouse */
+    case 0xA973: /* StillDown */
+    case 0xA974: /* Button */
+    case 0xA977: /* WaitMouseUp */
+        return true;
+    }
+    int native = cfm_level_call();
+    if (native < 0)
+        return false;
+    const char *name = cfm_native_name((uint32_t)native);
+    return !strcmp(name, "GetMouse") || !strcmp(name, "StillDown") || !strcmp(name, "Button") ||
+           !strcmp(name, "WaitMouseUp");
+}
+
+static bool drain_released(void) { return drain_wanted() && !program_reads_mouse(); }
 
 static bool button_now(void)
 {
