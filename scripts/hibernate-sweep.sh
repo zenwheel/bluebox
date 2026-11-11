@@ -57,7 +57,8 @@
 # run's clock jumps further than that, the drain's included.  The table's
 # keys may use pace:N for the same before K.  Every run starts at
 # the same date (DATE, default 2000-01-01T12:00:00), as programs seed
-# their random numbers with it.
+# their random numbers with it; B and B0 go on from the date H stopped at
+# (a resume's --date), not the host's now.
 #
 # Writes <work dir>/play.tsv: program, K, hibernate, why, snapshot bytes,
 # resume, B's end, animates (B0's first and last screens differ), input
@@ -400,7 +401,7 @@ play_one() {
 			[ "$r" = b ] || p=$(no_input "$post")
 			st=0
 			HOME=$w/h BLUEBOX_CRASH_TRACE=1 timeout "$limit" "$bin" resume "$w/k.bbhib" --headless \
-				--max $((k + after - n)) --keys "$(keys_for "$r" "$(screens "$n" "$logs/$r" "$p")")" >"$logs/$r.out" 2>"$logs/$r.err" || st=$?
+				--max $((k + after - n)) --keys "$(keys_for "$r" "$(screens "$n" "$logs/$r" "$p")")" --date "$date" >"$logs/$r.out" 2>"$logs/$r.err" || st=$?
 			[ "$r" = b ] && bst=$st
 		done
 		tb=$(($(now) - t0))

@@ -1037,6 +1037,18 @@ extension BlueBox {
             let now = tb_NewPtr(4, false, true)
             tb_GetDateTime(now)
             #expect(rd32(now) >= secs && rd32(now) < secs + 5)
+
+            // Headless, the date follows the machine's clock, as Time does:
+            // a second of the host's going by does not move it, the
+            // machine's seconds do (Firefall seeds its game from it).
+            tb_GetDateTime(now)
+            let then = rd32(now)
+            usleep(1_100_000)
+            tb_GetDateTime(now)
+            #expect(rd32(now) == then)
+            machine_skip_time(2_000_000_000)
+            tb_GetDateTime(now)
+            #expect(rd32(now) == then + 2)
         }
     }
 }

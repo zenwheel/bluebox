@@ -331,7 +331,9 @@ bool cfdate_value(gaddr ref, double *at)
     return d != NULL;
 }
 
-/* Now: the host's clock, moved as the Mac's has been (SetDateTime). */
+/* Now: the host's clock, moved as the Mac's has been (SetDateTime).
+ * Headless, the date and its fraction of a second are the machine's
+ * (mac_now), the same each run. */
 double cf_absolute_now(void)
 {
     struct timeval tv;
@@ -341,7 +343,8 @@ double cf_absolute_now(void)
     localtime_r(&t, &lt);
     int64_t mac_host = (int64_t)t + lt.tm_gmtoff + 2082844800LL;
     int64_t moved = (int64_t)mac_now() - mac_host;
-    return (double)(t + moved) + tv.tv_usec / 1e6 - 978307200.0;
+    double frac = machine_wall_clock() ? tv.tv_usec / 1e6 : (double)(machine_time_ns() % 1000000000u) / 1e9;
+    return (double)(t + moved) + frac - 978307200.0;
 }
 
 /* Days since 1 January 2001 from a date, and back (proleptic Gregorian). */
