@@ -1567,6 +1567,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/ethertalk.c", "rpos", 4, 0 },
     { "Toolbox/ethertalk.c", "waiting", 12288, 56 },
     { "Toolbox/events.c", "button_down", 1, 0 },
+    { "Toolbox/events.c", "button_holds", 4, 0 },
     { "Toolbox/events.c", "button_new", 1, 0 },
     { "Toolbox/events.c", "elsewhere_new", 1, 0 },
     { "Toolbox/events.c", "frac_h", 8, 0 },
@@ -2701,7 +2702,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1695;
+const unsigned hb_nstatics = 1696;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

@@ -75,6 +75,10 @@ static uint8_t keymap[16];
 enum { TAP_GETKEYS, TAP_KEYMAP };
 static uint8_t keys_tapped[2][16];
 static bool keys_polled; /* the program has called GetKeys */
+/* Button calls that kept the clock for an unseen tap since GetKeys was last
+ * called: a program that polled the keyboard once and now waits on Button
+ * alone (Fusion's About box) would otherwise stop the clock for good. */
+static unsigned button_holds;
 
 /* The keyboard as the program sees it through one of them: what is down,
  * and what was tapped since it last looked; then forget those taps.  The
@@ -1274,6 +1278,10 @@ int8_t tb_Button(void)
         pthread_mutex_lock(&lock);
         for (int i = 0; i < 16 && !key_unseen; i++)
             key_unseen = keys_tapped[TAP_GETKEYS][i] != 0;
+        if (key_unseen && ++button_holds > 8) {
+            memset(keys_tapped[TAP_GETKEYS], 0, sizeof keys_tapped[TAP_GETKEYS]);
+            key_unseen = false;
+        }
         pthread_mutex_unlock(&lock);
     }
     if (!down && !host_attached && !key_unseen)
@@ -1403,6 +1411,7 @@ void tb_GetKeys(gaddr keys)
 {
     note_poll();
     keys_polled = true;
+    button_holds = 0;
     uint8_t now[16];
     pthread_mutex_lock(&lock);
     keys_seen(now, TAP_GETKEYS);
@@ -1466,6 +1475,7 @@ void events_reset(void)
     memset(keymap, 0, sizeof keymap);
     memset(keys_tapped, 0, sizeof keys_tapped);
     keys_polled = false;
+    button_holds = 0;
     key_last = 0;
     key_new = button_new = false;
     mouse_h = 100;

@@ -169,6 +169,23 @@ extension BlueBox {
             tb_FlushEvents(-1, 0)
         }
 
+        /// A program that polled the keyboard once and then waits on Button
+        /// alone (Fusion's About box) isn't held for a tap it never looks at:
+        /// after a few calls the clock moves on again.
+        @Test func buttonAloneLetsTheClockGo() {
+            tb_FlushEvents(-1, 0)
+            let keys = tb_NewPtr(16, false, true)
+            tb_GetKeys(keys)
+            machine_post_key(0x0D, 36, 0, 1, 0)
+            machine_post_key(0x0D, 36, 0, 0, 0)
+            let before = g_cpu!.pointee.icount
+            for _ in 0..<8 { #expect(tb_Button() == 0) }
+            #expect(g_cpu!.pointee.icount == before)
+            #expect(tb_Button() == 0)
+            #expect(g_cpu!.pointee.icount > before)
+            tb_FlushEvents(-1, 0)
+        }
+
         /// The System's key maps ('KMAP' 0, and 2 for the Extended Keyboard
         /// KbdType says): raw key codes to virtual ones, the arrows and
         /// Control moved, the right-hand modifiers their own.  S.C.OUT looks
