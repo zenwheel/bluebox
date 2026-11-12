@@ -970,6 +970,10 @@ bool machine_wall_clock(void) { return events_host_attached() || realtime; }
  * What the instruction count moved on by without running instructions (a
  * wait for input passing, machine_idle_for) is time at the usual rate. */
 static bool timed_68000(void) { return cpu.model == 68000 && !g_ppc_mode; }
+enum {
+    QD_CALL_CYCLES = 4000, /* a drawing call's setup in ROM QuickDraw, about 0.7 ms */
+    QD_PIXEL_CYCLES = 2,   /* a 1-bit pixel moved: 16 to a word, shifted and masked */
+};
 static uint64_t cycles_ns(uint64_t cycles) { return (uint64_t)((unsigned __int128)cycles * 4000000000u / (7833600u * 3)); }
 
 uint64_t machine_time_ns(void)
@@ -1013,6 +1017,15 @@ void machine_tick_polled(void)
 
 void machine_charge_pixels(uint64_t n)
 {
+    /* A 68000 drew with its own cycles, the ROM's QuickDraw setting up
+     * each call (clipping, the shift and the masks) and then moving the
+     * bits: a compact Mac spent most of a game's frame there (Glypha 3.0's
+     * eleven blits a frame).  Counted in its cycles, the time is the same
+     * headless and, paced by them, in a window. */
+    if (timed_68000()) {
+        cpu.cycles += QD_CALL_CYCLES + n * QD_PIXEL_CYCLES;
+        return;
+    }
     if (!events_host_attached() && !realtime)
         skipped_ns += n * 10u;
 }
