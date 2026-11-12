@@ -364,5 +364,24 @@ extension BlueBox {
                 #expect(hwRead(0x9FFFF8 + 2) == 0x33)
             }
         }
+
+        /// QuickDraw's drawing takes a 68000's cycles, as ROM QuickDraw's did:
+        /// Glypha 3.0, paced by nothing but its drawing, ran hundreds of
+        /// frames a second in a window.
+        @Test func drawingTakesTheCompactMacsTime() {
+            plus {
+                _ = initToolbox()
+                let r = tb_NewPtr(8, false, true)
+                wr16(r, 10); wr16(r + 2, 10); wr16(r + 4, 74); wr16(r + 6, 74) // 64 by 64
+                let before = machine_time_ns()
+                tb_PaintRect(r)
+                let spent = machine_time_ns() - before
+                // 4000 cycles of setup and 2 a pixel, at 7.8336 MHz with a quarter of the bus lost
+                let cycles: UInt64 = 4000 + 2 * 64 * 64
+                let expected: UInt64 = cycles * 4_000_000_000 / (7_833_600 * 3)
+                #expect(spent + 1 >= expected && spent <= expected + 1, "spent \(spent) ns")
+                tb_DisposePtr(r)
+            }
+        }
     }
 }

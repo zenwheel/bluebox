@@ -242,11 +242,13 @@ func requiredCPU(application path: String) -> Int? {
 /// the Plus, they draw on its 512×342 one-bit screen themselves, rows of
 /// 64 bytes from ScrnBase, and on a bigger, deeper screen showed garbage,
 /// or they time themselves by its speed and on a faster Mac divided by
-/// zero.  They run as a Plus unless a machine or processor is chosen.
+/// zero or ran far too fast.  They run as that Mac unless a machine or
+/// processor is chosen.
 let knownMachineRequirements: [UInt32: String] = [
     0x3F7A_2422: "plus", /* ?z$" Wave 15 (1985) */
     0x5350_2020: "plus", /* SP   PaintScroll 1.0 (1986) */
     0x5348_4150: "plus", /* SHAP Down Hill Racer (1986): divides by the ticks a frame takes */
+    0x7364_3039: "se",   /* sd09 Glypha 3.0 (1990): Fastest, its default speed, is as fast as it draws */
 ]
 
 func requiredMachine(application path: String) -> String? {
