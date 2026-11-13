@@ -196,6 +196,46 @@ extension BlueBox {
             #expect(savePointSteps.count == 2)
         }
 
+        /// A step queued before the save point's but due after it (the
+        /// input leading up to it: a mouse move, a key let go of) is the
+        /// save point's own: after a restore it comes again as it came
+        /// after the save point, before the steps carried from the restore.
+        @Test func stepsQueuedBeforeTheSavePoint() {
+            launchTestApp()
+            let counter = ptr(4)
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            _ = start([0x52B9, hi(counter), lo(counter), 0xA9B4, 0x60F6])
+            savePointSteps = []
+            machine_set_savepoint_handler({ action, _ in
+                savePointSteps.append((action, machine_instruction_count()))
+                machine_drain_begin(true)
+            }, nil)
+            defer { machine_set_savepoint_handler(nil, nil) }
+            let t0 = machine_instruction_count()
+            machine_script_add(t0 + 120_000, 1, 300, 200, -1) // move:300/200, queued first
+            machine_script_add(t0 + 100_000, 11, Int32(MACHINE_SAVEPOINT_SAVE), 0, 0)
+            machine_script_add(t0 + 600_000, 11, Int32(MACHINE_SAVEPOINT_RESTORE), 0, 0)
+            machine_script_add(t0 + 650_000, 3, 0x61, 0, 0)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            var buf: UnsafeMutablePointer<UInt8>?
+            var len = 0
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_savepoint_take(&buf, &len, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            defer { machine_savepoint_free(buf) }
+            #expect(machine_run(10_000_000) == RUN_DRAINED) // the move, then the restore step
+            #expect(machine_savepoint_restore(buf, len, nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            #expect(events_script_next_at() == t0 + 120_000) // the move again
+            _ = machine_run(40_000)
+            var x: Int32 = 0, y: Int32 = 0
+            var relative = false
+            _ = machine_mouse_state(&x, &y, &relative)
+            #expect(x == 300 && y == 200)
+            #expect(events_script_next_at() == t0 + 150_000) // then the restore's own
+        }
+
         /// The 68020's instruction cache is the machine's: put back as it
         /// was (a line the program's own store left stale stays stale), and
         /// the Toolbox's stores still flush its lines, which a resumed

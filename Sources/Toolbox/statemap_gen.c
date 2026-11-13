@@ -1605,8 +1605,10 @@ const hb_static hb_statics[] = {
     { "Toolbox/events.c", "qversion", 4, 0 },
     { "Toolbox/events.c", "relative_read", 1, 0 },
     { "Toolbox/events.c", "savepoint_step_at", 8, 12 },
+    { "Toolbox/events.c", "savepoint_step_seq", 4, 0 },
     { "Toolbox/events.c", "script", 8, 2 },
     { "Toolbox/events.c", "script_next", 4, 0 },
+    { "Toolbox/events.c", "script_seq", 4, 0 },
     { "Toolbox/events.c", "snap_paths", 8, 2 },
     { "Toolbox/events.c", "synced", 1, 0 },
     { "Toolbox/events.c", "system_gne_filter", 4, 0 },
@@ -2706,7 +2708,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1700;
+const unsigned hb_nstatics = 1702;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
@@ -2809,7 +2811,7 @@ const hb_typemap hb_types[] = {
     { "drivevol.c", "hfs_build_entry", 112, 178 },
     { "drivevol.c", "mac_file", 344, 179 },
     { "events.c", "char *", 8, 2 },
-    { "events.c", "script_step", 24, 12 },
+    { "events.c", "script_step", 32, 12 },
     { "filemgr.c", "char *", 8, 2 },
     { "filemgr.c", "dt_icon", 32, 161 },
     { "filemgr.c", "struct appl_path", 16, 150 },
