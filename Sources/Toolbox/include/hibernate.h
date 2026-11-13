@@ -33,6 +33,10 @@ typedef struct hb_stats {
     uint32_t untyped_blocks;              /* blocks no tag describes */
     uint32_t stale_types;                 /* tags the map has no layout for (or a different size) */
     uint32_t statics;                     /* saved statics the map placed */
+    /* Put back by name, from a build whose statics are elsewhere: the
+     * snapshot's statics this build has not (dropped), and this build's the
+     * snapshot has not (kept as they booted, being as compiled). */
+    uint32_t statics_dropped, statics_new;
     uint64_t file_bytes;                  /* the file written, compressed */
 } hb_stats;
 

@@ -248,8 +248,9 @@ func usage() -> Never {
           Where two snapshots differ (up to N places)
       bluebox fingerprint [--manifest | <snapshot>...]
           This build's state fingerprint (a snapshot resumes in any build with the
-          same), the list of what it covers, or whether each snapshot resumes here
-          and if not, the first thing that differs
+          same, or whose saved statics differ only by some being in one build alone),
+          the list of what it covers, or whether each snapshot resumes here and if
+          not, the first thing that differs
       bluebox chooser [run options]
           Open the Chooser on its own (it is also in every program's Apple menu):
           the AppleShare servers, LaserWriters and host printers to choose from,

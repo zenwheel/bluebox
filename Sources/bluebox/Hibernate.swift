@@ -664,7 +664,9 @@ func fingerprintCommand(_ args: [String]) {
     }
     if args.isEmpty {
         print("build \(str(id))\nstate fingerprint \(str(fp))")
-        exit(0)
+        // The map against this binary (a release build's optimizer may have
+        // split a static the map knows whole).
+        exit(hb_check_map(stderr) == 0 ? 0 : 1)
     }
     var all = true
     for path in args {
