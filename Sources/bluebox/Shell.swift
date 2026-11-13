@@ -374,14 +374,21 @@ enum ShellItem: Hashable {
             // run's own picker, before its app ran, left the program's
             // window behind the others (or unseen) however it asked to
             // come forward.
+            // After the click that asked: a modal picker run from within a
+            // SwiftUI action showed no snapshots and took no clicks.
             if states.isHibernated(path) {
-                switch pickSnapshot(program: path, title: (path as NSString).lastPathComponent,
-                                    registry: registry, standIn: false) {
-                case .resume(let snapshot): launch(path: path, extra: ["--resume", snapshot])
-                case .startFresh: launch(path: path, extra: ["--fresh"])
-                case .cancel: break
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        switch pickSnapshot(program: RunningProgram.canonical(path),
+                                            title: (path as NSString).lastPathComponent,
+                                            registry: self.registry, standIn: false) {
+                        case .resume(let snapshot): self.launch(path: path, extra: ["--resume", snapshot])
+                        case .startFresh: self.launch(path: path, extra: ["--fresh"])
+                        case .cancel: break
+                        }
+                        self.readRegistry()
+                    }
                 }
-                readRegistry()
                 return
             }
             launch(path: path)
