@@ -172,18 +172,100 @@ extension BlueBox {
             #expect(all >= 2) // boot_time and the guest's Time
         }
 
-        /// A snapshot another build wrote whose saved state has another shape
-        /// (another state fingerprint) is refused, and nothing changes.
+        /// The place of a line in a snapshot's own manifest (in its body).
+        func manifestLine(_ snap: [UInt8], _ prefix: String) -> Int? {
+            let key = Array(prefix.utf8)
+            return (0...(snap.count - key.count)).first { snap[$0] == key[0] && Array(snap[$0..<$0 + key.count]) == key }
+        }
+
+        /// A snapshot another build wrote, a static of whose has another type
+        /// here, is refused, naming it, and nothing changes.
         @Test func anotherShapeIsRefused() {
             let out = setUp()
             _ = machine_run(50_000)
             var snap = save()
             snap[16] ^= 0xFF  // a byte of the build's UUID
             snap[32] ^= 0xFF  // and of the state fingerprint
+            guard let at = manifestLine(snap, "S\tToolbox/trap.c\tnatives\t") else {
+                Issue.record("no manifest in the snapshot")
+                return
+            }
+            var end = at
+            while snap[end] != 0x0A { end += 1 }
+            snap[end - 1] = snap[end - 1] == UInt8(ascii: "0") ? UInt8(ascii: "1") : UInt8(ascii: "0") // its shape
             let before = fingerprint(out)
             let (ok, err, _) = restore(snap)
-            #expect(!ok && err.contains("saved state differs"), Comment(rawValue: err))
+            #expect(!ok && err.contains("the static natives (Toolbox/trap.c) has another type"), Comment(rawValue: err))
             #expect(fingerprint(out) == before)
+        }
+
+        /// A snapshot of a build whose statics are elsewhere (another
+        /// fingerprint, the same shapes) is put back a static at a time by
+        /// name, and the machine goes on exactly as from this build's.
+        @Test func staticsArePutBackByName() {
+            let out = setUp()
+            _ = machine_run(200_000)
+            var s1 = save()
+            _ = machine_run(300_000)
+            let ranA = fingerprint(out), sA = save()
+            s1[16] ^= 0xFF
+            s1[32] ^= 0xFF  // another layout
+            let (ok, err, st) = restore(s1, flags: Int32(HB_RESTORE_MOVE_REGIONS))
+            #expect(ok, Comment(rawValue: err))
+            #expect(st.statics_dropped == 0 && st.statics_new == 0, "\(st)")
+            s1[16] ^= 0xFF
+            s1[32] ^= 0xFF
+            #expect(differences(s1, save()) == 0)
+            _ = machine_run(300_000)
+            #expect(fingerprint(out) == ranA)
+            #expect(differences(sA, save()) == 0)
+        }
+
+        /// A static the snapshot's build had and this one has not is dropped;
+        /// one this build has and the snapshot's had not keeps its value when
+        /// that is as compiled, and is refused, naming it, when booting set it
+        /// (it could hold a stub's place among this boot's natives).
+        @Test func aStaticOnlyOneBuildHas() {
+            let out = setUp()
+            _ = machine_run(50_000)
+            var snap = save()
+            snap[16] ^= 0xFF
+            snap[32] ^= 0xFF
+            // natives (trap.c), set as the machine booted, renamed in the
+            // snapshot: the snapshot's Natives is dropped, this build's natives new.
+            var set = snap
+            guard let at = manifestLine(set, "S\tToolbox/trap.c\tnatives\t") else {
+                Issue.record("no manifest in the snapshot")
+                return
+            }
+            set[at + 17] = UInt8(ascii: "N")
+            let before = fingerprint(out)
+            let (ok, err, _) = restore(set)
+            // (Set, or holding a pointer to a name made as it booted.)
+            #expect(!ok && err.contains("the static natives (Toolbox/trap.c), new in this build, ")
+                    && err.hasSuffix("as this build booted"), Comment(rawValue: err))
+            #expect(fingerprint(out) == before)
+            // A static of zeros now, with no pointer: renamed, it is put back
+            // as a new static, keeping its zeros.
+            let lines = manifest().split(separator: "\n").map(String.init)
+            var zero: String?
+            for l in lines where l.hasPrefix("S\t") {
+                let f = l.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+                guard f.count >= 8, f[3] == "1", let size = Int(f[5]), size > 0, size <= 64,
+                      let p = hb_resolve_symbol(f[1], f[2], 0) else { continue }
+                if (0..<size).allSatisfy({ p.load(fromByteOffset: $0, as: UInt8.self) == 0 }) {
+                    zero = "S\t\(f[1])\t\(f[2])\t"
+                    break
+                }
+            }
+            guard let zero, let z = manifestLine(snap, zero) else {
+                Issue.record("no static of zeros")
+                return
+            }
+            snap[z + zero.utf8.count - 2] ^= 0x20 // its name's last letter's case
+            let (ok2, err2, st) = restore(snap)
+            #expect(ok2, Comment(rawValue: err2))
+            #expect(st.statics_dropped == 1 && st.statics_new == 1, "\(st)")
         }
 
         /// Another build's snapshot with this build's state fingerprint is put
@@ -285,13 +367,24 @@ extension BlueBox {
             f[7] = "0000000000000000"
             old[i] = f.joined(separator: "\t")
             #expect(explain(old.joined(separator: "\n") + "\n") == "the static natives (Toolbox/trap.c) has another type")
+            // A static only one build has, or elsewhere, is no difference
+            // (put back by name); a layout record's value is.
             old.remove(at: i)
+            if let k = old.firstIndex(where: { $0.hasPrefix("S\t") }) {
+                var g = old[k].split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+                g[4] = "12345"
+                old[k] = g.joined(separator: "\t")
+            }
+            #expect(explain(old.joined(separator: "\n") + "\n") == "its saved state has this build's shape")
             if let k = old.firstIndex(where: { $0.hasPrefix("L\ttrap.c stub size\t") }) {
                 old[k] = "L\ttrap.c stub size\t0000000000000010"
             }
+            if let k = old.firstIndex(where: { $0.hasPrefix("L\ttrap.c stubs\t") }) {
+                old[k] = "L\ttrap.c stubs\t0000000000002000"
+            }
             let why = explain(old.joined(separator: "\n") + "\n")
-            #expect(why.contains("guest-side layout trap.c stub size differs") && why.contains("1 more"), Comment(rawValue: why))
-            #expect(explain(lines.joined(separator: "\n") + "\n") == "its saved state differs from this build's")
+            #expect(why.hasPrefix("the guest-side layout trap.c stub size differs") && why.contains("1 more"),
+                    Comment(rawValue: why))
         }
 
         /// A pointer into the binary as a snapshot names it: a global function
