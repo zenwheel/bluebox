@@ -995,6 +995,21 @@ uint64_t machine_time_ns(void)
 
 void machine_skip_time(uint64_t ns) { skipped_ns += ns; }
 
+/* A wait on the wall clock really takes its time: skipping the clock
+ * instead would leave it ahead of the host's (a --realtime run's Delay, or
+ * its sound played out).  A headless run's instruction count moves on as
+ * if the program had run meanwhile, as for idle.c's sleeps, so that its
+ * scripted input still comes and it meets its instruction limit. */
+void machine_pass_time(uint64_t ns);
+
+void machine_sleep_ns(uint64_t ns)
+{
+    struct timespec ts = { (time_t)(ns / 1000000000u), (long)(ns % 1000000000u) };
+    nanosleep(&ts, NULL);
+    if (!events_host_attached())
+        machine_pass_time(ns);
+}
+
 /* QuickDraw's work takes time on the instruction clock as it did on a
  * Mac (10 ns a pixel, a 68040's fills): a trap counts as one instruction
  * however much it draws, and a program drawing until the tick changes

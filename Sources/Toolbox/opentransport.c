@@ -1378,8 +1378,13 @@ static void ot_Memcmp(ppc_cpu *c)
     RETURN(i == n);
 }
 
+/* The host's microseconds on the wall clock (a host attached, or
+ * --realtime); headless, the machine's clock's, so a program timing itself
+ * by them keeps the machine's time. */
 static uint64_t micros(void)
 {
+    if (!machine_wall_clock())
+        return machine_time_ns() / 1000u;
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint64_t)tv.tv_sec * 1000000u + (uint64_t)tv.tv_usec;

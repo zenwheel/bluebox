@@ -278,7 +278,7 @@ static void note_indexed(int16_t vref, uint32_t bytes)
         indexed[i].vref = vref;
         indexed[i].size = 0;
     }
-    indexed[i].stamp = (uint32_t)time(NULL) + 2082844800u;
+    indexed[i].stamp = (uint32_t)machine_unix_now() + 2082844800u;
     indexed[i].size += bytes;
 }
 

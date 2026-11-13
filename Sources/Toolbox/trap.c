@@ -761,10 +761,10 @@ unsigned machine_idle_answered(void)
     return in_row;
 }
 
-/* The same for WaitNextEvent's sleep, in ticks (negative: as long as the
- * script lets it): the clock moves on no further than the program asked
- * to sleep, so a program doing its work between null events (the Finder
- * filling its windows) gets them as often as it did on a Mac. */
+/* The same for WaitNextEvent's sleep, in ticks (negative: none asked
+ * for): the clock moves on no further than the program asked to sleep, so
+ * a program doing its work between null events (the Finder filling its
+ * windows) gets them as often as it did on a Mac. */
 void machine_idle_for(int32_t sleep)
 {
     cpu68k *c = g_cpu;
@@ -794,15 +794,17 @@ void machine_idle_for(int32_t sleep)
         machine_advance_ticks();
         time_pump();
     }
-    /* Waiting: scripted input comes now, or the clock moves on to it. */
-    uint64_t next = events_script_next_at();
-    if (sleep == 0) {
-        /* No sleep: WaitNextEvent returns at once, as on a Mac, the clock
-         * moved on by the call's own time only, not a tick: a program
-         * counting its null events (ApplLoader quits after 3000 of them)
-         * would otherwise wait most of a minute. */
-        next = 0;
-    } else if (sleep > 0) {
+    /* Asleep, the program wakes for scripted input, or when its sleep is
+     * up.  With no sleep (GetNextEvent, a poll of Button, WaitNextEvent
+     * asked not to sleep) the call returns at once, as on a Mac, the
+     * clock moved on by the call's own time only: a program counting its
+     * null events (ApplLoader quits after 3000 of them) would otherwise
+     * wait most of a minute, and one polling as it plays (a game's loop)
+     * keeps its own pace, as it does on a Mac, rather than the clock
+     * jumping to the next scripted key at each poll. */
+    uint64_t next = 0;
+    if (sleep > 0) {
+        next = events_script_next_at();
         uint64_t slept = c->icount + (uint64_t)sleep * 166667u; /* a tick at 10 MIPS */
         if (!next || slept < next)
             next = slept;

@@ -157,7 +157,7 @@ static void via_update(void)
  * TickCount, rather than burning wall-clock time at emulation speed. */
 static void via_polled(void)
 {
-    if (events_host_attached() || !g_cpu)
+    if (machine_wall_clock() || !g_cpu)
         return;
     uint64_t ic = g_cpu->icount;
     via.polls = ic - via.poll_icount < 100 ? via.polls + 1 : 0;

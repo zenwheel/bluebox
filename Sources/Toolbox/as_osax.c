@@ -916,8 +916,8 @@ static as_obj *say(as_obj *direct)
     /* say waits until it has been said */
     for (int i = 0; !err && tb_SpeechBusy() && i < 6000 && !(g_cpu && g_cpu->halted); i++) {
         speech_pump();
-        if (events_host_attached())
-            usleep(10000);
+        if (machine_wall_clock())
+            machine_sleep_ns(10000000);
         else
             machine_pass_tick();
     }
@@ -1114,8 +1114,23 @@ as_obj *as_command(as_obj *event, as_obj *direct, as_obj *params, as_obj *target
         case 0x64656C61: { /* 'dela' */
             double n = 0;
             bool is_int;
-            if (direct && as_to_number(direct, &n, &is_int) && n > 0)
-                machine_skip_time((uint64_t)(n * 1e9));
+            if (!direct || !as_to_number(direct, &n, &is_int) || n <= 0)
+                return as_undef();
+            uint64_t ns = (uint64_t)(n * 1e9);
+            if (!machine_wall_clock()) {
+                machine_skip_time(ns); /* headless, the clock follows instructions */
+                return as_undef();
+            }
+            /* On the wall clock the time really passes, interrupt-time
+             * work going on: skipped, the clock stayed that far ahead of
+             * the host's for the rest of the run.  A drain cuts it short. */
+            uint64_t end = machine_time_ns() + ns;
+            while (machine_time_ns() < end && !(g_cpu && g_cpu->halted) && !drain_wanted()) {
+                machine_sleep_ns(5000000);
+                machine_advance_ticks();
+                sound_pump();
+                time_pump();
+            }
             return as_undef();
         }
         }

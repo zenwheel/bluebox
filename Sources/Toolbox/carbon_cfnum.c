@@ -338,7 +338,7 @@ double cf_absolute_now(void)
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    time_t t = tv.tv_sec;
+    time_t t = machine_wall_clock() ? tv.tv_sec : (time_t)machine_unix_now();
     struct tm lt;
     localtime_r(&t, &lt);
     int64_t mac_host = (int64_t)t + lt.tm_gmtoff + 2082844800LL;
@@ -658,7 +658,10 @@ static void cf_CFUUIDGetTypeID(ppc_cpu *c) { RETURN(CFT_UUID); }
 static void cf_CFUUIDCreate(ppc_cpu *c)
 {
     static uint64_t state;
-    if (!state) {
+    if (!state && !machine_wall_clock()) {
+        /* Headless, seeded by the machine's clock: the same UUIDs each run. */
+        state = ((uint64_t)mac_now() << 32 ^ machine_time_ns()) | 1;
+    } else if (!state) {
         struct timeval tv;
         gettimeofday(&tv, NULL);
         state = (uint64_t)tv.tv_sec * 1000003u ^ (uint64_t)tv.tv_usec ^ (uint64_t)(uintptr_t)&state;

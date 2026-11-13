@@ -451,9 +451,8 @@ static bool wait_recording(void)
     while (rec.active && !g_cpu->halted) {
         if (drain_wanted() && drain_abandon())
             return false;
-        if (events_host_attached()) {
-            struct timespec ts = { 0, 5000000 };
-            nanosleep(&ts, NULL);
+        if (machine_wall_clock()) {
+            machine_sleep_ns(5000000);
         } else if (rec.total) {
             uint64_t ns = (uint64_t)((double)((rec.total - rec.done) / frame_bytes()) * 1e9 / rate_hz(dev.rate));
             machine_skip_time(ns + 1000000);
