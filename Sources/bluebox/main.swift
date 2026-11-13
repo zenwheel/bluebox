@@ -936,9 +936,13 @@ func runCommand(_ args: [String], resume: String? = nil) {
         var extra = args
         extra.remove(at: appIndex)
         let fresh = startFresh || ProcessInfo.processInfo.environment[startFreshVariable] == "1"
+        // A bundle launched again with its picker's choice (not passed on
+        // to the runs it starts).
+        let named = resumeNamed ?? ProcessInfo.processInfo.environment[resumeSnapshotVariable]
+        unsetenv(resumeSnapshotVariable)
         resumeIfHibernated(app: app, program: Registration.current?.entry.program ?? RunningProgram.canonical(app),
-                           extra: extra, resumes: interactive || resumeHibernated, named: resumeNamed, fresh: fresh,
-                           newCopy: newCopy, interactive: interactive && resumeNamed == nil)
+                           extra: extra, resumes: interactive || resumeHibernated || named != nil, named: named,
+                           fresh: fresh, newCopy: newCopy, interactive: interactive && named == nil)
     }
     // A game known to need a 13-inch monitor's screen gets it, unless a size is
     // given, it resumes on the one it hibernated with, or it is to stay rootless.
@@ -997,6 +1001,13 @@ func runCommand(_ args: [String], resume: String? = nil) {
     }
     #endif
     machine_set_appearance(appearance)
+    #if canImport(AppKit)
+    // Headless, macOS's controls drawn as in a window (for tests and
+    // pictures of what a window shows): BLUEBOX_NATIVE_CONTROLS=1.
+    if !interactive && ProcessInfo.processInfo.environment["BLUEBOX_NATIVE_CONTROLS"] == "1" {
+        MainActor.assumeIsolated { NativeControls.install() }
+    }
+    #endif
     // Network and serial ports from the settings, unless given here.
     if !appletalkGiven, let a = saved.appletalk, a.hasPrefix("bridge:"), isWireless(String(a.dropFirst(7))) {
         eprint("bluebox: appletalk \"\(a)\" (from the settings) is Wi-Fi, which drops EtherTalk; AppleTalk is on this Mac only\n")

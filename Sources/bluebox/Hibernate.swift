@@ -295,7 +295,9 @@ func resumeIfHibernated(app: String, program: String, extra: [String], resumes: 
         print("It is kept. --fresh starts \(title) fresh; bluebox snapshots delete deletes it.")
         exit(1)
     case .pick:
-        switch pickSnapshot(program: program, title: title, registry: registry) {
+        let picked = pickSnapshot(program: program, title: title, registry: registry)
+        if picked != .cancel { relaunchFromBundle(picked) }
+        switch picked {
         case .resume(let snapshot):
             resumeSnapshot(snapshot, app: app, title: title, extra: extra, interactive: interactive)
         case .startFresh:
@@ -309,6 +311,41 @@ func resumeIfHibernated(app: String, program: String, extra: [String], resumes: 
     case .resume(let snapshot):
         resumeSnapshot(snapshot, app: app, title: title, extra: extra, interactive: interactive)
     }
+}
+
+/// The snapshot a run is to resume without asking (a program's own
+/// bundle, launched again with the picker's choice).
+let resumeSnapshotVariable = "BLUEBOX_RESUME_SNAPSHOT"
+
+/// A program run from its own bundle starts again with the picker's choice,
+/// launched by Launch Services as its Dock icon would, and this run ends.
+/// Gone on in this process, whose app the picker had started before it
+/// ran, the program's window came up hidden (not even in Mission Control
+/// until the Dock icon was clicked).  Returns if it is not a bundle's run,
+/// or the launch failed (the run goes on here).
+private func relaunchFromBundle(_ choice: SnapshotPicker.Choice) {
+    #if canImport(AppKit)
+    guard Bundle.main.object(forInfoDictionaryKey: bundleAppKey) != nil else { return }
+    let config = NSWorkspace.OpenConfiguration()
+    config.activates = true
+    config.createsNewApplicationInstance = true
+    switch choice {
+    case .resume(let snapshot): config.environment = [resumeSnapshotVariable: snapshot]
+    case .startFresh: config.environment = [startFreshVariable: "1"]
+    case .cancel: return
+    }
+    // Out of the registry first: the new run would find this one running
+    // and bring it forward instead.
+    Registration.current?.end()
+    let done = DispatchSemaphore(value: 0)
+    nonisolated(unsafe) var launched = false
+    NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { app, _ in
+        launched = app != nil
+        done.signal()
+    }
+    guard done.wait(timeout: .now() + 15) == .success, launched else { return }
+    exit(0)
+    #endif
 }
 
 /// Set (to 1) for a run that is to start fresh without asking: the shell's
@@ -332,7 +369,10 @@ private func resumeSnapshot(_ snapshot: String, app: String, title: String, extr
 /// to Trash and Cancel.  A snapshot this build cannot resume (saved by a
 /// build whose saved state differs) is listed, says why, and can only be
 /// deleted.
-private func pickSnapshot(program: String, title: String, registry: ProgramRegistry) -> SnapshotPicker.Choice {
+/// `standIn`: a run's own picker leaves its window up, unseen, until the
+/// program has one (PickerStandIn); the shell's just closes it.
+func pickSnapshot(program: String, title: String, registry: ProgramRegistry,
+                  standIn: Bool = true) -> SnapshotPicker.Choice {
     #if canImport(AppKit)
     return MainActor.assumeIsolated {
         let model = SnapshotPickerModel(SnapshotPicker(program: program, title: title, registry: registry), registry: registry)
@@ -343,6 +383,10 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
                               styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         window.title = title
+        // Closed with its close button (Cancel), it is still ours: the
+        // shell goes on after it, and a window released on closing as well
+        // was released twice.
+        window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SnapshotPickerView(model: model))
         window.center()
         let closer = PickerWindowDelegate()
@@ -351,7 +395,7 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
         withExtendedLifetime(closer) { _ = app.runModal(for: window) }
         window.delegate = nil
         let choice = model.choice ?? .cancel
-        if choice == .cancel { window.orderOut(nil) } else { PickerStandIn.keep(window) }
+        if choice == .cancel || !standIn { window.orderOut(nil) } else { PickerStandIn.keep(window) }
         return choice
     }
     #else

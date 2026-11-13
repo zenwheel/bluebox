@@ -369,6 +369,28 @@ enum ShellItem: Hashable {
                 }
                 return
             }
+            // Hibernated: the shell asks which snapshot, and the run starts
+            // told (--resume FILE or --fresh), as any launch from here.  A
+            // run's own picker, before its app ran, left the program's
+            // window behind the others (or unseen) however it asked to
+            // come forward.
+            // After the click that asked: a modal picker run from within a
+            // SwiftUI action showed no snapshots and took no clicks.
+            if states.isHibernated(path) {
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        switch pickSnapshot(program: RunningProgram.canonical(path),
+                                            title: (path as NSString).lastPathComponent,
+                                            registry: self.registry, standIn: false) {
+                        case .resume(let snapshot): self.launch(path: path, extra: ["--resume", snapshot])
+                        case .startFresh: self.launch(path: path, extra: ["--fresh"])
+                        case .cancel: break
+                        }
+                        self.readRegistry()
+                    }
+                }
+                return
+            }
             launch(path: path)
         case .activate(let pid): bringToFront(pid: pid)
         case .resume(let pid):

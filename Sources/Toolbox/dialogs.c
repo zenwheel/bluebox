@@ -1510,11 +1510,38 @@ static bool as_host_alert(gaddr d, machine_alert *a)
     }
     if (!tn || a->nbuttons < 1)
         return false;
+    /* A control the program added with NewControl, outside the items
+     * (ZTerm's Serial Port pop-up, made over a user item), would be left
+     * out of the host's alert: then it is a dialog after all.  With a
+     * root control, so would one embedded in it. */
+    gaddr root = ctl_window_root(d);
+    for (gaddr c = WindowRecord_controlList(d); c && rd32(c); c = ControlRecord_nextControl(rd32(c))) {
+        gaddr subs[256];
+        int k = 0;
+        if (c == root)
+            k = ctl_subcontrols(root, subs, 256);
+        else
+            subs[k++] = c;
+        for (int j = 0; j < k; j++) {
+            bool button = false;
+            for (int i = 1; i <= n && !button; i++)
+                button = (item_type(d, i) & 0x7F) == (ctrlItem | btnCtrl) && item_handle(d, i) == subs[j];
+            if (!button)
+                return false;
+        }
+    }
     int16_t def = (int16_t)rd16(d + DialogRecord_aDefItem_off);
     a->default_item = def;
     for (int i = 0; i < a->nbuttons; i++)
         a->buttons[i].is_default = a->buttons[i].item == def;
     return true;
+}
+
+/* Whether the host would show d as one of its alerts (tests). */
+bool dialog_alert_like(gaddr d)
+{
+    machine_alert a;
+    return as_host_alert(d, &a);
 }
 
 /* For a visible dialog box (not a modeless window) that is an alert in all
