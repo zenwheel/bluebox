@@ -205,6 +205,8 @@ enum ShellItem: Hashable {
         didSet { UserDefaults.standard.set(Array(expanded), forKey: "expanded") }
     }
     @Published var themes: [String] = []
+    /// The host's printers, for the settings pages' printing choice.
+    @Published private(set) var hostPrinters: [String] = []
     @Published var importing: [String] = []
     @Published var messages: [String] = []
     @Published var settings: [String: AppSettings] = [:]
@@ -282,10 +284,23 @@ enum ShellItem: Hashable {
 
     init() {
         refreshInBackground()
+        readHostPrinters()
         watchSystemFolder()
         watchRegistry()
         watchSuspensions()
         watchFrontRequests()
+    }
+
+    /// The printers, asked off the main thread: lpstat can take a while, and
+    /// waiting for it there spins the main run loop inside SwiftUI's update,
+    /// after which the sidebar no longer followed light and dark mode.
+    private func readHostPrinters() {
+        DispatchQueue.global(qos: .utility).async {
+            let names = hostPrinterNames()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self.hostPrinters = names }
+            }
+        }
     }
 
     /// A program of the shell's whose window came up behind the others.
@@ -914,7 +929,8 @@ struct DefaultsPage: View {
                 Text("Every classic application gets these unless its own settings say otherwise.")
                     .foregroundStyle(.secondary)
             }
-            SettingsForm(settings: model.settingsBinding(defaultSettingsKey), themes: model.themes, isDefault: true,
+            SettingsForm(settings: model.settingsBinding(defaultSettingsKey), themes: model.themes,
+                         printers: model.hostPrinters, isDefault: true,
                          fallback: AppSettings())
         }
         .formStyle(.grouped)
@@ -1002,7 +1018,8 @@ struct AppPage: View {
                         .keyboardShortcut(.defaultAction)
                 }
             }
-            SettingsForm(settings: model.settingsBinding(settingsKey(app.path)), themes: model.themes, isDefault: false,
+            SettingsForm(settings: model.settingsBinding(settingsKey(app.path)), themes: model.themes,
+                         printers: model.hostPrinters, isDefault: false,
                          fallback: fallback, depthNote: neededDepth == nil ? nil : "which it needs")
         }
         .formStyle(.grouped)
@@ -1022,6 +1039,8 @@ struct AppPage: View {
 struct SettingsForm: View {
     @Binding var settings: AppSettings
     let themes: [String]
+    /// The host's printers (ShellModel.hostPrinters).
+    let printers: [String]
     let isDefault: Bool
     /// What an unset setting comes to: the defaults' values (for an
     /// application), or nothing (the built-in values, for the defaults).
@@ -1155,7 +1174,7 @@ struct SettingsForm: View {
                   + "before the server to log in; without it you are a guest.")
         }
         Section("Printing") {
-            PrinterPicker(printer: $settings.printer, folder: $settings.printFolder, inherit: inherit,
+            PrinterPicker(printer: $settings.printer, folder: $settings.printFolder, hosts: printers, inherit: inherit,
                           inherited: fallback)
         }
         Section {
@@ -1814,15 +1833,13 @@ struct NetworkInterface {
     }
 }
 
-/// The host's printers, asked once (lpstat) for the settings pages.
-let shellHostPrinters = hostPrinterNames()
-
 /// Printing, as the Chooser chooses it: the print panel, a host printer
 /// printed to without it, a LaserWriter on AppleTalk, or every job saved as
 /// a PDF in a folder.
 struct PrinterPicker: View {
     @Binding var printer: String?
     @Binding var folder: String?
+    let hosts: [String]
     let inherit: String
     let inherited: AppSettings
 
@@ -1838,7 +1855,6 @@ struct PrinterPicker: View {
 
     var body: some View {
         let current = printer ?? (folder.map { $0.isEmpty ? "panel" : "pdf" })
-        let hosts = shellHostPrinters
         Picker("Printed pages", selection: Binding(get: { current ?? "" }, set: { v in
             switch v {
             case "": printer = nil; folder = nil
