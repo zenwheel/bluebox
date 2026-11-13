@@ -48,6 +48,43 @@ extension BlueBox {
             #expect(hwRead(0x50F1_4801) == 0)
         }
 
+        /// What the host was given to play: each buffer's frames and its
+        /// loudest sample.
+        nonisolated(unsafe) static var played: [(frames: Int32, peak: Int32)] = []
+
+        /// The Plus's sound buffer, on a Mac without one: what a program
+        /// writes at SoundBase is played, 370 samples a retrace, as the
+        /// Sound Manager played it through the Apple Sound Chip; untouched,
+        /// or silenced with one value, nothing is heard.
+        @Test func soundBufferPlaysOnLaterMacs() {
+            Self.played = []
+            machine_set_sound_handler({ _, pcm, frames, _, _, _, _ in
+                guard let pcm else { return }
+                let peak = (0..<Int(frames)).map { abs(Int32(pcm[$0])) }.max() ?? 0
+                Hardware.played.append((frames, peak))
+            }, nil)
+            defer { machine_set_sound_handler(nil, nil) }
+            let volume = rd8(UInt32(LM_SdVolume))
+            wr8(UInt32(LM_SdVolume), 7)
+            defer { wr8(UInt32(LM_SdVolume), volume) }
+            func retraces(_ fill: ((Int) -> UInt8)?) -> [(frames: Int32, peak: Int32)] {
+                let buf = rd32(UInt32(LM_SoundBase))
+                if let fill { for i in 0..<370 { wr8(buf + UInt32(i * 2), fill(i)) } }
+                Self.played = []
+                machine_skip_time(40_000_000)
+                time_pump()
+                return Self.played
+            }
+            #expect(rd32(UInt32(LM_SoundBase)) != 0)
+            #expect(retraces(nil).isEmpty)                         // untouched
+            #expect(retraces { _ in 0x80 }.allSatisfy { $0.peak == 0 }) // silenced, as the Talking Moose does
+            let tone = retraces { $0 & 1 == 0 ? 0xC0 : 0x40 }
+            #expect(!tone.isEmpty)
+            #expect(tone.allSatisfy { $0.frames == 370 && $0.peak > 0 })
+            #expect(retraces { _ in 0x80 }.allSatisfy { $0.peak == 0 }) // back to rest
+            #expect(retraces(nil).isEmpty)                         // and then nothing
+        }
+
         /// A 68k program reads and writes the VIA with ordinary instructions.
         @Test func viaFromAProgram() {
             hwWrite(via(V.ier), 0x82)  // enable CA1
