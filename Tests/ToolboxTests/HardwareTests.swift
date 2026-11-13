@@ -15,6 +15,7 @@ func withMachine(_ name: String, _ body: () -> Void) {
         machine_set_cpu(68040)
         machine_set_fpu(-1)
         machine_set_addressing(0)
+        machine_set_accurate_timing(false)
     }
     body()
 }
@@ -365,10 +366,11 @@ extension BlueBox {
             }
         }
 
-        /// QuickDraw's drawing takes a 68000's cycles, as ROM QuickDraw's did:
-        /// Glypha 3.0, paced by nothing but its drawing, ran hundreds of
-        /// frames a second in a window.
+        /// With accurate timing QuickDraw's drawing takes a 68000's cycles,
+        /// as ROM QuickDraw's did: Glypha 3.0, paced by nothing but its
+        /// drawing, ran hundreds of frames a second in a window.
         @Test func drawingTakesTheCompactMacsTime() {
+            machine_set_accurate_timing(true)
             plus {
                 _ = initToolbox()
                 let r = tb_NewPtr(8, false, true)
@@ -380,6 +382,25 @@ extension BlueBox {
                 let cycles: UInt64 = 4000 + 2 * 64 * 64
                 let expected: UInt64 = cycles * 4_000_000_000 / (7_833_600 * 3)
                 #expect(spent + 1 >= expected && spent <= expected + 1, "spent \(spent) ns")
+                tb_DisposePtr(r)
+            }
+        }
+
+        /// Fast timing (the default) runs a 68000 at the host's speed: its
+        /// drawing is charged as other processors' is (10 ns a pixel), and
+        /// its clock follows the instructions, not its cycles.
+        @Test func fastTimingLeavesTheCompactMacsSpeed() {
+            plus {
+                #expect(!machine_accurate_timing())
+                _ = initToolbox()
+                let r = tb_NewPtr(8, false, true)
+                wr16(r, 10); wr16(r + 2, 10); wr16(r + 4, 74); wr16(r + 6, 74) // 64 by 64
+                let cycles = g_cpu!.pointee.cycles
+                let before = machine_time_ns()
+                tb_PaintRect(r)
+                let spent = machine_time_ns() - before
+                #expect(g_cpu!.pointee.cycles == cycles, "QuickDraw charged the 68000's cycles")
+                #expect(spent == 64 * 64 * 10, "spent \(spent) ns")
                 tb_DisposePtr(r)
             }
         }

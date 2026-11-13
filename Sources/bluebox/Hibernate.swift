@@ -106,7 +106,7 @@ func runArgsToKeep(_ args: [String]) -> [String] {
             out.append(a)
             // The flags with a value (the rest of runCommand's).
             if ["--fonts", "--appearance", "--speech", "--appleshare", "--scale", "--jit-cache", "--depth", "--machine",
-                "--floppy", "--screensaver", "--every", "--idle", "--init", "--cpu", "--fpu", "--addressing",
+                "--floppy", "--screensaver", "--every", "--idle", "--init", "--cpu", "--fpu", "--addressing", "--timing",
                 "--appletalk", "--modem-port", "--printer-port", "--screen", "--gestalt", "--lowmem",
                 "--date"].contains(a),
                i + 1 < args.count {

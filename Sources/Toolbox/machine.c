@@ -963,13 +963,20 @@ BB_HOST static bool realtime; /* the run's choice, kept when a snapshot is put b
 void machine_set_realtime(bool on) { realtime = on; }
 bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
-/* A 68000 (PLAN M22) keeps a compact Mac's time: its clocks at 7.8336 MHz,
- * with about a quarter of the bus going to the screen and the sound, as on
- * a Plus or an SE, so it ran as a 6 MHz 68000 would.  Early games timed
- * themselves by it (Down Hill Racer divides by the ticks a frame takes).
- * What the instruction count moved on by without running instructions (a
- * wait for input passing, machine_idle_for) is time at the usual rate. */
-static bool timed_68000(void) { return cpu.model == 68000 && !g_ppc_mode; }
+/* With accurate timing a 68000 (PLAN M22) keeps a compact Mac's time: its
+ * clocks at 7.8336 MHz, with about a quarter of the bus going to the
+ * screen and the sound, as on a Plus or an SE, so it ran as a 6 MHz 68000
+ * would.  Early games timed themselves by it (Down Hill Racer divides by
+ * the ticks a frame takes).  What the instruction count moved on by
+ * without running instructions (a wait for input passing,
+ * machine_idle_for) is time at the usual rate.  Otherwise (fast, the
+ * default) a 68000 keeps its instruction set but runs at the host's speed,
+ * on the clock every other processor has.  Saved with a snapshot: the
+ * clock and the slices go on as they were. */
+static bool accurate_timing;
+void machine_set_accurate_timing(bool on) { accurate_timing = on; }
+bool machine_accurate_timing(void) { return accurate_timing; }
+static bool timed_68000(void) { return accurate_timing && cpu.model == 68000 && !g_ppc_mode; }
 enum {
     QD_CALL_CYCLES = 4000, /* a drawing call's setup in ROM QuickDraw, about 0.7 ms */
     QD_PIXEL_CYCLES = 2,   /* a 1-bit pixel moved: 16 to a word, shifted and masked */
@@ -1105,7 +1112,7 @@ void machine_set_time(uint32_t secs)
     wr32(LM_Time, secs);
 }
 
-/* With the wall clock, a 68000 runs no faster than its clocks allow:
+/* With the wall clock, a timed 68000 runs no faster than its clocks allow:
  * ahead of them it waits.  A program idle in the host meanwhile (or behind
  * by more than a few ticks) starts the count again rather than racing to
  * catch up. */
@@ -1128,8 +1135,8 @@ static void pace_68000(void)
 
 run_status machine_run(uint64_t max)
 {
-    /* Ticks and the VBL tasks move on between slices: a 68000's are
-     * shorter, its instructions taking ten times as long, so that a
+    /* Ticks and the VBL tasks move on between slices: a timed 68000's
+     * are shorter, its instructions taking ten times as long, so that a
      * program timing a loop by Ticks sees them change within a tick. */
     const uint64_t slice = timed_68000() ? 2000 : 20000;
     uint64_t done = 0;

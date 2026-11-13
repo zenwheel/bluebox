@@ -186,11 +186,12 @@ Some useful options for `run`:
 | `--cpu 68000\|68020\|68030\|68040` | The processor a 68k program runs on: a Quadra 800's 68040 by default; a 68030, 68020 or 68000 for programs written for those (the 68000 takes address errors and has no 68020 instructions; the 68020 and 68030 have their instruction caches). `--fpu none\|68881\|68882\|68040` chooses the FPU. |
 | `--addressing 24\|32` | 24-bit addressing ignores the top byte of every address, as a Mac without 32-bit mode did. A 68k program not marked 32-bit clean gets it by default. |
 | `--machine plus\|se\|classic\|macii` | Present a classic Mac: its processor (a 68000, or the Mac II's 68020 and 68881), 24-bit addressing, its memory map (a compact Mac's 4 MB with the 512×342 screen near the top of RAM and its chips at `$EFE1FE` and the rest; the Mac II's 8 MB, ROM at `$800000` and chips at `$F00000`), ROM and System 6.0.8. `--cpu`, `--fpu` and `--addressing` change the machine's own. |
+| `--timing fast\|accurate` | How fast a 68000 runs. Fast, the default, runs it at this Mac's speed (it is still a 68000: 24-bit, address errors, no 68020 instructions). Accurate gives it a compact Mac's speed: its clock cycles counted at 7.8336 MHz, QuickDraw's drawing taking ROM QuickDraw's time, and in a window no faster than that, for games that time themselves by the Plus (Down Hill Racer and Glypha 3.0 get it unless a timing is chosen). Other processors have no cycle model yet, so accurate changes nothing for them. |
 | `--appearance native` | Use macOS window frames. A Kaleidoscope scheme can be given instead. |
 | `--headless --screenshot out.png` | Run without a window and save the screen at the end. |
 | `--background` | No Dock icon or menu bar: the program's menus are in a status item, its windows float over the desktop. |
 
-`bluebox set <app> depth 8` (or `cpu`, `fpu`, `addressing`, `scale`)
+`bluebox set <app> depth 8` (or `cpu`, `fpu`, `addressing`, `timing`, `scale`)
 remembers a setting for one application. `bluebox --help` lists everything.
 
 Command keys go to the program, as on a Mac, Command-Q too. The host keeps

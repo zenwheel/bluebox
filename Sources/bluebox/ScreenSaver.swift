@@ -121,7 +121,7 @@ func screensaverCommand(_ args: [String]) {
                 runArgs.append(a)
                 if a == "--depth" { depthGiven = true }
                 if a == "--max" { maxGiven = true }
-                let takesValue: Set<String> = ["--depth", "--screen", "--machine", "--cpu", "--fpu", "--addressing", "--log",
+                let takesValue: Set<String> = ["--depth", "--screen", "--machine", "--cpu", "--fpu", "--addressing", "--timing", "--log",
                                                "--max", "--init", "--keys", "--gestalt", "--lowmem", "--fonts", "--app",
                                                "--screenshot", "--appearance", "--scale", "--file-answer"]
                 if takesValue.contains(a) { runArgs.append(next()) }

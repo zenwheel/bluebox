@@ -928,10 +928,12 @@ struct AppPage: View {
         requiredDepth(creator: app.creator, over: model.settings[defaultSettingsKey]?.depth)
     }
     /// What unset settings come to: the defaults, with the depth a program
-    /// known to refuse the default one is given instead.
+    /// known to refuse the default one is given instead, and accurate timing
+    /// for one known to need it.
     private var fallback: AppSettings {
         var f = model.settings[defaultSettingsKey] ?? AppSettings()
         if let d = neededDepth { f.depth = d }
+        if knownAccurateTiming.contains(app.creator) { f.timing = "accurate" }
         return f
     }
     var body: some View {
@@ -1046,6 +1048,18 @@ struct SettingsForm: View {
             }
             .help("24-bit addressing ignores the top byte of every address, as a Mac without 32-bit mode did, "
                   + "for programs that keep flags there; the program then has about 7 MB. A 68000 always has it.")
+            Toggle("Accurate timing", isOn: Binding(get: {
+                (settings.timing ?? fallback.timing) == "accurate"
+            }, set: { on in
+                // Back to unset when it matches what it would inherit.
+                let inherited = fallback.timing == "accurate"
+                settings.timing = on == inherited ? nil : (on ? "accurate" : "fast")
+            }))
+            .help("A 68000 at a compact Mac's speed: its clock cycles counted at 7.8336 MHz and QuickDraw's "
+                  + "drawing taking ROM QuickDraw's time, for games that time themselves by the Plus "
+                  + "(Down Hill Racer and Glypha 3.0 have it unless it is turned off). Off, a 68000 runs at "
+                  + "this Mac's speed, still a 68000. Other processors have no cycle model yet: it changes "
+                  + "nothing for them.")
             Picker("Translate code (JIT)", selection: $settings.jit) {
                 Text("\(inherit) (\(fallback.jit == true ? "on" : "off"))").tag(Bool?.none)
                 Text("On").tag(Bool?.some(true))

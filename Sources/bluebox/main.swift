@@ -152,6 +152,13 @@ func usage() -> Never {
                      errors, no 68020 instructions); a fat application then runs its 68k code
           --fpu F    floating point: none, 68881, 68882 or 68040 (default: the machine's, else the
                      68040's own, a 68882 with a 68030, none with a 68020 or 68000)
+          --timing T  fast (the default) or accurate: a 68000 at a compact Mac's speed, its
+                     clock cycles counted at 7.8336 MHz and QuickDraw's drawing taking ROM
+                     QuickDraw's time (and in a window no faster than that), for games that
+                     time themselves by it (Down Hill Racer and Glypha 3.0 get it unless a
+                     timing is chosen); fast runs a 68000 at this Mac's speed, still a 68000
+                     (24-bit, odd-address errors, no 68020 instructions).  Other processors
+                     have no cycle model yet: accurate changes nothing for them
           --addressing B  24 or 32 (default: the machine's; else 24 for a 68k program whose SIZE
                      resource doesn't say it is 32-bit clean, as such a program had on a Mac in
                      24-bit mode; the address's top byte is then ignored)
@@ -257,7 +264,7 @@ func usage() -> Never {
     \(exportUsage())
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default]
                 [cpu 68000|68020|68030|68040|ppc|default] [fpu none|68881|68882|68040|default]
-                [addressing 24|32|default] [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
+                [addressing 24|32|default] [timing fast|accurate|default] [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
                 [printer panel|pdf|host:NAME|laserwriter:NAME@ZONE|driver:FILE|default] [user-name NAME|default]
                 [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
@@ -269,7 +276,8 @@ func usage() -> Never {
           Remember settings for an application (by file name), used by every run,
           including installed bundles: e.g. bluebox set "Star Chaos" depth 8 for a
           game that wants 256 colours, cpu 68020 for one that misbehaves on a
-          68040, cpu 68000 for one written for a Mac Plus or SE, or cpu 68040 for
+          68040, cpu 68000 for one written for a Mac Plus or SE (with timing accurate
+          if it times itself by the Plus's speed), or cpu 68040 for
           a fat application to run its 68k code.
           --default sets them for every application without its own (bluebox set
           --default scale 2 doubles every classic window).  The Internet settings
@@ -604,6 +612,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var cpuModel: Int32?
     var fpuModel: Int32?
     var addressingBits: Int32?
+    var timingOption: String?
     var machineName: String?
     var initFiles: [String] = []
     var idleModules: [String] = []
@@ -771,6 +780,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
             i += 1
             guard i < args.count, let f = parseFPU(args[i]) else { fail("--fpu expects none, 68881, 68882 or 68040") }
             fpuModel = Int32(f)
+        case "--timing":
+            i += 1
+            guard i < args.count, ["fast", "accurate"].contains(args[i]) else { fail("--timing expects fast or accurate") }
+            timingOption = args[i]
         case "--addressing":
             i += 1
             guard i < args.count, let b = Int32(args[i]), [24, 32].contains(b) else {
@@ -1019,6 +1032,11 @@ func runCommand(_ args: [String], resume: String? = nil) {
     } else if !hw_machine_chosen() {
         machine_set_addressing(machine_app_addressing(app))
     }
+    // Timing: as chosen for the run or the program, else accurate for a
+    // program known to need it, else the defaults' (fast).
+    let timing = timingOption ?? settings(for: app)?.timing
+        ?? (requiresAccurateTiming(application: app) ? "accurate" : nil) ?? saved.timing
+    machine_set_accurate_timing(timing == "accurate")
     machine_set_depth_alerts(depthRelaunch != nil)
     machine_set_prefer_ppc(preferPPC ?? (processor == nil || processor == Int32(powerPCSetting)))
     if saved.jit == true { useJIT = true } /* the jit setting; --jit turns it on for a run */
