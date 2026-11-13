@@ -218,7 +218,10 @@ func usage() -> Never {
                      wakes a program sleeping until the next input there (wait:N,sync
                      lets a title timed by the clock go on while it sleeps); pace:N
                      puts a sync every N instructions into the waits after it
-                     (pace:0 ends that); in a
+                     (pace:0 ends that); savepoint makes a save point at the next safe
+                     point and goes on, restore goes back to the latest (the steps
+                     after it then come as far after the savepoint step as they were
+                     after the restore step); in a
                      window, wait:N is N/1000 ms
     \(screensaverUsage)
           --date D   the machine's clock starts at D (YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS
@@ -228,6 +231,9 @@ func usage() -> Never {
           --hibernate-at K  after K instructions, run on to the program's event loop, save
                  it (Application Support/Blue Box/Hibernated, or --hibernate-to FILE) and end;
                  --then N goes on N more instead of ending, --snapshot-end FILE saves the end
+          --savepoint-check  a restore step (--keys) compares the machine put back with
+                 its save point and says how many places differ (none but pointers to
+                 the host's memory, which it leaves out)
       bluebox resume <snapshot> [run options]
           Resume a hibernated program in this process, booted as the run that saved it
           (the same build only)
@@ -530,6 +536,12 @@ func queueScript(_ script: [String], start: UInt64) {
             add(9, ms, 0, after: 200_000)
             continue
         }
+        // savepoint and restore: the host's Make Save Point and Restore
+        // Save Point, done at the next safe point.
+        if step == "savepoint" || step == "restore" {
+            add(11, step == "restore" ? Int32(MACHINE_SAVEPOINT_RESTORE) : Int32(MACHINE_SAVEPOINT_SAVE), 0, after: 200_000)
+            continue
+        }
         // suspend and resume: the program sent to the background and back.
         if step == "suspend" || step == "resume" {
             add(6, step == "resume" ? 1 : 0, 0, after: 200_000)
@@ -578,6 +590,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var app: String?
     var hibernateAt: UInt64?
     var hibernateTo: String?
+    var savePointCheck = false
     var thenRun: UInt64?
     var snapshotEnd: String?
     var documents: [String] = []
@@ -639,6 +652,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
             let p = URL(fileURLWithPath: args[i]).standardizedFileURL.path
             if a == "--snapshot-end" { snapshotEnd = p } else { hibernateTo = p }
         case "--background": background = true
+        case "--savepoint-check": savePointCheck = true
         case "--realtime": machine_set_realtime(true)
         case "--date":
             i += 1
@@ -1193,6 +1207,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
         let title = bundleTitle ?? (app as NSString).lastPathComponent
         let script = keyScript
         let icons = finderBundle(applicationAt: app).appIcons
+        MainActor.assumeIsolated { SavePointer.installScripted() }
         hibernateContext = HibernateContext(app: app, args: args, title: title, screen: [bootWidth, bootHeight],
                                             depth: bootDepth, display: background ? "background" : screenWindow ? "screen" : "rootless")
         if screenWindow {
@@ -1252,11 +1267,21 @@ func runCommand(_ args: [String], resume: String? = nil) {
     machine_set_instruction_limit(start + maxInstructions)
     queueScript(keyScript, start: start)
     if let hibernateAt { machine_hibernate_at(start + hibernateAt) }
+    if !interactive { installHeadlessSavePoints() }
     // With --then the walk starts once the run has hibernated, as a resumed
     // run's does: the two are then alike but for the process.
     if walkMenus && thenRun != nil { machine_set_menu_walk(false) }
     var status = machine_run(budget)
     while status == RUN_DRAINED {
+        if let action = pendingSavePoint {
+            // A scripted save point (or going back to one): the run goes on.
+            pendingSavePoint = nil
+            headlessSavePoint(action, app: app, runArgs: args, check: savePointCheck)
+            machine_drain_end()
+            let left = start + budget > machine_instruction_count() ? start + budget - machine_instruction_count() : 0
+            status = machine_run(left)
+            continue
+        }
         // At a safe point: saved, then this run ends (or, with --then, goes
         // on N more instructions, the reference a resumed run is compared with).
         let saved = hibernateRun(app: app, runArgs: args, to: hibernateTo, startedAt: start)

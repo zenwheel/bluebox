@@ -1175,6 +1175,11 @@ const char *cfm_native_name(uint32_t index);
 void cfm_after_resume(void);
 void sound_after_resume(void);
 void speech_after_resume(void);
+/* A save point about to be put back in this process (reattach.c): what the
+ * host plays or says for the timeline left behind stops. */
+void sound_before_restore(void);
+void speech_before_restore(void);
+void qt_movies_before_restore(void);
 void sound_input_after_resume(void);
 /* The network after resuming (reattach.c, network_after_resume): each
  * part's own; and for the tests, the end of the process that hibernated
@@ -1215,9 +1220,19 @@ bool qt_streams_open(void);
 void fm_disk_stamp(const char *path, int64_t out[4]);
 void files_before_hibernate(void);
 int files_after_resume(void);
+int files_after_savepoint_restore(void);
 void rm_files_before_hibernate(void);
 int rm_files_after_resume(void);
+int rm_files_after_savepoint_restore(void);
 void events_script_clear(void);
+/* A save point put back (reattach.c): the scripted steps still to come
+ * taken out, then queued again as far after `to` as they were after
+ * `from`; the keys and button let go. */
+void *events_script_take(void);
+void events_script_give_back(void *taken, uint64_t from, uint64_t to);
+void events_after_savepoint_restore(void);
+/* A save point taken: the scripted step that asked for it (if one did). */
+void events_note_savepoint(void);
 void machine_resume_clock(uint64_t saved_ns, bool catch_up_date, int64_t away);
 void machine_clock_continue(uint64_t ns);
 /* This machine was put back from a snapshot (reattach.c). */

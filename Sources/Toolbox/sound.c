@@ -1912,6 +1912,18 @@ void sound_after_resume(void)
     sound_record_note("resumed");
 }
 
+/* A save point about to be put back in this process (reattach.c): the
+ * synthesizers' notes are this timeline's, and stop; what the save point's
+ * synthesizers held is told them again after (sound_after_resume).  The
+ * host's players are stopped by the host itself. */
+void sound_before_restore(void)
+{
+    sound_record_note("restore");
+    for (int i = 0; i < MAX_SYNTHS; i++)
+        if (synths[i] && midi_fn)
+            midi_fn(synths[i]->id, NULL, 0, midi_ctx);
+}
+
 #define REPLAY_GAP_MAX_NS 10000000000ull /* silence before a sound the host would have waited for */
 
 /* The rest of what the channel's old host had queued, from the machine's

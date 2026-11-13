@@ -39,6 +39,10 @@ void hb_free_buffer(uint8_t *buf);
 bool hb_save_file(const char *path, hb_stats *stats, char *err, size_t errlen);
 bool hb_save_file_extra(const char *path, const void *extra, size_t extra_len, hb_stats *stats, char *err,
                         size_t errlen);
+/* The same for a snapshot hb_save_buffer made already (from any thread:
+ * the machine may go on meanwhile). */
+bool hb_write_file_extra(const char *path, const uint8_t *buf, size_t len, const void *extra, size_t extra_len,
+                         hb_stats *stats, char *err, size_t errlen);
 bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *same_build, char *err, size_t errlen);
 bool hb_file_load(const char *path, uint8_t **out, size_t *len, char *err, size_t errlen);
 
@@ -46,6 +50,10 @@ enum {
     /* Put each region (the guest's memory) in fresh memory too, as a new
      * process would have it, rather than over the one there now. */
     HB_RESTORE_MOVE_REGIONS = 1 << 0,
+    /* Pointers to the host's memory cleared as for another process, even in
+     * the one that saved it (a save point put back: what they pointed to
+     * may be gone since). */
+    HB_RESTORE_FORGET_HOST = 1 << 1,
 };
 
 /* Puts a snapshot back: refused unless the same build wrote it. */

@@ -3632,6 +3632,18 @@ void qt_movies_after_hibernate(void)
         movies[i].reopen = false;
 }
 
+/* A save point about to be put back in this process: the movies VLC
+ * plays are this timeline's, and close (the save point's are opened again
+ * where its clock has them, as after resuming). */
+void qt_movies_before_restore(void)
+{
+    for (int i = 0; i < MAX_MOVIES; i++)
+        if (movies[i].used && movies[i].player) {
+            qt_vlc_close(movies[i].player);
+            movies[i].player = NULL;
+        }
+}
+
 /* Resumed: VLC's players are gone (opened again as each movie is next
  * played or given time), and the flattened copies VLC played were
  * deleted when the process that hibernated ended: made again. */

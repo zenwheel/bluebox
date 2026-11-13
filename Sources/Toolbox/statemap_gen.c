@@ -1604,6 +1604,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/events.c", "queue_polls", 4, 0 },
     { "Toolbox/events.c", "qversion", 4, 0 },
     { "Toolbox/events.c", "relative_read", 1, 0 },
+    { "Toolbox/events.c", "savepoint_step_at", 8, 12 },
     { "Toolbox/events.c", "script", 8, 2 },
     { "Toolbox/events.c", "script_next", 4, 0 },
     { "Toolbox/events.c", "snap_paths", 8, 2 },

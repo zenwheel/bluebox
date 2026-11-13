@@ -178,6 +178,10 @@ public enum HostKey: Equatable {
     /// program that hides the menu bar or never lets the host's menus be
     /// reached (a game reading the keyboard itself).  Always the host's.
     case hibernate
+    /// Control-Option-Command-S: make a save point, the program going on;
+    /// Control-Option-Command-R: back to the latest (SavePoint.swift).
+    /// The host's always, as Hibernate's.
+    case savePoint, restoreSavePoint
     /// Anything else while suspended: nothing.
     case ignore
 
@@ -187,6 +191,10 @@ public enum HostKey: Equatable {
     /// Control-Option-Command keys (contrast, invert, shut down) leave H.
     public static let hibernateKey = "h"
     public static let hibernateModifiers: NSEvent.ModifierFlags = [.control, .option, .command]
+    /// The save points' keys, with Hibernate's modifiers: S and R are no
+    /// macOS Control-Option-Command key either.
+    public static let savePointKey = "s"
+    public static let restoreKey = "r"
 
     /// `programHas`: whether the program's current menu bar has an item
     /// with Command and this key, asked as the key comes, since programs
@@ -195,7 +203,14 @@ public enum HostKey: Equatable {
     public static func classify(_ flags: NSEvent.ModifierFlags, _ key: String?, suspended: Bool,
                                 programHas: (Character) -> Bool = programHasCommandKey) -> HostKey {
         let mods = flags.intersection([.command, .option, .control, .shift])
-        if key?.lowercased() == hibernateKey && mods == hibernateModifiers { return .hibernate }
+        if mods == hibernateModifiers {
+            switch key?.lowercased() {
+            case hibernateKey: return .hibernate
+            case savePointKey: return .savePoint
+            case restoreKey: return .restoreSavePoint
+            default: break
+            }
+        }
         if key?.lowercased() == "q" {
             if mods == [.command, .option] { return .forceQuit }
             if mods == [.command] && suspended { return .quit }
@@ -218,9 +233,24 @@ public enum HostKey: Equatable {
 /// Hibernate (Control-Option-Command-H), then Quit, with Option Force Quit (Command-Option-Q) in its
 /// place.  Quit asks the classic program to quit, resuming it first.
 @MainActor public enum HostQuitItems {
+    /// Make Save Point and Restore Save Point, after Hibernate.
+    public struct SavePointItems {
+        public var save: Selector
+        public var restore: Selector
+        public var saving: HibernateAvailability
+        public var restoring: HibernateAvailability
+        public init(save: Selector, restore: Selector, saving: HibernateAvailability, restoring: HibernateAvailability) {
+            self.save = save
+            self.restore = restore
+            self.saving = saving
+            self.restoring = restoring
+        }
+    }
+
     public static func items(title: String, suspended: Bool, target: AnyObject, quit: Selector, suspend: Selector,
                              forceQuit: Selector, hibernate: Selector? = nil,
-                             hibernation: HibernateAvailability = .available, quitKeys: Bool = true) -> [NSMenuItem] {
+                             hibernation: HibernateAvailability = .available, savePoints: SavePointItems? = nil,
+                             quitKeys: Bool = true) -> [NSMenuItem] {
         let verb = suspended ? "Resume" : "Suspend"
         let toggle = NSMenuItem(title: "\(verb) \(title)", action: suspend, keyEquivalent: "")
         toggle.target = target
@@ -234,6 +264,18 @@ public enum HostKey: Equatable {
             item.target = target
             show(hibernation, on: item)
             top.append(item)
+        }
+        if let sp = savePoints {
+            let save = NSMenuItem(title: "Make Save Point", action: sp.save, keyEquivalent: quitKeys ? HostKey.savePointKey : "")
+            save.keyEquivalentModifierMask = HostKey.hibernateModifiers
+            save.target = target
+            show(sp.saving, on: save, otherwise: savePointHelp)
+            let restore = NSMenuItem(title: "Restore Save Point", action: sp.restore,
+                                     keyEquivalent: quitKeys ? HostKey.restoreKey : "")
+            restore.keyEquivalentModifierMask = HostKey.hibernateModifiers
+            restore.target = target
+            show(sp.restoring, on: restore, otherwise: restoreHelp)
+            top += [save, restore]
         }
         let quitItem = NSMenuItem(title: "Quit \(title)", action: quit, keyEquivalent: quitKeys ? "q" : "")
         quitItem.target = target
@@ -255,9 +297,24 @@ public enum HostKey: Equatable {
         }
     }
 
-    static func show(_ availability: HibernateAvailability, on item: NSMenuItem) {
+    /// Make Save Point and Restore Save Point enabled or not, with why not.
+    public static func update(_ menu: NSMenu?, save: Selector, restore: Selector, saving: HibernateAvailability,
+                              restoring: HibernateAvailability) {
+        guard let menu else { return }
+        for item in menu.items {
+            if item.action == save { show(saving, on: item, otherwise: savePointHelp) }
+            if item.action == restore { show(restoring, on: item, otherwise: restoreHelp) }
+            if let sub = item.submenu { update(sub, save: save, restore: restore, saving: saving, restoring: restoring) }
+        }
+    }
+
+    static let savePointHelp = "Save where it is now and go on playing; Restore Save Point comes back here"
+    static let restoreHelp = "Go back to the latest save point, leaving what happened since"
+
+    static func show(_ availability: HibernateAvailability, on item: NSMenuItem,
+                     otherwise help: String = "Save it to disk and quit; opening it again resumes it where it was") {
         item.isEnabled = availability.enabled
-        item.toolTip = availability.reason ?? "Save it to disk and quit; opening it again resumes it where it was"
+        item.toolTip = availability.reason ?? help
     }
 }
 

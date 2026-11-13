@@ -65,6 +65,17 @@ public final class ClassicAudio: @unchecked Sendable {
         }
     }
 
+    /// Everything given to the players dropped (a save point put back:
+    /// what they hold is the timeline left behind).
+    public func stopAll() {
+        queue.async {
+            for (channel, entry) in self.players {
+                entry.node.stop()
+                self.players[channel]?.scheduled = 0
+            }
+        }
+    }
+
     private func play(channel: Int32, pcm: UnsafePointer<Int16>?, frames: Int, channels: Int, rate: Double,
                       volume: Float) {
         guard let pcm else {

@@ -1433,6 +1433,28 @@ int rm_files_after_resume(void)
     return n;
 }
 
+/* A save point put back in the process that made it: each writable
+ * resource file opened from the host that changed since is written back as
+ * the save point has it (its map is that copy's).  Returns how many. */
+int rm_files_after_savepoint_restore(void)
+{
+    int n = 0;
+    for (int i = 0; i < MAX_RESFILES; i++) {
+        resfile *f = &files[i];
+        if (!f->used || !f->path || f->gone || f->read_only || !f->fork)
+            continue;
+        int64_t now[4];
+        fm_disk_stamp(f->path, now);
+        if (!memcmp(now, f->disk, sizeof now))
+            continue;
+        if (write_host_fork(f->path, f->fork, f->len))
+            fm_disk_stamp(f->path, f->disk);
+        n++;
+        LOGF(LOG_IDLE, "restore: %s (resource file) changed since the save point: written back as it was\n", f->path);
+    }
+    return n;
+}
+
 /* At ExitToShell, as the Resource Manager did when closing every file. */
 void rm_update_all(void)
 {

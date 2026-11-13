@@ -147,7 +147,8 @@ void machine_attach_host(bool attached)
 typedef struct {
     uint64_t at;
     int kind; /* 0 key, 1 mouse, 2 menu, 3 key down, 4 key up, 5 screenshot (a: its path's index),
-               * 6 suspend or resume, 7 and 8 the scroll wheel, 9 the host's Suspend for a: ms */
+               * 6 suspend or resume, 7 and 8 the scroll wheel, 9 the host's Suspend for a: ms,
+               * 10 sync, 11 a save point (a: MACHINE_SAVEPOINT_*) */
     int a, b, c;
 } script_step;
 
@@ -193,6 +194,119 @@ void events_script_clear(void)
     nsnap_paths = 0;
 }
 
+BB_HOST static machine_savepoint_fn savepoint_fn;
+BB_HOST static void *savepoint_ctx;
+/* When the scripted step of the save point being made, and of the restore
+ * being done, were due; the save point's own is kept in it (saved state),
+ * so a restore step puts the steps after it as far after the save point's
+ * step as they were after its own: a run going back and on then has its
+ * input at the counts a run that never went on has it. */
+BB_HOST static uint64_t save_step_due, restore_step_due;
+static uint64_t savepoint_step_at;
+
+void events_note_savepoint(void)
+{
+    savepoint_step_at = save_step_due;
+    save_step_due = 0;
+}
+
+void machine_set_savepoint_handler(machine_savepoint_fn fn, void *ctx)
+{
+    savepoint_fn = fn;
+    savepoint_ctx = ctx;
+}
+
+/* A save point put back in this process (reattach.c): the steps still to
+ * come are this run's, not the save point's (whose queue the snapshot
+ * brought back, its restore step among them), so they are taken out first
+ * and queued again after, as far apart as they were from the restore. */
+typedef struct {
+    script_step *steps;
+    char **paths; /* a screenshot step's (kind 5) */
+    int n;
+} carried_script;
+
+void *events_script_take(void)
+{
+    carried_script *c = bb_host_calloc(1, sizeof *c);
+    /* A restore step's own: the steps due after it that came while the
+     * machine ran on to its safe point are the timeline left behind, and
+     * come again after it. */
+    int from = script_next;
+    while (restore_step_due && from > 0 && script[from - 1].at > restore_step_due)
+        from--;
+    int n = nscript - from;
+    if (!c || n <= 0)
+        return c;
+    c->steps = bb_host_malloc((size_t)n * sizeof *c->steps);
+    c->paths = bb_host_calloc((size_t)n, sizeof *c->paths);
+    if (!c->steps || !c->paths)
+        return c;
+    for (int i = 0; i < n; i++) {
+        c->steps[i] = script[from + i];
+        if (c->steps[i].kind == 5) {
+            const char *path = snap_paths[c->steps[i].a];
+            size_t len = strlen(path) + 1;
+            c->paths[i] = bb_host_malloc(len);
+            if (c->paths[i])
+                memcpy(c->paths[i], path, len);
+        }
+    }
+    c->n = n;
+    return c;
+}
+
+void events_script_give_back(void *taken, uint64_t from, uint64_t to)
+{
+    carried_script *c = taken;
+    /* Steps between two scripted steps: those that come before the save
+     * point was taken (it stops a little after its step) were in it. */
+    uint64_t now = to;
+    bool scripted = restore_step_due && savepoint_step_at;
+    if (scripted) {
+        from = restore_step_due;
+        to = savepoint_step_at;
+    }
+    restore_step_due = 0;
+    events_script_clear();
+    for (int i = 0; c && i < c->n; i++) {
+        script_step st = c->steps[i];
+        uint64_t at = st.at > from ? st.at - from + to : to;
+        if (scripted && at <= now) {
+            bb_host_free(c->paths[i]);
+            continue;
+        }
+        if (st.kind == 5) {
+            if (c->paths[i])
+                machine_script_add_snap(at, c->paths[i]);
+            bb_host_free(c->paths[i]);
+        } else {
+            machine_script_add(at, st.kind, st.a, st.b, st.c);
+        }
+    }
+    if (c) {
+        bb_host_free(c->steps);
+        bb_host_free(c->paths);
+        bb_host_free(c);
+    }
+}
+
+/* A save point put back with a host attached: the keys and button it had
+ * down are the past's; the host's next change says what is down now.  A
+ * headless run's keyboard is its script, which goes on from the save
+ * point's step: what was down then is down. */
+void events_after_savepoint_restore(void)
+{
+    if (!host_attached)
+        return;
+    pthread_mutex_lock(&lock);
+    memset(keymap, 0, sizeof keymap);
+    memset(keys_tapped, 0, sizeof keys_tapped);
+    key_mods = 0;
+    button_down = false;
+    pthread_mutex_unlock(&lock);
+}
+
 /* The next input not yet applied: its instruction count, or 0.  A
  * screenshot is no input: the clock of a program waiting for input moves
  * on to the next key or click, not to a snapshot, which would otherwise
@@ -200,11 +314,13 @@ void events_script_clear(void)
  * (SmallTalk polls for events once before loading its Prelude).  A sync
  * step is no input either, but the clock stops at it: a program sleeping
  * as long as it can then goes on in steps, a title timed by Ticks has its
- * time before the next click comes. */
+ * time before the next click comes.  A save point is no input either, and
+ * none of the program's business: the clock goes past it as if it were not
+ * there. */
 uint64_t events_script_next_at(void)
 {
     for (int i = script_next; i < nscript; i++)
-        if (script[i].kind != 5)
+        if (script[i].kind != 5 && script[i].kind != 11)
             return script[i].at;
     return 0;
 }
@@ -237,6 +353,14 @@ void events_script_pump(uint64_t now)
         case 8: machine_post_wheel(s.a, s.b, s.c, 0); break; /* sideways, c columns (left) */
         case 9: machine_pause_for((uint32_t)s.a); break; /* held still from the next pause point */
         case 10: break; /* sync: no input, only a point the clock stops at */
+        case 11: /* a save point made or put back: by the host, at the next safe point */
+            if (s.a == MACHINE_SAVEPOINT_SAVE)
+                save_step_due = s.at;
+            else
+                restore_step_due = s.at;
+            if (savepoint_fn)
+                savepoint_fn(s.a, savepoint_ctx);
+            break;
         }
     }
 }

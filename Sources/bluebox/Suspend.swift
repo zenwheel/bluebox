@@ -16,6 +16,10 @@
 // shown again when the program goes on.  A program that cannot be saved
 // (one with a connection open, say) is told so in an alert: one that was
 // running goes on, one that was suspended stays so.
+//
+// Make Save Point and Restore Save Point (after Hibernate in the same
+// menus, Control-Option-Command-S and -R; SavePoint.swift) save the
+// program and go back to it without it quitting.
 
 #if canImport(AppKit)
 import AppKit
@@ -43,8 +47,9 @@ import Toolbox
 
     /// Whether Hibernate can be chosen now.
     var hibernation: HibernateAvailability {
-        hibernateContext == nil ? .unavailable("This run cannot be hibernated.")
-            : .current(suspended: suspended, hibernating: hibernating)
+        if hibernateContext == nil { return .unavailable("This run cannot be hibernated.") }
+        if SavePointer.shared.busy != nil { return .unavailable("Making a save point or going back to one…") }
+        return .current(suspended: suspended, hibernating: hibernating)
     }
 
     /// Menu items act while an alert or panel of the program's is up (to
@@ -100,7 +105,7 @@ import Toolbox
     /// is abandoned and made again after the program goes on (dialog.c,
     /// stdfile.c).  A call a routine of the program's own made is left: it
     /// would take the closing as its answer.
-    private func closeProgramModal() {
+    func closeProgramModal() {
         guard NSApp.modalWindow != nil else { return }
         // The drain starts on the machine's thread; give it a moment.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -126,15 +131,25 @@ import Toolbox
         }
     }
 
-    /// Hibernate's items and buttons enabled or not, with why not.
+    /// Hibernate's items and buttons enabled or not, with why not; the save
+    /// points' items too.
     func refreshHibernate() {
         let state = hibernation
         HostQuitItems.update(NSApp.mainMenu, hibernate: #selector(hibernateApp(_:)), state)
+        updateSavePoints(NSApp.mainMenu)
         for w in NSApp.windows {
             HostQuitItems.update(w.menu, hibernate: #selector(hibernateApp(_:)), state)
+            updateSavePoints(w.menu)
             w.contentView?.subviews.compactMap { $0 as? SuspendedOverlay }.forEach { $0.show(state) }
         }
         hibernateChanged?(state)
+    }
+
+    private func updateSavePoints(_ menu: NSMenu?) {
+        guard hibernateContext != nil else { return }
+        let sp = SavePointer.shared
+        HostQuitItems.update(menu, save: #selector(makeSavePoint(_:)), restore: #selector(restoreSavePoint(_:)),
+                             saving: sp.saving, restoring: sp.restoring)
     }
 
     /// The host's own menus that hold Hibernate (a status item's).
@@ -143,7 +158,7 @@ import Toolbox
     /// Hibernate: suspended first if running, then saved at the safe point
     /// and the process ended.
     func hibernate() {
-        guard !hibernating, !machine_halted() else { return }
+        guard !hibernating, !machine_halted(), SavePointer.shared.busy == nil else { return }
         if hibernateContext == nil { return refused("this run cannot be hibernated") }
         if suspended && machine_pause_parked() && !machine_hibernatable() {
             // Stopped already, where it cannot be saved (or holding what a
@@ -246,16 +261,20 @@ import Toolbox
             // After the key's event, as a menu item's action comes: a
             // refusal's alert runs an event loop of its own.
             DispatchQueue.main.async { MainActor.assumeIsolated { Suspender.shared.hibernate() } }
+        case .savePoint:
+            DispatchQueue.main.async { MainActor.assumeIsolated { SavePointer.shared.save() } }
+        case .restoreSavePoint:
+            DispatchQueue.main.async { MainActor.assumeIsolated { SavePointer.shared.restore() } }
         case .ignore: break
         }
         return true
     }
 
-    /// Hibernate's key (HostKey.hibernate) in every window, before the
-    /// screen view or the rootless key monitor sends keys to the program:
-    /// in a window, in the whole screen, rootless, over a native alert or
-    /// panel, and while the program reads the keyboard itself.  Its key-up
-    /// is kept too, so the program sees neither.
+    /// Hibernate's key (HostKey.hibernate) and the save points' in every
+    /// window, before the screen view or the rootless key monitor sends keys
+    /// to the program: in a window, in the whole screen, rootless, over a
+    /// native alert or panel, and while the program reads the keyboard
+    /// itself.  Their key-ups are kept too, so the program sees neither.
     func installHibernateKey() {
         NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
             let type = event.type, code = event.keyCode, flags = event.modifierFlags
@@ -267,10 +286,10 @@ import Toolbox
                     me.hibernateKeyCode = nil
                     return true
                 }
-                guard HostKey.classify(flags, key, suspended: me.suspended, programHas: { _ in false }) == .hibernate
-                else { return false }
+                let kind = HostKey.classify(flags, key, suspended: me.suspended, programHas: { _ in false })
+                guard [.hibernate, .savePoint, .restoreSavePoint].contains(kind) else { return false }
                 me.hibernateKeyCode = code
-                if !repeated { _ = me.handle(.hibernate) }
+                if !repeated { _ = me.handle(kind) }
                 return true
             }
             return kept ? nil : event
@@ -279,6 +298,8 @@ import Toolbox
 
     @objc func toggleSuspend(_ sender: Any?) { toggle() }
     @objc func hibernateApp(_ sender: Any?) { hibernate() }
+    @objc func makeSavePoint(_ sender: Any?) { SavePointer.shared.save() }
+    @objc func restoreSavePoint(_ sender: Any?) { SavePointer.shared.restore() }
     @objc func quitApp(_ sender: Any?) { quit() }
     @objc func forceQuit(_ sender: Any?) { NSApp.terminate(nil) }
 
@@ -288,12 +309,13 @@ import Toolbox
         HostHideItems.items(title: title) + menuItems(title: title)
     }
 
-    /// Suspend, Hibernate, Quit and their alternates.
+    /// Suspend, Hibernate, the save points, Quit and their alternates.
     func menuItems(title: String, quitKeys: Bool = true) -> [NSMenuItem] {
         HostQuitItems.items(title: title, suspended: suspended, target: self, quit: #selector(quitApp(_:)),
                             suspend: #selector(toggleSuspend(_:)), forceQuit: #selector(forceQuit(_:)),
                             hibernate: hibernateContext == nil ? nil : #selector(hibernateApp(_:)),
-                            hibernation: hibernation, quitKeys: quitKeys)
+                            hibernation: hibernation,
+                            savePoints: hibernateContext == nil ? nil : SavePointer.shared.items, quitKeys: quitKeys)
     }
 
     /// Suspend items say Resume while suspended, and Suspend again after.
@@ -306,11 +328,13 @@ import Toolbox
             if let sub = item.submenu { retitle(sub, title: title) }
         }
         HostQuitItems.update(menu, hibernate: #selector(hibernateApp(_:)), hibernation)
+        updateSavePoints(menu)
     }
 
     /// A menu holding Hibernate opened: its state as it is now.
     func menuOpening(_ menu: NSMenu) {
         HostQuitItems.update(menu, hibernate: #selector(hibernateApp(_:)), hibernation)
+        updateSavePoints(menu)
     }
 
     /// An overlay for a window's content view (its whole area).
