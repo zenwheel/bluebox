@@ -38,6 +38,20 @@ public enum SuspendNotice {
     }
 }
 
+/// A program whose window came up behind the others asks the shell, which
+/// started it and may be the active app, to bring it forward: macOS lets an
+/// app take the front only from the active one, and asking Launch Services
+/// would bring up the shell, whose bundle the program shares.
+public enum FrontNotice {
+    /// Program to shell: object its process ID.
+    public static let request = Notification.Name("local.bluebox.front.request")
+
+    public static func ask() {
+        DistributedNotificationCenter.default().postNotificationName(
+            request, object: String(getpid()), userInfo: nil, deliverImmediately: true)
+    }
+}
+
 /// The shell's programs: which are running (by application path, with
 /// their process IDs), which of them are suspended, and which are
 /// hibernated (saved to disk, no process).  The registry (ProgramRegistry)

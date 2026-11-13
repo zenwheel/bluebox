@@ -427,7 +427,8 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
 
     /// To the front: asked of the window server, and, from a program's own
     /// bundle, of Launch Services too, as its Dock icon does (which macOS
-    /// honours when it ignores an app's own request).
+    /// honours when it ignores an app's own request); started by the shell,
+    /// of the shell.
     private static func comeForward(tries: Int = 3) {
         guard !NSApp.isActive, tries > 0, NSApp.activationPolicy() == .regular else { return }
         NSApp.activate(ignoringOtherApps: true)
@@ -436,6 +437,8 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
             let config = NSWorkspace.OpenConfiguration()
             config.activates = true
             NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in }
+        } else {
+            FrontNotice.ask() // the shell's child: the shell hands it the front
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             MainActor.assumeIsolated { comeForward(tries: tries - 1) }

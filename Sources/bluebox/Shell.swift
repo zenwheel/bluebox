@@ -285,6 +285,21 @@ enum ShellItem: Hashable {
         watchSystemFolder()
         watchRegistry()
         watchSuspensions()
+        watchFrontRequests()
+    }
+
+    /// A program of the shell's whose window came up behind the others.
+    private func watchFrontRequests() {
+        DistributedNotificationCenter.default().addObserver(forName: FrontNotice.request, object: nil,
+                                                            queue: .main) { [weak self] note in
+            guard let object = note.object as? String, let pid = Int32(object) else { return }
+            MainActor.assumeIsolated {
+                guard let self, self.states.pids.values.contains(pid) || self.running.values.contains(where: {
+                    $0.processIdentifier == pid
+                }) else { return }
+                bringToFront(pid: pid)
+            }
+        }
     }
 
     // MARK: Suspending and resuming

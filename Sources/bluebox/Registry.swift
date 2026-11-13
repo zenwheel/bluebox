@@ -78,7 +78,10 @@ private func bringForward(_ other: RunningProgram, documents: [String]) {
     let me = NSApp as NSApplication?
     if let me, me.isActive, #available(macOS 14, *) { me.yieldActivation(to: app) }
     app.activate(options: [.activateAllWindows])
-    guard me?.isActive != true, let url = app.bundleURL else { return }
+    // Not when it shares this process's bundle (the shell's own child):
+    // that would bring this one up instead.
+    guard me?.isActive != true, let url = app.bundleURL,
+          url.standardizedFileURL != Bundle.main.bundleURL.standardizedFileURL else { return }
     let config = NSWorkspace.OpenConfiguration()
     config.activates = true
     let done = DispatchSemaphore(value: 0)
