@@ -407,10 +407,12 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
         window = w
     }
 
-    /// Once the host is up: closed when another window shows (the program
-    /// coming forward with it), or after a minute regardless.
+    /// Once the host is up: when the program's first window shows, the
+    /// stand-in goes and the program comes to the front if it is not there
+    /// already (after the picker macOS left it behind the others even so);
+    /// a minute without one, the stand-in goes regardless.
     static func closeWhenAnotherShows(tries: Int = 600) {
-        guard let w = window else { return }
+        let w = window
         let shown = NSApp.windows.contains { $0 !== w && $0.isVisible && $0.alphaValue > 0 }
         guard shown || tries <= 0 else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -418,9 +420,26 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
             }
             return
         }
-        if shown && !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
-        w.orderOut(nil)
+        if shown { comeForward() }
+        w?.orderOut(nil)
         window = nil
+    }
+
+    /// To the front: asked of the window server, and, from a program's own
+    /// bundle, of Launch Services too, as its Dock icon does (which macOS
+    /// honours when it ignores an app's own request).
+    private static func comeForward(tries: Int = 3) {
+        guard !NSApp.isActive, tries > 0, NSApp.activationPolicy() == .regular else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        if Bundle.main.object(forInfoDictionaryKey: bundleAppKey) != nil {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            MainActor.assumeIsolated { comeForward(tries: tries - 1) }
+        }
     }
 }
 
