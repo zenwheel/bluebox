@@ -1024,17 +1024,22 @@ void machine_tick_polled(void)
 
 void machine_charge_pixels(uint64_t n)
 {
+    machine_charge_drawing(n, QD_CALL_CYCLES + n * QD_PIXEL_CYCLES);
+}
+
+void machine_charge_drawing(uint64_t pixels, uint64_t cycles)
+{
     /* A 68000 drew with its own cycles, the ROM's QuickDraw setting up
      * each call (clipping, the shift and the masks) and then moving the
      * bits: a compact Mac spent most of a game's frame there (Glypha 3.0's
      * eleven blits a frame).  Counted in its cycles, the time is the same
      * headless and, paced by them, in a window. */
     if (timed_68000()) {
-        cpu.cycles += QD_CALL_CYCLES + n * QD_PIXEL_CYCLES;
+        cpu.cycles += cycles;
         return;
     }
     if (!events_host_attached() && !realtime)
-        skipped_ns += n * 10u;
+        skipped_ns += pixels * 10u;
 }
 
 /* Bring the 60 Hz tick counter up to the machine's time. */
