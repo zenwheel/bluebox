@@ -912,13 +912,12 @@ static bool drain(channel *c)
             return true;
         if (give_up_for_drain())
             return false;
-        if (!events_host_attached()) {
+        if (!machine_wall_clock()) {
             /* Headless, the clock follows instructions: move it on to the end. */
             if (c->busy_until > now_ns())
                 machine_skip_time(c->busy_until - now_ns());
         } else {
-            struct timespec ts = { 0, 2000000 };
-            nanosleep(&ts, NULL);
+            machine_sleep_ns(2000000);
         }
         machine_advance_ticks();
     }
@@ -990,14 +989,13 @@ static bool wait_for_room(channel *c)
             return true;
         if (give_up_for_drain())
             return false;
-        if (!events_host_attached()) {
+        if (!machine_wall_clock()) {
             /* Headless, the clock follows instructions: on to when the
              * command playing now ends. */
             uint64_t t = now_ns();
             machine_skip_time(c->busy_until > t ? c->busy_until - t : 1000000);
         } else {
-            struct timespec ts = { 0, 1000000 };
-            nanosleep(&ts, NULL);
+            machine_sleep_ns(1000000);
         }
         machine_advance_ticks();
     }
@@ -1844,9 +1842,8 @@ static int16_t sd_wait(gaddr pb)
             sd_gave_up = pb;
             return noErr; /* made again */
         }
-        if (events_host_attached()) {
-            struct timespec ts = { 0, 5000000 };
-            nanosleep(&ts, NULL);
+        if (machine_wall_clock()) {
+            machine_sleep_ns(5000000);
         } else {
             uint64_t t = now_ns();
             uint64_t until = sd_ft ? sd_ft_next : sd_chan.busy_until;

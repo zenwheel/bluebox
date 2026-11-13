@@ -524,7 +524,7 @@ static void wait_native(cpu68k *c, uint16_t tw)
         }
         struct timespec ts = { 0, 10000000 };
         nanosleep(&ts, NULL);
-        if (!events_host_attached()) /* headless, the clock follows instructions */
+        if (!machine_wall_clock()) /* headless, the clock follows instructions */
             machine_skip_time(10000000);
         /* Interrupts went on while MacinTalk spoke (the Talking Moose
          * moves its mouth from a VBL task), taken in its wait, the return

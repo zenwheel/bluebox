@@ -351,6 +351,9 @@ void machine_advance_ticks(void);
 /* The machine's clock (ns): wall clock with a host, instructions without. */
 uint64_t machine_time_ns(void);
 void machine_skip_time(uint64_t ns);
+/* A wait of ns on the wall clock: the host thread sleeps (headless, the
+ * instruction count moves on meanwhile, for scripted input). */
+void machine_sleep_ns(uint64_t ns);
 void machine_set_time(uint32_t secs); /* SetDateTime: Time counts from secs */
 uint32_t machine_clock_date(void);     /* the date by the machine's clock (Time); 0 before boot */
 bool events_host_attached(void);

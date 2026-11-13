@@ -76,6 +76,21 @@ extension BlueBox {
             #expect(r.slept > r.wall / 2, "slept \(r.slept) s of \(r.wall)")
         }
 
+        /// A --realtime run's Delay waits on the wall clock, as a window's
+        /// does: skipping the clock ahead instead left it ahead of the
+        /// host's (Glypha 3.0's idle loop saw some 60 ticks a millisecond).
+        @Test func aRealtimeDelayTakesItsTime() {
+            launchTestApp()
+            machine_set_realtime(true)
+            defer { machine_set_realtime(false) }
+            let t0 = machine_time_ns(), start = Date()
+            var ticks: UInt32 = 0
+            tb_Delay(6, &ticks)
+            let wall = Date().timeIntervalSince(start), ran = Double(machine_time_ns() - t0) / 1e9
+            #expect(wall >= 0.08, "Delay(6) took \(wall) s")
+            #expect(ran <= wall + 0.02, "the clock moved \(ran) s in \(wall) s")
+        }
+
         @Test func notWithTheSleepTurnedOff() throws {
             machine_set_idle_sleep(false)
             defer { machine_set_idle_sleep(true) }

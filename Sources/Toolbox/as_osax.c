@@ -916,8 +916,8 @@ static as_obj *say(as_obj *direct)
     /* say waits until it has been said */
     for (int i = 0; !err && tb_SpeechBusy() && i < 6000 && !(g_cpu && g_cpu->halted); i++) {
         speech_pump();
-        if (events_host_attached())
-            usleep(10000);
+        if (machine_wall_clock())
+            machine_sleep_ns(10000000);
         else
             machine_pass_tick();
     }

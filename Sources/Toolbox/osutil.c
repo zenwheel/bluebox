@@ -88,12 +88,13 @@ void tb_GetDateTime(gaddr p) { wr32(p, mac_now()); }
 
 void tb_Delay(int32_t n, uint32_t *ftp)
 {
-    if (n > 0 && events_host_attached()) {
-        /* Really wait, as a Mac did, with interrupt-time work (sound
-         * refills, Time Manager and VBL tasks) going on in 5 ms slices.
-         * Skipping the clock ahead instead would leave it ahead of the
-         * host's: tasks paced by it then catch up all at once, and the
-         * sound they queue plays seconds late (Apeiron's). */
+    if (n > 0 && machine_wall_clock()) {
+        /* On the wall clock (a host attached, or --realtime), really
+         * wait, as a Mac did, with interrupt-time work (sound refills,
+         * Time Manager and VBL tasks) going on in 5 ms slices.  Skipping
+         * the clock ahead instead would leave it ahead of the host's:
+         * tasks paced by it then catch up all at once, and the sound they
+         * queue plays seconds late (Apeiron's). */
         machine_advance_ticks();
         uint32_t until = rd32(LM_Ticks) + (uint32_t)n;
         while ((int32_t)(rd32(LM_Ticks) - until) < 0 && !g_cpu->halted) {
@@ -101,8 +102,7 @@ void tb_Delay(int32_t n, uint32_t *ftp)
                 drain_abandon(); /* at the program's level: Delay again after resuming */
                 break;
             }
-            struct timespec ts = { 0, 5000000 };
-            nanosleep(&ts, NULL);
+            machine_sleep_ns(5000000);
             machine_advance_ticks();
             sound_pump();
             time_pump();
