@@ -149,9 +149,8 @@ extension BlueBox {
             tb_FlushEvents(-1, 0)
         }
 
-        /// Headless, Button waiting for input lets the clock move on to the
-        /// next scripted input, but not past a key a program polling
-        /// GetKeys has yet to see: S.C.OUT calls Button and GetKeys in turn,
+        /// Headless, Button waiting for input lets the clock move on, but
+        /// not past a key a program polling GetKeys has yet to see: S.C.OUT calls Button and GetKeys in turn,
         /// and the key's release would come before it looked.
         @Test func buttonWaitsForAnUnseenKey() {
             tb_FlushEvents(-1, 0)

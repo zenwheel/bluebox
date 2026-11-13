@@ -38,7 +38,10 @@
 # program, the K to hibernate it at, the scripted input (--keys) that
 # starts a game before K and has it busy at K (keys held, sound playing,
 # its timers and VBL tasks running), the input to give it once resumed,
-# and run flags.  For each:
+# and run flags (among them MID=n, WIN=n and AFTER=n, that game's own:
+# one whose frames each wait for the next tick, which a headless run
+# passes at once, plays a whole game in a few million instructions).
+# For each:
 #
 #   H  plays to K and on to the next safe point, saves and ends;
 #   B  resumes H's snapshot in a new process (folder and home as H left
@@ -51,7 +54,7 @@
 #      same input at the same counts and its screens saved at them;
 #   C2 C again, which says whether the game plays the same each time.
 # Each run is given the whole script (H's part after K never comes): a
-# program idle in GetNextEvent has its clock move on to the next input, so
+# program asleep in WaitNextEvent has its clock move on to the next input, so
 # input to come changes how a run goes before it.  From K on the script
 # has a sync step every GRID instructions (default 1000000), so that no
 # run's clock jumps further than that, the drain's included.  The table's
@@ -296,7 +299,7 @@ screens() {
 }
 
 # Sync steps every GRID instructions from K on (default 1000000), for a
-# run whose script starts at $1: a program idle in GetNextEvent has its
+# run whose script starts at $1: a program asleep in WaitNextEvent has its
 # clock move on no further than the next, in every run alike, wherever
 # the input after the resume is (and a drain, which does not stop at the
 # polls some games make, runs on no further either).
@@ -336,6 +339,17 @@ play_one() {
 	after=${AFTER:-300000000}
 	mid=${MID:-20000000}
 	win=${WIN:-100000000}
+	# A game's own MID, WIN and AFTER among its flags (MID=n ...).
+	rest=
+	for w in $flags; do
+		case $w in
+		MID=*) mid=${w#MID=} ;;
+		WIN=*) win=${w#WIN=} ;;
+		AFTER=*) after=${w#AFTER=} ;;
+		*) rest="$rest${rest:+ }$w" ;;
+		esac
+	done
+	flags=$rest
 	date=${DATE:-2000-01-01T12:00:00}
 	limit=${WALK_TIMEOUT:-600}
 	name=$(name_of "$rel")

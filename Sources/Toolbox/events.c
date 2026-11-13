@@ -194,8 +194,8 @@ void events_script_clear(void)
 }
 
 /* The next input not yet applied: its instruction count, or 0.  A
- * screenshot is no input: the clock of a program waiting for input moves
- * on to the next key or click, not to a snapshot, which would otherwise
+ * screenshot is no input: the clock of a program asleep in WaitNextEvent
+ * moves on to the next key or click, not to a snapshot, which would otherwise
  * be taken at the program's first wait however much it had yet to draw
  * (SmallTalk polls for events once before loading its Prelude).  A sync
  * step is no input either, but the clock stops at it: a program sleeping

@@ -86,10 +86,12 @@ extension BlueBox {
             #expect(tb_EventAvail(8, ev) != 0) // the walk's Return, its first step
         }
 
-        /// A scripted snapshot is no input: a program waiting for events
-        /// (SmallTalk's one poll before it loads its Prelude) does not
-        /// have the clock moved on to it, so the snapshot shows what the
-        /// program drew by then; a key after it still does.
+        /// A scripted snapshot is no input: a program asleep in
+        /// WaitNextEvent sleeps on past it, its clock going no further
+        /// than the sleep asked for, so the snapshot shows what the program
+        /// drew by then; a key after it ends the sleep there.  A program
+        /// polling (GetNextEvent, SmallTalk's one poll before it loads its
+        /// Prelude) has its clock moved on by the call alone.
         @Test func aSnapshotDoesNotPullTheClock() throws {
             let dir = try launch(cat(be16(0xA9F4))) // _ExitToShell
             defer { try? FileManager.default.removeItem(at: dir) }
@@ -99,13 +101,16 @@ extension BlueBox {
             while events_script_next_at() != 0 { events_script_pump(events_script_next_at()) } // none left over
             machine_script_add_snap(now + 5_000_000, png)
             #expect(events_script_next_at() == 0)
-            machine_idle()
+            machine_idle_for(20) // a third of a second: 3.3 million instructions
             #expect(g_cpu!.pointee.icount < now + 5_000_000)
             #expect(!FileManager.default.fileExists(atPath: png))
             machine_script_add(now + 9_000_000, 0, 0x61, 0, 0) // "a"
             #expect(events_script_next_at() == now + 9_000_000)
+            let polled = g_cpu!.pointee.icount
             machine_idle()
-            #expect(g_cpu!.pointee.icount >= now + 9_000_000)
+            #expect(g_cpu!.pointee.icount < polled + 10_000) // no sleep: the next key doesn't pull the clock
+            machine_idle_for(60)
+            #expect(g_cpu!.pointee.icount == now + 9_000_000)
             #expect(FileManager.default.fileExists(atPath: png)) // taken on the way
             tb_FlushEvents(-1, 0)
         }
