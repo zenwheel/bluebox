@@ -5,6 +5,9 @@ import Foundation
 import Testing
 import Toolbox
 
+/// What a live window drag showed the host, looked at from its tracking.
+nonisolated(unsafe) private var liveDragLook: () -> Void = {}
+
 extension BlueBox {
     @Suite struct QuickDrawExtras {
         func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
@@ -855,6 +858,66 @@ extension BlueBox {
             tb_DragWindow(w, pt, bounds)
             tb_DragWindow(w, pt, bounds)
             #expect(bbox(WindowRecord_strucRgn(w)) == [81, 99, 202, 302])
+            tb_DisposeWindow(w)
+        }
+
+        /// With a rootless host, a window the program drags moves with the
+        /// pointer: no gray outline on the screen (the host shows only the
+        /// windows, so it showed as a stripe through the window's own title
+        /// bar, Register Apeiron's), the host told the offset instead, and
+        /// at the end the window is where it was last shown.
+        @Test func aLiveDragMovesTheHostWindowNotAnOutline() {
+            launchTestApp()
+            _ = initToolbox()
+            machine_set_live_window_drag(true)
+            defer { machine_set_live_window_drag(false) }
+            let w = tb_NewCWindow(0, rect(100, 100, 200, 300), 0, 1, 5, 0xFFFF_FFFF, 0, 0) // movableDBoxProc
+            let s = bbox(WindowRecord_strucRgn(w))
+            display_sync()
+            func pixel(_ x: Int, _ y: Int) -> [UInt8] {
+                var px = [UInt8](repeating: 0, count: 4)
+                machine_screen_rgba(Int32(x), Int32(y), 1, 1, &px)
+                return px
+            }
+            // Where the outline's bottom edge would be: desktop.
+            let (ox, oy) = (s[1] + 60, s[2] + 20 - 1)
+            let desk = (0..<2).map { pixel(ox + $0, oy) }
+            var drag: [Int] = [], bounds: [Int] = [], screen: [[UInt8]] = []
+            liveDragLook = {
+                var wins = [machine_window](repeating: machine_window(), count: 8)
+                let n = Int(machine_windows(&wins, 8))
+                if let mw = wins.prefix(n).first(where: { $0.id == w }) {
+                    drag = [Int(mw.drag_h), Int(mw.drag_v)]
+                    bounds = [Int(mw.top), Int(mw.left), Int(mw.bottom), Int(mw.right)]
+                }
+                screen = (0..<2).map { pixel(ox + $0, oy) }
+            }
+            // The scripted steps come in DragWindow's tracking: down in the
+            // title bar, 60 right and 20 down, a look, let go.
+            machine_set_savepoint_handler({ _, _ in liveDragLook() }, nil)
+            defer {
+                machine_set_savepoint_handler(nil, nil)
+                liveDragLook = {}
+                events_note_savepoint() // the step's count taken, then dropped
+                events_note_savepoint()
+                machine_script_clear()
+            }
+            let (h, v) = (s[1] + 100, s[0] + 8)
+            machine_post_mouse(Int32(h), Int32(v), 1)
+            tb_FlushEvents(-1, 0) // the click DragWindow is called for, taken
+            let t0 = machine_instruction_count()
+            machine_script_add(t0 + 100_000, 1, Int32(h + 60), Int32(v + 20), -1)
+            machine_script_add(t0 + 200_000, 11, Int32(MACHINE_SAVEPOINT_SAVE), 0, 0)
+            machine_script_add(t0 + 300_000, 1, Int32(h + 60), Int32(v + 20), 0)
+            tb_DragWindow(w, UInt32(v) << 16 | UInt32(h), rect(20, 0, 700, 1000))
+            #expect(drag == [60, 20])
+            #expect(bounds == s)    // its pixels still where they were
+            #expect(screen == desk) // and no outline drawn
+            #expect(bbox(WindowRecord_strucRgn(w)) == [s[0] + 20, s[1] + 60, s[2] + 20, s[3] + 60])
+            var wins = [machine_window](repeating: machine_window(), count: 8)
+            let n = Int(machine_windows(&wins, 8))
+            let mw = wins.prefix(n).first { $0.id == w }
+            #expect(mw.map { [Int($0.top), Int($0.left), Int($0.drag_h), Int($0.drag_v)] } == [s[0] + 20, s[1] + 60, 0, 0])
             tb_DisposeWindow(w)
         }
     }

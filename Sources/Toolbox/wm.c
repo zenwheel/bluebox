@@ -2262,9 +2262,11 @@ bool ev_still_down(void);
 uint32_t ev_mouse_global(void);
 void ev_wait_tick(void);
 
-int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int16_t axis, gaddr proc)
+/* Track the mouse until release, the gray outline drawn with XOR; or, for
+ * a window a live drag host shows moving (live), no outline: the host is
+ * told how far it has gone instead. */
+static int32_t drag_track(gaddr rgn, uint32_t startp, gaddr limit, int16_t axis, gaddr proc, gaddr live)
 {
-    /* Track the mouse until release; the gray outline is drawn with XOR. */
     hrgn shape, moved;
     hrgn_init(&shape);
     hrgn_init(&moved);
@@ -2296,7 +2298,11 @@ int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int1
             ev_wait_tick();
             continue;
         }
-        if (ndh != dh || ndv != dv || !shown) {
+        if (live) {
+            dh = ndh;
+            dv = ndv;
+            display_window_drag(live, dh, dv);
+        } else if (ndh != dh || ndv != dv || !shown) {
             if (shown)
                 qd_fill_region(wmgr_port(), &moved, pat, patXor);
             hrgn_copy(&moved, &shape);
@@ -2315,6 +2321,11 @@ int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int1
     hrgn_free(&moved);
     hrgn_free(&inner);
     return (int32_t)make_pt((int16_t)dv, (int16_t)dh);
+}
+
+int32_t tb_DragGrayRgn(gaddr rgn, uint32_t startp, gaddr limit, gaddr slop, int16_t axis, gaddr proc)
+{
+    return drag_track(rgn, startp, limit, axis, proc, 0);
 }
 
 void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
@@ -2341,10 +2352,8 @@ void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
         tb_SelectWindow(wp);
         return;
     }
-    gaddr slop = tb_NewPtr(8, false, false);
-    qrect_put(slop, qrect_get(rp));
-    int32_t d = tb_DragGrayRgn(WindowRecord_strucRgn(wp), p, rp, slop, 0, 0);
-    tb_DisposePtr(slop);
+    gaddr live = display_live_window_drag() && wvisible(wp) ? wp : 0;
+    int32_t d = drag_track(WindowRecord_strucRgn(wp), p, rp, 0, 0, live);
     int16_t dh = pt_h((uint32_t)d), dv = pt_v((uint32_t)d);
     last_w = dh || dv ? 0 : wp;
     last_ticks = now;
@@ -2353,6 +2362,8 @@ void tb_DragWindow(gaddr wp, uint32_t p, gaddr rp)
         qrect c = global_content(wp);
         tb_MoveWindow(wp, (int16_t)(c.left + dh), (int16_t)(c.top + dv), 0);
     }
+    if (live) /* the window where the host showed it last, its pixels moved there */
+        display_window_drag_done();
     tb_SelectWindow(wp);
 }
 

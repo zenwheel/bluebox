@@ -295,7 +295,17 @@ typedef struct {
     bool active;
     uint8_t flags;               /* MACHINE_WINDOW_*: native frame and its controls */
     char title[256];             /* MacRoman */
+    int16_t drag_h, drag_v;      /* while the program drags it (DragWindow) with a live drag
+                                  * host: how far, to show it there; its pixels are still at
+                                  * the bounds above until the drag ends */
 } machine_window;
+
+/* A rootless host shows a window the program drags (DragWindow) moving
+ * with the pointer, as macOS does, instead of the Window Manager drawing
+ * its gray outline on the screen: the host shows only the windows, so
+ * the outline would show only where it crosses one, a stripe through the
+ * window's own title bar as far from its edge as it was dragged. */
+void machine_set_live_window_drag(bool on);
 
 /* With the native appearance, the host draws document windows' frames;
  * its title-bar actions reach the app as the classic clicks would (the app

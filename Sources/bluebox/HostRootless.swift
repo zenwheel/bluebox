@@ -467,6 +467,9 @@ final class TransientView: NSView {
         installKeyMonitor()
         Suspender.shared.changed = { [weak self] on in self?.showSuspended(on) }
         Suspender.shared.listen()
+        // Windows the program drags move with the pointer: the Window
+        // Manager's outline would show only where it crosses a window.
+        machine_set_live_window_drag(true)
         let script = self.script
         Thread.detachNewThread {
             while !machine_halted() { _ = machine_run(1_000_000) }
@@ -582,7 +585,9 @@ final class TransientView: NSView {
         }
         for mw in current {
             let width = Int(mw.right) - Int(mw.left), height = Int(mw.bottom) - Int(mw.top)
-            let origin = macToHost(CGFloat(mw.left), CGFloat(mw.bottom))
+            // Being dragged: shown where the pointer has taken it, its pixels
+            // still captured where it is (macBounds) until the drag ends.
+            let origin = macToHost(CGFloat(Int(mw.left) + Int(mw.drag_h)), CGFloat(Int(mw.bottom) + Int(mw.drag_v)))
             let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(width) * displayScale,
                                height: CGFloat(height) * displayScale)
             let native = mw.flags & UInt8(MACHINE_WINDOW_NATIVE) != 0
@@ -650,6 +655,7 @@ final class TransientView: NSView {
     }
 
     func switchToScreen(because why: String) {
+        machine_set_live_window_drag(false) // the whole screen shows the outline
         var sw: Int32 = 0, sh: Int32 = 0
         machine_screen_size(&sw, &sh)
         showWholeScreen(Int(sw), Int(sh))
