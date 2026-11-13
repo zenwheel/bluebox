@@ -135,8 +135,9 @@ extension BlueBox {
 
         /// A PowerPC program's PBReadSync to a 68k driver of its own whose
         /// Prime waits for input in GetNextEvent: the routine is left at the
-        /// idle call, the program's call put back on its NATIVE word, and
-        /// made again after a restore, when the driver answers it.
+        /// idle call, the request out of the queue and the program's call put back on
+        /// its NATIVE word, and after a restore the call is answered
+        /// abortErr without entering the driver again.
         @Test func aSynchronousReadWaitingInsideItsDriverHibernates() {
             defer { g_ppc_mode = false }
             let (storage, pb, buf) = waitingDriverRead()
@@ -159,11 +160,12 @@ extension BlueBox {
             let snap = snapshot("ppcdrvwait.bbhib")
             machine_drain_end()
             restore(snap)
-            wr16(storage, 1)                                // the line comes
+            wr16(storage, 1)                                // a line would come
             _ = machine_run(5_000_000)
-            #expect(rd16(storage + 2) == 2)                 // the call made again, and answered
-            #expect(rd32(result) == 0)
-            #expect(rd8(buf) == 0x58)
+            #expect(rd16(storage + 2) == 1)                 // the driver not entered again
+            #expect(Int32(bitPattern: rd32(result)) == -27) // abortErr
+            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -27)
+            #expect(rd8(buf) == 0)
         }
 
         static let noteLevel: @convention(c) (UnsafeMutablePointer<ppc_cpu>?) -> Void = { c in

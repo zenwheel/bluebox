@@ -37,7 +37,8 @@
  * instead: a 68k driver's routine run for the program's own synchronous
  * request (Small Talk's console driver waits for a line in its Prime),
  * at an idle call there once the grace is over; the routine is left where
- * it is and the program's call given up, to be made again (driver68k.c).
+ * it is and the program's call given up, to be made again, or once resumed
+ * answered abortErr (driver68k.c).
  *
  * Refused (with a reason the host can show) when no safe point comes in
  * DRAIN_TIMEOUT_NS of the host's time (the program in a callback from
@@ -248,7 +249,7 @@ bool drain_at_trap(cpu68k *c, uint16_t op)
     if ((g_ppc_mode && !mm_level_68k()) || !drain_program_level()) {
         /* A driver's routine waiting inside the program's synchronous
          * call, once the grace has given it the time to finish: left, and
-         * the program's call given up (driver68k.c), to be made again. */
+         * the program's call given up (driver68k.c). */
         if (c->icount >= grace_until && abandon_level_under(1) && drv68k_leave_for_drain()) {
             c->pc = c->op_pc;
             c->icount--; /* not made: the routine is left */

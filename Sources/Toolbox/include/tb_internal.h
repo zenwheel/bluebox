@@ -785,9 +785,11 @@ bool drv68k_system_edit(int16_t cmd);
 void drv68k_periodic(void);
 int16_t drv68k_take_opened(void);
 /* A drain at an idle call inside a 68k driver's routine: the routine left
- * if it runs for the program's own synchronous request (its call made
- * again after); false if not. */
+ * if it runs for the program's own synchronous request (its call put back,
+ * made again after or answered abortErr once resumed); false if not. */
 bool drv68k_leave_for_drain(void);
+/* After a resume: a call given up so is answered abortErr. */
+void drv68k_after_resume(void);
 bool drv68k_open_da_path(const char *path); /* a desk accessory file's DRVRs installed, the first opened */
 /* The whole screen in one window instead of rootless windows (display.c). */
 void display_want_screen(const char *why);

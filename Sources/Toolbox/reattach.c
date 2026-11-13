@@ -33,6 +33,9 @@
  *   the network  what listens or is registered is made again on the new
  *                host; a connection is over, and the program hears so
  *                as each protocol tells it (network_after_resume)
+ *   a driver     a program's synchronous call given up for the drain
+ *                inside its driver's routine fails with abortErr, as a
+ *                killed request does (drv68k_after_resume)
  *
  * What a snapshot cannot carry is refused before it is taken
  * (hibernate_io_blocker): a print job, a streamed movie, EtherTalk
@@ -238,6 +241,7 @@ void hibernate_reattach_host(void)
     hostgl_after_resume();   /* OpenGL's contexts, made again as used */
     qt_movies_after_resume(); /* VLC's movies opened again, their flattened copies made again */
     network_after_resume();
+    drv68k_after_resume();   /* a driver's read given up for the drain fails */
 }
 
 /* ---- The network ----
