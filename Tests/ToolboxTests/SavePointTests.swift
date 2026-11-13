@@ -196,6 +196,54 @@ extension BlueBox {
             #expect(savePointSteps.count == 2)
         }
 
+        /// The 68020's instruction cache is the machine's: put back as it
+        /// was (a line the program's own store left stale stays stale), and
+        /// the Toolbox's stores still flush its lines, which a resumed
+        /// process's code map never saw.
+        @Test func instructionCacheComesBack() {
+            machine_set_cpu(68020)
+            defer {
+                machine_set_cpu(68040)
+                bootMachine()
+            }
+            launchTestApp()
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            let target = code([0x7E01, 0x4E75]) // MOVEQ #1,D7; RTS
+            let src = code([0x7E03]) // MOVEQ #3,D7
+            // Code whose lines are not target's (64 lines of a long each).
+            func apart(_ words: [UInt16]) -> UInt32 {
+                let block = tb_NewPtr(512, false, false)
+                let p = block + ((target &+ 64 &- block) & 0xFF)
+                for (i, w) in words.enumerated() { wr16(p + UInt32(i * 2), w) }
+                return p
+            }
+            // JSR target (cached); MOVE.W #$7E02,target (stale now); loop: _SystemTask; BRA.S loop
+            let first = apart([0x4EB9, hi(target), lo(target), 0x33FC, 0x7E02, hi(target), lo(target), 0xA9B4, 0x60FC])
+            _ = start([0x4EF9, hi(first), lo(first)]) // JMP first
+            _ = machine_run(100_000)
+            guard let (buf, len) = take() else { return }
+            defer { machine_savepoint_free(buf) }
+            _ = machine_run(100_000)
+            // As a new process has it: no mark on the cached code.
+            mem_code_unmark((target & ~0xFF) &- 0x100, (target & ~0xFF) + 0x100, 4)
+            park()
+            var err = [CChar](repeating: 0, count: 256)
+            var differences: Int32 = -1
+            #expect(machine_savepoint_restore(buf, len, &differences, &err, err.count),
+                    Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            #expect(differences == 0)
+            // MOVEQ #0,D7; JSR target; MOVE.L D7,D6; BlockMove src over it; JSR target; MOVE.L D7,D4; loop
+            let after = apart([0x7E00, 0x4EB9, hi(target), lo(target), 0x2C07,
+                              0x41F9, hi(src), lo(src), 0x227C, hi(target), lo(target), 0x7002, 0xA02E,
+                              0x4EB9, hi(target), lo(target), 0x2807, 0xA9B4, 0x60FC])
+            g_cpu!.pointee.pc = after
+            _ = machine_run(100_000)
+            #expect(g_cpu!.pointee.d.6 == 1) // still the cached MOVEQ #1
+            #expect(g_cpu!.pointee.d.4 == 3) // BlockMove flushed it
+        }
+
         // MARK: The host's side
 
         func withFolder(_ body: (String) throws -> Void) rethrows {

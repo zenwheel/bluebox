@@ -67,6 +67,24 @@ static inline unsigned ic_line(const cpu68k *c, uint32_t a) { return c->model ==
 static inline unsigned ic_long_of(const cpu68k *c, uint32_t a) { return c->model == 68030 ? (a >> 2) & 3 : 0; }
 
 #if !CPU68K_STRICT
+/* A snapshot put back: the cache holds what it held when it was taken,
+ * stale lines included, as the program left it; the Toolbox's stores must
+ * still flush those lines, so each is marked again. */
+static void icache_restored(void)
+{
+    cpu68k *c = icache_cpu;
+    if (!c || !c->icache)
+        return;
+    struct cpu_icache *ic = c->icache;
+    unsigned lines = c->model == 68030 ? 16 : 64;
+    for (unsigned l = 0; l < lines; l++) {
+        if (!ic->valid[l])
+            continue;
+        uint32_t a = (ic->tag[l] & 0x00FFFFFFu) << 8 | (c->model == 68030 ? l << 4 : l << 2);
+        mem_code_mark(a & ~15u, (a & ~15u) + 16, CODE_ICACHE);
+    }
+}
+
 void cpu_icache_flush(cpu68k *c, uint32_t addr, uint32_t len)
 {
     struct cpu_icache *ic = c->icache;
@@ -2694,6 +2712,7 @@ void cpu_set_model(cpu68k *c, int model, int fpu)
         c->icache = &the_icache;
         icache_cpu = c;
         g_code_written[2] = icache_written;
+        g_code_restored[2] = icache_restored;
     } else if (icache_cpu == c) {
         icache_cpu = NULL;
     }
