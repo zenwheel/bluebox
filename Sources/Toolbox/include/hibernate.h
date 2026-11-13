@@ -22,6 +22,12 @@ typedef struct hb_stats {
     uint32_t sections, blocks, regions;
     uint32_t relocs;                      /* pointers rewritten */
     uint32_t to_blocks, to_statics, to_regions, to_image, to_libraries;
+    /* Of those to the binary (by name, which another build puts back): to
+     * a function's start, into a function, to a constant's (or a static of
+     * the host's) start, into one, to a string constant; and those with no
+     * symbol (the same build only). */
+    uint32_t to_functions, to_code_inside, to_data, to_data_inside, to_strings, to_image_unnamed;
+    uint32_t strings_kept; /* string constants this build has not: kept in blocks */
     uint32_t host;                        /* pointers to the host's memory: kept only in this process */
     uint32_t untyped_blocks;              /* blocks no tag describes */
     uint32_t stale_types;                 /* tags the map has no layout for (or a different size) */
@@ -33,9 +39,11 @@ typedef struct hb_stats {
 bool hb_save_buffer(uint8_t **out, size_t *len, hb_stats *stats, char *err, size_t errlen);
 void hb_free_buffer(uint8_t *buf);
 /* A snapshot file: deflated, after a header and the caller's bytes (extra:
- * the record of the launch, for the host).  hb_file_extra reads those back
- * (and whether this build wrote the file); hb_file_load inflates the
- * snapshot (free it with hb_free_buffer). */
+ * the record of the launch, for the host).  hb_file_extra reads those back,
+ * and whether this build can put the snapshot back (*resumable: the build
+ * that wrote it, or one whose saved state has the same fingerprint), and
+ * if not, why (the first difference, in words, into why); hb_file_load
+ * inflates the snapshot (free it with hb_free_buffer). */
 bool hb_save_file(const char *path, hb_stats *stats, char *err, size_t errlen);
 bool hb_save_file_extra(const char *path, const void *extra, size_t extra_len, hb_stats *stats, char *err,
                         size_t errlen);
@@ -43,7 +51,8 @@ bool hb_save_file_extra(const char *path, const void *extra, size_t extra_len, h
  * the machine may go on meanwhile). */
 bool hb_write_file_extra(const char *path, const uint8_t *buf, size_t len, const void *extra, size_t extra_len,
                          hb_stats *stats, char *err, size_t errlen);
-bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *same_build, char *err, size_t errlen);
+bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *resumable, char *why, size_t whylen,
+                   char *err, size_t errlen);
 bool hb_file_load(const char *path, uint8_t **out, size_t *len, char *err, size_t errlen);
 
 enum {
@@ -56,7 +65,8 @@ enum {
     HB_RESTORE_FORGET_HOST = 1 << 1,
 };
 
-/* Puts a snapshot back: refused unless the same build wrote it. */
+/* Puts a snapshot back: refused unless the build that wrote it had the same
+ * state fingerprint (or was this one), saying why. */
 bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stats, char *err, size_t errlen);
 bool hb_restore_file(const char *path, int flags, hb_stats *stats, char *err, size_t errlen);
 
@@ -96,5 +106,17 @@ int hb_check_map(FILE *out);
 
 /* The build's identity (LC_UUID), as 32 hex digits and a NUL. */
 void hb_build_id(char out[33]);
+/* The state fingerprint (hibernate.c says what it covers), the same way,
+ * and the manifest it is a hash of (text, a line for each thing). */
+void hb_fingerprint(char out[33]);
+size_t hb_manifest(const char **out);
+/* Why a snapshot with this manifest cannot be put back here (the first
+ * difference), into why. */
+void hb_explain_manifest(const char *old, size_t len, char *why, size_t whylen);
+/* A pointer into the binary as a snapshot saves it: "file:symbol+offset"
+ * (or "symbol+offset" for a global, "\"text\"+offset" for a string
+ * constant) into out, false when it has no name; and back.  For tests. */
+bool hb_symbolize(const void *p, char *out, size_t n);
+const void *hb_resolve_symbol(const char *file, const char *name, uint64_t off);
 
 #endif

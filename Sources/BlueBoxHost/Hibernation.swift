@@ -21,8 +21,11 @@
 // --fresh starts it fresh and --new starts another copy, both leaving the
 // snapshots alone.  A headless run never resumes unless asked (--resume
 // takes the newest, --resume FILE that one), so a census or a menu walk of
-// a program the user hibernated leaves it be.  A snapshot another build
-// wrote is never resumed: the picker says so, and it can be deleted there.
+// a program the user hibernated leaves it be.  A snapshot resumes in any
+// build of Blue Box whose saved state has the same shape (hibernate.c's
+// state fingerprint), not only the one that saved it; one that does not
+// fit this build is never resumed: the picker says why, and it can be
+// deleted there.
 
 import Foundation
 import Toolbox
@@ -95,32 +98,39 @@ public struct SnapshotProblem: Error, Equatable, Sendable {
     public var message: String
     public init(_ message: String) { self.message = message }
 
-    /// The words for a snapshot of another build's.
-    public static let otherBuild = "it resumes only in the build of Blue Box that saved it"
+    /// The words for a snapshot this build cannot resume, when hibernate.c
+    /// gives none: its saved state is laid out otherwise.
+    public static let otherBuild = "it was saved by a build of Blue Box whose saved state differs from this one's"
 }
 
 public enum SnapshotFile {
-    /// A snapshot file's launch record and whether this build wrote it.
-    public static func read(_ path: String) -> Result<(record: HibernateRecord, sameBuild: Bool), SnapshotProblem> {
+    /// A snapshot file's launch record, and whether this build can resume
+    /// it (the build that saved it, or one whose saved state has the same
+    /// shape), and if not, why.
+    public static func read(_ path: String)
+        -> Result<(record: HibernateRecord, resumable: Bool, why: String), SnapshotProblem> {
         var extra: UnsafeMutablePointer<UInt8>?
         var len = 0
-        var same = false
+        var fits = false
+        var why = [CChar](repeating: 0, count: 768)
         var err = [CChar](repeating: 0, count: 512)
-        guard hb_file_extra(path, &extra, &len, &same, &err, err.count), let extra else {
-            return .failure(SnapshotProblem(String(decoding: err.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)))
+        func text(_ c: [CChar]) -> String { String(decoding: c.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self) }
+        guard hb_file_extra(path, &extra, &len, &fits, &why, why.count, &err, err.count), let extra else {
+            return .failure(SnapshotProblem(text(err)))
         }
         defer { hb_free_buffer(extra) }
         guard let record = HibernateRecord.decode(Data(bytes: extra, count: len)) else {
             return .failure(SnapshotProblem("\(path): the snapshot has no launch record Blue Box reads"))
         }
-        return .success((record, same))
+        let reason = text(why)
+        return .success((record, fits, fits ? "" : reason.isEmpty ? SnapshotProblem.otherBuild : reason))
     }
 
     /// What resuming it here would meet: nil when it can be resumed.
     public static func problem(_ path: String) -> SnapshotStatus {
         guard FileManager.default.fileExists(atPath: path) else { return .missing }
         switch read(path) {
-        case .success(let r): return r.sameBuild ? .resumable : .cannotResume(SnapshotProblem.otherBuild)
+        case .success(let r): return r.resumable ? .resumable : .cannotResume(r.why)
         case .failure(let p): return .cannotResume(p.message)
         }
     }
@@ -141,7 +151,8 @@ public enum SnapshotStatus: Equatable, Sendable {
     case resumable
     /// Its file is gone (moved, deleted): the entry is forgotten.
     case missing
-    /// Another build's, or unreadable: the user decides.
+    /// Saved by a build whose saved state differs, or unreadable: the user
+    /// decides.
     case cannotResume(String)
 }
 
@@ -154,7 +165,8 @@ public enum ResumeChoice: Equatable, Sendable {
     /// The snapshot's file is gone: a headless run says so (its entry
     /// forgotten; one named with --resume FILE ends the run).
     case missing(snapshot: String)
-    /// It cannot resume here (another build's, or unreadable): a headless
+    /// It cannot resume here (its saved state does not fit this build, or it
+    /// is unreadable): a headless
     /// run says so and ends.
     case ask(snapshot: String, reason: String)
     /// An interactive run: the user picks one of these (newest first) or
@@ -269,7 +281,10 @@ public struct SnapshotInfo: Equatable, Sendable {
     public var bytes: UInt64
     public var modified: Date
     public var record: HibernateRecord?
-    public var sameBuild: Bool
+    /// This build can resume it (the build that saved it, or one whose
+    /// saved state has the same shape); else why not.
+    public var resumable: Bool
+    public var incompatible: String?
     /// Why it could not be read.
     public var problem: String?
     /// A hibernated entry names it: opening its program resumes it.
@@ -285,7 +300,7 @@ public struct SnapshotInfo: Equatable, Sendable {
     /// A save point's (the program went on), not Hibernate's.
     public var isSavePoint: Bool { record?.isSavePoint ?? false }
     /// Why it cannot be resumed here, or nil.
-    public var unresumable: String? { problem ?? (sameBuild ? nil : SnapshotProblem.otherBuild) }
+    public var unresumable: String? { problem ?? (resumable ? nil : incompatible ?? SnapshotProblem.otherBuild) }
 
     /// "Macintosh Quadra 800 · 640×480, 256 colors · 3.2 MB": what the
     /// picker says under its date.
@@ -456,11 +471,12 @@ public enum HibernatedSnapshots {
         let attrs = (try? FileManager.default.attributesOfItem(atPath: path)) ?? [:]
         var info = SnapshotInfo(path: path, bytes: (attrs[.size] as? NSNumber)?.uint64Value ?? 0,
                                 modified: attrs[.modificationDate] as? Date ?? .distantPast, record: nil,
-                                sameBuild: false, problem: nil, entered: entered)
+                                resumable: false, incompatible: nil, problem: nil, entered: entered)
         switch SnapshotFile.read(path) {
         case .success(let r):
             info.record = r.record
-            info.sameBuild = r.sameBuild
+            info.resumable = r.resumable
+            info.incompatible = r.resumable ? nil : r.why
         case .failure(let p):
             info.problem = p.message
         }

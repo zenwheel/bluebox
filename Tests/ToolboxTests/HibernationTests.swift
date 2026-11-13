@@ -26,28 +26,10 @@ extension BlueBox {
                             display: "rootless")
         }
 
-        /// A snapshot file's head as hibernate.c writes it (BBHIBZ01, this
-        /// build's UUID or another's, the record), with no snapshot after.
-        func writeSnapshot(_ path: String, _ record: HibernateRecord, sameBuild: Bool = true) {
-            var id = [CChar](repeating: 0, count: 33)
-            hb_build_id(&id)
-            let hex = String(decoding: id.prefix(32).map { UInt8(bitPattern: $0) }, as: UTF8.self)
-            var uuid = stride(from: 0, to: 32, by: 2).map { i -> UInt8 in
-                let s = hex.index(hex.startIndex, offsetBy: i)
-                return UInt8(hex[s..<hex.index(s, offsetBy: 2)], radix: 16)!
-            }
-            if !sameBuild { uuid[0] ^= 0xFF }
-            let extra = Data(record.json.utf8)
-            var d = Data("BBHIBZ01".utf8)
-            func le<T: FixedWidthInteger>(_ v: T) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
-            le(UInt32(1))
-            le(UInt32(0))
-            d.append(contentsOf: uuid)
-            le(UInt64(0))
-            le(UInt64(0))
-            le(UInt64(extra.count))
-            d.append(extra)
-            FileManager.default.createFile(atPath: path, contents: d)
+        /// A snapshot file's head as hibernate.c writes it, with no snapshot
+        /// after (snapshotHead).
+        func writeSnapshot(_ path: String, _ record: HibernateRecord, kind: SnapshotHeadKind = .thisBuild) {
+            FileManager.default.createFile(atPath: path, contents: snapshotHead(record, kind))
         }
 
         func entry(_ program: String, started: Date = Date()) -> RunningProgram {
@@ -302,16 +284,16 @@ extension BlueBox {
                 let t = Date(timeIntervalSince1970: 1_800_000_000)
                 let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
                                 0, 0, 0, 160, 0, 0, 0, 120, 8, 2, 0, 0, 0])
-                func make(_ name: String, _ at: Date, thumbnail: Bool = true, sameBuild: Bool = true) throws {
+                func make(_ name: String, _ at: Date, thumbnail: Bool = true, kind: SnapshotHeadKind = .thisBuild) throws {
                     var r = record("TeachText", saved: at)
                     r.thumbnail = thumbnail ? png : nil
                     r.machine = "Macintosh Quadra 800"
-                    writeSnapshot(folder + "/" + name, r, sameBuild: sameBuild)
+                    writeSnapshot(folder + "/" + name, r, kind: kind)
                     try hibernate(registry, "/lib/TeachText", snapshot: folder + "/" + name, at: at)
                 }
                 try make("one.bbhib", t, thumbnail: false)                           // before thumbnails
-                try make("two.bbhib", t.addingTimeInterval(60))
-                try make("three.bbhib", t.addingTimeInterval(120), sameBuild: false) // another build's
+                try make("two.bbhib", t.addingTimeInterval(60), kind: .sameShape)      // another build's, as this
+                try make("three.bbhib", t.addingTimeInterval(120), kind: .otherShape) // another shape's
                 try make("four.bbhib", t.addingTimeInterval(180))
                 try make("gone.bbhib", t.addingTimeInterval(240))
                 try FileManager.default.removeItem(atPath: folder + "/gone.bbhib")
@@ -332,7 +314,7 @@ extension BlueBox {
                 #expect(picker.selection == folder + "/four.bbhib")                  // the newest
                 #expect(picker.resume() == .resume(folder + "/four.bbhib"))
                 picker.selection = folder + "/three.bbhib"
-                #expect(!picker.canResume && picker.resume() == nil)                 // another build's: delete only
+                #expect(!picker.canResume && picker.resume() == nil)                 // another shape's: delete only
 
                 // Move to Trash: gone, its entry forgotten, the next one chosen.
                 try picker.deleteSelected(registry: registry, toTrash: false)
@@ -396,27 +378,37 @@ extension BlueBox {
             }
         }
 
-        /// A snapshot's record read back; another build's is told apart; a
-        /// file that is no snapshot, or gone, says so.
+        /// A snapshot's record read back; another build's resumes when its
+        /// saved state has this build's shape, and is told apart when not, as
+        /// an older Blue Box's is (it resumed only in the build that saved it);
+        /// a file that is no snapshot, or gone, says so.
         @Test func snapshotFiles() {
             withFolder { root in
                 let r = record("TeachText")
                 writeSnapshot(root + "/same.bbhib", r)
-                writeSnapshot(root + "/other.bbhib", r, sameBuild: false)
+                writeSnapshot(root + "/other.bbhib", r, kind: .otherShape)
+                writeSnapshot(root + "/shaped.bbhib", r, kind: .sameShape)
+                writeSnapshot(root + "/older.bbhib", r, kind: .older)
                 FileManager.default.createFile(atPath: root + "/junk.bbhib", contents: Data("not one".utf8))
                 guard case .success(let same) = SnapshotFile.read(root + "/same.bbhib") else {
                     Issue.record("not read")
                     return
                 }
-                #expect(same.sameBuild && same.record == r)
+                #expect(same.resumable && same.record == r)
                 #expect(same.record.screen == [1024, 768] && same.record.depth == 8 && same.record.display == "rootless")
                 guard case .success(let other) = SnapshotFile.read(root + "/other.bbhib") else {
                     Issue.record("not read")
                     return
                 }
-                #expect(!other.sameBuild && other.record.title == "TeachText")
+                #expect(!other.resumable && other.record.title == "TeachText")
                 #expect(SnapshotFile.problem(root + "/same.bbhib") == .resumable)
+                #expect(SnapshotFile.problem(root + "/shaped.bbhib") == .resumable)
                 #expect(SnapshotFile.problem(root + "/other.bbhib") == .cannotResume(SnapshotProblem.otherBuild))
+                if case .cannotResume(let why) = SnapshotFile.problem(root + "/older.bbhib") {
+                    #expect(why.contains("older Blue Box"))
+                } else {
+                    Issue.record("an older Blue Box's snapshot offered to resume")
+                }
                 #expect(SnapshotFile.problem(root + "/gone.bbhib") == .missing)
                 if case .cannotResume(let why) = SnapshotFile.problem(root + "/junk.bbhib") {
                     #expect(why.contains("not a snapshot"))
@@ -447,7 +439,7 @@ extension BlueBox {
                 let t = Date(timeIntervalSince1970: 1_800_000_000)
                 writeSnapshot(folder + "/old.bbhib", record("Bolo", saved: t))
                 writeSnapshot(folder + "/new.bbhib", record("TeachText", saved: t.addingTimeInterval(100)))
-                writeSnapshot(folder + "/foreign.bbhib", record("Apeiron", saved: t.addingTimeInterval(50)), sameBuild: false)
+                writeSnapshot(folder + "/foreign.bbhib", record("Apeiron", saved: t.addingTimeInterval(50)), kind: .otherShape)
                 writeSnapshot(elsewhere + "/given.bbhib", record("Moose", saved: t.addingTimeInterval(10)))
                 FileManager.default.createFile(atPath: folder + "/notes.txt", contents: Data())
                 try hibernate(registry, "/lib/TeachText", snapshot: folder + "/new.bbhib", at: t)
@@ -455,7 +447,7 @@ extension BlueBox {
                 let list = HibernatedSnapshots.list(folders: [folder], registry: registry)
                 #expect(list.map(\.title) == ["TeachText", "Apeiron", "Moose", "Bolo"])
                 #expect(list.map(\.entered) == [true, false, true, false])
-                #expect(list.map(\.sameBuild) == [true, false, true, true])
+                #expect(list.map(\.resumable) == [true, false, true, true])
                 #expect(list.allSatisfy { $0.bytes > 56 && $0.problem == nil })
                 try HibernatedSnapshots.delete(folder + "/new.bbhib", registry: registry, toTrash: false)
                 #expect(!FileManager.default.fileExists(atPath: folder + "/new.bbhib"))
@@ -469,4 +461,43 @@ extension BlueBox {
             }
         }
     }
+}
+
+/// Whose a test's snapshot head is: this build's; another build's whose
+/// saved state has this one's shape (the same fingerprint); another
+/// shape's; or an older Blue Box's (version 1, the build's UUID alone).
+enum SnapshotHeadKind { case thisBuild, sameShape, otherShape, older }
+
+/// A snapshot file's head as hibernate.c writes it (BBHIBZ01, the build's
+/// UUID and state fingerprint, the record, no manifest), with no snapshot
+/// after.
+func snapshotHead(_ record: HibernateRecord, _ kind: SnapshotHeadKind) -> Data {
+    func bytes(_ f: (UnsafeMutablePointer<CChar>) -> Void) -> [UInt8] {
+        var id = [CChar](repeating: 0, count: 33)
+        id.withUnsafeMutableBufferPointer { f($0.baseAddress!) }
+        let hex = String(decoding: id.prefix(32).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return stride(from: 0, to: 32, by: 2).map { i -> UInt8 in
+            let s = hex.index(hex.startIndex, offsetBy: i)
+            return UInt8(hex[s..<hex.index(s, offsetBy: 2)], radix: 16)!
+        }
+    }
+    var uuid = bytes { hb_build_id($0) }, fingerprint = bytes { hb_fingerprint($0) }
+    if kind != .thisBuild { uuid[0] ^= 0xFF }
+    if kind == .otherShape { fingerprint[0] ^= 0xFF }
+    let extra = Data(record.json.utf8)
+    var d = Data("BBHIBZ01".utf8)
+    func le<T: FixedWidthInteger>(_ v: T) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
+    le(UInt32(kind == .older ? 1 : 2))
+    le(UInt32(0))
+    d.append(contentsOf: uuid)
+    le(UInt64(0))
+    le(UInt64(0))
+    le(UInt64(extra.count))
+    if kind != .older {
+        d.append(contentsOf: fingerprint)
+        le(UInt64(0))
+        le(UInt64(0))
+    }
+    d.append(extra)
+    return d
 }

@@ -387,7 +387,7 @@ enum ShellItem: Hashable {
             + (count > 1 ? " (\(count) snapshots)" : "")
         switch e.snapshot.flatMap({ snapshotStatus[$0] }) {
         case .missing?: return label + " (its snapshot is gone)"
-        case .cannotResume?: return label + " (by another build of Blue Box: it resumes only in that one)"
+        case .cannotResume?: return label + " (this build of Blue Box cannot resume it)"
         default: return label
         }
     }
@@ -1552,12 +1552,13 @@ struct SnapshotsView: View {
 
     private func state(_ s: SnapshotInfo) -> String {
         if let p = s.problem { return "unreadable: \(p)" }
-        if !s.sameBuild { return "by another build of Blue Box (it resumes only in that one)" }
+        if !s.resumable { return "cannot be resumed by this build of Blue Box" }
         return s.entered ? "opening \(s.title) offers it" : "not offered when \(s.title) opens: resume it from here"
     }
 
-    /// Why it cannot be resumed from here now, or nil: another build's (or
-    /// unreadable), or its program is running (quit it first).
+    /// Why it cannot be resumed from here now, or nil: its saved state does
+    /// not fit this build (or it is unreadable), or its program is running
+    /// (quit it first).
     private func whyNot(_ s: SnapshotInfo) -> String? {
         if let p = s.unresumable { return "It cannot be resumed here: \(p)" }
         if let program = s.record?.program, model.states.isRunning(program) { return "\(s.title) is running: quit it first" }

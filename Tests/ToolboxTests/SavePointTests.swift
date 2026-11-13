@@ -301,24 +301,7 @@ extension BlueBox {
 
         /// A snapshot file's head as hibernate.c writes it, this build's.
         func writeHead(_ path: String, _ record: HibernateRecord) {
-            var id = [CChar](repeating: 0, count: 33)
-            hb_build_id(&id)
-            let hex = String(decoding: id.prefix(32).map { UInt8(bitPattern: $0) }, as: UTF8.self)
-            let uuid = stride(from: 0, to: 32, by: 2).map { i -> UInt8 in
-                let s = hex.index(hex.startIndex, offsetBy: i)
-                return UInt8(hex[s..<hex.index(s, offsetBy: 2)], radix: 16)!
-            }
-            let extra = Data(record.json.utf8)
-            var d = Data("BBHIBZ01".utf8)
-            func le<T: FixedWidthInteger>(_ v: T) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
-            le(UInt32(1))
-            le(UInt32(0))
-            d.append(contentsOf: uuid)
-            le(UInt64(0))
-            le(UInt64(0))
-            le(UInt64(extra.count))
-            d.append(extra)
-            FileManager.default.createFile(atPath: path, contents: d)
+            FileManager.default.createFile(atPath: path, contents: snapshotHead(record, .thisBuild))
         }
 
         /// A save point's record and entry say so; an older one's (no kind)

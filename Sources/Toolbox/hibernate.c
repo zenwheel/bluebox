@@ -15,10 +15,16 @@
  *   a tracked block      the block's number and the offset into it
  *   a static             the state section and the offset into it
  *   a region             the region and the offset
- *   the binary           the offset from the binary's Mach-O header: a
- *                        function, a constant table, a string, a type's
- *                        descriptor, even the host's section (the same
- *                        build puts it at the same offset, the slide apart)
+ *   the binary           by name: the symbol it is in (with its file, for
+ *                        a static one) and the offset into it; a string
+ *                        constant by its text and the offset into it.  So
+ *                        another build puts a pointer to a function back
+ *                        at that function wherever it is now.  A pointer
+ *                        into the middle of a symbol whose size is not
+ *                        what it was, or to a symbol that is gone, is
+ *                        refused.  What has no symbol is the offset from
+ *                        the binary's Mach-O header, for the same build
+ *                        only
  *   a library            the library, the symbol dladdr names and the
  *                        offset from it (a library's place changes with
  *                        every boot)
@@ -36,8 +42,19 @@
  * blocks are still there while the new ones are made, so in the same
  * process they land elsewhere too), copies the sections and the regions
  * back, applies the relocations, frees the blocks the process had and
- * drops the JIT's translations.  Refused unless the binary's LC_UUID is
- * the one in the snapshot.
+ * drops the JIT's translations.  A block's type is written by what it is
+ * (its name, file and size), not where its descriptor is.
+ *
+ * Which builds put a snapshot back: the one that wrote it (its LC_UUID),
+ * or any whose saved state has the same shape: the state fingerprint, a
+ * hash of the manifest (manifest_make): each saved static's file, name,
+ * place in its section, size, pointer layout and whole type (the map's
+ * shape), each tagged type's, the sections' sizes, the format, and the
+ * guest-side layout the host lays the guest's memory out by (bbmem.h's
+ * layout records).  The code may differ: a commit that changes a
+ * function's body but no saved type keeps every snapshot.  A snapshot
+ * file carries its build's manifest in its head, so a refusal names the
+ * first thing that differs without inflating the rest.
  */
 #include "hibernate.h"
 #include "hibernate_map.h"
@@ -61,18 +78,24 @@
 #include <mach-o/stab.h>
 #endif
 
-#define MAGIC "BBHIBER1"
-#define VERSION 1
+#define MAGIC "BBHIBER2"
+#define VERSION 2
 
-enum { R_BLOCK = 1, R_STATE, R_REGION, R_IMAGE, R_EXTERN, R_HOST };
+/* R_SYM: a symbol of the binary (the snapshot's symbol table) and the
+ * offset into it; R_CSTR: a string constant (its text in the pool) and
+ * the offset into it; R_IMAGE: the offset from the binary's header (no
+ * symbol: the same build only). */
+enum { R_BLOCK = 1, R_STATE, R_REGION, R_IMAGE, R_EXTERN, R_HOST, R_SYM, R_CSTR };
 
 typedef struct {
     char magic[8];
     uint32_t version, flags;
     uint8_t uuid[16];
+    uint8_t fingerprint[16];
     uint64_t session;
-    uint64_t nsections, nblocks, nregions, nrelocs, nexterns;
-    uint64_t sections_off, blocks_off, regions_off, relocs_off, externs_off, total;
+    uint64_t nsections, nblocks, nregions, nrelocs, nexterns, nsyms, ncstrs, ntypes;
+    uint64_t sections_off, blocks_off, regions_off, relocs_off, externs_off, syms_off, cstrs_off, types_off;
+    uint64_t pool_off, pool_len, total;
 } file_header;
 
 typedef struct {
@@ -81,9 +104,29 @@ typedef struct {
 } file_section;
 
 typedef struct {
-    uint64_t type_off; /* the descriptor, from the binary's header */
-    uint32_t size, pad;
+    uint32_t type; /* in the snapshot's table of types */
+    uint32_t size;
 } file_block;
+
+/* A symbol of the binary a pointer is in: its file (a static one's, else
+ * empty) and name, in the pool; its size, and whether a pointer goes past
+ * its start (then it must be as large where it is put back). */
+enum { SYM_INTERIOR = 1 << 0, SYM_CODE = 1 << 1 };
+typedef struct {
+    uint32_t file, name, flags, pad;
+    uint64_t size;
+} file_sym;
+
+/* A string constant: its text in the pool. */
+typedef struct {
+    uint32_t text, len;
+} file_cstr;
+
+/* A block's type, as its descriptor says (bbmem.h): name and file in the
+ * pool. */
+typedef struct {
+    uint32_t name, file, size, form, line, pad;
+} file_type;
 
 typedef struct {
     char name[16];
@@ -118,6 +161,14 @@ typedef struct {
     size_t sect_size[NSAVED];
     uint8_t *host[NHOSTSECT];
     size_t host_size[NHOSTSECT];
+    /* Every section, by its number in the symbol table (from 1). */
+    struct {
+        uintptr_t lo, hi;
+        bool code, cstrings;
+    } sects[256];
+    uint32_t nsects;
+    const bb_layout_rec *layout;
+    size_t nlayout;
 #if defined(__APPLE__)
     const struct nlist_64 *syms;
     uint32_t nsyms;
@@ -245,6 +296,17 @@ static bool image_load(char *err, size_t errlen)
             img.hi = e;
         const struct section_64 *sec = (const void *)(seg + 1);
         for (uint32_t k = 0; k < seg->nsects; k++, sec++) {
+            if (img.nsects + 1 < sizeof img.sects / sizeof img.sects[0]) {
+                uint32_t n = ++img.nsects;
+                img.sects[n].lo = (uintptr_t)(sec->addr + img.slide);
+                img.sects[n].hi = img.sects[n].lo + sec->size;
+                img.sects[n].code = sec->flags & (S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS);
+                img.sects[n].cstrings = (sec->flags & SECTION_TYPE) == S_CSTRING_LITERALS;
+            }
+            if (!strncmp(sec->segname, "__DATA_CONST", 16) && !strncmp(sec->sectname, "__bblayout", 16)) {
+                img.layout = (const bb_layout_rec *)(sec->addr + img.slide);
+                img.nlayout = sec->size / sizeof(bb_layout_rec);
+            }
             if (strncmp(sec->segname, "__DATA", 16))
                 continue;
             for (int n = 0; n < NSAVED; n++)
@@ -363,6 +425,166 @@ static const struct mach_header *lib_named(const char *path)
     return NULL;
 }
 
+/* ---- The binary's symbols, for pointers into it by name ----
+ *
+ * Every symbol of the binary's own (not a stab, in a section, a C or
+ * Swift name), with its size: a function's from the debug map, anything
+ * else's as far as the next symbol in its section.  A static symbol is
+ * named with its file (two files may each have a static of a name), as
+ * the debug map has it; a global by its name alone. */
+
+typedef struct {
+    uintptr_t addr;
+    uint64_t size;
+    const char *name; /* without the underscore */
+    const char *file; /* a static one's, as Target/path; else "" */
+    uint32_t sect;
+    bool code;
+} isym;
+
+BB_HOST static isym *isyms;
+BB_HOST static size_t nisyms;
+BB_HOST static uint32_t *isym_slots; /* by file and name: index + 1 */
+BB_HOST static size_t isym_cap;
+
+typedef struct {
+    uintptr_t addr;
+    const char *file;
+    uint64_t size;
+} stab_info;
+
+static int cmp_stab(const void *a, const void *b)
+{
+    uintptr_t x = ((const stab_info *)a)->addr, y = ((const stab_info *)b)->addr;
+    return x < y ? -1 : x > y;
+}
+
+static int cmp_isym(const void *a, const void *b)
+{
+    const isym *x = a, *y = b;
+    if (x->addr != y->addr)
+        return x->addr < y->addr ? -1 : 1;
+    int c = strcmp(x->name, y->name);
+    return c ? c : strcmp(x->file, y->file);
+}
+
+static uint64_t hash_key(const char *file, const char *name)
+{
+    return hash_str(file) * 31 ^ hash_str(name);
+}
+
+static bool symbols_ready(char *err, size_t errlen)
+{
+    if (isyms)
+        return true;
+    if (!img.syms) {
+        snprintf(err, errlen, "the binary has no symbol table");
+        return false;
+    }
+    /* The debug map: each function's and static's file, each function's size. */
+    stab_info *st = bb_host_malloc(((size_t)img.nsyms + 1) * sizeof *st);
+    isym *list = bb_host_malloc(((size_t)img.nsyms + 1) * sizeof *list);
+    if (!st || !list) {
+        bb_host_free(st);
+        bb_host_free(list);
+        snprintf(err, errlen, "out of memory");
+        return false;
+    }
+    size_t nst = 0, n = 0;
+    char dir[1024] = "";
+    const char *file = "";
+    stab_info *fun = NULL;
+    for (uint32_t i = 0; i < img.nsyms; i++) {
+        const struct nlist_64 *e = &img.syms[i];
+        if (!(e->n_type & N_STAB))
+            continue;
+        const char *s = img.strs + e->n_un.n_strx;
+        if (e->n_type == N_SO) {
+            if (!*s) {
+                dir[0] = 0;
+                file = "";
+            } else if (s[strlen(s) - 1] == '/') {
+                snprintf(dir, sizeof dir, "%s", s);
+            } else {
+                char path[2048];
+                snprintf(path, sizeof path, "%s%s", s[0] == '/' ? "" : dir, s);
+                const char *t = strstr(path, "/Sources/");
+                t = t ? t + 9 : path;
+                char *copy = bb_host_malloc(strlen(t) + 1); /* kept for good, as the index is */
+                file = copy ? strcpy(copy, t) : "";
+            }
+        } else if (e->n_type == N_FUN) {
+            if (*s) {
+                st[nst] = (stab_info){ (uintptr_t)(e->n_value + img.slide), file, 0 };
+                fun = &st[nst++];
+            } else if (fun) {
+                fun->size = e->n_value;
+                fun = NULL;
+            }
+        } else if (e->n_type == N_STSYM) {
+            st[nst++] = (stab_info){ (uintptr_t)(e->n_value + img.slide), file, 0 };
+        }
+    }
+    qsort(st, nst, sizeof *st, cmp_stab);
+    for (uint32_t i = 0; i < img.nsyms; i++) {
+        const struct nlist_64 *e = &img.syms[i];
+        const char *s = img.strs + e->n_un.n_strx;
+        if ((e->n_type & N_STAB) || (e->n_type & N_TYPE) != N_SECT || s[0] != '_' || !e->n_sect ||
+            e->n_sect > img.nsects)
+            continue;
+        uintptr_t a = (uintptr_t)(e->n_value + img.slide);
+        size_t lo = 0, hi = nst;
+        while (lo < hi) {
+            size_t mid = (lo + hi) / 2;
+            if (st[mid].addr < a)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        const stab_info *at = lo < nst && st[lo].addr == a ? &st[lo] : NULL;
+        list[n++] = (isym){ a, at ? at->size : 0, s + 1, !(e->n_type & N_EXT) && at ? at->file : "", e->n_sect,
+                            img.sects[e->n_sect].code };
+    }
+    bb_host_free(st);
+    qsort(list, n, sizeof *list, cmp_isym);
+    for (size_t i = 0; i < n; i++) {
+        if (list[i].size)
+            continue;
+        uintptr_t end = img.sects[list[i].sect].hi;
+        for (size_t j = i + 1; j < n; j++)
+            if (list[j].addr > list[i].addr) {
+                if (list[j].addr < end)
+                    end = list[j].addr;
+                break;
+            }
+        list[i].size = end > list[i].addr ? end - list[i].addr : 0;
+    }
+    size_t cap = 1;
+    while (cap < n * 2 + 16)
+        cap <<= 1;
+    uint32_t *slots = bb_host_calloc(cap, sizeof *slots);
+    if (!slots) {
+        bb_host_free(list);
+        snprintf(err, errlen, "out of memory");
+        return false;
+    }
+    for (size_t i = 0; i < n; i++)
+        for (size_t h = hash_key(list[i].file, list[i].name) & (cap - 1);; h = (h + 1) & (cap - 1)) {
+            if (!slots[h]) {
+                slots[h] = (uint32_t)i + 1;
+                break;
+            }
+            const isym *o = &list[slots[h] - 1];
+            if (!strcmp(o->name, list[i].name) && !strcmp(o->file, list[i].file))
+                break; /* an alias at another address: the first stands */
+        }
+    isyms = list;
+    nisyms = n;
+    isym_slots = slots;
+    isym_cap = cap;
+    return true;
+}
+
 #else
 
 static bool image_load(char *err, size_t errlen)
@@ -383,7 +605,174 @@ static const void *lib_named(const char *path)
     return NULL;
 }
 
+typedef struct {
+    uintptr_t addr;
+    uint64_t size;
+    const char *name, *file;
+    uint32_t sect;
+    bool code;
+} isym;
+
+BB_HOST static isym *isyms;
+BB_HOST static size_t nisyms;
+BB_HOST static uint32_t *isym_slots;
+BB_HOST static size_t isym_cap;
+
+static uint64_t hash_key(const char *file, const char *name)
+{
+    return 0;
+}
+
+static bool symbols_ready(char *err, size_t errlen)
+{
+    snprintf(err, errlen, "no symbol reader on this host");
+    return false;
+}
+
 #endif
+
+/* The symbol v is in (a pointer one past an array's end is in the next
+ * symbol: such a pointer is the same in another build only if that is). */
+static const isym *isym_at(uintptr_t v)
+{
+    size_t lo = 0, hi = nisyms;
+    while (lo < hi) {
+        size_t mid = (lo + hi) / 2;
+        if (isyms[mid].addr <= v)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    if (!lo)
+        return NULL;
+    const isym *s = &isyms[lo - 1];
+    return v - s->addr < (s->size ? s->size : 1) ? s : NULL;
+}
+
+static const isym *isym_named(const char *file, const char *name)
+{
+    if (!isym_cap)
+        return NULL;
+    for (size_t h = hash_key(file, name) & (isym_cap - 1); isym_slots[h]; h = (h + 1) & (isym_cap - 1)) {
+        const isym *s = &isyms[isym_slots[h] - 1];
+        if (!strcmp(s->name, name) && !strcmp(s->file, file))
+            return s;
+    }
+    return NULL;
+}
+
+/* The section of string constants v is in (its number), or 0. */
+static uint32_t cstring_section(uintptr_t v)
+{
+    for (uint32_t i = 1; i <= img.nsects; i++)
+        if (img.sects[i].cstrings && v >= img.sects[i].lo && v < img.sects[i].hi)
+            return i;
+    return 0;
+}
+
+static uint64_t hash_text(const char *s, size_t n)
+{
+    uint64_t h = 1469598103934665603ull;
+    for (size_t i = 0; i < n; i++)
+        h = (h ^ (uint8_t)s[i]) * 1099511628211ull;
+    return h;
+}
+
+/* The binary's string constants by their text, for putting a pointer to
+ * one back (made when first wanted). */
+BB_HOST static const char **cstr_slots;
+BB_HOST static size_t cstr_cap;
+
+static bool cstrings_ready(void)
+{
+    if (cstr_slots)
+        return true;
+    size_t count = 0;
+    for (uint32_t i = 1; i <= img.nsects; i++)
+        if (img.sects[i].cstrings)
+            for (const char *p = (const char *)img.sects[i].lo; p < (const char *)img.sects[i].hi; p++)
+                count += !*p;
+    size_t cap = 1;
+    while (cap < count * 2 + 16)
+        cap <<= 1;
+    const char **slots = bb_host_calloc(cap, sizeof *slots);
+    if (!slots)
+        return false;
+    for (uint32_t i = 1; i <= img.nsects; i++) {
+        if (!img.sects[i].cstrings)
+            continue;
+        const char *p = (const char *)img.sects[i].lo, *end = (const char *)img.sects[i].hi;
+        while (p < end) {
+            size_t n = strnlen(p, (size_t)(end - p));
+            if (n < (size_t)(end - p))
+                for (size_t h = hash_text(p, n) & (cap - 1);; h = (h + 1) & (cap - 1)) {
+                    if (!slots[h]) {
+                        slots[h] = p;
+                        break;
+                    }
+                    if (!strcmp(slots[h], p))
+                        break;
+                }
+            p += n + 1;
+        }
+    }
+    cstr_slots = slots;
+    cstr_cap = cap;
+    return true;
+}
+
+static const char *cstring_named(const char *text, size_t n)
+{
+    if (!cstr_cap)
+        return NULL;
+    for (size_t h = hash_text(text, n) & (cstr_cap - 1); cstr_slots[h]; h = (h + 1) & (cstr_cap - 1))
+        if (!strncmp(cstr_slots[h], text, n) && !cstr_slots[h][n])
+            return cstr_slots[h];
+    return NULL;
+}
+
+/* A block's type in this binary, by what the snapshot says it is: a
+ * descriptor of the same type written at the same line, else anywhere
+ * (each BB_TAG is a descriptor of its own), else for bytes or an untyped
+ * block the generic one. */
+BB_HOST static const bb_type **descs;
+BB_HOST static size_t ndescs;
+
+static bool descriptors_ready(void)
+{
+    if (descs)
+        return true;
+    descs = bb_host_malloc((nisyms + 2) * sizeof *descs);
+    if (!descs)
+        return false;
+    for (size_t i = 0; i < nisyms; i++)
+        if (!isyms[i].code && strstr(isyms[i].name, ".bb_tag_") && isyms[i].size >= sizeof(bb_type))
+            descs[ndescs++] = (const bb_type *)isyms[i].addr;
+    descs[ndescs++] = &bb_type_bytes;
+    descs[ndescs++] = &bb_type_untyped;
+    return true;
+}
+
+static const bb_type *descriptor_for(const char *name, const char *file, uint32_t size, uint32_t form, uint32_t line)
+{
+    const bb_type *any = NULL;
+    for (size_t i = 0; i < ndescs; i++) {
+        const bb_type *t = descs[i];
+        if (t->form != form || t->size != size || strcmp(t->name, name) || strcmp(t->file, file))
+            continue;
+        if (t->line == line)
+            return t;
+        if (!any)
+            any = t;
+    }
+    if (any)
+        return any;
+    if (form == BB_FORM_BYTES)
+        return &bb_type_bytes;
+    if (form == BB_FORM_UNTYPED)
+        return &bb_type_untyped;
+    return NULL;
+}
 
 typedef struct {
     placed *list;
@@ -409,6 +798,242 @@ static void place_one(void *vctx, const char *file, const char *name, uintptr_t 
     c->list[c->n++] = (placed){ addr, m->size, m->layout, m };
 }
 
+/* ---- The state fingerprint ----
+ *
+ * The manifest: a line for each thing a snapshot's layout depends on,
+ * tab separated, the kind first:
+ *   V  the format's version, the machine, a pointer's size
+ *   R  a state section and its size
+ *   S  a saved static: file, name, section, offset, size, a hash of its
+ *      pointers' layout, its shape (the whole type, from the map)
+ *   T  a tagged type: file, the type as written, size, layout, shape
+ *   L  a record of the guest-side layout (bbmem.h): name and value
+ * The fingerprint is a hash of it; two builds with the same manifest put
+ * back each other's snapshots. */
+
+BB_HOST static char *manifest;
+BB_HOST static size_t manifest_len, manifest_cap;
+BB_HOST static uint8_t fingerprint[16];
+
+static void manifest_add(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void manifest_add(const char *fmt, ...)
+{
+    if (manifest_len == SIZE_MAX)
+        return;
+    for (;;) {
+        va_list ap;
+        va_start(ap, fmt);
+        size_t room = manifest_cap - manifest_len;
+        int n = vsnprintf(manifest ? manifest + manifest_len : NULL, room, fmt, ap);
+        va_end(ap);
+        if (n < 0) {
+            manifest_len = SIZE_MAX;
+            return;
+        }
+        if ((size_t)n < room) {
+            manifest_len += (size_t)n;
+            return;
+        }
+        size_t cap = manifest_cap ? manifest_cap * 2 : 1 << 18;
+        while (cap - manifest_len <= (size_t)n)
+            cap *= 2;
+        char *m = bb_host_realloc(manifest, cap);
+        if (!m) {
+            manifest_len = SIZE_MAX;
+            return;
+        }
+        manifest = m;
+        manifest_cap = cap;
+    }
+}
+
+static uint64_t runs_hash(uint32_t layout)
+{
+    uint64_t h = bb_layout_hash(0, "runs", 4);
+    if (layout >= hb_nlayouts)
+        return h;
+    const hb_layout *l = &hb_layouts[layout];
+    for (uint32_t r = 0; r < l->n; r++) {
+        const hb_run *run = &hb_runs[l->first + r];
+        uint32_t v[6] = { run->off, (uint32_t)(uint8_t)run->kind, run->count, run->stride, run->count2, run->stride2 };
+        h = bb_layout_hash(h, v, sizeof v);
+    }
+    return h;
+}
+
+static int cmp_layout_rec(const void *a, const void *b)
+{
+    const bb_layout_rec *x = *(const bb_layout_rec *const *)a, *y = *(const bb_layout_rec *const *)b;
+    return strcmp(x->name, y->name);
+}
+
+static bool manifest_make(void)
+{
+    manifest_len = 0;
+#if defined(__aarch64__)
+    const char *arch = "arm64";
+#elif defined(__x86_64__)
+    const char *arch = "x86_64";
+#else
+    const char *arch = "?";
+#endif
+    manifest_add("V\t%d\t%s\t%zu\n", VERSION, arch, sizeof(void *));
+    for (int i = 0; i < NSAVED; i++)
+        manifest_add("R\t%s\t%zu\n", saved_names[i], img.sect_size[i]);
+    for (size_t i = 0; i < nstatics; i++) {
+        int w = 0;
+        in_saved(statics[i].addr, &w);
+        manifest_add("S\t%s\t%s\t%d\t%llu\t%u\t%016llx\t%016llx\n", statics[i].map->file, statics[i].map->sym, w,
+                     (unsigned long long)(statics[i].addr - (uintptr_t)img.sect[w]), statics[i].size,
+                     (unsigned long long)runs_hash(statics[i].layout), (unsigned long long)statics[i].map->shape);
+    }
+    for (unsigned i = 0; i < hb_ntypes; i++)
+        manifest_add("T\t%s\t%s\t%u\t%016llx\t%016llx\n", hb_types[i].file, hb_types[i].name, hb_types[i].size,
+                     (unsigned long long)runs_hash(hb_types[i].layout), (unsigned long long)hb_types[i].shape);
+    const bb_layout_rec **recs = bb_host_malloc((img.nlayout + 1) * sizeof *recs);
+    if (!recs)
+        return false;
+    for (size_t i = 0; i < img.nlayout; i++)
+        recs[i] = &img.layout[i];
+    qsort(recs, img.nlayout, sizeof *recs, cmp_layout_rec);
+    for (size_t i = 0; i < img.nlayout; i++)
+        manifest_add("L\t%s\t%016llx\n", recs[i]->name,
+                     (unsigned long long)(recs[i]->hash ? recs[i]->hash() : recs[i]->value));
+    bb_host_free(recs);
+    if (manifest_len == SIZE_MAX)
+        return false;
+    uint64_t a = bb_layout_hash(0, manifest, manifest_len);
+    uint64_t b = bb_layout_hash(0x84222325cbf29ce4ull, manifest, manifest_len);
+    memcpy(fingerprint, &a, 8);
+    memcpy(fingerprint + 8, &b, 8);
+    return true;
+}
+
+/* The fields of a manifest line (up to 8), split in place of a copy. */
+static int manifest_fields(const char *line, size_t n, char *copy, size_t room, const char **f)
+{
+    if (n >= room)
+        n = room - 1;
+    memcpy(copy, line, n);
+    copy[n] = 0;
+    int k = 0;
+    for (char *p = copy; k < 8;) {
+        f[k++] = p;
+        char *t = strchr(p, '\t');
+        if (!t)
+            break;
+        *t = 0;
+        p = t + 1;
+    }
+    return k;
+}
+
+/* The fields that name a line's thing (the kind and its name). */
+static int manifest_key_fields(char kind)
+{
+    return kind == 'S' || kind == 'T' ? 3 : kind == 'V' ? 1 : 2;
+}
+
+static const char *manifest_find(const char *m, size_t len, const char *const *key, int nkey, size_t *linelen)
+{
+    for (const char *p = m; p < m + len;) {
+        const char *e = memchr(p, '\n', (size_t)(m + len - p));
+        size_t n = e ? (size_t)(e - p) : (size_t)(m + len - p);
+        const char *q = p;
+        int k = 0;
+        for (; k < nkey; k++) {
+            size_t kl = strlen(key[k]);
+            if ((size_t)(p + n - q) < kl || memcmp(q, key[k], kl) || (q + kl < p + n && q[kl] != '\t') ||
+                (q + kl == p + n && k + 1 < nkey))
+                break;
+            q += kl + 1;
+        }
+        if (k == nkey) {
+            *linelen = n;
+            return p;
+        }
+        p += n + 1;
+    }
+    return NULL;
+}
+
+/* Why a snapshot whose manifest is old cannot be put back here: the first
+ * thing that differs, and how many do. */
+static void manifest_explain(const char *old, size_t oldlen, char *why, size_t whylen)
+{
+    int count = 0;
+    char first[512] = "";
+    char a[1024], b[1024];
+    const char *fa[8], *fb[8];
+    for (int pass = 0; pass < 2; pass++) {
+        const char *m = pass ? manifest : old, *other = pass ? old : manifest;
+        size_t len = pass ? manifest_len : oldlen, olen = pass ? oldlen : manifest_len;
+        for (const char *p = m; p < m + len;) {
+            const char *e = memchr(p, '\n', (size_t)(m + len - p));
+            size_t n = e ? (size_t)(e - p) : (size_t)(m + len - p);
+            int na = manifest_fields(p, n, a, sizeof a, fa);
+            p += n + 1;
+            if (na < 2)
+                continue;
+            int nkey = manifest_key_fields(fa[0][0]);
+            if (na < nkey)
+                continue;
+            size_t ol;
+            const char *o = manifest_find(other, olen, fa, nkey, &ol);
+            if (o && pass)
+                continue; /* both have it: the first pass told */
+            if (o && ol == n && !memcmp(o, p - n - 1, n))
+                continue;
+            count++;
+            if (*first)
+                continue;
+            const char *what = fa[0][0] == 'S' ? "the static" : fa[0][0] == 'T' ? "the tagged type" : "";
+            if (!o) {
+                if (fa[0][0] == 'S' || fa[0][0] == 'T')
+                    snprintf(first, sizeof first, "%s %s (%s) is %s", what, fa[2], fa[1],
+                             pass ? "new in this build" : "not in this build");
+                else if (fa[0][0] == 'L')
+                    snprintf(first, sizeof first, "the guest-side layout %s is %s", fa[1],
+                             pass ? "new in this build" : "not in this build");
+                else
+                    snprintf(first, sizeof first, "its format differs");
+                continue;
+            }
+            int nb = manifest_fields(o, ol, b, sizeof b, fb);
+            if (fa[0][0] == 'S' && na >= 8 && nb >= 8) {
+                const char *how = strcmp(fa[5], fb[5]) ? "is another size"
+                                  : strcmp(fa[7], fb[7]) ? "has another type"
+                                  : strcmp(fa[6], fb[6]) ? "has its pointers elsewhere"
+                                                         : "is elsewhere in the saved state";
+                if (strcmp(fa[5], fb[5]))
+                    snprintf(first, sizeof first, "the static %s (%s) is %s bytes in the snapshot, %s here", fa[2],
+                             fa[1], fa[5], fb[5]);
+                else
+                    snprintf(first, sizeof first, "the static %s (%s) %s", fa[2], fa[1], how);
+            } else if (fa[0][0] == 'T' && na >= 6 && nb >= 6) {
+                if (strcmp(fa[3], fb[3]))
+                    snprintf(first, sizeof first, "the tagged type %s (%s) is %s bytes in the snapshot, %s here", fa[2],
+                             fa[1], fa[3], fb[3]);
+                else
+                    snprintf(first, sizeof first, "the tagged type %s (%s) differs", fa[2], fa[1]);
+            } else if (fa[0][0] == 'R' && na >= 3 && nb >= 3) {
+                snprintf(first, sizeof first, "the saved state (%s) is %s bytes in the snapshot, %s here", fa[1], fa[2],
+                         fb[2]);
+            } else if (fa[0][0] == 'L') {
+                snprintf(first, sizeof first, "the guest-side layout %s differs", fa[1]);
+            } else {
+                snprintf(first, sizeof first, "it was saved in another format or for another machine");
+            }
+        }
+    }
+    if (!count)
+        snprintf(why, whylen, "its saved state differs from this build's");
+    else if (count == 1)
+        snprintf(why, whylen, "%s", first);
+    else
+        snprintf(why, whylen, "%s (and %d more differences)", first, count - 1);
+}
+
 static bool ready(char *err, size_t errlen)
 {
     if (img_ok)
@@ -427,6 +1052,10 @@ static bool ready(char *err, size_t errlen)
     qsort(c.list, c.n, sizeof *c.list, cmp_placed);
     statics = c.list;
     nstatics = c.n;
+    if (!manifest_make()) {
+        snprintf(err, errlen, "out of memory");
+        return false;
+    }
     if (!session) {
         int local;
 #if defined(__APPLE__)
@@ -440,6 +1069,28 @@ static bool ready(char *err, size_t errlen)
     }
     img_ok = true;
     return true;
+}
+
+void hb_fingerprint(char out[33])
+{
+    char err[128];
+    if (!ready(err, sizeof err)) {
+        out[0] = 0;
+        return;
+    }
+    for (int i = 0; i < 16; i++)
+        snprintf(out + i * 2, 3, "%02x", fingerprint[i]);
+}
+
+size_t hb_manifest(const char **out)
+{
+    char err[128];
+    if (!ready(err, sizeof err)) {
+        *out = "";
+        return 0;
+    }
+    *out = manifest;
+    return manifest_len;
 }
 
 void hb_build_id(char out[33])
@@ -673,7 +1324,122 @@ typedef struct {
     size_t nrelocs, cap;
     extern_ref *externs;
     size_t nexterns, ecap;
+    /* the binary's symbols, string constants and block types pointed to,
+     * each once (by its index here: in the binary's symbols, a constant's
+     * address, a descriptor), with their names in the pool */
+    file_sym *syms;
+    size_t nsyms, scap;
+    uint32_t *sym_of; /* the binary's symbol -> its index + 1 */
+    file_cstr *cstrs;
+    uintptr_t *cstr_addr;
+    size_t ncstrs, ccap;
+    file_type *types;
+    const bb_type **type_desc;
+    size_t ntypes, tcap;
+    char *pool;
+    size_t pool_len, pool_cap;
 } save_ctx;
+
+static bool grow(void **p, size_t *cap, size_t n, size_t each)
+{
+    if (n < *cap)
+        return true;
+    size_t c = *cap ? *cap * 2 : 256;
+    void *q = bb_host_realloc(*p, c * each);
+    if (!q)
+        return false;
+    *p = q;
+    *cap = c;
+    return true;
+}
+
+static uint32_t pool_add(save_ctx *c, const char *s, size_t n)
+{
+    if (c->pool_len + n + 1 > c->pool_cap) {
+        size_t cap = c->pool_cap ? c->pool_cap : 1 << 16;
+        while (cap < c->pool_len + n + 1)
+            cap *= 2;
+        char *p = bb_host_realloc(c->pool, cap);
+        if (!p) {
+            c->w->failed = true;
+            return 0;
+        }
+        c->pool = p;
+        c->pool_cap = cap;
+    }
+    uint32_t at = (uint32_t)c->pool_len;
+    memcpy(c->pool + at, s, n);
+    c->pool[at + n] = 0;
+    c->pool_len += n + 1;
+    return at;
+}
+
+/* A pointer into the binary, by name: the symbol it is in, or the string
+ * constant; false when it is in neither. */
+static bool symbolize(save_ctx *c, uintptr_t v, target *t)
+{
+    if (!isyms)
+        return false;
+    uint32_t cs = cstring_section(v);
+    if (cs) {
+        const char *lo = (const char *)img.sects[cs].lo, *hi = (const char *)img.sects[cs].hi;
+        const char *p = (const char *)v, *start = p;
+        while (start > lo && start[-1])
+            start--;
+        size_t n = strnlen(start, (size_t)(hi - start));
+        if (start + n == hi)
+            return false;
+        for (size_t i = 0; i < c->ncstrs; i++)
+            if (c->cstr_addr[i] == (uintptr_t)start) {
+                *t = (target){ R_CSTR, (uint32_t)i, (uint64_t)(p - start) };
+                return true;
+            }
+        if (!grow((void **)&c->cstrs, &c->ccap, c->ncstrs, sizeof *c->cstrs) ||
+            !(c->cstr_addr = bb_host_realloc(c->cstr_addr, c->ccap * sizeof *c->cstr_addr))) {
+            c->w->failed = true;
+            return false;
+        }
+        c->cstrs[c->ncstrs] = (file_cstr){ pool_add(c, start, n), (uint32_t)n };
+        c->cstr_addr[c->ncstrs] = (uintptr_t)start;
+        *t = (target){ R_CSTR, (uint32_t)c->ncstrs++, (uint64_t)(p - start) };
+        return true;
+    }
+    const isym *s = isym_at(v);
+    if (!s)
+        return false;
+    size_t k = (size_t)(s - isyms);
+    if (!c->sym_of[k]) {
+        if (!grow((void **)&c->syms, &c->scap, c->nsyms, sizeof *c->syms)) {
+            c->w->failed = true;
+            return false;
+        }
+        c->syms[c->nsyms] = (file_sym){ pool_add(c, s->file, strlen(s->file)), pool_add(c, s->name, strlen(s->name)),
+                                        s->code ? SYM_CODE : 0, 0, s->size };
+        c->sym_of[k] = (uint32_t)++c->nsyms;
+    }
+    uint32_t i = c->sym_of[k] - 1;
+    if (v != s->addr)
+        c->syms[i].flags |= SYM_INTERIOR;
+    *t = (target){ R_SYM, i, v - s->addr };
+    return true;
+}
+
+/* A block's type, in the snapshot's table. */
+static uint32_t type_index(save_ctx *c, const bb_type *t)
+{
+    for (size_t i = 0; i < c->ntypes; i++)
+        if (c->type_desc[i] == t)
+            return (uint32_t)i;
+    if (!grow((void **)&c->types, &c->tcap, c->ntypes, sizeof *c->types) ||
+        !(c->type_desc = bb_host_realloc(c->type_desc, c->tcap * sizeof *c->type_desc))) {
+        c->w->failed = true;
+        return 0;
+    }
+    c->types[c->ntypes] = (file_type){ pool_add(c, t->name, strlen(t->name)), pool_add(c, t->file, strlen(t->file)),
+                                       t->size, t->form, t->line, 0 };
+    c->type_desc[c->ntypes] = t;
+    return (uint32_t)c->ntypes++;
+}
 
 static uint32_t extern_index(save_ctx *c, const char *lib, const char *sym)
 {
@@ -715,7 +1481,17 @@ static void add_reloc(save_ctx *c, size_t off, int kind, uint32_t tgt, uint64_t 
     case R_IMAGE: c->st->to_image++; break;
     case R_EXTERN: c->st->to_libraries++; break;
     case R_HOST: c->st->host++; break;
+    case R_SYM:
+        c->st->to_image++;
+        if (c->syms[tgt].flags & SYM_CODE)
+            *(value ? &c->st->to_code_inside : &c->st->to_functions) += 1;
+        else
+            *(value ? &c->st->to_data_inside : &c->st->to_data) += 1;
+        break;
+    case R_CSTR: c->st->to_image++; c->st->to_strings++; break;
     }
+    if (kind == R_IMAGE)
+        c->st->to_image_unnamed++;
 }
 
 static void save_field(void *vctx, size_t off, char kind)
@@ -731,6 +1507,8 @@ static void save_field(void *vctx, size_t off, char kind)
     bool known = kind != 'H' && classify_known(c->bi, (uintptr_t)v, &t);
     if (!known && kind == 'U')
         return; /* data */
+    if (known && t.kind == R_IMAGE)
+        symbolize(c, (uintptr_t)v, &t);
     if (!known && kind != 'H') {
         Dl_info info;
         if (dladdr((const void *)(uintptr_t)v, &info) && info.dli_fname && info.dli_fbase) {
@@ -831,8 +1609,13 @@ bool hb_save_buffer(uint8_t **out, size_t *len, hb_stats *stats, char *err, size
     memcpy(h.magic, MAGIC, 8);
     h.version = VERSION;
     memcpy(h.uuid, img.uuid, 16);
+    memcpy(h.fingerprint, fingerprint, 16);
     h.session = session;
     w_put(&w, &h, sizeof h);
+    /* Without the binary's symbols its pointers are saved by offset: for
+     * this build only. */
+    char serr[128];
+    symbols_ready(serr, sizeof serr);
 
     bb_blocks_lock();
     block_index bi;
@@ -845,10 +1628,12 @@ bool hb_save_buffer(uint8_t **out, size_t *len, hb_stats *stats, char *err, size
     c.bi = &bi;
     c.tc = &tc;
     c.st = st;
-    if (!index_blocks(&bi) || !tc.slots) {
+    c.sym_of = bb_host_calloc(nisyms + 1, sizeof *c.sym_of);
+    if (!index_blocks(&bi) || !tc.slots || !c.sym_of) {
         bb_blocks_unlock();
         free_index(&bi);
         bb_host_free(tc.slots);
+        bb_host_free(c.sym_of);
         snprintf(err, errlen, "out of memory");
         return false;
     }
@@ -881,7 +1666,7 @@ bool hb_save_buffer(uint8_t **out, size_t *len, hb_stats *stats, char *err, size
             snprintf(err, errlen, "a block's type is not in the binary");
             return false;
         }
-        file_block fb = { t - (uintptr_t)img.base, b->size, 0 };
+        file_block fb = { type_index(&c, b->type), b->size };
         w_put(&w, &fb, sizeof fb);
         c.live = BB_BLOCK_DATA(b);
         c.size = b->size;
@@ -916,14 +1701,34 @@ bool hb_save_buffer(uint8_t **out, size_t *len, hb_stats *stats, char *err, size
         ((file_header *)w.buf)->externs_off = w.len;
     for (size_t i = 0; i < c.nexterns && !w.failed; i++)
         w_put(&w, &c.externs[i], sizeof c.externs[i]);
+    if (!w.failed)
+        ((file_header *)w.buf)->syms_off = w_put(&w, c.syms, c.nsyms * sizeof *c.syms);
+    if (!w.failed)
+        ((file_header *)w.buf)->cstrs_off = w_put(&w, c.cstrs, c.ncstrs * sizeof *c.cstrs);
+    if (!w.failed)
+        ((file_header *)w.buf)->types_off = w_put(&w, c.types, c.ntypes * sizeof *c.types);
+    if (!w.failed)
+        ((file_header *)w.buf)->pool_off = w_put(&w, c.pool, c.pool_len);
     bb_host_free(c.relocs);
     bb_host_free(c.externs);
+    bb_host_free(c.syms);
+    bb_host_free(c.sym_of);
+    bb_host_free(c.cstrs);
+    bb_host_free(c.cstr_addr);
+    bb_host_free(c.types);
+    bb_host_free(c.type_desc);
+    bb_host_free(c.pool);
     if (w.failed) {
         bb_host_free(w.buf);
         snprintf(err, errlen, "out of memory");
         return false;
     }
     file_header *hp = (file_header *)w.buf;
+    hp->nsyms = c.nsyms;
+    hp->ncstrs = c.ncstrs;
+    hp->ntypes = c.ntypes;
+    hp->pool_len = c.pool_len;
+
     hp->nsections = NSAVED;
     hp->nblocks = nblocks;
     hp->nregions = (uint64_t)nregions;
@@ -955,7 +1760,15 @@ typedef struct {
     uint32_t version, flags;
     uint8_t uuid[16];
     uint64_t raw_len, data_len, extra_len;
+    /* From version 2: the state fingerprint, and the manifest (deflated,
+     * after the caller's bytes), which says why another build's cannot
+     * be put back without inflating the rest. */
+    uint8_t fingerprint[16];
+    uint64_t manifest_len, manifest_raw;
 } file_wrapper;
+
+/* A wrapper's size as version 1 wrote it. */
+#define WRAPPER_V1 56
 
 static bool write_all(FILE *f, const void *p, size_t n) { return !n || fwrite(p, 1, n, f) == n; }
 
@@ -983,22 +1796,37 @@ bool hb_write_file_extra(const char *path, const uint8_t *buf, size_t len, const
         snprintf(err, errlen, "out of memory compressing the snapshot");
         return false;
     }
+    /* This build's manifest (hb_save_buffer's snapshots are this build's),
+     * which says why another build cannot put it back. */
+    uLongf mlen = compressBound((uLong)manifest_len);
+    uint8_t *mz = bb_host_malloc(mlen);
+    if (!mz || compress2(mz, &mlen, (const Bytef *)manifest, (uLong)manifest_len, 6) != Z_OK) {
+        bb_host_free(z);
+        bb_host_free(mz);
+        snprintf(err, errlen, "out of memory compressing the snapshot");
+        return false;
+    }
     file_wrapper fw;
     memset(&fw, 0, sizeof fw);
     memcpy(fw.magic, FILE_MAGIC, 8);
     fw.version = VERSION;
     memcpy(fw.uuid, img.uuid, 16);
+    memcpy(fw.fingerprint, fingerprint, 16);
     fw.raw_len = len;
     fw.data_len = zlen;
     fw.extra_len = extra_len;
+    fw.manifest_len = mlen;
+    fw.manifest_raw = manifest_len;
     /* Written beside, then renamed over: never half a snapshot. */
     char tmp[2048];
     snprintf(tmp, sizeof tmp, "%s.partial", path);
     FILE *f = fopen(tmp, "wb");
-    bool ok = f && write_all(f, &fw, sizeof fw) && write_all(f, extra, extra_len) && write_all(f, z, zlen);
+    bool ok = f && write_all(f, &fw, sizeof fw) && write_all(f, extra, extra_len) && write_all(f, mz, mlen) &&
+              write_all(f, z, zlen);
     if (f && fclose(f) != 0)
         ok = false;
     bb_host_free(z);
+    bb_host_free(mz);
     if (ok && rename(tmp, path) != 0)
         ok = false;
     if (!ok) {
@@ -1007,7 +1835,7 @@ bool hb_write_file_extra(const char *path, const uint8_t *buf, size_t len, const
         return false;
     }
     if (stats)
-        stats->file_bytes = sizeof fw + extra_len + zlen;
+        stats->file_bytes = sizeof fw + extra_len + mlen + zlen;
     return true;
 }
 
@@ -1018,25 +1846,60 @@ bool hb_save_file(const char *path, hb_stats *stats, char *err, size_t errlen)
 
 static bool read_wrapper(FILE *f, const char *path, file_wrapper *fw, char *err, size_t errlen)
 {
-    if (fread(fw, 1, sizeof *fw, f) != sizeof *fw || memcmp(fw->magic, FILE_MAGIC, 8)) {
+    memset(fw, 0, sizeof *fw);
+    if (fread(fw, 1, WRAPPER_V1, f) != WRAPPER_V1 || memcmp(fw->magic, FILE_MAGIC, 8)) {
         snprintf(err, errlen, "%s: not a snapshot", path);
         return false;
     }
-    if (fw->version != VERSION) {
+    if (fw->version != VERSION && fw->version != 1) {
         snprintf(err, errlen, "%s: not a snapshot this version of Blue Box reads", path);
         return false;
     }
-    if (fw->extra_len > (1u << 24) || fw->raw_len > ((uint64_t)1 << 36) || fw->data_len > ((uint64_t)1 << 36)) {
+    if (fw->version == VERSION && fread((uint8_t *)fw + WRAPPER_V1, 1, sizeof *fw - WRAPPER_V1, f) !=
+                                      sizeof *fw - WRAPPER_V1) {
+        snprintf(err, errlen, "%s: the snapshot is damaged", path);
+        return false;
+    }
+    if (fw->extra_len > (1u << 24) || fw->raw_len > ((uint64_t)1 << 36) || fw->data_len > ((uint64_t)1 << 36) ||
+        fw->manifest_len > (1u << 26) || fw->manifest_raw > (1u << 28)) {
         snprintf(err, errlen, "%s: the snapshot is damaged", path);
         return false;
     }
     return true;
 }
 
-bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *same_build, char *err, size_t errlen)
+/* Whether this build puts back a snapshot with this wrapper, and if not
+ * why (f just after the caller's bytes: the manifest is next). */
+static bool wrapper_fits(FILE *f, const file_wrapper *fw, char *why, size_t whylen)
+{
+    if (fw->version == 1) {
+        snprintf(why, whylen, "it was saved by an older Blue Box, whose snapshots resume only in the build "
+                              "that saved them");
+        return false;
+    }
+    if (!memcmp(fw->uuid, img.uuid, 16) || !memcmp(fw->fingerprint, fingerprint, 16))
+        return true;
+    uint8_t *z = bb_host_malloc(fw->manifest_len + 1);
+    char *m = bb_host_malloc(fw->manifest_raw + 1);
+    uLongf mlen = (uLongf)fw->manifest_raw;
+    char first[512] = "";
+    if (z && m && fw->manifest_len && fread(z, 1, fw->manifest_len, f) == fw->manifest_len &&
+        uncompress((Bytef *)m, &mlen, z, (uLong)fw->manifest_len) == Z_OK)
+        manifest_explain(m, mlen, first, sizeof first);
+    snprintf(why, whylen, "it was saved by a build of Blue Box whose saved state differs from this one's%s%s",
+             *first ? ": " : "", first);
+    bb_host_free(z);
+    bb_host_free(m);
+    return false;
+}
+
+bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *resumable, char *why, size_t whylen,
+                   char *err, size_t errlen)
 {
     *extra = NULL;
     *extra_len = 0;
+    if (why && whylen)
+        *why = 0;
     if (!ready(err, errlen))
         return false;
     FILE *f = fopen(path, "rb");
@@ -1051,6 +1914,8 @@ bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *s
         snprintf(err, errlen, "%s: cannot read", path);
         ok = false;
     }
+    char reason[512] = "";
+    bool fits = ok && wrapper_fits(f, &fw, reason, sizeof reason);
     fclose(f);
     if (!ok) {
         bb_host_free(e);
@@ -1059,8 +1924,10 @@ bool hb_file_extra(const char *path, uint8_t **extra, size_t *extra_len, bool *s
     e[fw.extra_len] = 0;
     *extra = e;
     *extra_len = fw.extra_len;
-    if (same_build)
-        *same_build = !memcmp(fw.uuid, img.uuid, 16);
+    if (resumable)
+        *resumable = fits;
+    if (why && whylen)
+        snprintf(why, whylen, "%s", reason);
     return true;
 }
 
@@ -1075,9 +1942,15 @@ bool hb_file_load(const char *path, uint8_t **out, size_t *len, char *err, size_
     }
     file_wrapper fw;
     bool ok = read_wrapper(f, path, &fw, err, errlen);
+    if (ok && fw.version != VERSION) {
+        snprintf(err, errlen, "%s: saved by an older Blue Box, whose snapshots resume only in the build that saved them",
+                 path);
+        ok = false;
+    }
     uint8_t *z = ok ? bb_host_malloc(fw.data_len ? fw.data_len : 1) : NULL;
     uint8_t *raw = ok ? bb_host_malloc(fw.raw_len ? fw.raw_len : 1) : NULL;
-    if (ok && (!z || !raw || fseek(f, (long)fw.extra_len, SEEK_CUR) != 0 || fread(z, 1, fw.data_len, f) != fw.data_len)) {
+    if (ok && (!z || !raw || fseek(f, (long)(fw.extra_len + fw.manifest_len), SEEK_CUR) != 0 ||
+               fread(z, 1, fw.data_len, f) != fw.data_len)) {
         snprintf(err, errlen, "%s: cannot read", path);
         ok = false;
     }
@@ -1128,6 +2001,90 @@ static void *lib_symbol(const extern_ref *e)
     return (void *)lib_named(e->lib);
 }
 
+/* What a snapshot's names are in this binary. */
+typedef struct {
+    uintptr_t *syms, *cstrs;
+    bool *code;
+    const bb_type **types;
+} resolved;
+
+static void free_resolved(resolved *rs)
+{
+    bb_host_free(rs->syms);
+    bb_host_free(rs->cstrs);
+    bb_host_free(rs->code);
+    bb_host_free(rs->types);
+}
+
+static const char *pool_at(const uint8_t *buf, const file_header *h, uint32_t off)
+{
+    return off < h->pool_len ? (const char *)buf + h->pool_off + off : "";
+}
+
+/* Each symbol, string constant and block type the snapshot names, found
+ * here; false (and why) when one is not, or is not as it was. */
+static bool resolve(const uint8_t *buf, const file_header *h, bool same_build, uint64_t unnamed, resolved *rs,
+                    char *why, size_t whylen)
+{
+    memset(rs, 0, sizeof *rs);
+    if (unnamed && !same_build) {
+        snprintf(why, whylen, "the snapshot holds %llu pointers into the binary that have no name: only the build "
+                              "that saved it can put it back", (unsigned long long)unnamed);
+        return false;
+    }
+    char err[128] = "";
+    if ((h->nsyms || h->ncstrs || h->ntypes) && (!symbols_ready(err, sizeof err) || !descriptors_ready())) {
+        snprintf(why, whylen, "%s", *err ? err : "out of memory");
+        return false;
+    }
+    rs->syms = bb_host_calloc(h->nsyms + 1, sizeof *rs->syms);
+    rs->code = bb_host_calloc(h->nsyms + 1, sizeof *rs->code);
+    rs->cstrs = bb_host_calloc(h->ncstrs + 1, sizeof *rs->cstrs);
+    rs->types = bb_host_calloc(h->ntypes + 1, sizeof *rs->types);
+    if (!rs->syms || !rs->code || !rs->cstrs || !rs->types || (h->ncstrs && !cstrings_ready())) {
+        free_resolved(rs);
+        snprintf(why, whylen, "out of memory");
+        return false;
+    }
+    const file_sym *fs = (const file_sym *)(buf + h->syms_off);
+    for (uint64_t i = 0; i < h->nsyms; i++) {
+        const char *file = pool_at(buf, h, fs[i].file), *name = pool_at(buf, h, fs[i].name);
+        const isym *s = isym_named(file, name);
+        if (!s) {
+            snprintf(why, whylen, "the snapshot points to %s%s%s%s, which this build does not have", name,
+                     *file ? " (" : "", file, *file ? ")" : "");
+            free_resolved(rs);
+            return false;
+        }
+        if ((fs[i].flags & SYM_INTERIOR) && s->size != fs[i].size) {
+            snprintf(why, whylen, "the snapshot points into %s%s%s%s, which is %llu bytes in this build and was %llu",
+                     name, *file ? " (" : "", file, *file ? ")" : "", (unsigned long long)s->size,
+                     (unsigned long long)fs[i].size);
+            free_resolved(rs);
+            return false;
+        }
+        rs->syms[i] = s->addr;
+        rs->code[i] = s->code;
+    }
+    const file_cstr *fc = (const file_cstr *)(buf + h->cstrs_off);
+    for (uint64_t i = 0; i < h->ncstrs; i++) {
+        const char *text = pool_at(buf, h, fc[i].text);
+        rs->cstrs[i] = (uintptr_t)cstring_named(text, strlen(text));
+    }
+    const file_type *ft = (const file_type *)(buf + h->types_off);
+    for (uint64_t i = 0; i < h->ntypes; i++) {
+        const char *name = pool_at(buf, h, ft[i].name), *file = pool_at(buf, h, ft[i].file);
+        rs->types[i] = descriptor_for(name, file, ft[i].size, ft[i].form, ft[i].line);
+        if (!rs->types[i]) {
+            snprintf(why, whylen, "the snapshot holds a block of %s (%s, %u bytes), a type this build does not tag",
+                     name, file, ft[i].size);
+            free_resolved(rs);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stats, char *err, size_t errlen)
 {
     hb_stats local;
@@ -1146,14 +2103,19 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
         snprintf(err, errlen, "not a snapshot this version of Blue Box reads");
         return false;
     }
-    if (memcmp(h.uuid, img.uuid, 16)) {
-        snprintf(err, errlen, "the snapshot was made by another build of Blue Box");
+    if (h.total != len || h.nsections != NSAVED || h.nblocks > UINT32_MAX || h.nsyms > 0xFFFFFF ||
+        h.ncstrs > 0xFFFFFF || h.ntypes > UINT32_MAX || !span_ok(&r, h.relocs_off, h.nrelocs * sizeof(file_reloc)) ||
+        !span_ok(&r, h.externs_off, h.nexterns * sizeof(extern_ref)) ||
+        !span_ok(&r, h.syms_off, h.nsyms * sizeof(file_sym)) || !span_ok(&r, h.cstrs_off, h.ncstrs * sizeof(file_cstr)) ||
+        !span_ok(&r, h.types_off, h.ntypes * sizeof(file_type)) || !span_ok(&r, h.pool_off, h.pool_len) ||
+        (h.pool_len && buf[h.pool_off + h.pool_len - 1])) {
+        snprintf(err, errlen, "the snapshot is damaged");
         return false;
     }
-    if (h.total != len || h.nsections != NSAVED || h.nblocks > UINT32_MAX ||
-        !span_ok(&r, h.relocs_off, h.nrelocs * sizeof(file_reloc)) ||
-        !span_ok(&r, h.externs_off, h.nexterns * sizeof(extern_ref))) {
-        snprintf(err, errlen, "the snapshot is damaged");
+    bool same_build = !memcmp(h.uuid, img.uuid, 16);
+    if (!same_build && memcmp(h.fingerprint, fingerprint, 16)) {
+        /* (A file's head says what differs: hb_restore_file.) */
+        snprintf(err, errlen, "it was saved by a build of Blue Box whose saved state differs from this one's");
         return false;
     }
     bool same_process = h.session == session;
@@ -1192,13 +2154,14 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
             break;
         }
         memcpy(&fb, buf + at, sizeof fb);
-        if (fb.type_off >= img.hi - (uintptr_t)img.base || !span_ok(&r, at + sizeof fb, fb.size)) {
+        if (fb.type >= h.ntypes || !span_ok(&r, at + sizeof fb, fb.size)) {
             at = UINT64_MAX;
             break;
         }
         block_at_[i] = at;
         at = pad8(at + sizeof fb + fb.size);
     }
+    uint64_t unnamed = 0;
     for (uint64_t i = 0; i < h.nrelocs && at != UINT64_MAX; i++) {
         file_reloc rl;
         memcpy(&rl, buf + h.relocs_off + i * sizeof rl, sizeof rl);
@@ -1208,10 +2171,13 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
                          : rl.where - NSAVED < h.nblocks
                              ? ((const file_block *)(buf + block_at_[rl.where - NSAVED]))->size
                              : 0;
-        if (rl.off + 8 > limit || kind < R_BLOCK || kind > R_HOST || (kind == R_BLOCK && tgt >= h.nblocks) ||
+        if (rl.off + 8 > limit || kind < R_BLOCK || kind > R_CSTR || (kind == R_BLOCK && tgt >= h.nblocks) ||
             (kind == R_STATE && tgt >= NSAVED) || (kind == R_REGION && tgt >= h.nregions) ||
-            (kind == R_EXTERN && tgt >= h.nexterns))
+            (kind == R_EXTERN && tgt >= h.nexterns) || (kind == R_SYM && tgt >= h.nsyms) ||
+            (kind == R_CSTR && tgt >= h.ncstrs))
             at = UINT64_MAX;
+        if (kind == R_IMAGE)
+            unnamed++;
     }
     if (at == UINT64_MAX) {
         bb_host_free(block_at_);
@@ -1270,11 +2236,22 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
         at = data;
     }
 
+    /* What the snapshot points to in the binary, and its blocks' types,
+     * found here by name. */
+    resolved rs;
+    char why[512] = "";
+    if (!resolve(buf, &h, same_build, unnamed, &rs, why, sizeof why)) {
+        bb_host_free(block_at_);
+        bb_host_free(fresh_blocks);
+        snprintf(err, errlen, "%s", why);
+        return false;
+    }
+
     /* The blocks, made again (the old ones still there meanwhile). */
     bb_block *old = bb_blocks_detach();
     for (uint64_t i = 0; i < h.nblocks; i++) {
         const file_block *fb = (const file_block *)(buf + block_at_[i]);
-        const bb_type *t = (const bb_type *)(img.base + fb->type_off);
+        const bb_type *t = rs.types[fb->type];
         uint8_t *p = bb_malloc(fb->size, t);
         if (!p) {
             /* Too late to go back: what was there is gone too. */
@@ -1360,7 +2337,28 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
             st->to_libraries++;
             break;
         case R_HOST: v = same_process && !(flags & HB_RESTORE_FORGET_HOST) ? rl.value : 0; st->host++; break;
+        case R_SYM:
+            v = (uint64_t)rs.syms[tgt] + rl.value;
+            st->to_image++;
+            if (rs.code[tgt])
+                *(rl.value ? &st->to_code_inside : &st->to_functions) += 1;
+            else
+                *(rl.value ? &st->to_data_inside : &st->to_data) += 1;
+            break;
+        case R_CSTR:
+            if (!rs.cstrs[tgt]) {
+                /* A string this build has not: kept in a block of its own. */
+                const file_cstr *fc = (const file_cstr *)(buf + h.cstrs_off) + tgt;
+                rs.cstrs[tgt] = (uintptr_t)bb_strdup((const char *)buf + h.pool_off + fc->text);
+                st->strings_kept++;
+            }
+            v = rs.cstrs[tgt] ? (uint64_t)rs.cstrs[tgt] + rl.value : 0;
+            st->to_image++;
+            st->to_strings++;
+            break;
         }
+        if (kind == R_IMAGE)
+            st->to_image_unnamed++;
         memcpy(dst, &v, 8);
         st->relocs++;
     }
@@ -1375,6 +2373,7 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     bb_blocks_release(old);
     bb_host_free(block_at_);
     bb_host_free(fresh_blocks);
+    free_resolved(&rs);
     /* The JIT's translations are of the code that was there; the
      * instruction cache came back with the rest of the machine. */
     mem_code_after_restore();
@@ -1384,6 +2383,15 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
 
 bool hb_restore_file(const char *path, int flags, hb_stats *stats, char *err, size_t errlen)
 {
+    /* Another build's that does not fit: why, from the file's head. */
+    uint8_t *extra;
+    size_t extra_len;
+    bool fits = false;
+    if (!hb_file_extra(path, &extra, &extra_len, &fits, err, errlen, err, errlen))
+        return false;
+    hb_free_buffer(extra);
+    if (!fits)
+        return false;
     uint8_t *buf;
     size_t n;
     if (!hb_file_load(path, &buf, &n, err, errlen))
@@ -1701,7 +2709,31 @@ typedef struct {
     const uint8_t *regions;
     const file_reloc *relocs;
     const extern_ref *externs;
+    const file_sym *syms;
+    const file_cstr *cstrs;
+    const file_type *types;
 } snap_view;
+
+static const char *view_str(const snap_view *v, uint32_t off)
+{
+    return pool_at(v->buf, &v->h, off);
+}
+
+/* What a relocation of a snapshot points to, in words, for comparing two
+ * snapshots of different builds by name (empty for other kinds). */
+static void reloc_name(const snap_view *v, const file_reloc *rl, char *out, size_t n)
+{
+    uint32_t tgt = rl->what & 0xFFFFFFu;
+    int kind = (int)(rl->what >> 24);
+    if (kind == R_SYM && tgt < v->h.nsyms)
+        snprintf(out, n, "%s:%s", view_str(v, v->syms[tgt].file), view_str(v, v->syms[tgt].name));
+    else if (kind == R_CSTR && tgt < v->h.ncstrs)
+        snprintf(out, n, "%s", view_str(v, v->cstrs[tgt].text));
+    else if (kind == R_EXTERN && tgt < v->h.nexterns)
+        snprintf(out, n, "%s:%s", v->externs[tgt].lib, v->externs[tgt].sym);
+    else
+        *out = 0;
+}
 
 static bool view_of(const uint8_t *buf, size_t len, snap_view *v)
 {
@@ -1712,9 +2744,16 @@ static bool view_of(const uint8_t *buf, size_t len, snap_view *v)
     memcpy(&v->h, buf, sizeof v->h);
     if (memcmp(v->h.magic, MAGIC, 8) || v->h.version != VERSION || v->h.total != len || v->h.nsections != NSAVED ||
         !span_ok(&r, v->h.relocs_off, v->h.nrelocs * sizeof(file_reloc)) ||
-        !span_ok(&r, v->h.externs_off, v->h.nexterns * sizeof(extern_ref)))
+        !span_ok(&r, v->h.externs_off, v->h.nexterns * sizeof(extern_ref)) ||
+        !span_ok(&r, v->h.syms_off, v->h.nsyms * sizeof(file_sym)) ||
+        !span_ok(&r, v->h.cstrs_off, v->h.ncstrs * sizeof(file_cstr)) ||
+        !span_ok(&r, v->h.types_off, v->h.ntypes * sizeof(file_type)) || !span_ok(&r, v->h.pool_off, v->h.pool_len) ||
+        (v->h.pool_len && buf[v->h.pool_off + v->h.pool_len - 1]))
         return false;
     v->buf = buf;
+    v->syms = (const file_sym *)(buf + v->h.syms_off);
+    v->cstrs = (const file_cstr *)(buf + v->h.cstrs_off);
+    v->types = (const file_type *)(buf + v->h.types_off);
     uint64_t at = v->h.sections_off;
     for (int i = 0; i < NSAVED; i++) {
         file_section fs;
@@ -1735,7 +2774,7 @@ static bool view_of(const uint8_t *buf, size_t len, snap_view *v)
         if (!span_ok(&r, at, sizeof(file_block)))
             return false;
         v->blocks[i] = (const file_block *)(buf + at);
-        if (!span_ok(&r, at + sizeof(file_block), v->blocks[i]->size))
+        if (v->blocks[i]->type >= v->h.ntypes || !span_ok(&r, at + sizeof(file_block), v->blocks[i]->size))
             return false;
         at = pad8(at + sizeof(file_block) + v->blocks[i]->size);
     }
@@ -1773,9 +2812,9 @@ static void describe_where(const snap_view *v, uint32_t where, uint64_t off, cha
         snprintf(out, n, "%s +%llu", s, (unsigned long long)o);
         return;
     }
-    const file_block *fb = v->blocks[where - NSAVED];
-    const bb_type *t = (const bb_type *)(img.base + fb->type_off);
-    snprintf(out, n, "block %u (%s, %s:%u) +%llu", where - NSAVED, t->name, t->file, t->line, (unsigned long long)off);
+    const file_type *t = &v->types[v->blocks[where - NSAVED]->type];
+    snprintf(out, n, "block %u (%s, %s:%u) +%llu", where - NSAVED, view_str(v, t->name), view_str(v, t->file), t->line,
+             (unsigned long long)off);
 }
 
 static int cmp_reloc(const void *a, const void *b)
@@ -1864,18 +2903,20 @@ int hb_compare(const uint8_t *a, size_t alen, const uint8_t *b, size_t blen, int
         diff(&d, "%llu blocks, then %llu", (unsigned long long)va.h.nblocks, (unsigned long long)vb.h.nblocks);
     for (uint64_t i = 0; i < va.h.nblocks && i < vb.h.nblocks; i++) {
         const file_block *x = va.blocks[i], *y = vb.blocks[i];
-        if (x->size != y->size || x->type_off != y->type_off) {
+        const file_type *tx = &va.types[x->type], *ty = &vb.types[y->type];
+        if (x->size != y->size || tx->size != ty->size || tx->form != ty->form ||
+            strcmp(view_str(&va, tx->name), view_str(&vb, ty->name)) ||
+            strcmp(view_str(&va, tx->file), view_str(&vb, ty->file))) {
             describe_where(&va, (uint32_t)(NSAVED + i), 0, where, sizeof where);
             diff(&d, "%s: %u bytes, then %u bytes of another type or size", where, x->size, y->size);
             continue;
         }
         const uint8_t *px = (const uint8_t *)(x + 1), *py = (const uint8_t *)(y + 1);
         uint8_t *mask = NULL;
-        const bb_type *t = (const bb_type *)(img.base + x->type_off);
-        const hb_typemap *m = ignore_host && (t->form == BB_FORM_ARRAY || t->form == BB_FORM_HEAD)
-                                  ? map_type(t->file, t->name) : NULL;
-        if (m && m->size == t->size && m->size && (mask = bb_host_calloc(x->size + 8, 1))) {
-            if (t->form == BB_FORM_HEAD)
+        const hb_typemap *m = ignore_host && (tx->form == BB_FORM_ARRAY || tx->form == BB_FORM_HEAD)
+                                  ? map_type(view_str(&va, tx->file), view_str(&va, tx->name)) : NULL;
+        if (m && m->size == tx->size && m->size && (mask = bb_host_calloc(x->size + 8, 1))) {
+            if (tx->form == BB_FORM_HEAD)
                 mark_host_values(m->layout, 0, x->size, mask);
             else
                 for (size_t e = 0; e + m->size <= x->size; e += m->size)
@@ -1950,10 +2991,15 @@ int hb_compare(const uint8_t *a, size_t alen, const uint8_t *b, size_t blen, int
             const file_reloc *ra = c <= 0 ? &xa[i] : NULL, *rb = c >= 0 ? &xb[j] : NULL;
             const file_reloc *any = ra ? ra : rb;
             bool host = (ra && ra->what >> 24 == R_HOST) || (rb && rb->what >> 24 == R_HOST);
-            bool same = ra && rb && ra->what == rb->what && ra->value == rb->value;
-            if (same && ra->what >> 24 == R_EXTERN)
-                same = !strcmp(va.externs[ra->what & 0xFFFFFFu].lib, vb.externs[rb->what & 0xFFFFFFu].lib) &&
-                       !strcmp(va.externs[ra->what & 0xFFFFFFu].sym, vb.externs[rb->what & 0xFFFFFFu].sym);
+            /* By name where it is one: two snapshots number the binary's
+             * symbols each in its own order, and may be two builds'. */
+            bool same = ra && rb && ra->what >> 24 == rb->what >> 24 && ra->value == rb->value;
+            if (same) {
+                char na[512], nb[512];
+                reloc_name(&va, ra, na, sizeof na);
+                reloc_name(&vb, rb, nb, sizeof nb);
+                same = *na ? !strcmp(na, nb) : ra->what == rb->what;
+            }
             if (!same && !(host && ignore_host)) {
                 describe_where(any->where < NSAVED || any->where - NSAVED < va.h.nblocks ? &va : &vb, any->where,
                                any->off, where, sizeof where);
@@ -2025,4 +3071,46 @@ int hb_check_map(FILE *out)
     if (c.problems && out)
         fprintf(out, "hibernate map: %d differences: run scripts/state-map.py after a build\n", c.problems);
     return c.problems;
+}
+
+/* ---- For tests and tools ---- */
+
+void hb_explain_manifest(const char *old, size_t len, char *why, size_t whylen)
+{
+    char err[128];
+    if (!ready(err, sizeof err)) {
+        snprintf(why, whylen, "%s", err);
+        return;
+    }
+    manifest_explain(old, len, why, whylen);
+}
+
+bool hb_symbolize(const void *p, char *out, size_t n)
+{
+    char err[128];
+    if (!ready(err, sizeof err) || !symbols_ready(err, sizeof err))
+        return false;
+    uintptr_t v = (uintptr_t)p;
+    uint32_t cs = cstring_section(v);
+    if (cs) {
+        const char *start = p;
+        while (start > (const char *)img.sects[cs].lo && start[-1])
+            start--;
+        snprintf(out, n, "\"%s\"+%llu", start, (unsigned long long)(v - (uintptr_t)start));
+        return true;
+    }
+    const isym *s = isym_at(v);
+    if (!s)
+        return false;
+    snprintf(out, n, "%s%s%s+%llu", s->file, *s->file ? ":" : "", s->name, (unsigned long long)(v - s->addr));
+    return true;
+}
+
+const void *hb_resolve_symbol(const char *file, const char *name, uint64_t off)
+{
+    char err[128];
+    if (!ready(err, sizeof err) || !symbols_ready(err, sizeof err))
+        return NULL;
+    const isym *s = isym_named(file ? file : "", name);
+    return s && off <= s->size ? (const void *)(s->addr + off) : NULL;
 }
