@@ -1103,6 +1103,53 @@ static uint16_t arith(int mode, uint32_t s, uint32_t d, uint32_t op)
     }
 }
 
+/* A transfer's time on a 68000, after ROM QuickDraw's (Bill Atkinson's
+ * BitBlt and RgnBlt, as in the Plus and the SE).  The work goes by the
+ * scan line, not the pixel: each row sets up its masked first and last
+ * words, so a sprite a few words wide cost about 300 cycles a row however
+ * few pixels it had.  Between them an aligned srcCopy moves two words a
+ * MOVE.L; a shifted copy or another mode takes each word through the
+ * shift and the masks; and clipped to a region or a mask (CopyMask, a
+ * maskRgn, a window's non-rectangular visRgn) every long of the bounding
+ * box goes through a mask buffer the region is played into row by row.
+ * The setup (CopyBits, StdBits, StretchBits, RgnBlt, BitBlt, hiding the
+ * cursor) is about 5,000 cycles. */
+enum {
+    BLIT_CALL_CYCLES = 5000,
+    BLIT_ROW_CYCLES = 250,      /* the row loop, the edge words, the unwound copy's call */
+    BLIT_MASK_ROW_CYCLES = 300, /* the mask buffer brought to the row, the row's pointers */
+    BLIT_FAST_WORD_CYCLES = 10, /* MOVE.L (A4)+,(A5)+: 20 cycles for two words */
+    BLIT_WORD_CYCLES = 90,      /* fetched, shifted, masked, merged with the destination */
+    BLIT_MASK_WORD_CYCLES = 88, /* RgnBlt's MASK0: 176 cycles a long */
+};
+
+static bool region_is_rect(const hrgn *r)
+{
+    for (int i = 0; i < r->nbands; i++)
+        if (r->bands[i].n != 2 || (i && (r->bands[i].top != r->bands[i - 1].bottom ||
+                                         r->bands[i].x[0] != r->bands[0].x[0] || r->bands[i].x[1] != r->bands[0].x[1])))
+            return false;
+    return true;
+}
+
+static uint64_t transfer_cycles(const hrgn *clip, bool masked, const pixdst *s, const pixdst *d, qrect sr, qrect dr,
+                                int mode)
+{
+    qrect b = hrgn_bbox(clip);
+    if (b.bottom <= b.top || b.right <= b.left)
+        return BLIT_CALL_CYCLES;
+    masked = masked || !region_is_rect(clip);
+    uint64_t rows = (uint64_t)(b.bottom - b.top);
+    int x0 = b.left - d->bounds.left, x1 = b.right - d->bounds.left; /* in the destination's words */
+    uint64_t words = (uint64_t)(((x1 - 1) >> 4) - (x0 >> 4) + 1);
+    if (masked)
+        return BLIT_CALL_CYCLES + rows * (BLIT_MASK_ROW_CYCLES + words * BLIT_MASK_WORD_CYCLES);
+    int shift = ((dr.left - d->bounds.left) - (sr.left - s->bounds.left)) & 15;
+    bool same_size = sr.right - sr.left == dr.right - dr.left && sr.bottom - sr.top == dr.bottom - dr.top;
+    bool fast = (mode & 0x3F) == srcCopy && shift == 0 && same_size;
+    return BLIT_CALL_CYCLES + rows * (BLIT_ROW_CYCLES + words * (fast ? BLIT_FAST_WORD_CYCLES : BLIT_WORD_CYCLES));
+}
+
 static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, const hrgn *mask)
 {
     /* Callers pass a PixMap via its handle's master pointer or directly; a
@@ -1142,7 +1189,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     }
     if (mask)
         hrgn_op(&clip, &clip, mask, RGN_SECT);
-    machine_charge_pixels(region_area(&clip));
+    machine_charge_drawing(region_area(&clip), transfer_cycles(&clip, mask != NULL, &s, &d, sr, dr, mode));
     int sw = sr.right - sr.left, sh = sr.bottom - sr.top;
     int dw = dr.right - dr.left, dh = dr.bottom - dr.top;
     if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) {

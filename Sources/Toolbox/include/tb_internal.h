@@ -311,6 +311,9 @@ uint16_t ev_modifiers(void);
 void ev_wait_tick(void);
 /* Headless, n pixels' worth of QuickDraw time passes (machine.c). */
 void machine_charge_pixels(uint64_t n);
+/* The same for drawing a 68000 would take the given cycles over (a
+ * transfer's, costed by its rows and words). */
+void machine_charge_drawing(uint64_t pixels, uint64_t cycles);
 /* TickCount polled: headless, a tight loop of polls skips to the next tick. */
 void machine_tick_polled(void);
 gaddr wm_window_at(uint32_t p);

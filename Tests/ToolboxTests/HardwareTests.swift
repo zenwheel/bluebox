@@ -386,6 +386,47 @@ extension BlueBox {
             }
         }
 
+        /// A transfer on a 68000 takes ROM QuickDraw's time by the scan line:
+        /// each row's setup and edge words, then two words a MOVE.L when the
+        /// copy is aligned, each word through the shift and masks when not,
+        /// and every long of the box through a mask buffer for CopyMask.
+        /// Glypha 3.0's sprites, a few words wide, cost several times their
+        /// pixels' worth: charged by the pixel it played at about 60 frames
+        /// a second where an SE managed about 20.
+        @Test func transfersTakeTheCompactMacsTimeByTheRow() {
+            machine_set_accurate_timing(true)
+            plus {
+                _ = initToolbox()
+                func bitmap() -> UInt32 {
+                    let bm = tb_NewPtr(14, false, true)
+                    wr32(bm, tb_NewPtr(8 * 64, false, true)) // 64 by 64, one bit deep
+                    wr16(bm + 4, 8)
+                    wr16(bm + 6, 0); wr16(bm + 8, 0); wr16(bm + 10, 64); wr16(bm + 12, 64)
+                    return bm
+                }
+                func rect(_ t: Int, _ l: Int, _ b: Int, _ r: Int) -> UInt32 {
+                    let p = tb_NewPtr(8, false, true)
+                    wr16(p, UInt16(t)); wr16(p + 2, UInt16(l)); wr16(p + 4, UInt16(b)); wr16(p + 6, UInt16(r))
+                    return p
+                }
+                let src = bitmap(), dst = bitmap(), mask = bitmap()
+                for i in UInt32(0)..<(8 * 64) { wr8(rd32(mask) + i, 0xF0) }
+                func cycles(_ body: () -> Void) -> UInt64 {
+                    let c = g_cpu!.pointee.cycles
+                    body()
+                    return g_cpu!.pointee.cycles - c
+                }
+                // 49 rows of 27 pixels from x 16: two words a row
+                let r = rect(10, 16, 59, 43), shifted = rect(10, 17, 59, 44)
+                let aligned = cycles { tb_CopyBits(src, dst, r, r, 0, 0) }
+                #expect(aligned == 5000 + 49 * (250 + 2 * 10), "aligned \(aligned)")
+                let other = cycles { tb_CopyBits(src, dst, shifted, r, 0, 0) }
+                #expect(other == 5000 + 49 * (250 + 2 * 90), "shifted \(other)")
+                let masked = cycles { tb_CopyMask(src, mask, dst, r, r, r) }
+                #expect(masked == 5000 + 49 * (300 + 2 * 88), "masked \(masked)")
+            }
+        }
+
         /// Fast timing (the default) runs a 68000 at the host's speed: its
         /// drawing is charged as other processors' is (10 ns a pixel), and
         /// its clock follows the instructions, not its cycles.
