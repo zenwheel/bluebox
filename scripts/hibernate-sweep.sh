@@ -27,6 +27,8 @@
 #     resume crash, divergent walk, both timed out)
 #   and <work dir>/report.txt (the totals by class, refusals by reason);
 #   each run's output is kept in <work dir>/logs/<program>/.
+#   RESUME_BIN=binary resumes (B and B0 below) in another build than the one
+#   that saved (one whose saved state has the same shape: bluebox fingerprint).
 #   K=n hibernates after n instructions (default 30000000), K2=n the second
 #   pass (default 300000000; 0 for none), MAX=n instructions for each walk
 #   (default 24000000000), WALK_TIMEOUT=s seconds for each run (default
@@ -107,6 +109,7 @@ work=${2:?usage: hibernate-sweep.sh <census dir> <work dir> [bluebox binary] [jo
 root=$(cd "$(dirname "$0")/.." && pwd)
 bin=${3:-${BLUEBOX:-"$(cd "$root" && swift build -c release --show-bin-path)/bluebox"}}
 jobs=${4:-8}
+rbin=${RESUME_BIN:-$bin}
 K=${K:-30000000}
 K2=${K2:-300000000}
 mkdir -p "$work/logs" "$work/runs"
@@ -227,7 +230,7 @@ sweep_one() {
 		# B: H's snapshot resumed, with the folder and home as H left them.
 		t0=$(now)
 		st=0
-		HOME=$w/h BLUEBOX_HEAPCHECK="$hc" BLUEBOX_CRASH_TRACE=1 timeout "$limit" "$bin" resume "$w/k.bbhib" \
+		HOME=$w/h BLUEBOX_HEAPCHECK="$hc" BLUEBOX_CRASH_TRACE=1 timeout "$limit" "$rbin" resume "$w/k.bbhib" \
 			--headless --census --walk-menus --max "${MAX:-24000000000}" >"$logs/b.out" 2>"$logs/b.err" || st=$?
 		tb=$(($(now) - t0))
 		bend=$(host_end "$st")
@@ -446,7 +449,7 @@ play_one() {
 			p=$post
 			[ "$r" = b ] || p=$(no_input "$post")
 			st=0
-			HOME=$w/h BLUEBOX_CRASH_TRACE=1 timeout "$limit" "$bin" resume "$w/k.bbhib" --headless \
+			HOME=$w/h BLUEBOX_CRASH_TRACE=1 timeout "$limit" "$rbin" resume "$w/k.bbhib" --headless \
 				--max $((k + after - n)) --keys "$(keys_for "$r" "$(screens "$n" "$logs/$r" "$p")")" --date "$date" >"$logs/$r.out" 2>"$logs/$r.err" || st=$?
 			[ "$r" = b ] && bst=$st
 		done
