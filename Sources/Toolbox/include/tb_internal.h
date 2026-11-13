@@ -747,6 +747,7 @@ bool debugger_sys_break(cpu68k *c, int16_t code);
 void debugger_ppc(struct ppc_cpu *c, const char *kind, int arg);
 /* The Appearance Manager's StandardAlert (dialog.c). */
 int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gaddr param, gaddr item_hit);
+bool dialog_alert_like(gaddr d); /* the host would show the dialog as its own alert */
 /* Native drivers (drivers.c): opened by name, called by negative refnum. */
 enum { DRIVER_CONTROL, DRIVER_STATUS, DRIVER_READ, DRIVER_WRITE, DRIVER_CLOSE, DRIVER_KILLIO };
 typedef struct {

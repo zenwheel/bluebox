@@ -997,6 +997,13 @@ func runCommand(_ args: [String], resume: String? = nil) {
     }
     #endif
     machine_set_appearance(appearance)
+    #if canImport(AppKit)
+    // Headless, macOS's controls drawn as in a window (for tests and
+    // pictures of what a window shows): BLUEBOX_NATIVE_CONTROLS=1.
+    if !interactive && ProcessInfo.processInfo.environment["BLUEBOX_NATIVE_CONTROLS"] == "1" {
+        MainActor.assumeIsolated { NativeControls.install() }
+    }
+    #endif
     // Network and serial ports from the settings, unless given here.
     if !appletalkGiven, let a = saved.appletalk, a.hasPrefix("bridge:"), isWireless(String(a.dropFirst(7))) {
         eprint("bluebox: appletalk \"\(a)\" (from the settings) is Wi-Fi, which drops EtherTalk; AppleTalk is on this Mac only\n")

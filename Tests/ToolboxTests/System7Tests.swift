@@ -696,6 +696,27 @@ extension BlueBox {
             #expect(Self.seen?.buttons == ["OK"] && rd16(hit) == 1)
         }
 
+        /// A dialog that reads as an alert (text, buttons, a user item) is
+        /// one no longer when the program has added a control of its own
+        /// over the user item: ZTerm's Serial Port pop-up, which the host's
+        /// alert would leave out.
+        @Test func aControlOfItsOwnKeepsADialog() {
+            let items = ditl([ditlItem(4, (160, 220, 180, 290), Array("OK".utf8)),
+                              ditlItem(8, (20, 20, 50, 280), Array("Please select another port:".utf8)),
+                              ditlItem(0, (70, 120, 90, 260), [])])
+            launchTestApp([TestResource(type: "DLOG", id: 200, data: dlog(items: 200)),
+                           TestResource(type: "DITL", id: 200, data: items)])
+            _ = initToolbox()
+            let d = tb_GetNewDialog(200, 0, 0xFFFF_FFFF)
+            #expect(dialog_alert_like(d))
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [70, 120, 90, 260].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let title = tb_NewPtr(2, false, true)
+            _ = tb_NewControl(d, r, title, 1, 0, 0, 1, 1, 0) // a checkbox, not an item
+            #expect(!dialog_alert_like(d))
+            tb_DisposeDialog(d)
+        }
+
         @Test func withoutAHostTheDefaultButtonIsChosen() {
             // Stage bits 0x8 make item 2 the default.
             launchTestApp(Self.alertResources(stages: 0xDDDD))
