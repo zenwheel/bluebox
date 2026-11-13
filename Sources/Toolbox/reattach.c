@@ -1,6 +1,7 @@
 /* Hibernating a program: its snapshot written at a safe point (drain.c),
- * and put back in a fresh process of the same build (after a reboot, say),
- * which then reattaches what the snapshot could only describe:
+ * and put back in a fresh process (after a reboot, say) of a build whose
+ * saved state has the same shape (hibernate.c), which then reattaches
+ * what the snapshot could only describe:
  *
  *   the clocks   the machine's clock goes on from where it stopped (Ticks,
  *                the Time Manager, sound, UpTime: no jump); the date

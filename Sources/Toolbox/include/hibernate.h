@@ -1,9 +1,10 @@
 /*
  * Snapshots of the C targets' state, for hibernating a program: the
  * saved state sections (bbstate.h), every tracked block (bbmem.h) and the
- * regions (the guest's address space), written so that another process
- * of the same build can make every block again wherever it lands and
- * rewrite the pointers to it (hibernate.c says how).
+ * regions (the guest's address space), written so that another process,
+ * of this build or of any whose saved state has the same shape (the state
+ * fingerprint), can make every block again wherever it lands and rewrite
+ * the pointers to it (hibernate.c says how).
  *
  * The machine must be standing still while a snapshot is taken or put
  * back: no Toolbox call running on any thread.

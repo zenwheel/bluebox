@@ -1,6 +1,6 @@
 // Hibernating a program: its whole machine saved to a file and resumed
-// later in a fresh process of the same build (after a reboot, say), as a
-// virtual machine is suspended to disk.
+// later in a fresh process (after a reboot, say), of this build or any whose
+// saved state has the same shape, as a virtual machine is suspended to disk.
 //
 //   Hibernate (the application menu, the status item's menu, the suspended
 //   overlay, Control-Option-Command-H; Suspend.swift)
