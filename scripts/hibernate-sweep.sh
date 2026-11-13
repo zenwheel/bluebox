@@ -68,6 +68,28 @@
 # refused, not hibernated, save failure, resume crash, stopped after
 # resume, input ignored, differs from unhibernated); and
 # <work dir>/play-report.txt.  Its screens are kept in <work dir>/logs.
+#
+# SAVEPOINT=1 with PLAY sweeps save points in the same games instead: no
+# process ends, each run goes on.
+#
+#   P  plays to K and on to K + AFTER, with the input after K given after
+#      its first screen (as B's above), never saving;
+#   P2 P again, which says whether the game plays the same each time;
+#   S  as P, but makes a save point at K (savepoint in --keys) and goes on;
+#   R  as S, then plays on SPAN instructions (default 100000000) with that
+#      input, goes back to the save point (restore, --savepoint-check) and
+#      plays on with the input after K again, its steps as far after the
+#      save point as they were after the restore.
+# The save point is invisible when S's screens are P's; going back works
+# when R's are S's (and the check finds no difference between the machine
+# put back and the save point).  Writes <work dir>/savepoint.tsv: program,
+# K, save point (saved / refused / none), why, bytes, ms the machine was
+# held, restore (ok / refused / crashed / ...), the check's differences,
+# ms to go back, R's end, deterministic, invisible (S's screens are P's, or
+# the first that differs), back (R's are S's, or the first that differs),
+# and the class (pass, pass but not deterministic, refused, not saved,
+# restore failed, restore check differs, save point visible, differs after
+# restore); and <work dir>/savepoint-report.txt.
 set -eu
 LC_ALL=C
 export LC_ALL
@@ -310,6 +332,16 @@ grid() {
 	}'
 }
 
+# grid's sync steps from K up to K + $1 only (a run starting at 0).
+grid_to() {
+	awk -v k="$k" -v g="${GRID:-1000000}" -v n="$1" 'BEGIN {
+		out = ""
+		for (t = k + g; t < k + n; t += g)
+			out = out (out == "" ? "" : ",") "at:" t ",sync"
+		print out
+	}'
+}
+
 # A run's script ($2), kept as <logs>/$1.keys too (to run it again by hand).
 keys_for() {
 	printf '%s\n' "$2" >"$logs/$1.keys"
@@ -473,6 +505,112 @@ play_one() {
 		"$resume" "$bend" "$anim" "$input" "$det" "$match" "$th" "$tb" "$tc" "$class"
 }
 
+# One game of the PLAY table with a save point made, played on, and gone
+# back to (SAVEPOINT=1; see the top).
+savepoint_one() {
+	rel=$1
+	row=$(awk -F '\t' -v p="$rel" '$1 == p { print; exit }' "$table")
+	k=$(printf '%s' "$row" | cut -f2)
+	keys=$(printf '%s' "$row" | cut -f3)
+	post=$(printf '%s' "$row" | cut -f4)
+	flags=$(printf '%s' "$row" | cut -f5)
+	after=${AFTER:-300000000}
+	mid=${MID:-20000000}
+	win=${WIN:-100000000}
+	span=${SPAN:-100000000}
+	date=${DATE:-2000-01-01T12:00:00}
+	limit=${WALK_TIMEOUT:-600}
+	name=$(name_of "$rel")
+	w=$work/runs/$name
+	logs=$work/logs/$name
+	case $rel in
+	/*) folder=$(dirname "$rel") ;;
+	*) folder=$(dirname "$dir/corpus/$rel") ;;
+	esac
+	if [ ! -d "$folder" ]; then
+		printf '%s\t%s\tnone\tnot in corpus/\t\t\t\t\t\t\t\t\t\tnot saved\n' "$rel" "$k"
+		return
+	fi
+	rm -rf "$w" "$logs"
+	mkdir -p "$w/orig" "$logs"
+	d=$(basename "$folder")
+	cp -cR "$folder" "$w/orig/$d" 2>/dev/null || cp -R "$folder" "$w/orig/$d"
+	app=$w/$d/$(basename "$rel")
+	for r in p p2 s r; do
+		case $r in
+		p | p2) script="$keys,$(screens 0 "$logs/$r" "$post")" ;;
+		s) script="$keys,at:$k,savepoint,$(screens 0 "$logs/$r" "$post")" ;;
+		# The input after K played on (from a little after: a program idle
+		# until the next input, whose clock moves on to it, would have the
+		# first of it before its save point), then back; what follows the
+		# restore is S's, SPAN later (it comes as far after the save point).
+		# Sync steps up to the restore as S has them, for the same clock.
+		r) script="$keys,at:$k,savepoint,$(grid_to "$span"),at:$((k + 5000000)),$post${post:+,}at:$((k + span)),restore,$(screens "-$span" "$logs/$r" "$post")" ;;
+		esac
+		rm -rf "${w:?}/$d" "$w/h"
+		cp -cR "$w/orig/$d" "$w/$d"
+		mkdir -p "$w/h"
+		st=0
+		# shellcheck disable=SC2086 # the table's flags are words
+		HOME=$w/h BLUEBOX_CRASH_TRACE=1 timeout "$limit" "$bin" run "$app" --headless --max $((k + after + span)) \
+			--keys "$(keys_for "$r" "$script")" --savepoint-check --date "$date" $flags >"$logs/$r.out" 2>"$logs/$r.err" || st=$?
+		[ "$r" != r ] || rst=$st
+	done
+	saved=none why='' bytes='' held='' restore='' diffs='' back_ms='' det=yes invisible=same back=same
+	line=$(grep -a -m 1 -E '^save point( refused)?:' "$logs/r.out" || true)
+	case $line in
+	"save point refused:"*)
+		saved=refused
+		why=${line#save point refused: }
+		;;
+	"save point:"*)
+		saved=saved
+		bytes=$(printf '%s' "$line" | sed -E 's/.*\(([0-9]+) bytes.*/\1/')
+		held=$(printf '%s' "$line" | sed -E 's/.*held ([0-9]+) ms.*/\1/')
+		why=$(printf '%s' "$line" | sed -E 's/.*stopped at (.*) after [0-9]+ instructions\)$/\1/')
+		;;
+	*) why=$(end_of "$logs/r.out") ;;
+	esac
+	rend=$(host_end "$rst")
+	[ -n "$rend" ] || rend=$(end_of "$logs/r.out")
+	rline=$(grep -a -m 1 -E '^(restored|restore refused):' "$logs/r.out" || true)
+	case $rline in
+	restored:*)
+		restore=ok
+		back_ms=$(printf '%s' "$rline" | sed -E 's/.*; ([0-9]+) ms\)$/\1/')
+		;;
+	"restore refused:"*) restore=${rline#restore } ;;
+	*) restore=$(host_end "$rst") ;;
+	esac
+	[ -n "$restore" ] || restore='not done'
+	diffs=$(grep -a -m 1 '^restore check:' "$logs/r.out" | sed -E 's/restore check: ([-0-9]+) .*/\1/' || true)
+	for sc in mid post end; do
+		same_screen "$logs/p-$sc.png" "$logs/p2-$sc.png" || det=no
+		[ "$invisible" != same ] || same_screen "$logs/s-$sc.png" "$logs/p-$sc.png" || invisible="differ from $sc"
+		[ "$back" != same ] || same_screen "$logs/r-$sc.png" "$logs/s-$sc.png" || back="differ from $sc"
+	done
+	if [ "$saved" = refused ]; then
+		class=refused
+	elif [ "$saved" != saved ]; then
+		class='not saved'
+	elif [ "$restore" != ok ]; then
+		class='restore failed'
+	elif [ "$diffs" != 0 ]; then
+		class='restore check differs'
+	elif [ "$back" != same ]; then
+		class='differs after restore'
+	elif [ "$invisible" != same ] && [ "$det" = yes ]; then
+		class='save point visible'
+	elif [ "$det" = no ]; then
+		class='pass but not deterministic'
+	else
+		class=pass
+	fi
+	rm -rf "${w:?}"
+	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$rel" "$k" "$saved" "$why" "$bytes" \
+		"$held" "$restore" "$diffs" "$back_ms" "$rend" "$det" "$invisible" "$back" "$class"
+}
+
 table=${PLAY:-}
 [ "$table" != 1 ] || table=$root/scripts/hibernate-play.tsv
 
@@ -480,6 +618,10 @@ table=${PLAY:-}
 # play the fifth): what each of the parallel runs below does.
 if [ $# -ge 6 ] && [ "$5" = play ]; then
 	play_one "$6"
+	exit 0
+fi
+if [ $# -ge 6 ] && [ "$5" = savepoint ]; then
+	savepoint_one "$6"
 	exit 0
 fi
 if [ $# -ge 6 ]; then
@@ -501,6 +643,15 @@ pass() {
 		printf '%s\0' "$rel"
 	done | xargs -0 -n 1 -P "$jobs" sh "$0" "$dir" "$work" "$bin" "$jobs" "$2" || true
 }
+if [ -n "$table" ] && [ -n "${SAVEPOINT:-}" ]; then
+	pass "$list" savepoint >"$work/savepoint.tsv"
+	{
+		printf '%s games\n' "$(wc -l <"$work/savepoint.tsv" | tr -d ' ')"
+		cut -f14 "$work/savepoint.tsv" | sort | uniq -c | sort -rn
+	} >"$work/savepoint-report.txt"
+	cat "$work/savepoint-report.txt"
+	exit 0
+fi
 if [ -n "$table" ]; then
 	pass "$list" play >"$work/play.tsv"
 	{
