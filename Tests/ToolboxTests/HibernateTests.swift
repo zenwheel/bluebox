@@ -210,6 +210,28 @@ extension BlueBox {
             #expect(differences(sA, save()) == 0)
         }
 
+        /// Another build's snapshot that points to a function this build does
+        /// not have is refused, naming it, and nothing changes.
+        @Test func aFunctionThisBuildHasNotIsRefused() {
+            let out = setUp()
+            _ = machine_run(50_000)
+            var snap = save()
+            snap[16] ^= 0xFF  // another build's UUID, this one's fingerprint
+            // The pool, at the end, names the first native's function.
+            let name = Array("unimplemented_native\0".utf8)
+            guard let at = (0...(snap.count - name.count)).reversed().first(where: { Array(snap[$0..<$0 + name.count]) == name })
+            else {
+                Issue.record("not in the snapshot")
+                return
+            }
+            snap[at] = UInt8(ascii: "U")
+            let before = fingerprint(out)
+            let (ok, err, _) = restore(snap)
+            #expect(!ok && err.contains("Unimplemented_native (Toolbox/trap.c), which this build does not have"),
+                    Comment(rawValue: err))
+            #expect(fingerprint(out) == before)
+        }
+
         /// The fingerprint is a hash of the manifest, which names each saved
         /// static (file, name, place, size, layout and shape), each tagged
         /// type, the state sections and the guest-side layout records.
