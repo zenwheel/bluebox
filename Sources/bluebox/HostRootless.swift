@@ -403,6 +403,7 @@ final class TransientView: NSView {
         } else {
             NSApp.activate(ignoringOtherApps: true)
         }
+        PickerStandIn.closeWhenAnotherShows()
         Suspender.shared.installHibernateKey()
         installKeyMonitor()
         Suspender.shared.changed = { [weak self] on in self?.showSuspended(on) }

@@ -547,6 +547,7 @@ enum ShellItem: Hashable {
         }
         do {
             try p.run()
+            yieldActivation(toChild: p.processIdentifier)
             running[path] = p
             states.launched(path, pid: p.processIdentifier)
             recent.removeAll { $0 == path }
@@ -1556,12 +1557,30 @@ struct SnapshotsView: View {
         var env = ProcessInfo.processInfo.environment
         env[RunningProgram.launchedByVariable] = "shell"
         p.environment = env
-        do { try p.run() } catch { model.messages.append("Could not resume \(s.title): \(error.localizedDescription)") }
+        do {
+            try p.run()
+            yieldActivation(toChild: p.processIdentifier)
+        } catch { model.messages.append("Could not resume \(s.title): \(error.localizedDescription)") }
     }
 
     private func reload() {
         snapshots = HibernatedSnapshots.list(folders: hibernatedFolders(), registry: model.registry)
         if let sel = selection, !snapshots.contains(where: { $0.path == sel }) { selection = nil }
+    }
+}
+
+/// A program the shell started may come to the front when its window is
+/// up, seconds later for a resumed one: macOS lets an app take the front
+/// only from the active one, so the shell, while it is active, hands it on
+/// once the child is an application.
+@MainActor func yieldActivation(toChild pid: Int32, tries: Int = 40) {
+    guard #available(macOS 14, *), tries > 0, NSApp.isActive else { return }
+    if let child = NSRunningApplication(processIdentifier: pid), child.activationPolicy != .prohibited {
+        NSApp.yieldActivation(to: child)
+        return
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        MainActor.assumeIsolated { yieldActivation(toChild: pid, tries: tries - 1) }
     }
 }
 

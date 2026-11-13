@@ -631,6 +631,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(view)
         NSApp.activate(ignoringOtherApps: true)
+        PickerStandIn.closeWhenAnotherShows()
         DragOut.shared.refresh = { [weak view] in view?.refreshIfChanged() }
         let title = self.title
         Suspender.shared.changed = { [weak view] on in

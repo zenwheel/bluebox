@@ -349,8 +349,10 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
         window.delegate = closer
         window.makeKeyAndOrderFront(nil)
         withExtendedLifetime(closer) { _ = app.runModal(for: window) }
-        window.orderOut(nil)
-        return model.choice ?? .cancel
+        window.delegate = nil
+        let choice = model.choice ?? .cancel
+        if choice == .cancel { window.orderOut(nil) } else { PickerStandIn.keep(window) }
+        return choice
     }
     #else
     return .startFresh
@@ -386,6 +388,39 @@ private func pickSnapshot(program: String, title: String, registry: ProgramRegis
         } catch {
             message = "It could not be moved to the Trash: \(error.localizedDescription)"
         }
+    }
+}
+
+/// The picker's window, kept on screen unseen until the program has a
+/// window of its own.  An app left with no window is no longer the active
+/// one (since macOS 14 the next app's window comes forward), and the
+/// program's window, up seconds later once the snapshot is read, then
+/// opened behind the others, or in another app's full-screen space unseen.
+@MainActor enum PickerStandIn {
+    private static var window: NSWindow?
+
+    static func keep(_ w: NSWindow) {
+        w.contentView = nil
+        w.alphaValue = 0
+        w.ignoresMouseEvents = true
+        w.hasShadow = false
+        window = w
+    }
+
+    /// Once the host is up: closed when another window shows (the program
+    /// coming forward with it), or after a minute regardless.
+    static func closeWhenAnotherShows(tries: Int = 600) {
+        guard let w = window else { return }
+        let shown = NSApp.windows.contains { $0 !== w && $0.isVisible && $0.alphaValue > 0 }
+        guard shown || tries <= 0 else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                MainActor.assumeIsolated { closeWhenAnotherShows(tries: tries - 1) }
+            }
+            return
+        }
+        if shown && !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
+        w.orderOut(nil)
+        window = nil
     }
 }
 
