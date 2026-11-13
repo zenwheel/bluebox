@@ -105,6 +105,50 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
     machine_post_mouse(x, y, button)
 }
 
+/// The same, the point kept on a Mac screen of the size given.
+@MainActor func postHostMouse(button: Int32, clampedTo size: (Int32, Int32)) {
+    if mouseCaptured { return postHostMouse(button: button) }
+    let (x, y) = hostToMac(NSEvent.mouseLocation)
+    machine_post_mouse(min(max(x, 0), size.0 - 1), min(max(y, 0), size.1 - 1), button)
+}
+
+/// The black behind a program with the whole screen, over the macOS menu
+/// bar and Dock.  Its clicks never bring it forward: one above the Mac
+/// screen (where the hidden macOS menu bar is, a strip taller than the Mac's
+/// own) is the Mac's at its top edge, as the pointer would have stopped
+/// there on a Mac, so the menu bar is still reached; any other is dropped.
+final class BackdropWindow: NSWindow {
+    weak var screenWindow: NSWindow?
+    private var clicking = false
+
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            screenWindow?.makeKeyAndOrderFront(nil)
+            guard !Suspender.shared.suspended else { return }
+            var w: Int32 = 0, h: Int32 = 0
+            machine_screen_size(&w, &h)
+            let (x, y) = hostToMac(NSEvent.mouseLocation)
+            guard y < 0, x >= 0, x < w else { return }
+            clicking = true
+            postHostMouse(button: 1, clampedTo: (w, h))
+        case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
+            if clicking { postHostMouse(button: -1, clampedTo: screenSize()) }
+        case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+            if clicking { postHostMouse(button: 0, clampedTo: screenSize()) }
+            clicking = false
+        default:
+            super.sendEvent(event)
+        }
+    }
+
+    private func screenSize() -> (Int32, Int32) {
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        return (w, h)
+    }
+}
+
 final class MacWindow: NSWindow {
     var macID: UInt32 = 0
     var native = false
@@ -309,7 +353,7 @@ final class TransientView: NSView {
     /// BLUEBOX_DEBUG_MOUSE: say why the mouse is captured or not.
     static let debugMouse = ProcessInfo.processInfo.environment["BLUEBOX_DEBUG_MOUSE"] != nil
     var debugActive = false, debugRelative = false
-    var backdrop: NSWindow?
+    var backdrop: BackdropWindow?
     var motionMonitor: Any?
     var programWarps: UInt32 = 0
 
@@ -346,17 +390,32 @@ final class TransientView: NSView {
             NSApp.presentationOptions = [.hideDock, .hideMenuBar]
             let screen = NSScreen.main ?? NSScreen.screens[0]
             if backdrop == nil {
-                let w = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+                let w = BackdropWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
                 w.backgroundColor = .black
                 w.isReleasedWhenClosed = false
                 w.hasShadow = false
                 backdrop = w
             }
-            backdrop?.setFrame(screen.frame, display: false)
-            backdrop?.orderFront(nil)
-            screenWindow?.orderFront(nil)
+            guard let backdrop else { return }
+            backdrop.setFrame(screen.frame, display: false)
+            backdrop.orderFront(nil)
+            // The screen is the backdrop's child, so always above it: a
+            // click on the black (above the Mac's menu bar, where the
+            // hidden macOS menu bar is reached, or at the sides) brought
+            // the backdrop forward over the whole screen, which stayed
+            // black until the app was hidden or left and came back.
+            if let screenWindow {
+                backdrop.screenWindow = screenWindow
+                backdrop.addChildWindow(screenWindow, ordered: .above)
+                screenWindow.orderFront(nil)
+            }
         } else {
             NSApp.presentationOptions = []
+            // Let go of the screen first: ordering out a parent takes its
+            // children with it.
+            if let backdrop, let screenWindow, screenWindow.parent === backdrop {
+                backdrop.removeChildWindow(screenWindow)
+            }
             backdrop?.orderOut(nil)
         }
     }

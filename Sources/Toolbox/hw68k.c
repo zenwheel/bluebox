@@ -659,10 +659,19 @@ static void sound_regs_changed(void) {}
 static uint64_t sound_ticks; /* retraces whose buffer has been played */
 static uint8_t sound_last[370];
 static bool sound_last_valid;
+/* SoundBase on a Mac without the buffer (machine.c's memory): the Sound
+ * Manager from the Mac II on watched the old buffer and, when a program
+ * wrote it, played what it wrote through the Apple Sound Chip (Technical
+ * Note PT 22: MacinTalk, and games that make their own sound, kept
+ * working).  Played the same way, but beside the Sound Manager's own
+ * sound, not instead of it; until a program writes it, it holds one
+ * value, silence, and nothing is played. */
+static gaddr compat_buffer;
 
 static void hw_sound_pump(void)
 {
-    if (!machine->via_sound || !sound_main)
+    gaddr main = machine->via_sound ? sound_main : compat_buffer;
+    if (!main)
         return;
     uint64_t v = via.vbl_count;
     if (v == sound_ticks)
@@ -673,7 +682,7 @@ static void hw_sound_pump(void)
         sound_ticks++;
         if (!hw_sound_enabled() || hw_sound_volume() == 0)
             continue;
-        gaddr buf = hw_sound_buffer(hw_sound_alternate());
+        gaddr buf = machine->via_sound ? hw_sound_buffer(hw_sound_alternate()) : main;
         uint8_t s[370];
         for (int i = 0; i < 370; i++)
             s[i] = rd8(buf + (gaddr)i * 2);
@@ -834,5 +843,8 @@ void hw_boot(void)
         sound_alt = GAC_SOUND - 0x5C00u;
         wr32(LM_SoundBase, sound_main);
         wr32(LM_ScrnBase, GA_SCREEN);
+        compat_buffer = 0;
+    } else {
+        compat_buffer = rd32(LM_SoundBase);
     }
 }

@@ -1705,6 +1705,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/hosttext.c", "tables", 128, 64 },
     { "Toolbox/hw68k.c", "accesses", 8, 12 },
     { "Toolbox/hw68k.c", "chosen", 1, 0 },
+    { "Toolbox/hw68k.c", "compat_buffer", 4, 0 },
     { "Toolbox/hw68k.c", "default_level1", 4, 0 },
     { "Toolbox/hw68k.c", "drive", 8, 0 },
     { "Toolbox/hw68k.c", "in_hw_interrupt", 1, 0 },
@@ -2708,7 +2709,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1702;
+const unsigned hb_nstatics = 1703;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

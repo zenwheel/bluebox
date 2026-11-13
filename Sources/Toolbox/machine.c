@@ -415,7 +415,8 @@ static bool open_system_file(void)
 /* Hardware a program may address through low memory (the VIA, the serial
  * chip, the floppy controller, the sound buffer): harmless memory of
  * their own, so a program poking them writes there and not over the
- * vectors near address 0.  (The driver unit table is drivers.c's.) */
+ * vectors near address 0; what it writes into the sound buffer is played,
+ * as later Macs did (hw68k.c).  (The driver unit table is drivers.c's.) */
 static void hardware_globals(void)
 {
     /* The chips are at their machine's addresses (hw68k.c). */
