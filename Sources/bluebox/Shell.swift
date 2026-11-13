@@ -369,6 +369,21 @@ enum ShellItem: Hashable {
                 }
                 return
             }
+            // Hibernated: the shell asks which snapshot, and the run starts
+            // told (--resume FILE or --fresh), as any launch from here.  A
+            // run's own picker, before its app ran, left the program's
+            // window behind the others (or unseen) however it asked to
+            // come forward.
+            if states.isHibernated(path) {
+                switch pickSnapshot(program: path, title: (path as NSString).lastPathComponent,
+                                    registry: registry, standIn: false) {
+                case .resume(let snapshot): launch(path: path, extra: ["--resume", snapshot])
+                case .startFresh: launch(path: path, extra: ["--fresh"])
+                case .cancel: break
+                }
+                readRegistry()
+                return
+            }
             launch(path: path)
         case .activate(let pid): bringToFront(pid: pid)
         case .resume(let pid):
