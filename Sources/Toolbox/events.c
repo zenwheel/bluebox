@@ -150,10 +150,12 @@ typedef struct {
                * 6 suspend or resume, 7 and 8 the scroll wheel, 9 the host's Suspend for a: ms,
                * 10 sync, 11 a save point (a: MACHINE_SAVEPOINT_*) */
     int a, b, c;
+    uint32_t seq; /* the order the steps were queued in */
 } script_step;
 
 static script_step *script;
 static int nscript, script_next;
+static uint32_t script_seq;
 
 void machine_script_add(uint64_t at, int kind, int a, int b, int c)
 {
@@ -165,7 +167,7 @@ void machine_script_add(uint64_t at, int kind, int a, int b, int c)
         script[i] = script[i - 1];
         i--;
     }
-    script[i] = (script_step){ at, kind, a, b, c };
+    script[i] = (script_step){ at, kind, a, b, c, ++script_seq };
 }
 
 static char **snap_paths;
@@ -203,11 +205,17 @@ BB_HOST static void *savepoint_ctx;
  * input at the counts a run that never went on has it. */
 BB_HOST static uint64_t save_step_due, restore_step_due;
 static uint64_t savepoint_step_at;
+/* And where in the script the save point's step was queued: the steps
+ * queued before it led up to it, though some may be due after it. */
+BB_HOST static uint32_t save_step_seq;
+static uint32_t savepoint_step_seq;
 
 void events_note_savepoint(void)
 {
     savepoint_step_at = save_step_due;
+    savepoint_step_seq = save_step_seq;
     save_step_due = 0;
+    save_step_seq = 0;
 }
 
 void machine_set_savepoint_handler(machine_savepoint_fn fn, void *ctx)
@@ -268,11 +276,25 @@ void events_script_give_back(void *taken, uint64_t from, uint64_t to)
         to = savepoint_step_at;
     }
     restore_step_due = 0;
-    events_script_clear();
+    if (scripted) {
+        /* The save point's own steps still to come that were queued before
+         * its step (the input leading up to it, a mouse move due a little
+         * after it, a key let go of) come again as they came after it; the
+         * rest of its queue was the timeline the restore leaves. */
+        int k = script_next;
+        for (int i = script_next; i < nscript; i++)
+            if (script[i].seq < savepoint_step_seq)
+                script[k++] = script[i];
+        nscript = k;
+    } else {
+        events_script_clear();
+    }
     for (int i = 0; c && i < c->n; i++) {
         script_step st = c->steps[i];
         uint64_t at = st.at > from ? st.at - from + to : to;
-        if (scripted && at <= now) {
+        /* (One queued before the save point's step is the save point's
+         * own, kept above.) */
+        if (scripted && (at <= now || st.seq < savepoint_step_seq)) {
             bb_host_free(c->paths[i]);
             continue;
         }
@@ -354,9 +376,10 @@ void events_script_pump(uint64_t now)
         case 9: machine_pause_for((uint32_t)s.a); break; /* held still from the next pause point */
         case 10: break; /* sync: no input, only a point the clock stops at */
         case 11: /* a save point made or put back: by the host, at the next safe point */
-            if (s.a == MACHINE_SAVEPOINT_SAVE)
+            if (s.a == MACHINE_SAVEPOINT_SAVE) {
                 save_step_due = s.at;
-            else
+                save_step_seq = s.seq;
+            } else
                 restore_step_due = s.at;
             if (savepoint_fn)
                 savepoint_fn(s.a, savepoint_ctx);

@@ -1375,9 +1375,9 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     bb_blocks_release(old);
     bb_host_free(block_at_);
     bb_host_free(fresh_blocks);
-    /* The JIT's translations are of the code that was there. */
-    if (g_code_map)
-        mem_code_range(0, 0xFFFFFFFFu);
+    /* The JIT's translations are of the code that was there; the
+     * instruction cache came back with the rest of the machine. */
+    mem_code_after_restore();
     st->bytes = len;
     return true;
 }

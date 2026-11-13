@@ -134,7 +134,14 @@ extern uint8_t *g_code_map;
  * (the third is the 68020's and 68030's instruction cache, which the
  * Toolbox's own stores flush as the routines that moved code did). */
 extern void (*g_code_written[3])(gaddr lo, gaddr hi);
+/* An owner whose state is the machine's (the instruction cache): a
+ * snapshot put back brings it as it was, and this marks its code again
+ * (the map is the host's), where a translator's is dropped instead. */
+extern void (*g_code_restored[3])(void);
 void mem_code_written(gaddr a, uint32_t len);
+/* A snapshot put back (hibernate.c): the translators' blocks, made from
+ * the code that was there, go; the instruction cache's marks come back. */
+void mem_code_after_restore(void);
 /* Mark [lo, hi) as holding a translator's code (also the region just
  * before, so a misaligned store starting there is seen).  Returns false if
  * the map can't be made. */
