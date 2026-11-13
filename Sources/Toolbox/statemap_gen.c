@@ -1772,6 +1772,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/inputsprocket.c", "spare", 4, 0 },
     { "Toolbox/inputsprocket.c", "spare_button", 4, 0 },
     { "Toolbox/inputsprocket.c", "suspended", 1, 0 },
+    { "Toolbox/machine.c", "accurate_timing", 1, 0 },
     { "Toolbox/machine.c", "addressing", 4, 0 },
     { "Toolbox/machine.c", "boot_time", 4, 21 },
     { "Toolbox/machine.c", "cpu", 448, 70 },
@@ -2703,7 +2704,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1697;
+const unsigned hb_nstatics = 1698;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

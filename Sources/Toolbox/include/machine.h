@@ -823,6 +823,13 @@ int machine_bpf_helper(const char *sockpath, const char *ifname);
  * run (10 million a second), so runs repeat exactly; real time instead
  * for programs that talk to other programs over the network. */
 void machine_set_realtime(bool on);
+/* Timing: accurate gives a 68000 a compact Mac's speed (its cycles counted
+ * at 7.8336 MHz, QuickDraw's drawing charged as ROM QuickDraw's took, and
+ * with the wall clock no faster than that), for programs that time
+ * themselves by it; fast (the default) runs it at the host's speed.  Other
+ * processors have no cycle model and are the same either way.  Before boot. */
+void machine_set_accurate_timing(bool on);
+bool machine_accurate_timing(void);
 /* With the wall clock (a host attached or real time), a program waiting
  * by spinning (a poll loop doing nothing, again and again) lets the host
  * thread sleep (idle.c); on by default, BLUEBOX_IDLE_SLEEP=0 too turns it

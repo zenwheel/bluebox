@@ -31,6 +31,7 @@ struct AppSettings: Codable {
     var cpu: Int?
     var fpu: Int? /* 0 (none), 68881, 68882 or 68040; unset: the processor's own */
     var addressing: Int? /* 24 or 32; unset: 24 for a program whose SIZE resource doesn't say 32-bit clean */
+    var timing: String? /* fast or accurate (a 68000 at a compact Mac's speed); unset: fast, or accurate for a program known to need it */
     var scale: Double? /* host points per Mac pixel */
     var appearance: String? /* bw, native, or a theme's name */
     var highlight: String? /* host (the host's selection colour) or #RRGGBB */
@@ -46,7 +47,7 @@ struct AppSettings: Codable {
     var internet: InternetSettings? /* Internet Config's preferences */
     var keepSnapshots: Int? /* hibernated snapshots kept per program; unset: HibernatedSnapshots.defaultKeep */
     var isEmpty: Bool {
-        depth == nil && cpu == nil && fpu == nil && addressing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
+        depth == nil && cpu == nil && fpu == nil && addressing == nil && timing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
             && appleShare == nil && display == nil
             && jit == nil
@@ -58,6 +59,7 @@ struct AppSettings: Codable {
             + "cpu \(cpu.map { $0 == powerPCSetting ? "ppc" : String($0) } ?? "default (ppc if fat, else 68040)"), "
             + "fpu \(fpu.map { $0 == 0 ? "none" : String($0) } ?? "default (the processor's own)"), "
             + "addressing \(addressing.map(String.init) ?? "default (24 unless the program is 32-bit clean)"), "
+            + "timing \(timing ?? "default (fast, or accurate for a program known to need it)"), "
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
             + "appearance \(appearance ?? "default (native in rootless windows, else bw)"), highlight \(highlight ?? "default (host)"), "
             + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
@@ -76,7 +78,7 @@ struct AppSettings: Codable {
     func over(_ fallback: AppSettings?) -> AppSettings {
         guard let f = fallback else { return self }
         return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, fpu: fpu ?? f.fpu,
-                           addressing: addressing ?? f.addressing, scale: scale ?? f.scale,
+                           addressing: addressing ?? f.addressing, timing: timing ?? f.timing, scale: scale ?? f.scale,
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
@@ -242,14 +244,37 @@ func requiredCPU(application path: String) -> Int? {
 /// the Plus, they draw on its 512×342 one-bit screen themselves, rows of
 /// 64 bytes from ScrnBase, and on a bigger, deeper screen showed garbage,
 /// or they time themselves by its speed and on a faster Mac divided by
-/// zero or ran far too fast.  They run as that Mac unless a machine or
-/// processor is chosen.
+/// zero or ran far too fast (those also get accurate timing,
+/// knownAccurateTiming).  They run as that Mac unless a machine or
+/// processor is chosen.  Wave 15 waits for the tick between frames and
+/// PaintScroll scrolls with the mouse: the Plus's screen is all they need,
+/// and they run at the host's speed.
 let knownMachineRequirements: [UInt32: String] = [
     0x3F7A_2422: "plus", /* ?z$" Wave 15 (1985) */
     0x5350_2020: "plus", /* SP   PaintScroll 1.0 (1986) */
     0x5348_4150: "plus", /* SHAP Down Hill Racer (1986): divides by the ticks a frame takes */
     0x7364_3039: "se",   /* sd09 Glypha 3.0 (1990): Fastest, its default speed, is as fast as it draws */
 ]
+
+/// Programs that need accurate timing, by creator: they time themselves by
+/// a 68000's speed (Down Hill Racer divides by the ticks a frame takes) or
+/// have no other limit on it (Glypha 3.0's Fastest, its default speed,
+/// waits for nothing), and at the host's speed divided by zero or ran far
+/// too fast.  They get it unless their own settings or the run choose a
+/// timing (over the defaults' timing, as their machine is over the
+/// defaults' processor).
+let knownAccurateTiming: Set<UInt32> = [
+    0x5348_4150, /* SHAP Down Hill Racer (1986) */
+    0x7364_3039, /* sd09 Glypha 3.0 (1990) */
+]
+
+func requiresAccurateTiming(application path: String) -> Bool {
+    var mf = mac_file()
+    var err = [CChar](repeating: 0, count: 256)
+    guard appledouble_read(path, &mf, &err, err.count) else { return false }
+    defer { mac_file_free(&mf) }
+    return knownAccurateTiming.contains(mac_file_creator(&mf))
+}
 
 func requiredMachine(application path: String) -> String? {
     var mf = mac_file()
@@ -343,7 +368,7 @@ func settings(for app: String) -> AppSettings? {
 }
 
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
-///     [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
+///     [timing fast|accurate|default] [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
 ///     [print-folder <folder>|panel|default] [printer <spec>|default] [user-name <name>|default]
 ///     [appleshare <spec>|none|default] [display rootless|screen|default]
@@ -396,6 +421,14 @@ func setCommand(_ args: [String]) {
                 s.fpu = f
             } else {
                 fail("fpu expects none, 68881, 68882, 68040 or default")
+            }
+        case "timing":
+            if value == "default" {
+                s.timing = nil
+            } else if ["fast", "accurate"].contains(value) {
+                s.timing = value
+            } else {
+                fail("timing expects fast, accurate or default")
             }
         case "addressing":
             if value == "default" {
