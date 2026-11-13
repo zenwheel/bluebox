@@ -43,6 +43,14 @@ enum { kCurrentThreadID = 1, kApplicationThreadID = 2 };
 enum { NS_PER_ABS = 40 }; /* UpTime's unit, as driverservices.c has it */
 
 /* Reference kinds (carbon_events.c has its own, below 100): REF_TASK ... REF_SPACE, os9left_mp.h. */
+static uint64_t mp_kinds_layout(void)
+{
+    static const uint32_t v[] = { REF_TASK, REF_QUEUE, REF_SEMAPHORE, REF_REGION, REF_EVENT, REF_NOTIFICATION, REF_TIMER,
+                                  REF_PROCESS, REF_CPU, REF_COHERENCE, REF_SPACE, REF_AREA, REF_POOL, REF_OID };
+    return bb_layout_hash(0, v, sizeof v);
+}
+/* In the guest's memory, as carbon_events.c's (hibernate.c's fingerprint). */
+BB_LAYOUT_FN("multiprocessing.c reference kinds", mp_kinds_layout);
 
 #define MAX_STORAGE 64
 #define TASK_STACK 0x10000u

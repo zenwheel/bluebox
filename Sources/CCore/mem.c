@@ -223,6 +223,11 @@ static const struct {
                              GAC_SCREEN - 0x8000u, 0x00100000u, 0x00100000u, 0x00040000u },
 };
 
+/* Where everything is in each layout: a snapshot's guest memory is laid
+ * out so (hibernate.c's fingerprint). */
+static uint64_t layouts_hash(void) { return bb_layout_hash(0, layouts, sizeof layouts); }
+BB_LAYOUT_FN("mem.c layouts", layouts_hash);
+
 bool mem_set_layout(int layout)
 {
     if (layout < MEM_LAYOUT_32 || layout > MEM_LAYOUT_COMPACT)

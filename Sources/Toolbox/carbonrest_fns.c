@@ -35,6 +35,9 @@ enum {
     kFNSMatchPrintEncoding = 0x200, kFNSMissingDataNoMatch = (int)0x80000000,
 };
 enum { SECTIONS = 10, MAX_NAMES = 64, REF_TAG = 0x464E0000, PROFILE_TAG = 0x46500000, MAX_REFS = 256, MAX_PROFILES = 8 };
+/* A program is given these (tag | index): hibernate.c's fingerprint. */
+BB_LAYOUT("carbonrest_fns.c references", REF_TAG);
+BB_LAYOUT("carbonrest_fns.c profiles", PROFILE_TAG);
 #define T(s) fourcc(s)
 
 typedef struct {

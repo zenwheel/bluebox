@@ -44,6 +44,8 @@ bool g_ppc_mode;
 /* Natives callable from PowerPC code */
 
 #define MAX_PPC_NATIVES 4096
+BB_LAYOUT("cfm.c natives", MAX_PPC_NATIVES);
+BB_LAYOUT("cfm.c native opcode", PPC_NATIVE_OP);
 
 typedef struct {
     void (*fn)(ppc_cpu *c);

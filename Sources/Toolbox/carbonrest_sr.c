@@ -37,6 +37,8 @@ enum {
 #define T(s) fourcc(s)
 enum { SR_SYSTEM, SR_MODEL, SR_PATH, SR_PHRASE, SR_WORD };
 enum { MAX_REFS = 1024, REF_TAG = 0x53520000, MAX_CHILDREN = 4096, MAX_DEPTH = 16 };
+/* A program is given these (tag | index): hibernate.c's fingerprint. */
+BB_LAYOUT("carbonrest_sr.c references", REF_TAG);
 
 typedef struct sr_obj sr_obj;
 typedef struct {

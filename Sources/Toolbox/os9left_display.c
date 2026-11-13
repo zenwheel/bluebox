@@ -27,6 +27,7 @@
 
 enum { kDMNotFoundErr = -6229, kDMGenErr = -6220 };
 enum { REF_DESKRGN = 140 };
+BB_LAYOUT("os9left_display.c reference kind", REF_DESKRGN);
 #define LM_CrsrNew 0x08CEu /* as events.c has it: the cursor must be redrawn at RawMouse */
 
 extern uint32_t dmgr_display_id;

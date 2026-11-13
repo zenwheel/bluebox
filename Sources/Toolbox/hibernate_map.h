@@ -22,17 +22,21 @@ typedef struct hb_layout {
 } hb_layout;
 
 /* A saved static: its file (as Target/path), its symbol (a static local
- * as function.name), size and layout. */
+ * as function.name), size, layout and shape (a hash of its whole type:
+ * every member's name, offset and type, scripts/state-map.py's
+ * Layouts.shape). */
 typedef struct hb_static {
     const char *file, *sym;
     uint32_t size, layout;
+    uint64_t shape;
 } hb_static;
 
 /* A tagged type: the file the tag is written in (its base name), the
- * type as written, its size and layout. */
+ * type as written, its size, layout and shape. */
 typedef struct hb_typemap {
     const char *file, *name;
     uint32_t size, layout;
+    uint64_t shape;
 } hb_typemap;
 
 extern const hb_layout hb_layouts[];

@@ -30,7 +30,7 @@ The check also fails for a static the compiler left in plain __data, __bss
 or __common (a file that missed the state header), and for a tag whose
 type the DWARF does not have.
 """
-import collections, importlib.util, os, re, subprocess, sys
+import collections, hashlib, importlib.util, os, re, subprocess, sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 TARGETS = ['CCore', 'CPU68K', 'CPUPPC', 'ForkStore', 'Toolbox']
@@ -197,6 +197,62 @@ class Layouts:
             return [(0, 'I', 1, 0, 1, 0)] if wide_int(d) else []
         return []
 
+    def shape(self, off, depth=0):
+        """The type at off written out whole: every member's name, offset
+        and type, each array's length, each base type's size and encoding,
+        each enumeration's values, a pointer by what it points to (by name:
+        what it points to is saved, and described, where it is).  Two
+        builds whose saved state has the same shapes read each other's
+        snapshots (hibernate.c's fingerprint).  Typedef names are left out:
+        renaming a typedef changes nothing saved."""
+        key = ('shape', off)
+        if key in self.memo:
+            return self.memo[key]
+        s = self._shape(off, depth)
+        self.memo[key] = s
+        return s
+
+    def _shape(self, off, depth):
+        if depth > 24:
+            return '...'
+        d, _, _ = self.c.strip(off)
+        if d is None:
+            return 'void'
+        t = d['tag']
+        if t in ('DW_TAG_structure_type', 'DW_TAG_union_type') and d.get('DW_AT_declaration'):
+            lay, o = self.resolve(off)
+            if lay is not self or o != off:
+                return lay.shape(o, depth + 1)
+            return '%s %s?' % (t[7], name(d) or '')
+        if t in ('DW_TAG_structure_type', 'DW_TAG_union_type'):
+            parts = []
+            for k in d['kids']:
+                if k['tag'] != 'DW_TAG_member':
+                    continue
+                bits = ''
+                if 'DW_AT_bit_size' in k:
+                    bits = ':%s.%s' % (k.get('DW_AT_data_bit_offset', k.get('DW_AT_bit_offset', '?')),
+                                       k['DW_AT_bit_size'])
+                parts.append('%s@%s%s=%s' % (name(k) or '', k.get('DW_AT_data_member_location', '0x0'), bits,
+                                             self.shape(tref(k), depth + 1)))
+            return '%s%d{%s}' % (t[7], self.size(off), ';'.join(parts))
+        if t == 'DW_TAG_array_type':
+            return 'A%d[%s]' % (self.c.count(d), self.shape(tref(d), depth + 1))
+        if t == 'DW_TAG_enumeration_type':
+            vals = ','.join('%s=%s' % (name(k), k.get('DW_AT_const_value', '?'))
+                            for k in d['kids'] if k['tag'] == 'DW_TAG_enumerator')
+            return 'E%s{%s}' % (d.get('DW_AT_byte_size', '?'), vals)
+        if t == 'DW_TAG_pointer_type':
+            p, pnames, _ = self.c.strip(tref(d))
+            if p is None:
+                return '*void'
+            if p['tag'] == 'DW_TAG_subroutine_type':
+                return '*fn'
+            return '*%s' % (name(p) or (pnames[0] if pnames else p['tag'][7:]))
+        if t == 'DW_TAG_base_type':
+            return '%s%s%s' % (name(d), d.get('DW_AT_byte_size', '?'), d.get('DW_AT_encoding', '?'))
+        return t[7:]
+
 
 def wide_int(d):
     """An integer wide enough to hold a pointer (long, uint64_t, uintptr_t ...)."""
@@ -241,21 +297,21 @@ def find_type(objs, file, tname):
 
 
 def tag_runs(objs, file, tname):
-    """(size, runs) for a tag's type, or None."""
+    """(size, runs, shape) for a tag's type, or None."""
     t = tname.strip()
     if re.search(r'\(\s*\*', t):
-        return 8, [(0, 'F', 1, 0, 1, 0)]
+        return 8, [(0, 'F', 1, 0, 1, 0)], '*fn'
     if t.endswith('*'):
         base = t.rstrip('*').strip()
         if census.HOST_NAMES.search(base):
-            return 8, [(0, 'H', 1, 0, 1, 0)]
-        return 8, [(0, 'P', 1, 0, 1, 0)]
+            return 8, [(0, 'H', 1, 0, 1, 0)], '*' + base
+        return 8, [(0, 'P', 1, 0, 1, 0)], '*' + base
     m = re.match(r'^(.*?)\s*\[(\d+)\]$', t)
     if m:
         r = tag_runs(objs, file, m.group(1))
         if r is None:
             return None
-        esz, inner = r
+        esz, inner, eshape = r
         n = int(m.group(2))
         out = []
         for x in inner:
@@ -264,12 +320,12 @@ def tag_runs(objs, file, tname):
             else:
                 for i in range(n):
                     out.append((x[0] + i * esz,) + x[1:])
-        return esz * n, out
+        return esz * n, out, 'A%d[%s]' % (n, eshape)
     o, off = find_type(objs, file, t)
     if o is None:
         return None
     lay = o['layouts']
-    return lay.size(off), lay.runs(off)
+    return lay.size(off), lay.runs(off), lay.shape(off)
 
 
 TAGRE = re.compile(r'\bBB_(TAG|HEAD)\(((?:[^()]|\([^()]*\))*)\)')
@@ -293,6 +349,11 @@ def source_tags():
                     tags.add((f, re.sub(r'\s+', ' ', m.group(2).strip())))
     dup = sorted(b for b, n in bases.items() if n > 1)
     return tags, dup
+
+
+def shape_hash(shape):
+    """A shape (Layouts.shape) as 16 hex digits."""
+    return hashlib.sha256(shape.encode()).hexdigest()[:16]
 
 
 def cstr(s):
@@ -363,10 +424,11 @@ def main():
                 if not size:
                     problems.append('%s: the size of %s is not known' % (file, sym))
             runs = o['layouts'].runs(tref(v), name(v))
+            shape = shape_hash(o['layouts'].shape(tref(v)))
             key = (file, sym)
-            if key in statics and statics[key] != (size, runs):
+            if key in statics and statics[key] != (size, runs, shape):
                 problems.append('%s: two statics named %s with different types: rename one' % (file, sym))
-            statics[key] = (size, runs)
+            statics[key] = (size, runs, shape)
             host = sorted({r[1] for r in runs} & {'H', 'Y', 'D'})
             if host and key not in allow:
                 problems.append('%s: %s holds the host\'s state (%s) but is saved: mark it BB_HOST, '
@@ -381,7 +443,7 @@ def main():
         if r is None:
             problems.append('%s: the DWARF has no type %s (tagged with BB_TAG/BB_HEAD)' % (f, t))
             continue
-        typed[(f, t)] = r
+        typed[(f, t)] = (r[0], r[1], shape_hash(r[2]))
 
     # Layouts, shared.
     layouts = {(): 0}
@@ -394,8 +456,8 @@ def main():
             order.append(k)
         return layouts[k]
 
-    srows = [(f, s, size, lay(runs)) for (f, s), (size, runs) in sorted(statics.items())]
-    trows = [(f, t, size, lay(runs)) for (f, t), (size, runs) in sorted(typed.items())]
+    srows = [(f, s, size, lay(runs), sh) for (f, s), (size, runs, sh) in sorted(statics.items())]
+    trows = [(f, t, size, lay(runs), sh) for (f, t), (size, runs, sh) in sorted(typed.items())]
 
     out = ['/* Generated by scripts/state-map.py from the DWARF of a build: do not edit.',
            ' * Where the pointers are in each saved static and each tagged type',
@@ -422,21 +484,21 @@ def main():
     out.append('')
     out.append('/* By file and symbol (a static local as function.name). */')
     out.append('const hb_static hb_statics[] = {')
-    for f, s, size, li in srows:
-        out.append('    { %s, %s, %d, %d },' % (cstr(f), cstr(s), size, li))
+    for f, s, size, li, sh in srows:
+        out.append('    { %s, %s, %d, %d, 0x%s },' % (cstr(f), cstr(s), size, li, sh))
     out.append('};')
     out.append('const unsigned hb_nstatics = %d;' % len(srows))
     out.append('')
     out.append('/* By the file the tag is written in and the type as written. */')
     out.append('const hb_typemap hb_types[] = {')
-    for f, t, size, li in trows:
-        out.append('    { %s, %s, %d, %d },' % (cstr(f), cstr(t), size, li))
+    for f, t, size, li, sh in trows:
+        out.append('    { %s, %s, %d, %d, 0x%s },' % (cstr(f), cstr(t), size, li, sh))
     out.append('};')
     out.append('const unsigned hb_ntypes = %d;' % len(trows))
     text = '\n'.join(out) + '\n'
 
     kinds = collections.Counter()
-    for _, (size, runs) in statics.items():
+    for _, (size, runs, _) in statics.items():
         for r in runs:
             kinds[r[1]] += r[2] * r[4]
     print('state-map: %d saved statics (%d with pointers, %s), %d in the host\'s sections, '

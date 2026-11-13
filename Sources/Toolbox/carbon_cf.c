@@ -22,6 +22,17 @@
 
 #include "carbon_cf.h"
 
+/* The type IDs are in each object's header in the guest's memory, and
+ * programs keep CFGetTypeID's answers (hibernate.c's fingerprint). */
+static uint64_t cf_types_layout(void)
+{
+    static const uint32_t v[] = { CFT_TYPE, CFT_ALLOCATOR, CFT_STRING, CFT_ARRAY, CFT_DICTIONARY, CFT_SET, CFT_BAG,
+                                  CFT_DATA, CFT_NUMBER, CFT_BOOLEAN, CFT_DATE, CFT_URL, CFT_UUID, CFT_CHARSET,
+                                  CFT_TREE, CFT_BUNDLE, CFT_PLUGIN_INSTANCE, CFT_XML_NODE, CFT_XML_PARSER, CFT_COUNT };
+    return bb_layout_hash(0, v, sizeof v);
+}
+BB_LAYOUT_FN("carbon_cf.c type IDs", cf_types_layout);
+
 #define CF_MAGIC 0x43466F62u /* 'CFob' */
 
 void cf_return_double(ppc_cpu *c, double d)

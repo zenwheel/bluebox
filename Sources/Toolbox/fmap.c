@@ -24,6 +24,9 @@ enum { kCanReadMappedFile = 1, kCanWriteMappedFile = 2, kNoProcessMappedFile = 0
 enum { kIsMappedScratchFile = 1 };
 enum { accessRead = 1, accessWrite = 2, accessExecute = 4, accessAll = 7 };
 enum { MAX_FILES = 16, MAX_VIEWS = 32, ID_FILE = 0x00B10000, ID_VIEW = 0x00B20000, FSREF_SIZE = 80 };
+/* A program is given these (tag | index): hibernate.c's fingerprint. */
+BB_LAYOUT("fmap.c file IDs", ID_FILE);
+BB_LAYOUT("fmap.c view IDs", ID_VIEW);
 
 typedef struct {
     bool used;

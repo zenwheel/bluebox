@@ -31,6 +31,8 @@ enum {
 };
 enum { kLocaleNameMask = 1, kLocaleOperationVariantNameMask = 2 };
 enum { REF_TAG = 0x4C430000u, MAX_LOCALES = 256, MAX_PART = 16 };
+/* A program is given these (tag | index): hibernate.c's fingerprint. */
+BB_LAYOUT("os9rest_locale.c references", REF_TAG);
 
 typedef struct {
     int16_t lang;

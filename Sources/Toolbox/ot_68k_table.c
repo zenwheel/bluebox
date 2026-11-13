@@ -417,3 +417,21 @@ const ot68k_fn ot68k_functions[] = {
     { "OTLib$CfigLib", 27, "OTIsPortReal", 'C', "l", 'b' },
 };
 const unsigned ot68k_function_count = sizeof ot68k_functions / sizeof ot68k_functions[0];
+
+/* ot_68k.c keeps the functions' stubs and bindings by row (hibernate.c's
+ * fingerprint). */
+static uint64_t ot68k_layout(void)
+{
+    uint64_t h = 0;
+    for (unsigned i = 0; i < ot68k_function_count; i++) {
+        const ot68k_fn *f = &ot68k_functions[i];
+        h = bb_layout_hash_str(h, f->lib);
+        h = bb_layout_hash(h, &f->index, sizeof f->index);
+        h = bb_layout_hash_str(h, f->name);
+        h = bb_layout_hash(h, &f->conv, 1);
+        h = bb_layout_hash_str(h, f->sig);
+        h = bb_layout_hash(h, &f->ret, 1);
+    }
+    return h;
+}
+BB_LAYOUT_FN("ot_68k_table.c functions", ot68k_layout);
