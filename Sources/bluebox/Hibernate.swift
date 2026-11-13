@@ -383,6 +383,10 @@ func pickSnapshot(program: String, title: String, registry: ProgramRegistry,
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
                               styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         window.title = title
+        // Closed with its close button (Cancel), it is still ours: the
+        // shell goes on after it, and a window released on closing as well
+        // was released twice.
+        window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SnapshotPickerView(model: model))
         window.center()
         let closer = PickerWindowDelegate()
