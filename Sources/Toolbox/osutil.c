@@ -37,6 +37,20 @@ uint32_t mac_now(void)
     return secs ? secs : host_now();
 }
 
+/* Now as the host's time() counts it (seconds since 1970, UTC), for the
+ * rest of what the program sees of the date: the host's on the wall clock
+ * (a host attached, or --realtime); headless, the machine's (mac_now), as
+ * for GetDateTime. */
+int64_t machine_unix_now(void)
+{
+    if (machine_wall_clock())
+        return (int64_t)time(NULL);
+    time_t t = (time_t)((int64_t)mac_now() - MAC_EPOCH_OFFSET); /* local */
+    struct tm lt;
+    localtime_r(&t, &lt);
+    return (int64_t)t - lt.tm_gmtoff;
+}
+
 /* A resumed program whose date does not catch up (reattach.c): the
  * clock as it was when it hibernated, the seconds away taken off. */
 void osutil_clock_back(int64_t secs) { clock_set -= secs; }

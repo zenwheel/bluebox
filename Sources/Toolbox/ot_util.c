@@ -113,8 +113,11 @@ void ot_util_reset(void)
 
 /* ---- Time ---- */
 
+/* As opentransport.c's: headless, the machine's clock. */
 static uint64_t micros(void)
 {
+    if (!machine_wall_clock())
+        return machine_time_ns() / 1000u;
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint64_t)tv.tv_sec * 1000000u + (uint64_t)tv.tv_usec;

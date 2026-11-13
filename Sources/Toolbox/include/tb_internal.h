@@ -356,6 +356,7 @@ void machine_skip_time(uint64_t ns);
 void machine_sleep_ns(uint64_t ns);
 void machine_set_time(uint32_t secs); /* SetDateTime: Time counts from secs */
 uint32_t machine_clock_date(void);     /* the date by the machine's clock (Time); 0 before boot */
+int64_t machine_unix_now(void);        /* the date as time() has it: the host's, or headless the machine's */
 bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);

@@ -272,7 +272,7 @@ static double operand(wctx *x, uint32_t oprn)
     case 6: return 10000;                         /* kOperandConnectionSpeed: a fast network */
     case 7: case 8: case 9: case 10: case 11: case 12:
     case 13: case 14: case 15: case 16: case 17: case 18: {
-        time_t now = time(NULL);
+        time_t now = (time_t)machine_unix_now();
         struct tm tm;
         if (type <= 12)
             gmtime_r(&now, &tm);

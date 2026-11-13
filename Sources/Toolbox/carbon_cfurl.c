@@ -1423,10 +1423,11 @@ static bool want(gaddr desired, const char *key)
     return false;
 }
 
-/* Mac local time (since 1904) as absolute time. */
+/* Mac local time (since 1904) as absolute time, by the zone's offset now
+ * (the machine's now, as cf_absolute_now's). */
 static double absolute_of_mac(uint32_t secs)
 {
-    time_t now = time(NULL);
+    time_t now = (time_t)machine_unix_now();
     struct tm lt;
     localtime_r(&now, &lt);
     return (double)secs - lt.tm_gmtoff - 3061152000.0;

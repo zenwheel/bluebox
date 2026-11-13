@@ -113,7 +113,7 @@ extension BlueBox {
             _ = cfm_ppc_cpu() // callbacks run on the PowerPC processor
             let t0 = block(8), t1 = block(8), delta = block(8)
             ot("OTGetTimeStamp", t0)
-            usleep(20_000)
+            machine_skip_time(20_000_000) // headless, the stamps follow the machine's clock
             ot("OTGetTimeStamp", t1)
             // result = first minus second: the later stamp is named first.
             #expect(ot("OTSubtractTimeStamps", delta, t1, t0) == delta)
