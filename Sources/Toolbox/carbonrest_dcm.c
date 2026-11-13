@@ -50,6 +50,10 @@ enum {
 enum { kDCMReadOnlyDictionary = 0, kDCMReadWriteDictionary = 1 };
 enum { kAEEquals = 0x3D202020, kAEBeginsWith = 0x62677774, kAEContains = 0x636F6E74, kAEEndsWith = 0x656E6473 };
 enum { DICT_TAG = 0x44430000, REF_TAG = 0x44520000, METHOD_ID = 0x44414D01, ITER_TAG = 0x44490000 };
+/* A program is given these (tag | index): hibernate.c's fingerprint. */
+BB_LAYOUT("carbonrest_dcm.c dictionaries", DICT_TAG);
+BB_LAYOUT("carbonrest_dcm.c references", REF_TAG);
+BB_LAYOUT("carbonrest_dcm.c iterators", ITER_TAG);
 enum { MAX_DICTS = 32, MAX_REFS = 64, MAX_ITERS = 64, MAX_FIND = 8 };
 #define HEADER_MAGIC 0x64696374u /* 'dict' */
 

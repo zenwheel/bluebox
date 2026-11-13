@@ -34,6 +34,19 @@ static const native_driver *const drivers[] = {
 };
 enum { NDRIVERS = sizeof drivers / sizeof drivers[0] };
 
+/* dce[] is by place in drivers[], and each driver's unit numbers its
+ * reference number (hibernate.c's fingerprint). */
+static uint64_t drivers_layout(void)
+{
+    uint64_t h = 0;
+    for (int i = 0; i < NDRIVERS; i++) {
+        h = bb_layout_hash_str(h, drivers[i]->name);
+        h = bb_layout_hash(h, &drivers[i]->unit, sizeof drivers[i]->unit);
+    }
+    return h;
+}
+BB_LAYOUT_FN("drivers.c drivers", drivers_layout);
+
 static const native_driver *driver_for(int16_t refnum)
 {
     if (refnum >= 0)

@@ -1658,12 +1658,14 @@ static bool next_handler(gaddr f, gaddr *upp, int32_t *refcon)
     return false;
 }
 
-BB_HOST static gaddr return_68k; /* the 68k stub a handler returns to (aem_reset) */
+/* The 68k stub a handler returns to (aem_reset).  Saved: a snapshot's
+ * guest stacks return to the stub it had, which another build's boot may
+ * have registered at another place among the natives. */
+static gaddr return_68k;
 static void handler_returned_68k(cpu68k *c, uint16_t tw);
 static void handler_returned_ppc(ppc_cpu *c);
 
-/* A new machine: the stub registered (as the natives are, in the same
- * order in every process booted alike), and no one waits. */
+/* A new machine: the stub registered, and no one waits. */
 static void handler_frames_reset(void)
 {
     return_68k = native_register(handler_returned_68k, "Apple Event handler return", 0);

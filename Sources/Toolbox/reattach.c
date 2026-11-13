@@ -1,6 +1,7 @@
 /* Hibernating a program: its snapshot written at a safe point (drain.c),
- * and put back in a fresh process of the same build (after a reboot, say),
- * which then reattaches what the snapshot could only describe:
+ * and put back in a fresh process (after a reboot, say) of a build whose
+ * saved state has the same shape (hibernate.c), which then reattaches
+ * what the snapshot could only describe:
  *
  *   the clocks   the machine's clock goes on from where it stopped (Ticks,
  *                the Time Manager, sound, UpTime: no jump); the date
@@ -166,8 +167,11 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
         speech_record_note("hibernated");
     }
     if (ok)
-        LOGF(LOG_IDLE, "hibernate: %s: %llu bytes (%llu before compressing), %u blocks, %u pointers\n", path,
-             (unsigned long long)st.file_bytes, (unsigned long long)st.bytes, st.blocks, st.relocs);
+        LOGF(LOG_IDLE,
+             "hibernate: %s: %llu bytes (%llu before compressing), %u blocks, %u pointers; into the binary %u: "
+             "%u to functions, %u into them, %u to constants, %u into them, %u to strings, %u unnamed\n",
+             path, (unsigned long long)st.file_bytes, (unsigned long long)st.bytes, st.blocks, st.relocs, st.to_image,
+             st.to_functions, st.to_code_inside, st.to_data, st.to_data_inside, st.to_strings, st.to_image_unnamed);
     return ok;
 }
 
@@ -212,8 +216,11 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen)
     machine_resume_clock(saved.time_ns, catch_up, (int64_t)time(NULL) - saved.wall);
     hibernate_reattach_host();
     int bad = files_after_resume();
-    LOGF(LOG_IDLE, "resume: %s: %u blocks, %u pointers (%u to the host's memory, cleared); %d file%s changed\n",
-         path, st.blocks, st.relocs, st.host, bad, bad == 1 ? "" : "s");
+    LOGF(LOG_IDLE,
+         "resume: %s: %u blocks, %u pointers (%u to the host's memory, cleared; %u into the binary by name, %u "
+         "string constants this build has not kept in blocks); %d file%s changed\n",
+         path, st.blocks, st.relocs, st.host, st.to_image - st.to_image_unnamed, st.strings_kept, bad,
+         bad == 1 ? "" : "s");
     return true;
 }
 

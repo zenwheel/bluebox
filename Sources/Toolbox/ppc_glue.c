@@ -82,6 +82,9 @@ static void trap_done_native(cpu68k *c, uint16_t tw)
 void ppc_glue_reset(void) { trap_code = 0; }
 
 bool ppc_trap_word_at(gaddr pc) { return trap_code && pc >= trap_code && pc < trap_code + TRAP_DEPTH * 8; }
+/* The trap code's place in the guest's memory: a trap word, the native
+ * and a NOP each, TRAP_DEPTH of them. */
+BB_LAYOUT("ppc_glue.c trap code", TRAP_DEPTH * 8);
 
 void ppc_trap(uint16_t trapword)
 {

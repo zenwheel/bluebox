@@ -292,3 +292,20 @@ const bb_region *bb_region_at(int i)
 {
     return i >= 0 && i < nregions ? &regions[i] : NULL;
 }
+
+/* ---- Layout records ---- */
+
+uint64_t bb_layout_hash(uint64_t h, const void *p, size_t n)
+{
+    const uint8_t *b = p;
+    if (!h)
+        h = 1469598103934665603ull;
+    for (size_t i = 0; i < n; i++)
+        h = (h ^ b[i]) * 1099511628211ull;
+    return h;
+}
+
+uint64_t bb_layout_hash_str(uint64_t h, const char *s)
+{
+    return bb_layout_hash(h, s ? s : "", strlen(s ? s : "") + 1);
+}

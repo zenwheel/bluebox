@@ -112,4 +112,37 @@ void bb_region_add(const char *name, void *base, size_t size, size_t (*extent)(v
 int bb_region_count(void);
 const bb_region *bb_region_at(int i);
 
+/* What the guest's memory holds by the host's own design, and that a
+ * snapshot carries as it was: a constant address or size the host lays
+ * out the guest's memory by (where the ROM's stubs are, how far apart), a
+ * table whose rows are indexed by number in saved state.  Each such
+ * thing is named where it is defined, with its value or a function that
+ * hashes it (bb_layout_hash), and the snapshot's fingerprint takes them
+ * all in (hibernate.c): a build whose guest-side layout differs does not
+ * resume another's snapshot. */
+typedef struct bb_layout_rec {
+    const char *name;
+    uint64_t value;
+    uint64_t (*hash)(void); /* or NULL: value */
+} bb_layout_rec;
+
+#if defined(__APPLE__)
+#define BB_LAYOUT_SECTION "__DATA_CONST,__bblayout"
+#else
+#define BB_LAYOUT_SECTION "bblayout"
+#endif
+#define BB_LAYOUT_CAT2_(a, b) a##b
+#define BB_LAYOUT_CAT_(a, b) BB_LAYOUT_CAT2_(a, b)
+#define BB_LAYOUT_REC_(name, value, fn)                                                                  \
+    __attribute__((used, section(BB_LAYOUT_SECTION))) static const bb_layout_rec BB_LAYOUT_CAT_(        \
+        bb_layout_, __LINE__) = { name, (uint64_t)(value), fn }
+/* BB_LAYOUT("trap.c STUB_SIZE", STUB_SIZE); BB_LAYOUT_FN("drivers", hash_fn) */
+#define BB_LAYOUT(name, value) BB_LAYOUT_REC_(name, value, NULL)
+#define BB_LAYOUT_FN(name, fn) BB_LAYOUT_REC_(name, 0, fn)
+
+/* An FNV-1a hash of n bytes, or of a string with its NUL, on from h (0
+ * to begin). */
+uint64_t bb_layout_hash(uint64_t h, const void *p, size_t n);
+uint64_t bb_layout_hash_str(uint64_t h, const char *s);
+
 #endif

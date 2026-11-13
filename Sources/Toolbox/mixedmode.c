@@ -928,9 +928,19 @@ enum {
     LF_ARGS = 76,
     LF_SIZE = 76 + 4 * SPECIAL_ARGS,
 };
+/* The frame is in the guest's memory, so a snapshot holds it. */
+static uint64_t level_frame_layout(void)
+{
+    static const uint32_t v[] = { LF_PROCINFO, LF_PC, LF_REGS, LF_SR, LF_NARGS, LF_ARGS, LF_SIZE };
+    return bb_layout_hash(0, v, sizeof v);
+}
+BB_LAYOUT_FN("mixedmode.c level frame", level_frame_layout);
 
 static gaddr level_frame;          /* the call under way's frame, or 0 */
-BB_HOST static gaddr level_stub;   /* the 68k return address (mixedmode_init) */
+/* The 68k return address (mixedmode_init).  Saved, as a level frame on a
+ * snapshot's guest stack returns to it: another build may register it at
+ * another place among the natives. */
+static gaddr level_stub;
 BB_HOST static bool level_switched; /* the processor machine_run runs changed */
 
 bool mm_level_68k(void) { return level_frame != 0; }

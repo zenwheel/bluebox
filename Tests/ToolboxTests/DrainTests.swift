@@ -434,9 +434,10 @@ extension BlueBox {
             machine_drain_end()
             var extra: UnsafeMutablePointer<UInt8>?
             var len = 0
-            var same = false
-            #expect(hb_file_extra(snap, &extra, &len, &same, &err, err.count))
-            #expect(same)
+            var resumable = false
+            var why = [CChar](repeating: 0, count: 256)
+            #expect(hb_file_extra(snap, &extra, &len, &resumable, &why, why.count, &err, err.count))
+            #expect(resumable)
             if let extra {
                 #expect(String(decoding: UnsafeBufferPointer(start: extra, count: len), as: UTF8.self) == "{\"args\":[]}")
                 hb_free_buffer(extra)

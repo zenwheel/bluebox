@@ -29,6 +29,17 @@ void trap_set_current_word(uint16_t w) { last_trapword = w; }
 #define STUB_SIZE 8u
 #define MAX_NATIVES 8192
 
+/* Where the ROM's stubs and code are: a snapshot's guest memory holds them
+ * there (hibernate.c's fingerprint). */
+BB_LAYOUT("trap.c stubs", 0x1000u);
+BB_LAYOUT("trap.c method dispatch", 0x800u);
+BB_LAYOUT("trap.c exception jump", 0x800000u);
+BB_LAYOUT("trap.c stub size", STUB_SIZE);
+BB_LAYOUT("trap.c natives", MAX_NATIVES);
+BB_LAYOUT("trap.c native opcode", CPU_NATIVE_OP);
+BB_LAYOUT("trap.c OS trap table", OS_TRAP_TABLE);
+BB_LAYOUT("trap.c Toolbox trap table", TB_TRAP_TABLE);
+
 typedef struct {
     native_fn fn;
     const char *name;
@@ -128,9 +139,12 @@ typedef struct {
 } disp_entry;
 
 /* Room for every dispatcher (66 now; a table that fills silently drops the
- * rest, whose traps then answer "unimplemented"). */
-static disp_entry disps[256];
-static unsigned ndisps;
+ * rest, whose traps then answer "unimplemented").  The host's: made from
+ * the generated tables at every boot, never changed after, and pointing
+ * into them, so a snapshot another build saved keeps this build's (it
+ * finds a dispatcher by trap word). */
+BB_HOST static disp_entry disps[256];
+BB_HOST static unsigned ndisps;
 
 static const disp_entry *find_disp(uint16_t tw)
 {

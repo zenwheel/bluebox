@@ -47,6 +47,7 @@ enum { nsvErr = -35, rfNumErr = -51 };
 /* ---- Navigation previews ---- */
 
 enum { REF_NAVPREVIEW = 150 };
+BB_LAYOUT("os9left_misc.c reference kind", REF_NAVPREVIEW);
 
 typedef struct {
     gaddr id;

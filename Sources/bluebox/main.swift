@@ -236,7 +236,7 @@ func usage() -> Never {
                  the host's memory, which it leaves out)
       bluebox resume <snapshot> [run options]
           Resume a hibernated program in this process, booted as the run that saved it
-          (the same build only)
+          (in any build whose saved state has the same shape: bluebox fingerprint)
       bluebox snapshots [list]
       bluebox snapshots delete <snapshot|program>... [--permanently]
       bluebox snapshots thumbnail <snapshot> <file.png>
@@ -246,6 +246,10 @@ func usage() -> Never {
           the screen one was saved with
       bluebox hibernate-diff <snapshot> <snapshot> [N]
           Where two snapshots differ (up to N places)
+      bluebox fingerprint [--manifest | <snapshot>...]
+          This build's state fingerprint (a snapshot resumes in any build with the
+          same), the list of what it covers, or whether each snapshot resumes here
+          and if not, the first thing that differs
       bluebox chooser [run options]
           Open the Chooser on its own (it is also in every program's Apple menu):
           the AppleShare servers, LaserWriters and host printers to choose from,
@@ -2063,6 +2067,7 @@ case "run": runCommand(rest)
 case "resume": resumeCommand(rest)
 case "snapshots": snapshotsCommand(rest)
 case "hibernate-diff": hibernateDiffCommand(rest)
+case "fingerprint": fingerprintCommand(rest)
 case "screensaver": screensaverCommand(rest)
 case "import": importCommand(rest)
 case "send": sendCommand(rest)

@@ -1,6 +1,6 @@
 // Hibernating a program: its whole machine saved to a file and resumed
-// later in a fresh process of the same build (after a reboot, say), as a
-// virtual machine is suspended to disk.
+// later in a fresh process (after a reboot, say), of this build or any whose
+// saved state has the same shape, as a virtual machine is suspended to disk.
 //
 //   Hibernate (the application menu, the status item's menu, the suspended
 //   overlay, Control-Option-Command-H; Suspend.swift)
@@ -249,10 +249,11 @@ func enterHibernated(app: String, title: String, snapshot: String) {
     }
 }
 
-/// The launch record of a snapshot file.
-func readHibernateRecord(_ path: String) -> (HibernateRecord, sameBuild: Bool) {
+/// The launch record of a snapshot file, and why this build cannot resume
+/// it (nil: it can).
+func readHibernateRecord(_ path: String) -> (HibernateRecord, unresumable: String?) {
     switch SnapshotFile.read(path) {
-    case .success(let r): return (r.record, r.sameBuild)
+    case .success(let r): return (r.record, r.resumable ? nil : r.why)
     case .failure(let p): fail(p.message)
     }
 }
@@ -262,10 +263,8 @@ func readHibernateRecord(_ path: String) -> (HibernateRecord, sameBuild: Bool) {
 func resumeCommand(_ args: [String]) {
     guard let snapshot = args.first, !snapshot.hasPrefix("-") else { usage() }
     let path = URL(fileURLWithPath: snapshot).standardizedFileURL.path
-    let (record, sameBuild) = readHibernateRecord(path)
-    guard sameBuild else {
-        fail("\(path): saved by another build of Blue Box (\(SnapshotProblem.otherBuild))")
-    }
+    let (record, unresumable) = readHibernateRecord(path)
+    if let why = unresumable { fail("\(path) cannot be resumed here: \(why)") }
     resumeRecord = record
     runCommand(record.args + args.dropFirst(), resume: path)
 }
@@ -367,8 +366,9 @@ private func resumeSnapshot(_ snapshot: String, app: String, title: String, extr
 
 /// The snapshot picker: the program's snapshots, newest first, each with
 /// its thumbnail, when it hibernated and on what; Resume, Start Fresh, Move
-/// to Trash and Cancel.  A snapshot another build saved is listed, says
-/// so, and can only be deleted.
+/// to Trash and Cancel.  A snapshot this build cannot resume (saved by a
+/// build whose saved state differs) is listed, says why, and can only be
+/// deleted.
 /// `standIn`: a run's own picker leaves its window up, unseen, until the
 /// program has one (PickerStandIn); the shell's just closes it.
 func pickSnapshot(program: String, title: String, registry: ProgramRegistry,
@@ -589,7 +589,8 @@ func snapshotsCommand(_ args: [String]) {
         if all.isEmpty { print("no hibernated snapshots (in \(hibernatedFolders().joined(separator: ", ")))") }
         for s in all {
             let state = s.problem.map { "unreadable: \($0)" }
-                ?? (!s.sameBuild ? "another build's" : s.entered ? "opening \(s.title) offers it" : "not offered (resume it by name)")
+                ?? (!s.resumable ? "cannot be resumed here: \(s.unresumable ?? "")"
+                    : s.entered ? "opening \(s.title) offers it" : "not offered (resume it by name)")
             let thumb = s.thumbnail.flatMap(SnapshotThumbnail.size).map { "thumbnail \($0.width)×\($0.height)" } ?? "no thumbnail"
             print("\(s.path)\n    \(s.title), \(SnapshotFile.label(s.saved, savePoint: s.isSavePoint)), \(s.details), "
                   + "\(thumb), \(state)")
@@ -646,4 +647,35 @@ func hibernateDiffCommand(_ args: [String]) {
     let n = hb_compare(a, alen, b, blen, Int32(HB_COMPARE_IGNORE_HOST), stdout, max)
     print("\(n) difference\(n == 1 ? "" : "s")")
     exit(n == 0 ? 0 : 1)
+}
+
+/// bluebox fingerprint [--manifest | <snapshot>...]: this build's identity
+/// and state fingerprint (a snapshot resumes in any build with the same),
+/// the manifest it is a hash of, or whether each snapshot resumes here.
+func fingerprintCommand(_ args: [String]) {
+    var id = [CChar](repeating: 0, count: 33), fp = [CChar](repeating: 0, count: 33)
+    hb_build_id(&id)
+    hb_fingerprint(&fp)
+    if args.first == "--manifest" {
+        var m: UnsafePointer<CChar>?
+        let n = hb_manifest(&m)
+        if let m { FileHandle.standardOutput.write(Data(bytes: m, count: n)) }
+        exit(0)
+    }
+    if args.isEmpty {
+        print("build \(str(id))\nstate fingerprint \(str(fp))")
+        exit(0)
+    }
+    var all = true
+    for path in args {
+        switch SnapshotFile.read(path) {
+        case .success(let r):
+            print("\(path): " + (r.resumable ? "resumes here" : "cannot be resumed here: \(r.why)"))
+            all = all && r.resumable
+        case .failure(let p):
+            print("\(path): \(p.message)")
+            all = false
+        }
+    }
+    exit(all ? 0 : 1)
 }

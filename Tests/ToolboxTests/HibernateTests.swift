@@ -172,16 +172,153 @@ extension BlueBox {
             #expect(all >= 2) // boot_time and the guest's Time
         }
 
-        /// A snapshot another build wrote is refused, and nothing changes.
-        @Test func anotherBuildIsRefused() {
+        /// A snapshot another build wrote whose saved state has another shape
+        /// (another state fingerprint) is refused, and nothing changes.
+        @Test func anotherShapeIsRefused() {
             let out = setUp()
             _ = machine_run(50_000)
             var snap = save()
             snap[16] ^= 0xFF  // a byte of the build's UUID
+            snap[32] ^= 0xFF  // and of the state fingerprint
             let before = fingerprint(out)
             let (ok, err, _) = restore(snap)
-            #expect(!ok && err.contains("another build"))
+            #expect(!ok && err.contains("saved state differs"), Comment(rawValue: err))
             #expect(fingerprint(out) == before)
+        }
+
+        /// Another build's snapshot with this build's state fingerprint is put
+        /// back with every pointer into the binary found by name (functions,
+        /// constants, string constants) and every block's type by what it is,
+        /// none by offset; the machine goes on exactly as from this build's.
+        @Test func anotherBuildWithTheSameShapeResumes() {
+            let out = setUp()
+            _ = machine_run(200_000)
+            var s1 = save()
+            _ = machine_run(300_000)
+            let ranA = fingerprint(out), sA = save()
+            s1[16] ^= 0xFF  // another build's UUID, this one's fingerprint
+            let (ok, err, st) = restore(s1, flags: Int32(HB_RESTORE_MOVE_REGIONS))
+            #expect(ok, Comment(rawValue: err))
+            #expect(st.to_functions > 0 && st.to_strings > 0 && st.to_image_unnamed == 0 && st.strings_kept == 0, "\(st)")
+            print("hibernate by name: \(st.to_image) pointers into the binary: \(st.to_functions) to functions, "
+                  + "\(st.to_code_inside) into them, \(st.to_data) to constants, \(st.to_data_inside) into them, "
+                  + "\(st.to_strings) to strings")
+            s1[16] ^= 0xFF
+            #expect(differences(s1, save()) == 0)
+            _ = machine_run(300_000)
+            #expect(fingerprint(out) == ranA)
+            #expect(differences(sA, save()) == 0)
+        }
+
+        /// Another build's snapshot that points to a function this build does
+        /// not have is refused, naming it, and nothing changes.
+        @Test func aFunctionThisBuildHasNotIsRefused() {
+            let out = setUp()
+            _ = machine_run(50_000)
+            var snap = save()
+            snap[16] ^= 0xFF  // another build's UUID, this one's fingerprint
+            // The pool, at the end, names the first native's function.
+            let name = Array("unimplemented_native\0".utf8)
+            guard let at = (0...(snap.count - name.count)).reversed().first(where: { Array(snap[$0..<$0 + name.count]) == name })
+            else {
+                Issue.record("not in the snapshot")
+                return
+            }
+            snap[at] = UInt8(ascii: "U")
+            let before = fingerprint(out)
+            let (ok, err, _) = restore(snap)
+            #expect(!ok && err.contains("Unimplemented_native (Toolbox/trap.c), which this build does not have"),
+                    Comment(rawValue: err))
+            #expect(fingerprint(out) == before)
+        }
+
+        /// The fingerprint is a hash of the manifest, which names each saved
+        /// static (file, name, place, size, layout and shape), each tagged
+        /// type, the state sections and the guest-side layout records.
+        @Test func fingerprintCoversTheState() {
+            var a = [CChar](repeating: 0, count: 33), b = [CChar](repeating: 0, count: 33)
+            hb_fingerprint(&a)
+            hb_fingerprint(&b)
+            #expect(String(cString: a).count == 32 && a == b)
+            let lines = manifest().split(separator: "\n").map(String.init)
+            #expect(lines.first?.hasPrefix("V\t") == true)
+            #expect(lines.contains { $0.hasPrefix("R\t__bbbss\t") })
+            #expect(lines.contains { $0.hasPrefix("S\tToolbox/trap.c\tnatives\t") })
+            #expect(lines.contains { $0.hasPrefix("S\tToolbox/cfm.c\tnatives\t") })
+            #expect(lines.contains { $0.hasPrefix("T\t") })
+            for rec in ["trap.c stubs", "trap.c stub size", "mem.c layouts", "drivers.c drivers", "ot_68k_table.c functions",
+                        "carbon_cf.c type IDs", "mixedmode.c level frame"] {
+                #expect(lines.contains { $0.hasPrefix("L\t\(rec)\t") }, "\(rec)")
+            }
+            #expect(!lines.contains { $0.hasPrefix("S\tToolbox/trap.c\tdisps\t") }) // the host's: made at each boot
+        }
+
+        func manifest() -> String {
+            var m: UnsafePointer<CChar>?
+            let n = hb_manifest(&m)
+            guard let m else { return "" }
+            return String(decoding: UnsafeRawBufferPointer(start: m, count: n), as: UTF8.self)
+        }
+
+        func explain(_ old: String) -> String {
+            var why = [CChar](repeating: 0, count: 512)
+            old.withCString { hb_explain_manifest($0, strlen($0), &why, why.count) }
+            return String(cString: why)
+        }
+
+        /// A refusal names the first thing that differs between the snapshot's
+        /// manifest and this build's, and how many more do.
+        @Test func refusalNamesTheFirstDifference() {
+            let lines = manifest().split(separator: "\n").map(String.init)
+            guard let i = lines.firstIndex(where: { $0.hasPrefix("S\tToolbox/trap.c\tnatives\t") }) else {
+                Issue.record("no trap.c natives")
+                return
+            }
+            var f = lines[i].split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            let size = f[5]
+            f[5] = "8"
+            var old = lines
+            old[i] = f.joined(separator: "\t")
+            #expect(explain(old.joined(separator: "\n") + "\n")
+                    == "the static natives (Toolbox/trap.c) is 8 bytes in the snapshot, \(size) here")
+            f[5] = size
+            f[7] = "0000000000000000"
+            old[i] = f.joined(separator: "\t")
+            #expect(explain(old.joined(separator: "\n") + "\n") == "the static natives (Toolbox/trap.c) has another type")
+            old.remove(at: i)
+            if let k = old.firstIndex(where: { $0.hasPrefix("L\ttrap.c stub size\t") }) {
+                old[k] = "L\ttrap.c stub size\t0000000000000010"
+            }
+            let why = explain(old.joined(separator: "\n") + "\n")
+            #expect(why.contains("guest-side layout trap.c stub size differs") && why.contains("1 more"), Comment(rawValue: why))
+            #expect(explain(lines.joined(separator: "\n") + "\n") == "its saved state differs from this build's")
+        }
+
+        /// A pointer into the binary as a snapshot names it: a global function
+        /// by its name, a static one with its file, a place inside one by the
+        /// offset, a string constant by its text; and each name back.
+        @Test func pointersIntoTheBinaryByName() {
+            _ = setUp()
+            func name(_ p: UnsafeRawPointer?) -> String {
+                var out = [CChar](repeating: 0, count: 512)
+                return p.map { hb_symbolize($0, &out, out.count) ? String(cString: out) : "" } ?? ""
+            }
+            let global = unsafeBitCast(hb_save_buffer as @convention(c) (UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>?,
+                                                                         UnsafeMutablePointer<Int>?, UnsafeMutablePointer<hb_stats>?,
+                                                                         UnsafeMutablePointer<CChar>?, Int) -> Bool,
+                                       to: UnsafeRawPointer.self)
+            #expect(name(global) == "hb_save_buffer+0")
+            #expect(name(global + 4) == "hb_save_buffer+4")
+            #expect(hb_resolve_symbol(nil, "hb_save_buffer", 4) == global + 4)
+            // The first native, a static function of trap.c's.
+            let fn = native_fn_at(0).map { unsafeBitCast($0, to: UnsafeRawPointer.self) }
+            #expect(name(fn) == "Toolbox/trap.c:unimplemented_native+0")
+            #expect(hb_resolve_symbol("Toolbox/trap.c", "unimplemented_native", 0) == fn)
+            #expect(hb_resolve_symbol("Toolbox/menu.c", "unimplemented_native", 0) == nil) // another file's: none
+            // A string constant: its text.
+            let text = UnsafeRawPointer(bb_type_bytes.name)
+            #expect(name(text) == "\"bytes\"+0" && name(text! + 2) == "\"bytes\"+2")
+            #expect(hb_resolve_symbol(nil, "no such symbol", 0) == nil)
         }
 
         /// The untracked-pointer scan: no word of a saved static looks like a

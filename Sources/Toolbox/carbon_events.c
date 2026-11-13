@@ -129,6 +129,14 @@ enum { kMouseTrackingMousePressed = 1, kMouseTrackingMouseReleased, kMouseTracki
 
 /* Reference kinds (multiprocessing.c's are from 101). */
 enum { REF_EVENT = 1, REF_TARGET, REF_HANDLER, REF_TIMER, REF_CALL, REF_LOOP, REF_QUEUE, REF_HOTKEY, REF_CLASS };
+/* A reference's kind is in the guest's memory (hibernate.c's fingerprint). */
+static uint64_t ref_kinds_layout(void)
+{
+    static const uint32_t v[] = { REF_EVENT, REF_TARGET, REF_HANDLER, REF_TIMER, REF_CALL, REF_LOOP, REF_QUEUE,
+                                  REF_HOTKEY, REF_CLASS };
+    return bb_layout_hash(0, v, sizeof v);
+}
+BB_LAYOUT_FN("carbon_events.c reference kinds", ref_kinds_layout);
 
 /* ---------------------------------------------------------------------- */
 /* Opaque references */
