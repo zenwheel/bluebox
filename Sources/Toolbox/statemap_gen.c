@@ -1540,6 +1540,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/driver68k.c", "drv68k_periodic.busy", 4, 0 },
     { "Toolbox/driver68k.c", "file_da", 2, 0 },
     { "Toolbox/driver68k.c", "frames", 128, 0 },
+    { "Toolbox/driver68k.c", "given_up", 8, 0 },
     { "Toolbox/driver68k.c", "iodone_stub", 4, 0 },
     { "Toolbox/driver68k.c", "last_d0", 2, 0 },
     { "Toolbox/driver68k.c", "last_pb", 4, 0 },
@@ -2704,7 +2705,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0 },
 };
-const unsigned hb_nstatics = 1698;
+const unsigned hb_nstatics = 1699;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

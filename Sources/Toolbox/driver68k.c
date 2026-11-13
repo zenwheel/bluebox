@@ -22,8 +22,14 @@
  * level may wait inside for an event (Small Talk's console driver reads a
  * line in its Prime, calling GetNextEvent until Return is pressed): a
  * drain gives such a request up at an idle call there (drv68k_leave_for_
- * drain), the routine left and the program's call made again when the
- * machine goes on, so that the machine stops at the program's level.
+ * drain), so that the machine stops at the program's level: the routine
+ * is left, the request taken out of the queue as KillIO takes one (the
+ * driver's Control not told: Small Talk's console driver takes csCode 1
+ * as setting its mode) and the program's call put back on its trap.
+ * Made again if the machine goes on in this process; once the snapshot is
+ * resumed it is answered abortErr instead, as a connection is dropped by
+ * hibernating (drv68k_after_resume), and the program tries again when it
+ * will.
  */
 #include <ctype.h>
 #include <string.h>
@@ -341,6 +347,16 @@ BB_HOST static struct {
     bool left;
 } own;
 
+/* That request given up and its call put back (submit): its parameter
+ * block, the OS trap's number ($02 _Read ...), and whether the call is a
+ * PowerPC one.  Saved, for a resumed program; cleared when the call is
+ * made again here. */
+static struct {
+    gaddr pb;
+    uint8_t trap;
+    bool ppc;
+} given_up;
+
 /* Whether the parameter block is the one the program's own call passed
  * (not one of ours, as drivevol.c's reads of a disk the driver serves). */
 static bool programs_block(gaddr pb)
@@ -553,22 +569,29 @@ static int16_t submit(gaddr e, gaddr pb, bool async, int kind)
         gaddr saved = submitting;
         submitting = pb;
         bool mine = !async && !own.pb && trap_call_depth() == 0 && programs_block(pb);
-        if (mine)
+        if (mine) {
             own.e = e, own.pb = pb, own.thread = thread_current_index(), own.left = false;
+            given_up.pb = 0;
+        }
         run_head(e);
         bool left = mine && own.left;
         if (mine)
             own.e = own.pb = 0;
         submitting = saved;
         if (left) {
-            /* Given up for a drain: out of the queue, and made again when
-             * the machine goes on (drain_abandon); a call that cannot be
-             * made again (never so here) is answered abortErr. */
+            /* Given up for a drain, as KillIO gives a request up: out of
+             * the queue (the driver's Control is not told killIO: older
+             * drivers take csCode 1 for their own, as Small Talk's console
+             * driver sets its mode with it).  The program's call is put
+             * back (drain_abandon), to be made again, or answered abortErr
+             * if the snapshot is resumed; a call that cannot be put back
+             * (never so here) is answered now. */
             tb_Dequeue(pb, q);
             last_pb = 0;
             wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
             LOGF(LOG_TRAPS, "  driver %d call %04X given up for a drain\n", refnum_of(e), rd16(pb + IOParam_ioTrap_off));
-            drain_abandon();
+            if (drain_abandon())
+                given_up.pb = pb, given_up.trap = trap[kind] & 0xFF, given_up.ppc = g_ppc_mode && !mm_level_68k();
             return abortErr;
         }
     }
@@ -597,6 +620,34 @@ static int16_t submit(gaddr e, gaddr pb, bool async, int kind)
             run_head(e);
     }
     return r;
+}
+
+/* A resumed program whose synchronous request was given up for the drain
+ * (submit): its call, put back on its trap or NATIVE word, is answered as
+ * a killed request is, abortErr in ioResult and D0 (r3), and the program
+ * goes on after it, as a connection the hibernating dropped is reported. */
+void drv68k_after_resume(void)
+{
+    gaddr pb = given_up.pb;
+    given_up.pb = 0;
+    if (!pb)
+        return;
+    if (given_up.ppc) {
+        if (!g_ppc_mode || mm_level_68k() || g_ppc.gpr[3] != pb)
+            return;
+        g_ppc.gpr[3] = (uint32_t)(int32_t)abortErr;
+        g_ppc.pc = g_ppc.lr;
+    } else {
+        cpu68k *c = g_cpu;
+        uint16_t op = c ? rd16(c->pc) : 0;
+        if (!c || (op & 0xF800) != 0xA000 || (op & 0xFF) != given_up.trap || c->a[0] != pb)
+            return;
+        c->d[0] = (uint32_t)(int32_t)abortErr;
+        c->sr = (uint16_t)((c->sr & ~(SR_Z | SR_V | SR_C)) | SR_N); /* an OS trap's codes from D0.W */
+        c->pc += 2;
+    }
+    wr16(pb + IOParam_ioResult_off, (uint16_t)abortErr);
+    LOGF(LOG_IDLE, "resume: a driver call given up for the drain answered abortErr\n");
 }
 
 int16_t drv68k_call(gaddr pb, bool async, int kind)

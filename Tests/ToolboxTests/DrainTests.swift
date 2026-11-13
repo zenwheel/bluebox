@@ -301,14 +301,49 @@ extension BlueBox {
         /// A program reading from a driver of its own that waits for input
         /// inside its Prime routine, calling GetNextEvent until a line comes
         /// (Small Talk's console driver): at the idle call there the routine
-        /// is left and the program's synchronous _Read given up, the machine
-        /// stops on the trap, and the snapshot put back makes the call again,
-        /// which the driver then answers.
+        /// is left and the request taken out of the queue as KillIO takes
+        /// one, the machine stops on the program's _Read,
+        /// and the snapshot put back answers the call abortErr, as a killed
+        /// request is answered, without entering the driver again.
         @Test func aSynchronousReadWaitingInsideItsDriverHibernates() {
+            let (storage, pb, result, pc) = drainInsideWaitingDriver()
+            let snap = tempDir().appendingPathComponent("drvwait.bbhib").path
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
+            machine_drain_end()
+            #expect(machine_hibernate_restore(snap, &err, err.count), Comment(rawValue: String(cString: err)))
+            #expect(machine_pc() == pc + 8)                 // past the _Read
+            #expect(Int16(bitPattern: UInt16(g_cpu!.pointee.d.0 & 0xFFFF)) == -27)
+            #expect(g_cpu!.pointee.sr & 0xC == 0x8)         // N set, Z clear: from D0.W
+            wr16(storage, 1)                                // a line would come
+            _ = machine_run(5_000_000)
+            #expect(Int16(bitPattern: rd16(result)) == -27) // abortErr
+            #expect(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioResult_off))) == -27)
+            #expect(rd16(storage + 2) == 1)                 // the driver not entered again
+            #expect(rd32(waitingDriverQueue()) == 0)
+        }
+
+        /// The same drain going on in this process (Suspend let go, a
+        /// snapshot not resumed): the program's _Read is made again, and
+        /// the driver answers it.
+        @Test func aSynchronousReadGivenUpForADrainIsMadeAgainHere() {
+            let (storage, pb, result, _) = drainInsideWaitingDriver()
+            machine_drain_end()
+            wr16(storage, 1)                                // the line comes
+            _ = machine_run(5_000_000)
+            #expect(rd16(storage + 2) == 2)                 // the call made again, and answered
+            #expect(rd16(result) == 0)
+            #expect(rd32(pb + UInt32(IOParam_ioActCount_off)) == 1)
+            #expect(rd8(rd32(pb + UInt32(IOParam_ioBuffer_off))) == 0x58)
+        }
+
+        /// A 68k program's synchronous _Read to the waiting driver, drained
+        /// inside its Prime: the machine stopped on the _Read (at pc + 6).
+        func drainInsideWaitingDriver() -> (storage: UInt32, pb: UInt32, result: UInt32, pc: UInt32) {
             launchTestApp()
             func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
             func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
-            let (storage, pb, buf) = waitingDriverRead()
+            let (storage, pb, _) = waitingDriverRead()
             let result = ptr(2)
             wr16(result, 0x7777)
             // MOVEA.L #pb,A0; _Read; MOVE.W D0,result; loop: _SystemTask; BRA.S loop
@@ -324,19 +359,9 @@ extension BlueBox {
             #expect(machine_pc() == pc + 6)                 // on the _Read
             #expect(g_cpu!.pointee.a.0 == pb)
             #expect(rd32(waitingDriverQueue()) == 0)       // the request out of the queue
+            #expect(rd16(storage + 12) == 0)                // its Control not called (csCode 1 may be its own)
             #expect(rd16(result) == 0x7777)                 // the program has no answer yet
-            let snap = tempDir().appendingPathComponent("drvwait.bbhib").path
-            var err = [CChar](repeating: 0, count: 256)
-            #expect(machine_hibernate_save(snap, "{}", nil, &err, err.count), Comment(rawValue: String(cString: err)))
-            machine_drain_end()
-            #expect(machine_hibernate_restore(snap, &err, err.count), Comment(rawValue: String(cString: err)))
-            #expect(rd16(storage + 2) == 1)
-            wr16(storage, 1)                                // the line comes
-            _ = machine_run(5_000_000)
-            #expect(rd16(storage + 2) == 2)                 // the call made again, and answered
-            #expect(rd16(result) == 0)
-            #expect(rd8(buf) == 0x58)
-            #expect(rd32(pb + UInt32(IOParam_ioActCount_off)) == 1)
+            return (storage, pb, result, pc)
         }
 
         /// Hibernate in a window: the machine runs on its own thread (as the
@@ -424,13 +449,15 @@ extension BlueBox {
 /// console driver does, calling GetNextEvent until the word at its storage
 /// is set, then answers 'X'; opened, with a read's parameter block for it
 /// and its buffer.  Storage: 0 the flag, 2 Prime's entries, 4 its turns
-/// round the loop, 8 the parameter block, 16 an event record.
+/// round the loop, 8 the parameter block, 12 the last Control's csCode,
+/// 16 an event record.
 func waitingDriverRead() -> (storage: UInt32, pb: UInt32, buf: UInt32) {
     func ptr(_ n: UInt32) -> UInt32 { tb_NewPtr(Int32(n), false, true) }
-    // The header, Open and Close (MOVEQ #0,D0; RTS), Prime at 0x30, storage at 0x100.
+    // The header, Open and Close (MOVEQ #0,D0; RTS), Prime at 0x30, Control
+    // at 0x80, storage at 0x100.
     var b = [UInt16](repeating: 0, count: 0xA0)
     func put(_ at: Int, _ words: [UInt16]) { for (i, w) in words.enumerated() { b[at / 2 + i] = w } }
-    put(0, [0x0F00, 0, 0, 0, 0x20, 0x30, 0, 0, 0x24, 0x052E, 0x5761, 0x6974]) // ".Wait"
+    put(0, [0x0F00, 0, 0, 0, 0x20, 0x30, 0x80, 0, 0x24, 0x052E, 0x5761, 0x6974]) // ".Wait"
     put(0x20, [0x7000, 0x4E75, 0x7000, 0x4E75])
     put(0x30, [0x45FA, 0x00CE,           // LEA storage(PC),A2
                0x2548, 0x0008,           // MOVE.L A0,8(A2)
@@ -444,6 +471,9 @@ func waitingDriverRead() -> (storage: UInt32, pb: UInt32, buf: UInt32) {
                0x12BC, 0x0058,           // MOVE.B #'X',(A1)
                0x2168, 0x0024, 0x0028,   // MOVE.L ioReqCount(A0),ioActCount(A0)
                0x7000, 0x2678, 0x08FC, 0x4ED3]) // MOVEQ #0,D0; MOVEA.L JIODone,A3; JMP (A3)
+    put(0x80, [0x45FA, 0x007E,           // LEA storage(PC),A2
+               0x3568, 0x001A, 0x000C,   // MOVE.W csCode(A0),12(A2)
+               0x7000, 0x4E75])          // MOVEQ #0,D0; RTS
     let hdr = ptr(UInt32(b.count * 2))
     for (i, w) in b.enumerated() { wr16(hdr + UInt32(i * 2), w) }
     #expect(tb_DriverInstall(hdr, -63) == 0)
