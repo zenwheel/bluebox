@@ -72,6 +72,7 @@ BB_HOST static uint64_t begun_ns, begun_at;    /* the host's clock and the instr
 BB_HOST static uint64_t grace_until;           /* the instruction count */
 BB_HOST static bool stopped_here;              /* the CPU stopped at a trap for the drain */
 BB_HOST static bool between;                   /* parked at a slice boundary, not a trap */
+BB_HOST static bool safe_point;                /* came to one, whether or not it can be saved */
 BB_HOST static bool rewind_wanted;             /* a native abandoned its call */
 BB_HOST static char why[256];
 BB_HOST static uint64_t hibernate_at;          /* --hibernate-at: the instruction count, or 0 */
@@ -98,15 +99,21 @@ void machine_drain_begin(bool exit_run)
     /* A snapshot taken where the program waits for its next event is the
      * likeliest to go on well; Suspend wants the machine still now. */
     grace_until = exit_run && g_cpu ? g_cpu->icount + DRAIN_GRACE : 0;
-    stopped_here = rewind_wanted = false;
+    stopped_here = rewind_wanted = safe_point = false;
     why[0] = stopped_at[0] = last_where[0] = 0;
     atomic_store(&state, MACHINE_DRAIN_GOING);
+}
+
+void machine_drain_begin_now(void)
+{
+    machine_drain_begin(true);
+    grace_until = 0; /* a save point's: the next safe point, as Suspend's */
 }
 
 void machine_drain_end(void)
 {
     atomic_store(&state, MACHINE_DRAIN_NONE);
-    exits = stopped_here = rewind_wanted = false;
+    exits = stopped_here = rewind_wanted = safe_point = false;
     g_ppc.stop = false;
 }
 
@@ -114,6 +121,7 @@ int machine_drain_state(void) { return atomic_load(&state); }
 const char *machine_drain_reason(void) { return why; }
 const char *machine_drain_point(void) { return stopped_at; }
 bool machine_hibernatable(void) { return atomic_load(&state) == MACHINE_DRAIN_PARKED; }
+bool machine_drain_at_safe_point(void) { return atomic_load(&state) != MACHINE_DRAIN_GOING && safe_point; }
 
 void machine_hibernate_at(uint64_t icount) { hibernate_at = icount; }
 
@@ -399,6 +407,7 @@ bool drain_slice_point(void)
     } else {
         snprintf(stopped_at, sizeof stopped_at, "between instructions (pc %08X)", machine_pc());
     }
+    safe_point = true; /* a save point can be put back here, whatever it holds */
     const char *b = machine_hibernate_blocker();
     if (b) {
         snprintf(why, sizeof why, "%s", b);

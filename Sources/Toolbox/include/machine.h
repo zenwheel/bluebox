@@ -274,6 +274,11 @@ void machine_script_add(uint64_t at, int kind, int a, int b, int c);
 void machine_script_add_snap(uint64_t at, const char *path);
 /* The scripted input dropped (a hibernated run's is its own). */
 void machine_script_clear(void);
+/* Scripted save points (kind 11: a 0 makes one, 1 restores the latest):
+ * the host does them, told on the machine's thread as the step comes. */
+enum { MACHINE_SAVEPOINT_SAVE = 0, MACHINE_SAVEPOINT_RESTORE = 1 };
+typedef void (*machine_savepoint_fn)(int action, void *ctx);
+void machine_set_savepoint_handler(machine_savepoint_fn fn, void *ctx);
 /* Tell the Event Manager a host is attached (it may then sleep for input). */
 void machine_attach_host(bool attached);
 
@@ -991,6 +996,9 @@ void machine_pause_point(void);
  * snapshot cannot carry (machine_hibernate_blocker).  From any thread. */
 enum { MACHINE_DRAIN_NONE, MACHINE_DRAIN_GOING, MACHINE_DRAIN_PARKED, MACHINE_DRAIN_REFUSED };
 void machine_drain_begin(bool exit_run);
+/* exit_run, at the next safe point without waiting for an idle call (a
+ * headless save point's: the program barely stops, as Suspend's drain). */
+void machine_drain_begin_now(void);
 void machine_drain_end(void);
 int machine_drain_state(void);
 const char *machine_drain_reason(void);
@@ -999,6 +1007,10 @@ const char *machine_drain_reason(void);
 const char *machine_drain_point(void);
 /* Stopped at a safe point: a snapshot may be taken now. */
 bool machine_hibernatable(void);
+/* Stopped at a safe point, even one holding what a snapshot cannot carry:
+ * nothing of the Toolbox on the machine's stack, so a save point may be put
+ * back over it (machine_savepoint_restore). */
+bool machine_drain_at_safe_point(void);
 /* Draining, at the program's own level: an alert or a file panel the host
  * closes now is abandoned and shown again after the machine goes on. */
 bool machine_drain_abandonable(void);
@@ -1014,6 +1026,21 @@ void machine_hibernate_at(uint64_t icount);
  * of machine_launch; the program goes on with machine_run. */
 bool machine_hibernate_save(const char *path, const char *record, uint64_t *bytes, char *err, size_t errlen);
 bool machine_hibernate_restore(const char *path, char *err, size_t errlen);
+/* Save points (reattach.c): a snapshot the program goes on from.  Take:
+ * at a safe point (machine_hibernatable), into *buf (the machine may then
+ * go on); write: compressed to path with the host's record, from any
+ * thread; free with machine_savepoint_free.  Restore: put back over the
+ * running machine, stopped at a safe point (machine_drain_at_safe_point),
+ * in the process that took it; the host's input is taken afresh, and the
+ * scripted steps still to come follow the save point's step (or the save
+ * point) as they followed the restore's step (or the restore).  differences (or NULL):
+ * how many hb_compare finds between the save point and the machine put
+ * back (listed on stdout), -1 if it could not look. */
+bool machine_savepoint_take(uint8_t **buf, size_t *len, char *err, size_t errlen);
+bool machine_savepoint_write(const char *path, const uint8_t *buf, size_t len, const char *record, uint64_t *bytes,
+                             char *err, size_t errlen);
+void machine_savepoint_free(uint8_t *buf);
+bool machine_savepoint_restore(const uint8_t *buf, size_t len, int *differences, char *err, size_t errlen);
 /* Whether a resumed program's date catches up to the host's (the default)
  * or goes on from where it stopped. */
 void machine_set_resume_date_catch_up(bool on);

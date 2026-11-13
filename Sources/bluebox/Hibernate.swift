@@ -25,6 +25,9 @@
 //       goes on
 //   bluebox snapshots [list | delete ... | thumbnail ...]
 //       the snapshots kept (a resumed one stays until deleted)
+//   Make Save Point, Restore Save Point (SavePoint.swift)
+//       the same snapshot made while the program goes on, marked a save
+//       point, and gone back to in the same process
 //
 // Snapshots go to Application Support/Blue Box/Hibernated/<Program>
 // <date>.bbhib (an exported application's to its own folder there); each
@@ -89,7 +92,7 @@ func runArgsToKeep(_ args: [String]) -> [String] {
                                       "--screenshot", "--walk-avoid", "--log", "--debugger", "--print-to",
                                       "--file-answer", "--redraw-check", "--app", "--sound"]
     let dropAlone: Set<String> = ["--census", "--walk-menus", "--headless", "--background", "--new", "--screen-window",
-                                  "--realtime", "--fresh", "--resume"]
+                                  "--realtime", "--fresh", "--resume", "--savepoint-check"]
     var out: [String] = []
     var i = 0
     while i < args.count {
@@ -167,6 +170,17 @@ struct SavedSnapshot {
     var record: HibernateRecord
 }
 
+/// What a snapshot of the machine as it stands records of the run (a save
+/// point's says so, `kind`).
+func snapshotRecord(app: String, runArgs: [String], kind: String? = nil) -> HibernateRecord {
+    let ctx = hibernateContext
+    return HibernateRecord(args: [app] + runArgsToKeep(runArgs), program: RunningProgram.canonical(app),
+                           title: ctx?.title ?? (app as NSString).lastPathComponent, saved: Date(),
+                           instructions: machine_instruction_count(), drainedAt: String(cString: machine_drain_point()),
+                           screen: ctx?.screen, depth: ctx?.depth, display: ctx?.display, machine: presentedMachine(),
+                           thumbnail: screenThumbnail(), kind: kind)
+}
+
 /// The machine stopped at a safe point (machine_hibernatable): its snapshot
 /// written, atomically (hibernate.c writes beside it and renames).  From
 /// any thread, the machine standing still.
@@ -174,16 +188,10 @@ func writeSnapshot(app: String, runArgs: [String], to given: String?) -> Result<
     guard machine_hibernatable() else {
         return .failure(SnapshotProblem(String(cString: machine_drain_reason())))
     }
-    let ctx = hibernateContext
-    let title = ctx?.title ?? (app as NSString).lastPathComponent
-    let path = given ?? newSnapshotPath(title: title)
+    let record = snapshotRecord(app: app, runArgs: runArgs)
+    let path = given ?? newSnapshotPath(title: record.title)
     try? FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent,
                                              withIntermediateDirectories: true)
-    let record = HibernateRecord(args: [app] + runArgsToKeep(runArgs), program: RunningProgram.canonical(app), title: title,
-                                 saved: Date(), instructions: machine_instruction_count(),
-                                 drainedAt: String(cString: machine_drain_point()), screen: ctx?.screen,
-                                 depth: ctx?.depth, display: ctx?.display, machine: presentedMachine(),
-                                 thumbnail: screenThumbnail())
     var err = [CChar](repeating: 0, count: 512)
     var bytes: UInt64 = 0
     let t0 = Date()
@@ -393,8 +401,9 @@ struct SnapshotPickerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(model.picker.title) is hibernated").font(.headline)
-            Text("Choose where to go on from, or start it fresh. The snapshots are kept until you move them to the Trash.")
+            Text(model.picker.heading).font(.headline)
+            Text("Choose where to go on from, or start it fresh. The snapshots and save points are kept until you "
+                 + "move them to the Trash.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if model.picker.rows.isEmpty {
                 Text("No snapshots left").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -403,7 +412,13 @@ struct SnapshotPickerView: View {
                     HStack(spacing: 12) {
                         SnapshotThumbnailView(png: row.thumbnail)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(row.when).font(.body.weight(.medium))
+                            HStack(spacing: 6) {
+                                Text(row.when).font(.body.weight(.medium))
+                                Text(row.isSavePoint ? "Save point" : "Hibernated").font(.caption)
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(RoundedRectangle(cornerRadius: 3).fill(
+                                        (row.isSavePoint ? Color.accentColor : Color.secondary).opacity(0.18)))
+                            }
                             Text(row.details).font(.caption).foregroundStyle(.secondary)
                             if let p = row.problem {
                                 Text("Cannot be resumed here: \(p)").font(.caption).foregroundStyle(.red)
@@ -475,7 +490,8 @@ func snapshotsCommand(_ args: [String]) {
             let state = s.problem.map { "unreadable: \($0)" }
                 ?? (!s.sameBuild ? "another build's" : s.entered ? "opening \(s.title) offers it" : "not offered (resume it by name)")
             let thumb = s.thumbnail.flatMap(SnapshotThumbnail.size).map { "thumbnail \($0.width)×\($0.height)" } ?? "no thumbnail"
-            print("\(s.path)\n    \(s.title), \(SnapshotFile.label(s.saved)), \(s.details), \(thumb), \(state)")
+            print("\(s.path)\n    \(s.title), \(SnapshotFile.label(s.saved, savePoint: s.isSavePoint)), \(s.details), "
+                  + "\(thumb), \(state)")
         }
     case "thumbnail":
         guard args.count == 3 else { usage() }

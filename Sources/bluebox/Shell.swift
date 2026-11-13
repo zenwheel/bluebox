@@ -368,7 +368,8 @@ enum ShellItem: Hashable {
     func hibernationLabel(_ path: String) -> String? {
         guard states.isHibernated(path), let e = states.hibernated[path] else { return nil }
         let count = states.snapshots[path]?.count ?? 1
-        let label = SnapshotFile.label(e.hibernatedDate) + (count > 1 ? " (\(count) snapshots)" : "")
+        let label = SnapshotFile.label(e.hibernatedDate, savePoint: e.savePoint == true)
+            + (count > 1 ? " (\(count) snapshots)" : "")
         switch e.snapshot.flatMap({ snapshotStatus[$0] }) {
         case .missing?: return label + " (its snapshot is gone)"
         case .cannotResume?: return label + " (by another build of Blue Box: it resumes only in that one)"
@@ -1072,6 +1073,12 @@ struct SettingsForm: View {
                 ForEach([1, 3, 5, 10, 20], id: \.self) { n in Text("\(n)").tag(Int?.some(n)) }
             }
             .help("Each time it hibernates a new snapshot is added; beyond this many, the oldest go to the Trash.")
+            Picker("Save points kept", selection: $settings.keepSavePoints) {
+                Text("\(inherit) (\(fallback.keepSavePoints ?? HibernatedSnapshots.defaultKeepSavePoints))").tag(Int?.none)
+                ForEach([1, 3, 5, 10, 20], id: \.self) { n in Text("\(n)").tag(Int?.some(n)) }
+            }
+            .help("Each save point (Control-Option-Command-S) is kept apart from the hibernated snapshots; beyond this "
+                  + "many, the oldest go to the Trash.")
         }
         Section("Network and ports") {
             Picker("AppleTalk", selection: $settings.appletalk) {
@@ -1472,7 +1479,8 @@ struct SnapshotsView: View {
                                 if s.entered { Image(systemName: "moon.zzz.fill").foregroundStyle(.indigo).font(.caption) }
                                 Text(s.title)
                             }
-                            Text("\(SnapshotFile.label(s.saved)) · \(s.details)").font(.caption).foregroundStyle(.secondary)
+                            Text("\(SnapshotFile.label(s.saved, savePoint: s.isSavePoint)) · \(s.details)").font(.caption)
+                                .foregroundStyle(.secondary)
                             Text(state(s)).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()

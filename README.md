@@ -202,6 +202,15 @@ a few, in a window, in the whole screen and rootless:
 | Command-Option-Q | Force Quit, for a program that ignores Command-Q. |
 | Command-H, Command-Option-H | Hide and Hide Others, unless the program has a Command-H item of its own. |
 | Control-Option-Command-H | Hibernate: save the program to disk and quit; opening it again resumes it where it was. It works when the program hides the menu bar or reads the keyboard itself (a game); when the program can't be saved, an alert says why. |
+| Control-Option-Command-S | Make Save Point: save the program where it is and go on, as a game's quick save. Nothing quits or pauses for more than a moment; its sound plays on and its network connections stay open. "Saved" shows over its window. |
+| Control-Option-Command-R | Restore Save Point: go back to the latest save point at once, in the same windows, without asking, as a game's quick load. Its sound and connections are those of the save point's moment (a connection is over, as after resuming). "Restored" shows over its window. |
+
+Make Save Point and Restore Save Point are also in the application menu
+after Hibernate. Opening a program offers its save points beside its
+hibernated snapshots; it keeps its newest five of each, apart
+(`bluebox set <app> keep-save-points N`, `keep-snapshots N`). A headless run
+takes `savepoint` and `restore` in `--keys`, and `--savepoint-check` says
+whether the machine put back is the one saved.
 
 ### Apple Events
 

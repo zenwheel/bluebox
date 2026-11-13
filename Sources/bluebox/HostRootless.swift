@@ -877,6 +877,14 @@ func postScriptLive(_ script: [String]) {
             machine_pause_for(ms)
             continue
         }
+        if step == "savepoint" || step == "restore" {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if step == "savepoint" { SavePointer.shared.save() } else { SavePointer.shared.restore() }
+                }
+            }
+            continue
+        }
         if let colon = step.firstIndex(of: ":"), ["keydown", "keyup"].contains(String(step[..<colon])) {
             let name = String(step[step.index(after: colon)...])
             if let code = scriptKeyCodes[name] {

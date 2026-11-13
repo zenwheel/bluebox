@@ -1582,6 +1582,16 @@ int speech_channel_voice(gaddr chan)
  * them again from the word it was at would lose the embedded commands
  * before it.  What the old host reported and the program had not been
  * told yet is still told. */
+/* A save point about to be put back in this process: what the host is
+ * saying is this timeline's, and stops (the save point's utterances are
+ * then over, as after resuming). */
+void speech_before_restore(void)
+{
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if (channels[i].chan && channels[i].busy)
+            host_request(&channels[i], MACHINE_SPEECH_STOP, NULL);
+}
+
 void speech_after_resume(void)
 {
     for (int i = 0; i < MAX_CHANNELS; i++)

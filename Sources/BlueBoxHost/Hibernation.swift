@@ -7,6 +7,13 @@
 // snapshots until it is deleted (to the Trash).  A program keeps its newest
 // few (HibernatedSnapshots.tidy, after each hibernation).
 //
+// A save point (SavePoint.swift) is a snapshot too, made while the program
+// goes on running, and marked so in its record (kind "savepoint") and its
+// entry: the picker offers it with the hibernated ones, saying which is
+// which, and a program keeps its newest few save points apart from its
+// hibernated snapshots (a burst of quick saves never pushes out where it
+// was left when it hibernated, nor the other way round).
+//
 // What opening a hibernated program does (ResumePolicy): an interactive
 // run of it (a double-click in the shell, its bundle, the Dock, an exported
 // application, a login item, `bluebox run` from a terminal) shows its
@@ -45,10 +52,16 @@ public struct HibernateRecord: Codable, Equatable, Sendable {
     /// SnapshotThumbnail.width pixels wide), for choosing between
     /// snapshots.  Older snapshots have none.
     public var thumbnail: Data?
+    /// What made it: nil for Hibernate, "savepoint" for a save point (the
+    /// program went on running).
+    public var kind: String?
+
+    public static let savePointKind = "savepoint"
+    public var isSavePoint: Bool { kind == Self.savePointKind }
 
     public init(args: [String], program: String, title: String, saved: Date, instructions: UInt64, drainedAt: String,
                 screen: [Int32]? = nil, depth: Int32? = nil, display: String? = nil, machine: String? = nil,
-                thumbnail: Data? = nil) {
+                thumbnail: Data? = nil, kind: String? = nil) {
         self.args = args
         self.program = program
         self.title = title
@@ -60,6 +73,7 @@ public struct HibernateRecord: Codable, Equatable, Sendable {
         self.display = display
         self.machine = machine
         self.thumbnail = thumbnail
+        self.kind = kind
     }
 
     public var json: String {
@@ -111,13 +125,14 @@ public enum SnapshotFile {
         }
     }
 
-    /// "Hibernated 2026-11-06 01:23", in the host's time zone.
-    public static func label(_ date: Date, timeZone: TimeZone = .current) -> String {
+    /// "Hibernated 2026-11-06 01:23" (or "Save point ..."), in the host's
+    /// time zone.
+    public static func label(_ date: Date, savePoint: Bool = false, timeZone: TimeZone = .current) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = timeZone
         f.dateFormat = "yyyy-MM-dd HH:mm"
-        return "Hibernated \(f.string(from: date))"
+        return (savePoint ? "Save point " : "Hibernated ") + f.string(from: date)
     }
 }
 
@@ -267,6 +282,8 @@ public struct SnapshotInfo: Equatable, Sendable {
     public var title: String { record?.title ?? (path as NSString).lastPathComponent }
     public var saved: Date { record?.saved ?? hibernatedAt ?? modified }
     public var thumbnail: Data? { record?.thumbnail }
+    /// A save point's (the program went on), not Hibernate's.
+    public var isSavePoint: Bool { record?.isSavePoint ?? false }
     /// Why it cannot be resumed here, or nil.
     public var unresumable: String? { problem ?? (sameBuild ? nil : SnapshotProblem.otherBuild) }
 
@@ -338,6 +355,7 @@ public struct SnapshotPicker: Equatable {
         public var placeholder: Bool { thumbnail == nil }
         public var resumable: Bool { info.unresumable == nil }
         public var problem: String? { info.unresumable }
+        public var isSavePoint: Bool { info.isSavePoint }
     }
 
     public let title: String
@@ -359,6 +377,11 @@ public struct SnapshotPicker: Equatable {
     }
 
     public var selected: Row? { rows.first { $0.path == selection } }
+    /// What the window says of the program: hibernated, or (with only save
+    /// points) that it has save points to go on from.
+    public var heading: String {
+        rows.contains { !$0.isSavePoint } || rows.isEmpty ? "\(title) is hibernated" : "\(title) has save points"
+    }
     /// Resume is offered: the chosen one resumes here.
     public var canResume: Bool { selected?.resumable ?? false }
 
@@ -449,19 +472,23 @@ public enum HibernatedSnapshots {
     }
 
     /// How many of a program's snapshots are kept when it hibernates again
-    /// (AppSettings.keepSnapshots overrides it).
+    /// (AppSettings.keepSnapshots overrides it), and how many save points
+    /// besides (AppSettings.keepSavePoints).
     public static let defaultKeep = 5
+    public static let defaultKeepSavePoints = 5
 
-    /// After a program hibernates: its snapshots in the Hibernated folders
-    /// beyond the newest `keep` deleted (to the Trash, see delete), oldest
-    /// first, so they never pile up unseen; one saved elsewhere
-    /// (--hibernate-to) is the user's own and left alone.  Returns those
-    /// deleted.
+    /// After a program hibernates (or makes a save point): its snapshots of
+    /// that kind in the Hibernated folders beyond the newest `keep` deleted
+    /// (to the Trash, see delete), oldest first, so they never pile up
+    /// unseen; one saved elsewhere (--hibernate-to) is the user's own and
+    /// left alone.  Returns those deleted.
     @discardableResult
     public static func tidy(program: String, keep: Int, folders: [String], registry: ProgramRegistry,
-                            toTrash: Bool = true) -> [String] {
+                            savePoints: Bool = false, toTrash: Bool = true) -> [String] {
         let roots = folders.map { RunningProgram.canonical($0) + "/" }
-        let mine = snapshots(of: program, registry: registry).filter { s in roots.contains { s.path.hasPrefix($0) } }
+        let mine = snapshots(of: program, registry: registry).filter { s in
+            s.isSavePoint == savePoints && roots.contains { s.path.hasPrefix($0) }
+        }
         guard mine.count > max(keep, 1) else { return [] }
         var gone: [String] = []
         for s in mine.dropFirst(max(keep, 1)).reversed() {

@@ -1536,6 +1536,33 @@ int files_after_resume(void)
     return n + rm_files_after_resume();
 }
 
+/* A save point put back in the process that made it (reattach.c): a file
+ * the program had open for writing then and that changed since (the
+ * program wrote it, or closed and changed it another way) goes back to
+ * what the save point holds, so that the program's own view of it (and
+ * the Resource Manager's map of it) is true again.  One open read-only is
+ * left; the program reads the save point's copy.  Returns how many went
+ * back. */
+int files_after_savepoint_restore(void)
+{
+    int n = 0;
+    for (int i = 0; i < MAX_FCBS; i++) {
+        fcb *f = &fcbs[i];
+        if (!f->used || f->claimed || !f->path[0] || f->gone || !f->write)
+            continue;
+        int64_t now[4];
+        fm_disk_stamp(f->path, now);
+        if (!memcmp(now, f->disk, sizeof now))
+            continue;
+        f->dirty = true;
+        save_fork(f);
+        n++;
+        LOGF(LOG_IDLE, "restore: %s (%s fork) changed since the save point: written back as it was\n", f->path,
+             f->rsrc ? "resource" : "data");
+    }
+    return n + rm_files_after_savepoint_restore();
+}
+
 
 /* ---------------------------------------------------------------------- */
 /* Opening and closing */

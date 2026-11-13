@@ -111,13 +111,20 @@ const char *hibernate_io_blocker(void)
     return reason;
 }
 
-bool machine_hibernate_save(const char *path, const char *record, uint64_t *bytes, char *err, size_t errlen)
+static bool at_safe_point(char *err, size_t errlen)
 {
-    if (!machine_hibernatable()) {
-        const char *why = machine_drain_reason();
-        snprintf(err, errlen, "%s", *why ? why : "the program is not at a point where it can be saved");
-        return false;
-    }
+    if (machine_hibernatable())
+        return true;
+    const char *why = machine_drain_reason();
+    snprintf(err, errlen, "%s", *why ? why : "the program is not at a point where it can be saved");
+    return false;
+}
+
+/* Before the snapshot: the clocks, the open files stamped as they are on
+ * disk, what the host draws and plays read back into the machine.  After
+ * it, the machine may go on (a save point's does). */
+static void capture_begin(void)
+{
     saved.time_ns = machine_time_ns();
     saved.wall = (int64_t)time(NULL);
     saved.layout = g_mem_layout;
@@ -132,11 +139,23 @@ bool machine_hibernate_save(const char *path, const char *record, uint64_t *byte
     const char *scan = getenv("BLUEBOX_HIBERNATE_SCAN");
     if (scan && *scan == '1')
         hb_scan(stderr, 200, 0);
-    hb_stats st;
-    bool ok = hb_save_file_extra(path, record, record ? strlen(record) : 0, &st, err, errlen);
+}
+
+static void capture_end(void)
+{
     r3d_after_hibernate();
     hostgl_after_hibernate();
     qt_movies_after_hibernate();
+}
+
+bool machine_hibernate_save(const char *path, const char *record, uint64_t *bytes, char *err, size_t errlen)
+{
+    if (!at_safe_point(err, errlen))
+        return false;
+    capture_begin();
+    hb_stats st;
+    bool ok = hb_save_file_extra(path, record, record ? strlen(record) : 0, &st, err, errlen);
+    capture_end();
     if (ok && bytes)
         *bytes = st.file_bytes;
     if (ok) {
@@ -192,6 +211,111 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen)
     int bad = files_after_resume();
     LOGF(LOG_IDLE, "resume: %s: %u blocks, %u pointers (%u to the host's memory, cleared); %d file%s changed\n",
          path, st.blocks, st.relocs, st.host, bad, bad == 1 ? "" : "s");
+    return true;
+}
+
+/* ---- Save points ----
+ *
+ * A save point is a snapshot the program goes on from: taken at a safe
+ * point as Hibernate's is, but the machine runs on afterwards, its
+ * connections, sound, files and windows as they were (nothing the
+ * snapshot reads back from the host is let go).  Putting the latest back
+ * (the host's Restore) happens in the same process, over the running
+ * machine, which stopped at a safe point first: what the host plays, says
+ * or shows for the timeline left behind stops, its sockets close as a
+ * process ending would close them, the snapshot replaces the machine, and
+ * the host is reattached as for a resumed process (the clocks go on from
+ * the save point; the network's listeners are made again and its
+ * connections are over; the sound it had queued is played again).  A file
+ * the program had open for writing goes back to the save point's copy
+ * (files_after_savepoint_restore), rather than being marked gone: the
+ * change is the program's own.  The host's input is taken afresh. */
+
+bool machine_savepoint_take(uint8_t **buf, size_t *len, char *err, size_t errlen)
+{
+    if (!at_safe_point(err, errlen))
+        return false;
+    events_note_savepoint();
+    capture_begin();
+    hb_stats st;
+    bool ok = hb_save_buffer(buf, len, &st, err, errlen);
+    capture_end();
+    if (ok) {
+        sound_record_note("save point");
+        speech_record_note("save point");
+        LOGF(LOG_IDLE, "save point: %llu bytes, %u blocks, %u pointers\n", (unsigned long long)st.bytes, st.blocks,
+             st.relocs);
+    }
+    return ok;
+}
+
+bool machine_savepoint_write(const char *path, const uint8_t *buf, size_t len, const char *record, uint64_t *bytes,
+                             char *err, size_t errlen)
+{
+    hb_stats st;
+    memset(&st, 0, sizeof st);
+    if (!hb_write_file_extra(path, buf, len, record, record ? strlen(record) : 0, &st, err, errlen))
+        return false;
+    if (bytes)
+        *bytes = st.file_bytes;
+    return true;
+}
+
+void machine_savepoint_free(uint8_t *buf) { hb_free_buffer(buf); }
+
+bool machine_savepoint_restore(const uint8_t *buf, size_t len, int *differences, char *err, size_t errlen)
+{
+    if (!machine_drain_at_safe_point()) {
+        const char *why = machine_drain_reason();
+        snprintf(err, errlen, "%s", *why ? why : "the program did not come to a point where it could be put back");
+        return false;
+    }
+    maybe_crash_trace();
+    uint64_t was_at = g_cpu ? g_cpu->icount : 0;
+    int layout = g_mem_layout;
+    void *script = events_script_take();
+    sound_before_restore();
+    speech_before_restore();
+    qt_movies_before_restore();
+    network_close_sockets();
+    hb_stats st;
+    if (!hb_restore_buffer(buf, len, HB_RESTORE_FORGET_HOST, &st, err, errlen)) {
+        events_script_give_back(script, 0, 0);
+        return false;
+    }
+    if (saved.layout != layout) {
+        snprintf(err, errlen, "the save point's memory layout (%d) is not this machine's (%d)", saved.layout, layout);
+        return false;
+    }
+    if (differences) {
+        /* The machine as put back, against the save point: none but the
+         * host's pointers (cleared). */
+        uint8_t *now;
+        size_t now_len;
+        char cerr[256];
+        *differences = hb_save_buffer(&now, &now_len, NULL, cerr, sizeof cerr)
+                           ? hb_compare(buf, len, now, now_len, HB_COMPARE_IGNORE_HOST, stdout, 20)
+                           : -1;
+        if (*differences >= 0)
+            hb_free_buffer(now);
+    }
+    host_clock_offset = (int64_t)saved.host_ns - (int64_t)host_mono_ns();
+    /* The date is the host's again, unless the clock is the instructions'
+     * (headless, where a run repeats exactly). */
+    machine_resume_clock(saved.time_ns, machine_wall_clock(), (int64_t)time(NULL) - saved.wall);
+    hibernate_reattach_host();
+    events_after_savepoint_restore();
+    int back = files_after_savepoint_restore();
+    if (events_host_attached()) {
+        /* The host takes the windows, the menu bar and the cursor afresh. */
+        display_host_attached_after_resume();
+        cursor_after_resume();
+    }
+    events_script_give_back(script, was_at, g_cpu ? g_cpu->icount : 0);
+    sound_record_note("restored");
+    speech_record_note("restored");
+    LOGF(LOG_IDLE, "restore: %u blocks, %u pointers (%u to the host's memory, cleared); %d file%s written back\n",
+         st.blocks, st.relocs, st.host, back, back == 1 ? "" : "s");
     return true;
 }
 

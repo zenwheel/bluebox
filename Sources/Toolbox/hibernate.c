@@ -966,11 +966,20 @@ bool hb_save_file_extra(const char *path, const void *extra, size_t extra_len, h
     size_t len;
     if (!hb_save_buffer(&buf, &len, stats, err, errlen))
         return false;
+    bool ok = hb_write_file_extra(path, buf, len, extra, extra_len, stats, err, errlen);
+    hb_free_buffer(buf);
+    return ok;
+}
+
+bool hb_write_file_extra(const char *path, const uint8_t *buf, size_t len, const void *extra, size_t extra_len,
+                         hb_stats *stats, char *err, size_t errlen)
+{
+    if (!ready(err, errlen))
+        return false;
     uLongf zlen = compressBound((uLong)len);
     uint8_t *z = bb_host_malloc(zlen);
     if (!z || compress2(z, &zlen, buf, (uLong)len, 6) != Z_OK) {
         bb_host_free(z);
-        hb_free_buffer(buf);
         snprintf(err, errlen, "out of memory compressing the snapshot");
         return false;
     }
@@ -982,7 +991,6 @@ bool hb_save_file_extra(const char *path, const void *extra, size_t extra_len, h
     fw.raw_len = len;
     fw.data_len = zlen;
     fw.extra_len = extra_len;
-    hb_free_buffer(buf);
     /* Written beside, then renamed over: never half a snapshot. */
     char tmp[2048];
     snprintf(tmp, sizeof tmp, "%s.partial", path);
@@ -1351,7 +1359,7 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
             v = lib_at && lib_at[tgt] ? (uint64_t)(uintptr_t)lib_at[tgt] + rl.value : 0;
             st->to_libraries++;
             break;
-        case R_HOST: v = same_process ? rl.value : 0; st->host++; break;
+        case R_HOST: v = same_process && !(flags & HB_RESTORE_FORGET_HOST) ? rl.value : 0; st->host++; break;
         }
         memcpy(dst, &v, 8);
         st->relocs++;

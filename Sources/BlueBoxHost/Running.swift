@@ -54,10 +54,13 @@ public struct RunningProgram: Codable, Equatable, Sendable {
     public var snapshot: String?
     /// When it hibernated.
     public var hibernatedAt: Date?
+    /// A hibernated entry's snapshot is a save point (the program went on
+    /// running after it).
+    public var savePoint: Bool?
 
     public init(program: String, pid: Int32 = getpid(), executable: String, state: State = .running,
                 started: Date = Date(), title: String, launchedBy: Launcher, bundle: String? = nil,
-                snapshot: String? = nil, hibernatedAt: Date? = nil) {
+                snapshot: String? = nil, hibernatedAt: Date? = nil, savePoint: Bool? = nil) {
         self.program = program
         self.pid = pid
         self.executable = executable
@@ -68,6 +71,7 @@ public struct RunningProgram: Codable, Equatable, Sendable {
         self.bundle = bundle
         self.snapshot = snapshot
         self.hibernatedAt = hibernatedAt.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded(.down)) }
+        self.savePoint = savePoint
     }
 
     /// The paths of one program compare equal however they were written.
@@ -276,10 +280,11 @@ public final class Registration: @unchecked Sendable {
 
     /// Hibernated: the entry says where the saved state is and stays when
     /// the process ends (end(keeping: true)).
-    public func hibernated(snapshot: String, at date: Date = Date()) {
+    public func hibernated(snapshot: String, at date: Date = Date(), savePoint: Bool = false) {
         update {
             $0.state = .hibernated
             $0.snapshot = snapshot
+            $0.savePoint = savePoint ? true : nil
             $0.hibernatedAt = Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down)) // as written
         }
     }
