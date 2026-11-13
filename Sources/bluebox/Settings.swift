@@ -251,12 +251,16 @@ func requiredCPU(application path: String) -> Int? {
 /// knownAccurateTiming).  They run as that Mac unless a machine or
 /// processor is chosen.  Wave 15 waits for the tick between frames and
 /// PaintScroll scrolls with the mouse: the Plus's screen is all they need,
-/// and they run at the host's speed.
+/// and they run at the host's speed.  Others make their sound themselves,
+/// writing samples into the Plus's sound buffer at SoundBase from a VBL
+/// task: on a Mac II or later, which has no such buffer (its sound comes
+/// from the Apple Sound Chip), they were silent.
 let knownMachineRequirements: [UInt32: String] = [
     0x3F7A_2422: "plus", /* ?z$" Wave 15 (1985) */
     0x5350_2020: "plus", /* SP   PaintScroll 1.0 (1986) */
     0x5348_4150: "plus", /* SHAP Down Hill Racer (1986): divides by the ticks a frame takes */
     0x7364_3039: "se",   /* sd09 Glypha 3.0 (1990): Fastest, its default speed, is as fast as it draws */
+    0x5444_3247: "se",   /* TD2G Test Drive II: The Duel (1989): its engine and music are written into the sound buffer */
 ]
 
 /// Programs that need accurate timing, by creator: they time themselves by
