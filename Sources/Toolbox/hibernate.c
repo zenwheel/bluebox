@@ -191,7 +191,17 @@ typedef struct {
     uintptr_t addr;
     uint32_t size, layout;
     const hb_static *map;
+    /* A piece of the map's static, as the optimizer splits a static struct
+     * into its fields (name.0, name.1 ...): its name, or NULL.  A piece's
+     * size is as far as the next static; it has no layout of its own. */
+    const char *piece;
 } placed;
+
+/* A placed static's name in the manifest. */
+static const char *placed_name(const placed *p)
+{
+    return p->piece ? p->piece : p->map->sym;
+}
 
 BB_HOST static image_info img;
 BB_HOST static bool img_ok;
@@ -797,8 +807,21 @@ static void place_one(void *vctx, const char *file, const char *name, uintptr_t 
     if (!in_saved(addr, NULL))
         return;
     const hb_static *m = map_static(file, name);
-    if (!m)
-        return;
+    const char *piece = NULL;
+    if (!m) {
+        /* name.N: a piece of a static the optimizer split. */
+        size_t n = strlen(name), k = n;
+        while (k && name[k - 1] >= '0' && name[k - 1] <= '9')
+            k--;
+        if (k == n || k < 2 || name[k - 1] != '.' || k - 1 >= 256)
+            return;
+        char base[256];
+        memcpy(base, name, k - 1);
+        base[k - 1] = 0;
+        if (!(m = map_static(file, base)))
+            return;
+        piece = name; /* the symbol table's, kept for good */
+    }
     if (c->n == c->cap) {
         size_t cap = c->cap ? c->cap * 2 : 1024;
         placed *l = bb_host_realloc(c->list, cap * sizeof *l);
@@ -807,7 +830,7 @@ static void place_one(void *vctx, const char *file, const char *name, uintptr_t 
         c->list = l;
         c->cap = cap;
     }
-    c->list[c->n++] = (placed){ addr, m->size, m->layout, m };
+    c->list[c->n++] = (placed){ addr, piece ? 0 : m->size, piece ? 0 : m->layout, m, piece };
 }
 
 /* ---- The state fingerprint ----
@@ -895,7 +918,7 @@ static bool manifest_make(void)
     for (size_t i = 0; i < nstatics; i++) {
         int w = 0;
         in_saved(statics[i].addr, &w);
-        manifest_add("S\t%s\t%s\t%d\t%llu\t%u\t%016llx\t%016llx\n", statics[i].map->file, statics[i].map->sym, w,
+        manifest_add("S\t%s\t%s\t%d\t%llu\t%u\t%016llx\t%016llx\n", statics[i].map->file, placed_name(&statics[i]), w,
                      (unsigned long long)(statics[i].addr - (uintptr_t)img.sect[w]), statics[i].size,
                      (unsigned long long)runs_hash(statics[i].layout), (unsigned long long)statics[i].map->shape);
     }
@@ -969,6 +992,41 @@ static const char *manifest_find(const char *m, size_t len, const char *const *k
     return NULL;
 }
 
+/* How much of a static's name names its whole: all of it, or what is
+ * before a piece's .N (the optimizer's split). */
+static size_t whole_len(const char *sym)
+{
+    size_t n = strlen(sym), k = n;
+    while (k && sym[k - 1] >= '0' && sym[k - 1] <= '9')
+        k--;
+    return k < n && k >= 2 && sym[k - 1] == '.' ? k - 1 : n;
+}
+
+/* Whether manifest m has a static of file that is the same whole as sym
+ * (it, or a piece of it) but not sym itself. */
+static bool manifest_has_whole(const char *m, size_t len, const char *file, const char *sym)
+{
+    size_t wl = whole_len(sym), fl = strlen(file);
+    for (const char *p = m; p < m + len;) {
+        const char *e = memchr(p, '\n', (size_t)(m + len - p));
+        size_t n = e ? (size_t)(e - p) : (size_t)(m + len - p);
+        const char *line = p;
+        p += n + 1;
+        if (n < fl + 4 || line[0] != 'S' || memcmp(line + 2, file, fl) || line[2 + fl] != '\t')
+            continue;
+        const char *q = line + 3 + fl, *t = memchr(q, '\t', (size_t)(line + n - q));
+        if (!t)
+            continue;
+        char other[256];
+        size_t ol = (size_t)(t - q) < sizeof other - 1 ? (size_t)(t - q) : sizeof other - 1;
+        memcpy(other, q, ol);
+        other[ol] = 0;
+        if (strcmp(other, sym) && whole_len(other) == wl && !memcmp(other, sym, wl))
+            return true;
+    }
+    return false;
+}
+
 /* Whether a snapshot whose manifest is old can be put back here, by name
  * ("Statics put back by name"): returns how many things stand in the way,
  * the first in words into why.  What stands in the way: another format or machine;
@@ -997,6 +1055,13 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
             continue;
         size_t ol;
         const char *o = manifest_find(manifest, manifest_len, fa, nkey, &ol);
+        if (!o && fa[0][0] == 'S' && na >= 3 && manifest_has_whole(manifest, manifest_len, fa[1], fa[2])) {
+            /* Whole in one build, in pieces in the other (or other pieces). */
+            if (!count++)
+                snprintf(first, sizeof first, "the static %.*s (%s) is split otherwise by this build's optimizer",
+                         (int)whole_len(fa[2]), fa[2], fa[1]);
+            continue;
+        }
         if (!o && fa[0][0] != 'V')
             continue; /* only the snapshot's build has it */
         if (o && ol == n && !memcmp(o, line, n))
@@ -1031,6 +1096,20 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
             snprintf(first, sizeof first, "it was saved in another format or for another machine");
         }
     }
+    /* This build's pieces the snapshot's build had whole, or not at all. */
+    for (const char *p = manifest; p < manifest + manifest_len;) {
+        const char *e = memchr(p, '\n', (size_t)(manifest + manifest_len - p));
+        size_t n = e ? (size_t)(e - p) : (size_t)(manifest + manifest_len - p);
+        int na = manifest_fields(p, n, a, sizeof a, fa);
+        p += n + 1;
+        size_t ol;
+        if (na < 3 || fa[0][0] != 'S' || manifest_find(old, oldlen, fa, 3, &ol) ||
+            !manifest_has_whole(old, oldlen, fa[1], fa[2]))
+            continue;
+        if (!count++)
+            snprintf(first, sizeof first, "the static %.*s (%s) is split otherwise by this build's optimizer",
+                     (int)whole_len(fa[2]), fa[2], fa[1]);
+    }
     if (!count)
         snprintf(why, whylen, "its saved state has this build's shape");
     else if (count == 1)
@@ -1056,6 +1135,19 @@ static bool ready(char *err, size_t errlen)
         return false;
     }
     qsort(c.list, c.n, sizeof *c.list, cmp_placed);
+    /* A piece's size: as far as the next static, within its section and
+     * its whole's size. */
+    for (size_t i = 0; i < c.n; i++) {
+        if (!c.list[i].piece)
+            continue;
+        int w = 0;
+        in_saved(c.list[i].addr, &w);
+        uintptr_t end = (uintptr_t)img.sect[w] + img.sect_size[w];
+        if (i + 1 < c.n && c.list[i + 1].addr < end)
+            end = c.list[i + 1].addr;
+        uintptr_t most = c.list[i].addr + c.list[i].map->size;
+        c.list[i].size = (uint32_t)((end < most ? end : most) - c.list[i].addr);
+    }
     statics = c.list;
     nstatics = c.n;
     if (!manifest_make()) {
@@ -2063,7 +2155,11 @@ static bool static_map_make(const char *m, size_t len, const uint64_t sect_size[
     size_t cap = 0;
     for (const char *p = m; p < m + len; p++)
         cap += *p == '\n';
-    int32_t *placed_of = bb_host_malloc((hb_nstatics + 1) * sizeof *placed_of);
+    /* This build's statics by file and name (a piece's name its own). */
+    size_t hcap = 1;
+    while (hcap < nstatics * 2 + 16)
+        hcap <<= 1;
+    uint32_t *placed_of = bb_host_calloc(hcap, sizeof *placed_of);
     sm->list = bb_host_malloc((cap + 1) * sizeof *sm->list);
     sm->matched = bb_host_calloc(nstatics + 1, sizeof *sm->matched);
     if (!placed_of || !sm->list || !sm->matched) {
@@ -2071,10 +2167,12 @@ static bool static_map_make(const char *m, size_t len, const uint64_t sect_size[
         free_static_map(sm);
         return false;
     }
-    for (unsigned i = 0; i < hb_nstatics; i++)
-        placed_of[i] = -1;
     for (size_t i = 0; i < nstatics; i++)
-        placed_of[statics[i].map - hb_statics] = (int32_t)i;
+        for (size_t h = hash_key(statics[i].map->file, placed_name(&statics[i])) & (hcap - 1);; h = (h + 1) & (hcap - 1))
+            if (!placed_of[h]) {
+                placed_of[h] = (uint32_t)i + 1;
+                break;
+            }
     char a[1024];
     const char *f[8];
     bool ok = true;
@@ -2091,8 +2189,14 @@ static bool static_map_make(const char *m, size_t len, const uint64_t sect_size[
             ok = false;
             break;
         }
-        const hb_static *ms = map_static(f[1], f[2]);
-        int32_t k = ms ? placed_of[ms - hb_statics] : -1;
+        int32_t k = -1;
+        for (size_t h = hash_key(f[1], f[2]) & (hcap - 1); placed_of[h]; h = (h + 1) & (hcap - 1)) {
+            const placed *pl = &statics[placed_of[h] - 1];
+            if (!strcmp(pl->map->file, f[1]) && !strcmp(placed_name(pl), f[2])) {
+                k = (int32_t)(placed_of[h] - 1);
+                break;
+            }
+        }
         if (k >= 0 && statics[k].size == o.size) {
             o.here = statics[k].addr;
             sm->matched[k] = true;
@@ -2226,7 +2330,7 @@ static bool new_statics_safe(const static_map *sm, hb_stats *st, char *why, size
             set = !skip[k] && c.live[k] != (was ? was[k] : 0);
         bb_host_free(skip);
         if (c.pointer_made || set) {
-            snprintf(why, whylen, "the static %s (%s), new in this build, %s as this build booted", statics[i].map->sym,
+            snprintf(why, whylen, "the static %s (%s), new in this build, %s as this build booted", placed_name(&statics[i]),
                      statics[i].map->file, c.pointer_made ? "holds a pointer made" : "was set");
             return false;
         }
@@ -2797,7 +2901,7 @@ static void describe_static(uintptr_t a, char *out, size_t n, uint64_t *off)
             hi = mid;
     }
     if (lo && a < statics[lo - 1].addr + (statics[lo - 1].size ? statics[lo - 1].size : 1)) {
-        snprintf(out, n, "%s: %s", statics[lo - 1].map->file, statics[lo - 1].map->sym);
+        snprintf(out, n, "%s: %s", statics[lo - 1].map->file, placed_name(&statics[lo - 1]));
         *off = a - statics[lo - 1].addr;
     } else {
         snprintf(out, n, "a static the map does not know");
@@ -3362,6 +3466,27 @@ static void check_one(void *vctx, const char *file, const char *name, uintptr_t 
     }
     if (!in_saved(addr, NULL) || map_static(file, name))
         return;
+    size_t wl = whole_len(name);
+    if (wl < strlen(name) && wl < 256) {
+        /* A piece of a static the optimizer split: found by its whole's name,
+         * but a piece has no layout of its own, so its whole must have no
+         * pointers. */
+        char base[256];
+        memcpy(base, name, wl);
+        base[wl] = 0;
+        const hb_static *m = map_static(file, base);
+        bool pointers = false;
+        for (uint32_t r = 0; m && m->layout < hb_nlayouts && r < hb_layouts[m->layout].n; r++)
+            pointers |= strchr("PFUH", hb_runs[hb_layouts[m->layout].first + r].kind) != NULL;
+        if (m && !pointers)
+            return;
+        c->problems++;
+        if (c->out)
+            fprintf(c->out, "hibernate map: %s: %s is %s\n", file, name,
+                    m ? "a piece of a static with pointers, split by the optimizer: its pointers are not found"
+                      : "saved but not in the map");
+        return;
+    }
     c->problems++;
     if (c->out)
         fprintf(c->out, "hibernate map: %s: %s is saved but not in the map\n", file, name);
