@@ -36,6 +36,11 @@ static win_snap wins[64];
 static int nwins;
 static uint32_t win_version;
 static bool wins_dirty = true;
+/* A live window drag (machine_set_live_window_drag): the window and how far
+ * so far, under the lock.  Whether the host shows one is the host's. */
+BB_HOST static bool live_drag;
+static uint32_t drag_w;
+static int16_t drag_h, drag_v;
 
 void display_windows_changed(void) { wins_dirty = true; }
 
@@ -44,7 +49,7 @@ void display_windows_changed(void) { wins_dirty = true; }
  * back with the snapshot. */
 void display_after_resume(void) {}
 
-static void publish_windows(void);
+static void publish_windows(bool drag_done);
 
 /* After a Toolbox trap called from the program itself, also a safe point:
  * a program that shows a window and then draws and waits without asking
@@ -53,11 +58,11 @@ void display_trap_done(void)
 {
     if (wins_dirty) {
         wins_dirty = false;
-        publish_windows();
+        publish_windows(false);
     }
 }
 
-static void publish_windows(void)
+static void publish_windows(bool drag_done)
 {
     win_snap fresh[64];
     int n = 0;
@@ -98,8 +103,32 @@ static void publish_windows(void)
     if (n < nwins) /* no copies left of the masks just freed */
         memset(wins + n, 0, (size_t)(nwins - n) * sizeof *wins);
     nwins = n;
+    if (drag_done)
+        drag_w = 0;
     win_version++;
     pthread_mutex_unlock(&lock);
+}
+
+void machine_set_live_window_drag(bool on) { live_drag = on; }
+
+bool display_live_window_drag(void) { return live_drag; }
+
+void display_window_drag(gaddr w, int dh, int dv)
+{
+    pthread_mutex_lock(&lock);
+    if (drag_w != w || drag_h != dh || drag_v != dv) {
+        drag_w = w;
+        drag_h = (int16_t)dh;
+        drag_v = (int16_t)dv;
+        win_version++;
+    }
+    pthread_mutex_unlock(&lock);
+}
+
+void display_window_drag_done(void)
+{
+    wins_dirty = false;
+    publish_windows(true);
 }
 
 uint32_t machine_windows_version(void)
@@ -118,8 +147,12 @@ int machine_windows(machine_window *out, int max)
     for (int i = 0; i < n; i++)
     {
         out[i] = (machine_window){ wins[i].id, wins[i].bounds.top, wins[i].bounds.left, wins[i].bounds.bottom,
-                                   wins[i].bounds.right, wins[i].active, wins[i].flags, { 0 } };
+                                   wins[i].bounds.right, wins[i].active, wins[i].flags, { 0 }, 0, 0 };
         memcpy(out[i].title, wins[i].title, sizeof out[i].title);
+        if (drag_w && wins[i].id == drag_w) {
+            out[i].drag_h = drag_h;
+            out[i].drag_v = drag_v;
+        }
     }
     pthread_mutex_unlock(&lock);
     return n;
@@ -791,7 +824,7 @@ void display_sync(void)
 
     if (wins_dirty) {
         wins_dirty = false;
-        publish_windows();
+        publish_windows(false);
     }
     if (menus_dirty) {
         menus_dirty = false;
@@ -812,6 +845,9 @@ void display_reset(void)
     all_stores = NULL;
     g_watch_len = 0;
     wins_dirty = menus_dirty = true;
+    pthread_mutex_lock(&lock);
+    drag_w = 0;
+    pthread_mutex_unlock(&lock);
     pending_choice = 0;
     tracking = in_select = track_done = false;
 }

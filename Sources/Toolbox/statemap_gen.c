@@ -1469,6 +1469,9 @@ const hb_static hb_statics[] = {
     { "Toolbox/display.c", "desk_size", 4, 0, 0x4984645b460455b1 },
     { "Toolbox/display.c", "desk_val", 8, 2, 0x9fd7d7c6b4c5d1e4 },
     { "Toolbox/display.c", "direct_written", 1, 0, 0xa6aba2e36699f918 },
+    { "Toolbox/display.c", "drag_h", 2, 0, 0x7579d81a04189ef3 },
+    { "Toolbox/display.c", "drag_v", 2, 0, 0x7579d81a04189ef3 },
+    { "Toolbox/display.c", "drag_w", 4, 0, 0x4984645b460455b1 },
     { "Toolbox/display.c", "dw_bottom", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/display.c", "dw_left", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/display.c", "dw_right", 4, 0, 0xb34e18f570e7c710 },
@@ -2705,7 +2708,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1703;
+const unsigned hb_nstatics = 1706;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

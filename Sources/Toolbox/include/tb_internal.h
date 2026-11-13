@@ -343,6 +343,13 @@ void ev_mouse_raw(int32_t *h, int32_t *v, bool *down, bool capture);
 void display_trap_done(void);
 /* A pop-up menu's area while it is up (display.c), for rootless hosts. */
 void display_set_transient(bool on, int16_t top, int16_t left, int16_t bottom, int16_t right);
+/* A live window drag for the host (display.c): whether it shows one; the
+ * window's offset so far; and the end, after MoveWindow, the windows
+ * published at once with the drag gone, so the host goes straight from the
+ * offset to the new position. */
+bool display_live_window_drag(void);
+void display_window_drag(gaddr w, int dh, int dv);
+void display_window_drag_done(void);
 /* Scripted input (events.c): apply the steps due by `now`; the next one's time. */
 void events_script_pump(uint64_t now);
 uint64_t events_script_next_at(void);
