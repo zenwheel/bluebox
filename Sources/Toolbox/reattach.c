@@ -218,10 +218,10 @@ bool machine_hibernate_restore(const char *path, char *err, size_t errlen)
     int bad = files_after_resume();
     LOGF(LOG_IDLE,
          "resume: %s: %u blocks, %u pointers (%u to the host's memory, cleared; %u into the binary by name, %u "
-         "string constants this build has not kept in blocks); statics put back by name: %u dropped, %u new; "
-         "%d file%s changed\n",
+         "string constants this build has not kept in blocks); statics put back by name: %u dropped, %u new (%u of "
+         "their blocks kept, %u stubs found again); %d file%s changed\n",
          path, st.blocks, st.relocs, st.host, st.to_image - st.to_image_unnamed, st.strings_kept, st.statics_dropped,
-         st.statics_new, bad, bad == 1 ? "" : "s");
+         st.statics_new, st.blocks_kept, st.stubs_found, bad, bad == 1 ? "" : "s");
     return true;
 }
 

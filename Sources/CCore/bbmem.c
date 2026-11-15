@@ -251,6 +251,17 @@ bb_block *bb_blocks_detach(void)
     return list;
 }
 
+void bb_blocks_keep(bb_block **list, bb_block *b)
+{
+    if (b->prev)
+        b->prev->next = b->next;
+    else
+        *list = b->next;
+    if (b->next)
+        b->next->prev = b->prev;
+    link_block(b);
+}
+
 void bb_blocks_release(bb_block *list)
 {
     while (list) {

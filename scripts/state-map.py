@@ -24,6 +24,9 @@ Each field is one of
      hibernate-diff leaves it out, as it does D
   I  an integer as wide as a pointer: data, but where a pointer the map
      does not know of could hide (the scan looks there)
+  G  an address in the guest's memory (gaddr, 4 bytes): data; a static new
+     in a build that resumes another's snapshot is looked at there
+     (hibernate.c: a native's stub is found again, anything else refused)
 H, Y and D belong in the host's section (BB_HOST); in a saved static they
 fail the check unless scripts/state-allow.txt names the static, with why.
 The check also fails for a static the compiler left in plain __data, __bss
@@ -44,6 +47,7 @@ name, tref = census.name, census.tref
 
 SAVED = {'__bbdata', '__bbbss'}
 HOST_VALUES = {'bb_host_value64': 'X', 'bb_host_value32': 'x'}  # bbstate.h
+GUEST_ADDRESS = 'gaddr'  # mem.h: an address in the guest's memory, 4 bytes
 HOSTSECT = {'__bbhost', '__bbhostz'}
 PLAIN = {'__data', '__bss', '__common'}
 NMLINE = re.compile(r'^([0-9a-f]+) \((\w+),(\w+)\) (?:non-)?external (?:\[[^\]]*\] )?(\S+)')
@@ -130,6 +134,8 @@ class Layouts:
         for n in names:
             if n in HOST_VALUES:
                 return [(0, HOST_VALUES[n], 1, 0, 1, 0)]
+            if n == GUEST_ADDRESS:
+                return [(0, 'G', 1, 0, 1, 0)]
             if census.SYNC_NAMES.search(n):
                 return [(0, 'Y', 1, 0, 1, 0)]
             if census.HOST_NAMES.search(n):
@@ -158,7 +164,9 @@ class Layouts:
             return sorted(set(out))
         if t == 'DW_TAG_array_type':
             n = self.c.count(d)
-            et, _, _ = self.c.strip(tref(d))
+            et, enames, _ = self.c.strip(tref(d))
+            if GUEST_ADDRESS in enames and n:
+                return [(0, 'G', n, 4, 1, 0)]
             if n == 0 or et is None or et['tag'] == 'DW_TAG_enumeration_type':
                 return []
             if et['tag'] == 'DW_TAG_base_type':
@@ -351,13 +359,64 @@ def source_tags():
     return tags, dup
 
 
+def split_top(text, sep):
+    """text split at sep where no bracket is open."""
+    out, depth, cur = [], 0, []
+    for ch in text:
+        if ch in '{[':
+            depth += 1
+        elif ch in '}]':
+            depth -= 1
+        if ch == sep and depth == 0:
+            out.append(''.join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    out.append(''.join(cur))
+    return out
+
+
+def shape_nodes(shape, nodes):
+    """Each part of a shape (Layouts.shape), by its hash, as a line a
+    resuming build reads (hibernate.c: what changes it can carry a saved
+    value across): S or U size and members (name@offset[:bits]=hash), A count
+    and element, E size and values, B name, size and encoding, P (a pointer,
+    by what it points to) or O (anything else) and the text.  Returns the
+    shape's hash."""
+    h = shape_hash(shape)
+    if h in nodes:
+        return h
+    m = re.match(r'^([su])(\d+)\{(.*)\}$', shape, re.S)
+    if m:
+        members = []
+        for part in split_top(m.group(3), ';') if m.group(3) else []:
+            lhs, _, rhs = part.partition('=')
+            members.append('%s=%s' % (lhs, shape_nodes(rhs, nodes)))
+        nodes[h] = '%s\t%s\t%s' % (m.group(1).upper(), m.group(2), ';'.join(members))
+        return h
+    m = re.match(r'^A(\d+)\[(.*)\]$', shape, re.S)
+    if m:
+        nodes[h] = 'A\t%s\t%s' % (m.group(1), shape_nodes(m.group(2), nodes))
+        return h
+    m = re.match(r'^E(0x[0-9a-f]+)\{(.*)\}$', shape, re.S)
+    if m:
+        nodes[h] = 'E\t%d\t%s' % (int(m.group(1), 16), m.group(2))
+        return h
+    m = re.match(r'^(.*?)(0x[0-9a-f]+)(DW_ATE_\w+)$', shape)
+    if m:
+        nodes[h] = 'B\t%s\t%d\t%s' % (m.group(1), int(m.group(2), 16), m.group(3))
+        return h
+    nodes[h] = '%s\t%s' % ('P' if shape.startswith('*') else 'O', shape)
+    return h
+
+
 def shape_hash(shape):
     """A shape (Layouts.shape) as 16 hex digits."""
     return hashlib.sha256(shape.encode()).hexdigest()[:16]
 
 
 def cstr(s):
-    return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return '"' + s.replace('\\', '\\\\').replace('"', '\\"').replace('\t', '\\t') + '"'
 
 
 def main():
@@ -391,7 +450,8 @@ def main():
                     parts = line.split('\t')
                     allow[(parts[0], parts[1])] = parts[2] if len(parts) > 2 else ''
 
-    statics = {}  # (file, symbol) -> (size, runs)
+    statics = {}  # (file, symbol) -> (size, runs, shape)
+    nodes = {}    # shape hash -> its line (shape_nodes)
     nhost = 0
     for o in objs:
         for v in o['dies'].values():
@@ -424,7 +484,7 @@ def main():
                 if not size:
                     problems.append('%s: the size of %s is not known' % (file, sym))
             runs = o['layouts'].runs(tref(v), name(v))
-            shape = shape_hash(o['layouts'].shape(tref(v)))
+            shape = shape_nodes(o['layouts'].shape(tref(v)), nodes)
             key = (file, sym)
             if key in statics and statics[key] != (size, runs, shape):
                 problems.append('%s: two statics named %s with different types: rename one' % (file, sym))
@@ -443,7 +503,7 @@ def main():
         if r is None:
             problems.append('%s: the DWARF has no type %s (tagged with BB_TAG/BB_HEAD)' % (f, t))
             continue
-        typed[(f, t)] = (r[0], r[1], shape_hash(r[2]))
+        typed[(f, t)] = (r[0], r[1], shape_nodes(r[2], nodes))
 
     # Layouts, shared.
     layouts = {(): 0}
@@ -495,6 +555,14 @@ def main():
         out.append('    { %s, %s, %d, %d, 0x%s },' % (cstr(f), cstr(t), size, li, sh))
     out.append('};')
     out.append('const unsigned hb_ntypes = %d;' % len(trows))
+    out.append('')
+    out.append('/* Each shape, by its hash: what a build resuming another\'s snapshot reads')
+    out.append(' * to carry a saved value across a change to its type. */')
+    out.append('const char *const hb_shape_lines[] = {')
+    for h in sorted(nodes):
+        out.append('    %s,' % cstr('%s\t%s' % (h, nodes[h])))
+    out.append('};')
+    out.append('const unsigned hb_nshape_lines = %d;' % len(nodes))
     text = '\n'.join(out) + '\n'
 
     kinds = collections.Counter()

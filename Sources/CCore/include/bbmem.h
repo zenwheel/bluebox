@@ -94,6 +94,9 @@ bb_block *bb_block_of(const void *p);
 /* Takes every live block off the list (the caller frees them with
  * bb_blocks_release once nothing points to them) and leaves it empty. */
 bb_block *bb_blocks_detach(void);
+/* Takes b off a detached list (*list its first) and makes it live again:
+ * a block the process had that a restore keeps. */
+void bb_blocks_keep(bb_block **list, bb_block *b);
 void bb_blocks_release(bb_block *list);
 
 /* Memory a snapshot saves that is not a block: the guest's address space.

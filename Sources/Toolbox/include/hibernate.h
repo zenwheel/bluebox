@@ -37,6 +37,9 @@ typedef struct hb_stats {
      * snapshot's statics this build has not (dropped), and this build's the
      * snapshot has not (kept as they booted, being as compiled). */
     uint32_t statics_dropped, statics_new;
+    /* What booting left in the new ones, carried: blocks kept, natives'
+     * stubs found again among the snapshot's. */
+    uint32_t blocks_kept, stubs_found;
     uint64_t file_bytes;                  /* the file written, compressed */
 } hb_stats;
 
@@ -118,6 +121,13 @@ size_t hb_manifest(const char **out);
 /* Why a snapshot with this manifest cannot be put back here (the first
  * difference), into why. */
 void hb_explain_manifest(const char *old, size_t len, char *why, size_t whylen);
+/* This build against a baseline manifest (hb_baseline's, an older build's):
+ * each thing that would stop that build's snapshots resuming here, a line
+ * apiece to out; returns how many (0: they all resume). */
+int hb_check_against(const char *old, size_t len, FILE *out);
+/* The manifest as a baseline: without where each static is, which moves
+ * with any change. Free with hb_free_buffer. */
+size_t hb_baseline(char **out);
 /* A pointer into the binary as a snapshot saves it: "file:symbol+offset"
  * (or "symbol+offset" for a global, "\"text\"+offset" for a string
  * constant) into out, false when it has no name; and back.  For tests. */
