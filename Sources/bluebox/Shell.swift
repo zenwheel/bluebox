@@ -205,8 +205,13 @@ enum ShellItem: Hashable {
         didSet { UserDefaults.standard.set(Array(expanded), forKey: "expanded") }
     }
     @Published var themes: [String] = []
-    /// The host's printers, for the settings pages' printing choice.
+    /// The host's printers, for the settings pages' printing choice, kept
+    /// current while the shell runs (refreshHostPrinters()).
     @Published private(set) var hostPrinters: [String] = []
+    private var printersWatch: DispatchSourceFileSystemObject?
+    private var printersRefresh: DispatchWorkItem?
+    private var printersReading = false
+    private var printersAgain = false
     @Published var importing: [String] = []
     @Published var messages: [String] = []
     @Published var settings: [String: AppSettings] = [:]
@@ -284,21 +289,66 @@ enum ShellItem: Hashable {
 
     init() {
         refreshInBackground()
-        readHostPrinters()
+        watchHostPrinters()
         watchSystemFolder()
         watchRegistry()
         watchSuspensions()
         watchFrontRequests()
     }
 
-    /// The printers, asked off the main thread: lpstat can take a while, and
-    /// waiting for it there spins the main run loop inside SwiftUI's update,
-    /// after which the sidebar no longer followed light and dark mode.
+    /// The printers are read again when CUPS's queues change (it rewrites
+    /// printers.conf in /etc/cups), when the print system says its list
+    /// changed, when the shell comes to the front (AirPrint printers come
+    /// and go on the network without either) and when a settings page shows.
+    private func watchHostPrinters() {
+        refreshHostPrinters(after: 0)
+        let fd = open("/etc/cups", O_EVTONLY)
+        if fd >= 0 {
+            let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .rename, .delete],
+                                                                   queue: .main)
+            source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.refreshHostPrinters() } }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            printersWatch = source
+        }
+        let changed = Notification.Name("com.apple.printerListChange")
+        DistributedNotificationCenter.default().addObserver(forName: changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshHostPrinters() }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil,
+                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshHostPrinters() }
+        }
+    }
+
+    /// Read the printers again, once for a burst of requests, off the main
+    /// thread: lpstat can take a while, and waiting for it there inside
+    /// SwiftUI's update left the sidebar no longer following light and
+    /// dark mode.
+    func refreshHostPrinters(after delay: Double = 0.3) {
+        printersRefresh?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.readHostPrinters() }
+        }
+        printersRefresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
     private func readHostPrinters() {
+        // One reading at a time; a request during it reads again after.
+        guard !printersReading else { printersAgain = true; return }
+        printersReading = true
         DispatchQueue.global(qos: .utility).async {
             let names = hostPrinterNames()
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self.hostPrinters = names }
+                MainActor.assumeIsolated {
+                    if names != self.hostPrinters { self.hostPrinters = names }
+                    self.printersReading = false
+                    if self.printersAgain {
+                        self.printersAgain = false
+                        self.readHostPrinters()
+                    }
+                }
             }
         }
     }
@@ -935,6 +985,7 @@ struct DefaultsPage: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Defaults")
+        .onAppear { model.refreshHostPrinters() }
     }
 }
 
@@ -1024,6 +1075,7 @@ struct AppPage: View {
         }
         .formStyle(.grouped)
         .navigationTitle(app.name)
+        .onAppear { model.refreshHostPrinters() }
         .confirmationDialog("Move \(app.name) to the Trash?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Move to Trash", role: .destructive) { model.delete(app) }
             Button("Cancel", role: .cancel) {}
