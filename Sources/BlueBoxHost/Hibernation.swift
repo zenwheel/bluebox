@@ -79,6 +79,26 @@ public struct HibernateRecord: Codable, Equatable, Sendable {
         self.kind = kind
     }
 
+    /// The arguments a resumed run repeats: not those the settings now
+    /// decide (the scale, the appearance, the screen in a window), nor the
+    /// screen's size, which `screen` has (the resumed screen is made the
+    /// size the display now calls for): a program another started at 1x
+    /// (its launch passes --scale on) resumes at the scale set now.
+    public var replayedArgs: [String] {
+        var out: [String] = []
+        var i = 0
+        while i < args.count {
+            let a = args[i]
+            if i > 0 && (a == "--scale" || a == "--appearance" || (a == "--screen" && screen != nil)) {
+                i += 2
+                continue
+            }
+            if a != "--screen-window" || i == 0 { out.append(a) }
+            i += 1
+        }
+        return out
+    }
+
     public var json: String {
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601

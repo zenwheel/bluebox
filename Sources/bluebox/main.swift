@@ -618,6 +618,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var appIndex = 0 // where in args
     var screenWindow = false
     var screenGiven = false
+    var screenSize: (Int32, Int32)? // --screen's
+    var appearanceSet = false // by --appearance or the settings
+    var resumedTooLarge = false // resumed on a screen that could not change, larger than this display
     var appletalkGiven = false
     var portsGiven = Set<Int32>()
     var screenshot: String?
@@ -695,6 +698,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
             i += 1
             guard i < args.count else { usage() }
             appearanceGiven = true
+            appearanceSet = true
             switch args[i] {
             case "bw", "classic": appearance = Int32(MACHINE_APPEARANCE_BW)
             case "native": appearance = Int32(MACHINE_APPEARANCE_NATIVE)
@@ -834,6 +838,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
             machine_set_screen(parts[0], parts[1])
             screenWindow = true
             screenGiven = true
+            screenSize = (parts[0], parts[1])
         case "--app":
             i += 1
             guard i < args.count else { usage() }
@@ -956,33 +961,28 @@ func runCommand(_ args: [String], resume: String? = nil) {
     }
     if !appearanceGiven, let a = saved.appearance {
         switch a {
-        case "bw", "classic": appearance = Int32(MACHINE_APPEARANCE_BW)
-        case "native": appearance = Int32(MACHINE_APPEARANCE_NATIVE)
+        case "bw", "classic":
+            appearance = Int32(MACHINE_APPEARANCE_BW)
+            appearanceSet = true
+        case "native":
+            appearance = Int32(MACHINE_APPEARANCE_NATIVE)
+            appearanceSet = true
         default:
             if let path = exportedTheme(a) ?? findTheme(a) {
                 themePath = path
                 appearance = Int32(MACHINE_APPEARANCE_THEME)
+                appearanceSet = true
             } else {
                 eprint("bluebox: no theme \"\(a)\" (from the settings); using the default appearance\n")
             }
         }
     }
     if let r = resumeRecord, let sc = r.screen, sc.count == 2 {
-        // Resumed: the screen it was booted with, whatever this display is
-        // (the snapshot's memory is laid out for it).  Shown as it was, or,
-        // rootless on a display now too small for it, in a window.
-        if interactive && !background {
-            if r.display == "screen" {
-                screenWindow = true
-            } else if !screenWindow {
-                let (dw, dh) = MainActor.assumeIsolated { rootlessMacScreenSize() }
-                if sc[0] > dw || sc[1] > dh {
-                    screenWindow = true
-                    eprint("bluebox: \(r.title) hibernated on a \(sc[0])×\(sc[1]) screen, larger than this display's "
-                           + "\(dw)×\(dh): shown in a window\n")
-                }
-            }
-        }
+        // Resumed: booted on the screen it hibernated with (the snapshot's
+        // memory is laid out for it), then, once put back, made the size
+        // this display and scale call for (resizeResumedScreen).  Shown as
+        // the display setting says, or, with none, as it was.
+        if interactive && !background && r.display == "screen" && saved.display == nil { screenWindow = true }
         machine_set_screen(sc[0], sc[1])
     } else if let sz = requiredSize {
         machine_set_screen(sz.0, sz.1)
@@ -1147,6 +1147,54 @@ func runCommand(_ args: [String], resume: String? = nil) {
         guard machine_hibernate_restore(resume, &err, err.count) else { fail("\(resume): \(str(err))") }
         machine_jit_resume(app)
         print("resumed: \(resume) at instruction \(machine_instruction_count())")
+        if let r = resumeRecord, let sc = r.screen, sc.count == 2 {
+            #if canImport(AppKit)
+            let display = interactive ? MainActor.assumeIsolated { rootlessMacScreenSize() } : nil
+            #else
+            let display: (Int32, Int32)? = nil
+            #endif
+            // Asked for on this run's command line, else what this display
+            // and scale call for (a headless run keeps its screen).
+            if let target = screenSize ?? display {
+                resizeResumedScreen(title: r.title, from: (sc[0], sc[1]), to: target)
+            }
+            #if canImport(AppKit)
+            // A screen that could not change and is larger than this
+            // display at this scale is shown in a window.
+            var w: Int32 = 0, h: Int32 = 0
+            machine_screen_size(&w, &h)
+            if let (dw, dh) = display, !background, w > dw || h > dh {
+                resumedTooLarge = true
+                screenWindow = true
+                eprint("bluebox: \(r.title) keeps a \(w)×\(h) screen, larger than this display's \(dw)×\(dh): "
+                       + "shown in a window\n")
+            }
+            #endif
+            machine_screen_size(&bootWidth, &bootHeight) // what its next snapshot records
+        }
+        // The snapshot put back the look it had: the appearance and the
+        // highlight colour its settings (or this command line) now choose
+        // instead.  With no appearance set, it keeps its own.
+        if appearanceSet {
+            if let themePath {
+                var terr = [CChar](repeating: 0, count: 256)
+                if !machine_load_theme(themePath, &terr, terr.count) {
+                    eprint("bluebox: \(str(terr)); it keeps the appearance it hibernated with\n")
+                } else {
+                    if let sounds = themeSoundSet(for: themePath) { _ = machine_load_theme_sounds(sounds, &terr, terr.count) }
+                    machine_change_appearance(appearance)
+                }
+            } else {
+                machine_change_appearance(appearance)
+            }
+        }
+        #if canImport(AppKit)
+        if let rgb = saved.highlight.flatMap(parseHighlight) {
+            machine_set_hilite_color(rgb.0, rgb.1, rgb.2)
+        } else if interactive {
+            MainActor.assumeIsolated { useHostSelectionColor() }
+        }
+        #endif
     } else {
         guard machine_launch(app, &err, err.count) else { fail(str(err)) }
     }
@@ -1227,8 +1275,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
         hibernateContext = HibernateContext(app: app, args: args, title: title, screen: [bootWidth, bootHeight],
                                             depth: bootDepth, display: background ? "background" : screenWindow ? "screen" : "rootless")
         if screenWindow {
-            // A resumed screen larger than this display: scaled to fit it.
-            if resume != nil { MainActor.assumeIsolated { fitDisplayScale() } }
+            // A resumed screen that could not take this display's size and
+            // is larger than it: scaled to fit it (the only time the scale
+            // setting gives way; any other screen is made this display's size).
+            if resumedTooLarge { MainActor.assumeIsolated { fitDisplayScale() } }
             MainActor.assumeIsolated { runHostWindow(title: title, icon: dockImage(icons)) }
         } else {
             MainActor.assumeIsolated {

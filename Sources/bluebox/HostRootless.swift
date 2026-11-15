@@ -49,9 +49,12 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
 /// The host x of the Mac screen's left edge: the Mac screen centred in the
 /// visible area, the width it leaves (its rounding to 64) shared by both
 /// sides; a program with the whole screen has black there (the backdrop).
+/// The Mac screen as it is: a resumed program that could not take this
+/// display's size keeps a narrower or wider one, centred the same way.
 @MainActor func rootlessMacLeft() -> CGFloat {
     let vf = rootlessScreenFrame()
-    let (w, _) = rootlessMacScreenSize()
+    var w: Int32 = 0, h: Int32 = 0
+    machine_screen_size(&w, &h)
     return vf.minX + ((vf.width - CGFloat(w) * displayScale) / 2).rounded(.down)
 }
 

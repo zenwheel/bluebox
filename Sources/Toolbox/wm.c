@@ -965,14 +965,88 @@ void wm_set_menu_bar_height(int16_t h)
  * screen and the menu bar. */
 void wm_rebuild_desk(void) { set_desk((int16_t)rd16(LM_MBarHeight)); }
 
-void display_windows_changed(void);
-
 /* The Finder's desktop window (M21): a window outside the window list that
  * is the desktop itself, so FindWindow still answers inDesk there.  Its
  * port covers the screen; what of the gray region no window covers is its
  * visRgn, and what of that is uncovered goes into its update region, so
  * the Finder draws its desktop icons in update events like a window's. */
 static gaddr desk_window;
+static void repaint_all(void);
+void display_windows_changed(void);
+
+static qrect rgn_bbox(gaddr rgn) { return qrect_get(rd32(rgn) + 2); }
+
+/* Why the screen cannot change size under the program, or NULL: one that
+ * has the whole screen (draws on it outside its windows, hides the menu
+ * bar, has a window covering it, uses DrawSprocket) may keep the screen's
+ * address, row length and size in its own variables, and would draw
+ * across the rows of a screen of another width. */
+const char *wm_screen_fixed(void)
+{
+    const char *why = machine_screen_mode_wanted();
+    if (why)
+        return why;
+    if (!rd16(LM_MBarHeight))
+        return "it hides the menu bar";
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
+        if (!wvisible(w))
+            continue;
+        qrect s = rgn_bbox(WindowRecord_strucRgn(w));
+        if (s.left <= 0 && s.top <= 0 && s.right >= g_screen_width && s.bottom >= g_screen_height)
+            return "it has a window covering the screen";
+    }
+    return NULL;
+}
+
+/* The screen changed size (qd_screen_set_size): the Window Manager's ports
+ * and the desk cover the new one, a window left off it is brought back (as
+ * the Display Manager moved those of a program not aware of it), and
+ * everything is redrawn, the program's windows by update events. */
+void wm_screen_resized(void)
+{
+    qrect screen = { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width };
+    gaddr wports[2] = { rd32(LM_WMgrPort), rd32(LM_WMgrCPort) };
+    for (int i = 0; i < 2; i++)
+        if (wports[i]) {
+            qrect_put(wports[i] + GrafPort_portRect_off, screen);
+            tb_RectRgn(GrafPort_visRgn(wports[i]), wports[i] + GrafPort_portRect_off);
+        }
+    int mbar = (int16_t)rd16(LM_MBarHeight);
+    set_desk(mbar);
+    if (desk_window) {
+        qrect_put(desk_window + GrafPort_portRect_off, screen);
+        tb_CopyRgn(rd32(LM_GrayRgn), WindowRecord_strucRgn(desk_window));
+        tb_CopyRgn(rd32(LM_GrayRgn), WindowRecord_contRgn(desk_window));
+    }
+    /* A window over the screen's new edge is moved back by as much, if it
+     * then fits (below the menu bar); one too big to fit stays where it is
+     * while its top left is still on the screen to drag it by, and is
+     * otherwise moved to the screen's top left. */
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
+        qrect s = rgn_bbox(WindowRecord_strucRgn(w));
+        int dh = 0, dv = 0;
+        if (s.right > g_screen_width) {
+            if (s.right - s.left <= g_screen_width)
+                dh = g_screen_width - s.right;
+            else if (s.left > g_screen_width - 64)
+                dh = -s.left;
+        }
+        if (s.bottom > g_screen_height) {
+            if (s.bottom - s.top <= g_screen_height - mbar)
+                dv = g_screen_height - s.bottom;
+            else if (s.top > g_screen_height - 24)
+                dv = mbar - s.top;
+        }
+        if (!dh && !dv)
+            continue;
+        qrect c = global_content(w);
+        tb_MoveWindow(w, (int16_t)(c.left + dh), (int16_t)(c.top + dv), 0);
+    }
+    repaint_all();
+    if (mbar)
+        tb_DrawMenuBar();
+    display_windows_changed();
+}
 
 /* Recompute every window's visRgn (local coordinates). */
 static void calc_all_vis(void)
@@ -2102,6 +2176,25 @@ void wm_host_requests(void)
     tb_SetPort(saved);
     calc_all_vis();
     repaint_all();
+}
+
+/* The appearance changed under a running program (a resumed one, to the
+ * appearance its settings now choose; a theme file already loaded): the
+ * frames measured again by the new look, and everything redrawn. */
+void machine_change_appearance(int appearance)
+{
+    g_appearance = appearance;
+    frames_dropped = false;
+    drop_frames_asked = false;
+    gaddr saved = qd_port();
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w))
+        call_wdef(w, wCalcRgns, 0);
+    tb_SetPort(saved);
+    calc_all_vis();
+    repaint_all();
+    if (rd16(LM_MBarHeight))
+        tb_DrawMenuBar();
+    display_windows_changed();
 }
 
 /* ---------------------------------------------------------------------- */

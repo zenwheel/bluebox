@@ -662,8 +662,9 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     }
 }
 
-/// The screen's window fits the display: a resumed program keeps the screen
-/// it hibernated with, which may be larger than this display.
+/// The screen's window fits the display: a resumed program that has the
+/// whole screen (a game drawing on it itself) keeps the screen it
+/// hibernated with, which may be larger than this display at this scale.
 @MainActor func fitDisplayScale() {
     guard let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
     var w: Int32 = 0, h: Int32 = 0

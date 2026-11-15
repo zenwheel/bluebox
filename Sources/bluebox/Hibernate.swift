@@ -122,6 +122,26 @@ func runArgsToKeep(_ args: [String]) -> [String] {
     return out
 }
 
+/// A resumed program's screen made the size this display and scale call
+/// for (or --screen gives), as a Mac's resolution was changed: its windows
+/// redrawn, those left off it moved back on.  One that has the whole
+/// screen (a game drawing on it directly, say) keeps the screen it
+/// hibernated with.
+func resizeResumedScreen(title: String, from: (Int32, Int32), to: (Int32, Int32)) {
+    var (w, h) = to
+    machine_fit_screen(&w, &h)
+    guard (w, h) != from else { return }
+    if machine_resize_screen(w, h) {
+        var nw: Int32 = 0, nh: Int32 = 0
+        machine_screen_size(&nw, &nh)
+        let less = (nw, nh) != (w, h) ? " (as large as its depth fits, of \(w)×\(h))" : ""
+        print("resumed on a \(nw)×\(nh) screen\(less) (hibernated on \(from.0)×\(from.1))")
+    } else {
+        let why = machine_screen_fixed().map { String(cString: $0) } ?? "the screen cannot be that size"
+        eprint("bluebox: \(title) keeps the \(from.0)×\(from.1) screen it hibernated with (\(why)), not \(w)×\(h)\n")
+    }
+}
+
 /// --resume at args[i] names a snapshot (the next argument, a .bbhib
 /// file), rather than standing alone for the newest.
 func resumeTakesFile(_ args: [String], at i: Int) -> Bool {
@@ -266,7 +286,7 @@ func resumeCommand(_ args: [String]) {
     let (record, unresumable) = readHibernateRecord(path)
     if let why = unresumable { fail("\(path) cannot be resumed here: \(why)") }
     resumeRecord = record
-    runCommand(record.args + args.dropFirst(), resume: path)
+    runCommand(record.replayedArgs + args.dropFirst(), resume: path)
 }
 
 /// A run of a program (`program`, as the registry knows it) that may have
@@ -360,7 +380,7 @@ private func resumeSnapshot(_ snapshot: String, app: String, title: String, extr
     // As it was shown: one hibernated in the background resumes there.
     if interactive && record.display == "background" && !more.contains("--background") { more.append("--background") }
     print("resuming \(title) from \(snapshot)")
-    runCommand([app] + record.args.dropFirst() + more, resume: snapshot)
+    runCommand([app] + record.replayedArgs.dropFirst() + more, resume: snapshot)
     exit(0)
 }
 

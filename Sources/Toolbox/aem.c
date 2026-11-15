@@ -353,6 +353,15 @@ void aem_queue_flat(const uint8_t *data, uint32_t len, machine_ae_reply_fn reply
  * reads no events through WaitNextEvent while a movie plays, but quits
  * on Command-Q. */
 static bool has_handler(uint32_t cls, uint32_t id);
+/* The screen changed size: a program that handles the Display Manager's
+ * Display Notice is sent one, as the Display Manager did (it moves its own
+ * windows; the others' were moved for them). */
+void aem_display_notice(void)
+{
+    if (has_handler(T("aevt"), T("dspl")))
+        queue_event(T("aevt"), T("dspl"), NULL, 0, NULL, NULL, NULL);
+}
+
 static bool app_has_handlers(void);
 
 void machine_request_quit(void)

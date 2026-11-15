@@ -147,7 +147,7 @@ static uint32_t put_vpblock(image *im, int depth)
     return put(im, b, sizeof b);
 }
 
-static void build(void)
+static void build(bool in_place)
 {
     static image im;
     im.n = 0;
@@ -188,6 +188,12 @@ static void build(void)
     fh[19] = 0x0F;                           /* fhByteLanes: all four */
     put(&im, fh, FHEADER_SIZE);
 
+    if (in_place && rom && rom_size == im.n) {
+        /* Made again for the screen's new size (slots_screen_changed): the
+         * same layout, in the same place, so pointers into it stay good. */
+        gput(rom, im.b, rom_size);
+        return;
+    }
     rom_size = im.n;
     rom = tb_NewPtr((int32_t)rom_size, true, true);
     if (rom)
@@ -214,10 +220,18 @@ void slots_reset(void)
     memset(slot_queue, 0, sizeof slot_queue);
 }
 
+/* The screen changed size: the video's parameters in the declaration ROM
+ * say so (only a ROM already made needs it). */
+void slots_screen_changed(void)
+{
+    if (rom)
+        build(true);
+}
+
 static bool ready(void)
 {
     if (!rom)
-        build();
+        build(false);
     return rom != 0;
 }
 
@@ -512,7 +526,7 @@ int16_t slot_manager(uint16_t sel, gaddr spb)
     case 0x21: /* SPrimaryInit */
     case 0x25: /* SInitPRAMRecs */
     case 0x29: /* SInitSRsrcTable: all built again from the declaration ROM */
-        build();
+        build(false);
         return rom ? noErr : smNilsBlockErr;
     case 0x22: /* SCardChanged: no card is ever changed */
         if ((err = check_slot(rd8(spb + sp_slot))))

@@ -135,6 +135,15 @@ uint32_t machine_pc(void);
 void machine_set_screen(int width, int height);
 /* A Mac's screen size for a host area: width rounded down to 64, height to 2. */
 void machine_fit_screen(int *width, int *height);
+/* The running program's screen made another size (after a resume, for the
+ * display and scale it now runs on); false, and the screen as it was, when
+ * it cannot change: machine_screen_fixed says why. */
+bool machine_resize_screen(int width, int height);
+const char *machine_screen_fixed(void);
+/* A running program's appearance changed (after a resume, to its
+ * settings'; machine_load_theme first for a theme): its windows' frames
+ * measured again and everything redrawn. */
+void machine_change_appearance(int appearance);
 /* Open the fonts (FOND/NFNT/FONT) of a resource file below the application.
  * Call after machine_boot and before machine_launch. */
 bool machine_add_resource_file(const char *path, char *err, size_t errlen);
