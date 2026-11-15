@@ -555,6 +555,7 @@ S	Toolbox/display.c	track_done	-	-	1	d4952237c72370b5	a6aba2e36699f918
 S	Toolbox/display.c	choice_clicks	-	-	4	d4952237c72370b5	b34e18f570e7c710
 S	Toolbox/display.c	choice_click_ticks	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/display.c	in_select	-	-	1	d4952237c72370b5	a6aba2e36699f918
+S	Toolbox/display.c	program_stored	-	-	1	d4952237c72370b5	a6aba2e36699f918
 S	Toolbox/display.c	screen_reason	-	-	8	414ba98c3de019c5	3f8fbaebd5612a91
 S	Toolbox/display.c	desk_size	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/display.c	desk_base	-	-	4	d4952237c72370b5	4984645b460455b1
@@ -1691,6 +1692,7 @@ S	Toolbox/wm.c	pending.3	-	-	4	d4952237c72370b5	476e5c17abc84889
 S	Toolbox/wm.c	pending.4	-	-	1	d4952237c72370b5	476e5c17abc84889
 S	Toolbox/wm.c	pending.5	-	-	1	d4952237c72370b5	476e5c17abc84889
 S	Toolbox/wm.c	saved_height	-	-	2	d4952237c72370b5	7579d81a04189ef3
+S	Toolbox/wm.c	desk_window	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/wm.c	active_window	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/wm.c	ndisposed	-	-	4	d4952237c72370b5	b34e18f570e7c710
 S	Toolbox/wm.c	disposed	-	-	16	d4952237c72370b5	812f4d8edfa60dfc
@@ -1699,7 +1701,6 @@ S	Toolbox/wm.c	update_window	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/wm.c	update_dh	-	-	4	d4952237c72370b5	b34e18f570e7c710
 S	Toolbox/wm.c	update_dv	-	-	4	d4952237c72370b5	b34e18f570e7c710
 S	Toolbox/wm.c	self_drawn	-	-	128	7cb3d0fe66ba3b22	d923b49348ba9049
-S	Toolbox/wm.c	desk_window	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/wm.c	tb_DragWindow.last_w	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/wm.c	tb_DragWindow.last_ticks	-	-	4	d4952237c72370b5	4984645b460455b1
 S	Toolbox/wm.c	tb_DragWindow.last_p	-	-	4	d4952237c72370b5	4984645b460455b1
