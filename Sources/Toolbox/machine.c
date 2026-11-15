@@ -1,5 +1,6 @@
 /* Booting the environment and launching an application. */
 #include <dirent.h>
+#include <stdatomic.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,6 +57,21 @@ const char *machine_screen_fixed(void)
     return wm_screen_fixed();
 }
 
+/* The same for a screen of a given size: a program with the whole screen
+ * (a game) laid out what it shows for the screen it has, from the top
+ * left at places it worked out itself, and a smaller screen would cut it
+ * off; it may have a larger one (the view pans over a smaller window). */
+const char *machine_screen_fixed_at(int width, int height)
+{
+    const char *why = machine_screen_fixed();
+    if (why)
+        return why;
+    machine_fit_screen(&width, &height);
+    if ((width < g_screen_width || height < g_screen_height) && machine_screen_whole())
+        return "it has the whole screen, laid out for a larger one";
+    return NULL;
+}
+
 /* The running program's screen made another size, as a Mac's resolution
  * was changed under it (a resumed program on another display, or at
  * another scale): QuickDraw's screen and ports, the Window Manager's
@@ -76,7 +92,8 @@ bool machine_resize_screen(int width, int height)
     }
     if (width == g_screen_width && height == g_screen_height)
         return true;
-    if (machine_screen_fixed() || !qd_screen_set_size(width, height))
+    int old_w = g_screen_width, old_h = g_screen_height;
+    if (machine_screen_fixed_at(width, height) || !qd_screen_set_size(width, height))
         return false;
     machine_set_screen(width, height);
     qrect_put(LM_CrsrPin, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
@@ -91,9 +108,29 @@ bool machine_resize_screen(int width, int height)
         wr32(LM_MouseLocation2, pt);
     }
     slots_screen_changed();
-    wm_screen_resized();
+    wm_screen_resized(old_w, old_h);
     aem_display_notice();
     return true;
+}
+
+/* The host's window or display changed size while the program runs: the
+ * screen follows at the program's next event call, where its state is
+ * whole (machine_screen_request_poll), as at a resume. */
+BB_HOST static _Atomic uint64_t screen_request; /* 1 << 32 | width << 16 | height */
+
+void ev_wake(void);
+
+void machine_request_screen_size(int width, int height)
+{
+    atomic_store(&screen_request, 1ull << 32 | (uint64_t)(uint16_t)width << 16 | (uint16_t)height);
+    ev_wake();
+}
+
+void machine_screen_request_poll(void)
+{
+    uint64_t r = atomic_exchange(&screen_request, 0);
+    if (r)
+        machine_resize_screen((int)(r >> 16 & 0xFFFF), (int)(r & 0xFFFF));
 }
 
 /* A screen a Mac could have had for a host area of width x height: as wide

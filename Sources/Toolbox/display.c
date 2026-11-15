@@ -419,6 +419,11 @@ int qd_screen_depth(void);
 
 static const char *_Atomic screen_reason;
 static bool direct_written;
+/* The program's own code has stored into the screen's memory (not
+ * QuickDraw's): it may hold the screen's address and row length itself,
+ * so its screen keeps its size (wm_screen_fixed).  Watched until seen. */
+static bool program_stored;
+bool display_program_stored_screen(void) { return program_stored; }
 static int dw_top, dw_left, dw_bottom, dw_right; /* pixels written since the last sync */
 
 void display_want_screen(const char *why)
@@ -653,6 +658,7 @@ static void screen_written(gaddr a, uint32_t len)
         overlay_written(base, off, len);
         return;
     }
+    program_stored = true;
     int y = (int)(off / rb), x = (int)((off % rb) * 8 / (uint32_t)qd_screen_depth());
     if (!direct_written) {
         direct_written = true;
@@ -792,7 +798,8 @@ static void check_screen_mode(void)
     int w, h;
     machine_screen_size(&w, &h);
     screen_watch_lo = rd32(LM_ScrnBase);
-    screen_watch_len = screen_reason ? 0 : qd_screen_row_bytes() * (uint32_t)h; /* decided: no more watching */
+    /* Decided, and the program seen storing into it itself: no more watching. */
+    screen_watch_len = screen_reason && program_stored ? 0 : qd_screen_row_bytes() * (uint32_t)h;
     if (hw_machine()->via_sound && screen_watch_len) { /* and the alternate page below the main */
         screen_watch_lo -= 0x8000;
         screen_watch_len += 0x8000;
@@ -841,6 +848,7 @@ void display_reset(void)
     pthread_mutex_unlock(&ov_lock);
     screen_reason = NULL;
     direct_written = false;
+    program_stored = false;
     screen_watch_len = 0;
     all_stores = NULL;
     g_watch_len = 0;

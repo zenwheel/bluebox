@@ -1005,8 +1005,10 @@ static bool next_event(int16_t mask, gaddr evt, bool remove, bool os_only)
     note_poll();
     queue_polls++;
     wm_host_requests();
-    if (!os_only)
+    if (!os_only) {
+        machine_screen_request_poll(); /* the host's window or display resized */
         wheel_poll();
+    }
     opentransport_poll(); /* network events to the programs' notifiers */
     mactcp_poll();
     serial_poll();

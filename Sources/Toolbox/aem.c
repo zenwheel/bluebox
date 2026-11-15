@@ -356,6 +356,8 @@ static bool has_handler(uint32_t cls, uint32_t id);
 /* The screen changed size: a program that handles the Display Manager's
  * Display Notice is sent one, as the Display Manager did (it moves its own
  * windows; the others' were moved for them). */
+bool aem_handles_display_notice(void) { return has_handler(T("aevt"), T("dspl")); }
+
 void aem_display_notice(void)
 {
     if (has_handler(T("aevt"), T("dspl")))

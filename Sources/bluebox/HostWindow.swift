@@ -52,7 +52,64 @@ final class ScreenView: NSView, MacScreenView {
     private func mac(_ p: NSPoint) -> (Int32, Int32) {
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
-        return (Int32(p.x * CGFloat(w) / bounds.width), Int32(p.y * CGFloat(h) / bounds.height))
+        if hostFullScreen { // the whole screen stretched over the display
+            return (Int32(p.x * CGFloat(w) / bounds.width), Int32(p.y * CGFloat(h) / bounds.height))
+        }
+        let s = displayScale
+        return (Int32((p.x / s + pan.x).rounded(.down)), Int32((p.y / s + pan.y).rounded(.down)))
+    }
+
+    /// The Mac pixel at the view's top left: the screen at the display
+    /// scale is larger than the window can be (a program whose screen
+    /// can't change size, on a smaller display), and the view shows the
+    /// part of it around the mouse.
+    var pan = CGPoint.zero
+
+    /// The pan kept around the program's mouse: moved when the mouse comes
+    /// within a margin of the view's edge, and kept on the screen.
+    static var startAtFrontWindow = false
+
+    func followMouse() {
+        guard !hostFullScreen else { return }
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        let s = displayScale
+        let vw = bounds.width / s, vh = bounds.height / s
+        if Self.startAtFrontWindow {
+            Self.startAtFrontWindow = false
+            var list = [machine_window](repeating: machine_window(), count: 1)
+            if machine_windows(&list, 1) > 0 {
+                let f = list[0]
+                let cx = CGFloat(Int(f.left) + Int(f.right)) / 2, cy = CGFloat(Int(f.top) + Int(f.bottom)) / 2
+                pan = CGPoint(x: min(max(cx - vw / 2, 0), max(CGFloat(w) - vw, 0)).rounded(.down),
+                              y: min(max(cy - vh / 2, 0), max(CGFloat(h) - vh, 0)).rounded(.down))
+                needsDisplay = true
+                return
+            }
+        }
+        var x: Int32 = 0, y: Int32 = 0, relative = false
+        _ = machine_mouse_state(&x, &y, &relative)
+        func axis(_ at: CGFloat, _ pan: CGFloat, _ view: CGFloat, _ size: CGFloat) -> CGFloat {
+            guard size > view else { return 0 }
+            let margin = min(64, view / 4)
+            var p = pan
+            if at < p + margin { p = at - margin }
+            if at > p + view - margin { p = at - view + margin }
+            return min(max(p, 0), size - view).rounded(.down)
+        }
+        let next = CGPoint(x: axis(CGFloat(x), pan.x, vw, CGFloat(w)), y: axis(CGFloat(y), pan.y, vh, CGFloat(h)))
+        guard next != pan else { return }
+        pan = next
+        needsDisplay = true
+        // The pointer stays where it is over moved pixels: the Mac's mouse
+        // is now under it somewhere else (at the edge, it goes on scrolling).
+        if !captured, let window, !Suspender.shared.suspended {
+            let p = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            if bounds.contains(p) {
+                let (mx, my) = mac(p)
+                machine_post_mouse(mx, my, -1)
+            }
+        }
     }
 
     func macPoint(screen: NSPoint) -> (Int32, Int32) {
@@ -70,6 +127,7 @@ final class ScreenView: NSView, MacScreenView {
                 }
                 self?.refreshIfChanged()
                 self?.updateCapture()
+                self?.followMouse()
                 CursorSync.shared.tick()
                 DragOut.shared.tick()
                 if machine_halted() {
@@ -88,9 +146,18 @@ final class ScreenView: NSView, MacScreenView {
 
     /// Ask for a redraw only when the framebuffer changed (compared with a
     /// copy of it).
+    /// Told when the Mac screen changes size (the window follows it).
+    var sizeChanged: (() -> Void)?
+    private var shownSize: (Int32, Int32) = (0, 0)
+
     func refreshIfChanged() {
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
+        if (w, h) != shownSize {
+            let first = shownSize == (0, 0)
+            shownSize = (w, h)
+            if !first { sizeChanged?() }
+        }
         // Converted only when it changed, or the desktop's showing through
         // changes (the mask then follows).
         let clear = !NSApp.isActive && !hostFullScreen && !machine_is_finder()
@@ -134,7 +201,13 @@ final class ScreenView: NSView, MacScreenView {
         gc.saveGState()
         gc.translateBy(x: 0, y: bounds.height)
         gc.scaleBy(x: 1, y: -1)
-        gc.draw(image, in: CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height))
+        if hostFullScreen {
+            gc.draw(image, in: CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height))
+        } else { // at the display scale, from the pan
+            let s = displayScale
+            gc.draw(image, in: CGRect(x: -pan.x * s, y: bounds.height + pan.y * s - CGFloat(height) * s,
+                                      width: CGFloat(width) * s, height: CGFloat(height) * s))
+        }
         gc.restoreGState()
     }
 
@@ -151,6 +224,7 @@ final class ScreenView: NSView, MacScreenView {
 
     /// Host points per Mac pixel across the view.
     private var pointsPerPixel: CGFloat {
+        guard hostFullScreen else { return displayScale }
         var w: Int32 = 0, h: Int32 = 0
         machine_screen_size(&w, &h)
         return w > 0 ? bounds.width / CGFloat(w) : 1
@@ -193,7 +267,8 @@ final class ScreenView: NSView, MacScreenView {
     private func warpHostPointer(to x: Int32, _ y: Int32) {
         guard let window else { return }
         let scale = pointsPerPixel
-        let inView = NSPoint(x: (CGFloat(x) + 0.5) * scale, y: (CGFloat(y) + 0.5) * scale)
+        let origin = hostFullScreen ? .zero : pan
+        let inView = NSPoint(x: (CGFloat(x) - origin.x + 0.5) * scale, y: (CGFloat(y) - origin.y + 0.5) * scale)
         let onScreen = window.convertPoint(toScreen: convert(inView, to: nil))
         let top = NSScreen.screens.first?.frame.maxY ?? 0
         CGWarpMouseCursorPosition(CGPoint(x: onScreen.x, y: top - onScreen.y))
@@ -209,10 +284,7 @@ final class ScreenView: NSView, MacScreenView {
             machine_post_mouse(x, y, button)
             return
         }
-        let p = convert(event.locationInWindow, from: nil)
-        var w: Int32 = 0, h: Int32 = 0
-        machine_screen_size(&w, &h)
-        let x = Int32(p.x * CGFloat(w) / bounds.width), y = Int32(p.y * CGFloat(h) / bounds.height)
+        let (x, y) = mac(convert(event.locationInWindow, from: nil))
         machine_post_mouse(x, y, button)
     }
 
@@ -619,8 +691,12 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             NSCursor.hide()
         } else {
-            window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable],
-                              backing: .buffered, defer: false)
+            // On its display at the scale: a screen larger than that (one
+            // that can't change size) is shown in part, the view panning.
+            size = fitted(size, on: NSScreen.main)
+            window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            window.contentMinSize = NSSize(width: 512 * displayScale, height: 342 * displayScale)
         }
         window.title = title
         window.delegate = self
@@ -633,6 +709,13 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
         NSApp.activate(ignoringOtherApps: true)
         PickerStandIn.closeWhenAnotherShows()
         DragOut.shared.refresh = { [weak view] in view?.refreshIfChanged() }
+        if !hostFullScreen {
+            view.sizeChanged = { [weak self] in self?.followScreenSize() }
+            NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
+                                                   object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { (NSApp.delegate as? HostDelegate)?.displayChanged() }
+            }
+        }
         let title = self.title
         Suspender.shared.changed = { [weak view] on in
             view?.showSuspended(on)
@@ -646,6 +729,85 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
                 _ = machine_run(1_000_000)
             }
         }
+    }
+
+    // MARK: The screen's size
+    //
+    // The window and the Mac screen follow each other, as a virtual
+    // machine's display follows its window: the window resized (on the
+    // mouse-up that ends a live resize) or its display changed asks for a
+    // Mac screen of its size at the display scale (a Mac's size: rows of
+    // 64 pixels; machine_request_screen_size), which the program gets at
+    // its next event call, and the window then takes the screen's exact
+    // size.  A program whose screen can't change keeps it, and the view
+    // pans over it (ScreenView.followMouse).
+
+    /// The largest content the window can have on that display: its
+    /// visible area less a title bar.
+    @MainActor func contentLimit(on screen: NSScreen?) -> NSSize {
+        let vf = (screen ?? NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1024, height: 768)
+        let bar = window.map { $0.frame.height - $0.contentRect(forFrameRect: $0.frame).height } ?? 28
+        return NSSize(width: vf.width, height: vf.height - bar)
+    }
+
+    @MainActor func fitted(_ size: NSSize, on screen: NSScreen?) -> NSSize {
+        let limit = contentLimit(on: screen)
+        return NSSize(width: min(size.width, limit.width), height: min(size.height, limit.height))
+    }
+
+    /// The Mac screen the window's content asks for.
+    @MainActor func requestScreenForWindow() {
+        guard let window else { return }
+        let content = window.contentRect(forFrameRect: window.frame).size
+        var mw = Int32((content.width / displayScale).rounded(.down)), mh = Int32((content.height / displayScale).rounded(.down))
+        machine_fit_screen(&mw, &mh)
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        guard (mw, mh) != (w, h), mw >= 512, mh >= 342 else { return followScreenSize() }
+        if let why = machine_screen_fixed_at(mw, mh) {
+            // The window stays as made, the view panning over the screen.
+            eprint("bluebox: the screen stays \(w)×\(h): \(String(cString: why))\n")
+            return
+        }
+        machine_request_screen_size(mw, mh)
+    }
+
+    /// The window the screen's size at the scale, within its display.
+    @MainActor func followScreenSize() {
+        guard let window, !window.inLiveResize else { return }
+        var w: Int32 = 0, h: Int32 = 0
+        machine_screen_size(&w, &h)
+        let size = fitted(NSSize(width: CGFloat(w) * displayScale, height: CGFloat(h) * displayScale), on: window.screen)
+        window.contentMaxSize = machine_screen_fixed() == nil ? contentLimit(on: window.screen)
+            : NSSize(width: CGFloat(w) * displayScale, height: CGFloat(h) * displayScale)
+        let frame = window.contentRect(forFrameRect: window.frame)
+        guard frame.size != size else { return }
+        // Its top left stays where it is.
+        let content = NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height)
+        window.setFrame(window.frameRect(forContentRect: content), display: true)
+        window.contentView?.needsDisplay = true
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        MainActor.assumeIsolated { requestScreenForWindow() }
+    }
+
+    /// The display changed (another resolution, a monitor connected or
+    /// gone): the window kept on it, and the screen following the window.
+    @MainActor func displayChanged() {
+        guard let window else { return }
+        let frame = window.contentRect(forFrameRect: window.frame)
+        let size = fitted(frame.size, on: window.screen)
+        if size != frame.size {
+            let content = NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height)
+            window.setFrame(window.frameRect(forContentRect: content), display: true)
+        }
+        if let vf = window.screen?.visibleFrame, !vf.contains(window.frame) {
+            window.setFrameTopLeftPoint(NSPoint(x: max(vf.minX, min(window.frame.minX, vf.maxX - window.frame.width)),
+                                                y: min(vf.maxY, max(window.frame.maxY, vf.minY + window.frame.height))))
+        }
+        requestScreenForWindow()
     }
 
     /// A suspended program's window stays (closing it ends the program).
@@ -662,16 +824,15 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     }
 }
 
-/// The screen's window fits the display: a resumed program that has the
-/// whole screen (a game drawing on it itself) keeps the screen it
-/// hibernated with, which may be larger than this display at this scale.
-@MainActor func fitDisplayScale() {
-    guard let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
-    var w: Int32 = 0, h: Int32 = 0
-    machine_screen_size(&w, &h)
-    guard w > 0, h > 0 else { return }
-    let fit = min(vf.width / CGFloat(w), (vf.height - 28) / CGFloat(h)) // a title bar's room
-    if displayScale > fit { displayScale = max(fit, 0.25) }
+/// The Mac screen a window of the whole screen has on the main display at
+/// the display scale: its visible area less a title bar, a Mac's size.
+@MainActor func screenWindowMacSize() -> (Int32, Int32) {
+    let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 768)
+    let style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+    let bar = NSWindow.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: style).height - 100
+    var w = Int32((vf.width / displayScale).rounded(.down)), h = Int32(((vf.height - bar) / displayScale).rounded(.down))
+    machine_fit_screen(&w, &h)
+    return (w, h)
 }
 
 /// Show the classic screen in a window until the app quits.  Never returns.

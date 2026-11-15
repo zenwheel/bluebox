@@ -971,28 +971,45 @@ void wm_rebuild_desk(void) { set_desk((int16_t)rd16(LM_MBarHeight)); }
  * visRgn, and what of that is uncovered goes into its update region, so
  * the Finder draws its desktop icons in update events like a window's. */
 static gaddr desk_window;
-static void repaint_all(void);
+static void calc_all_vis(void);
+static void repaint(const hrgn *clobbered);
 void display_windows_changed(void);
 
 static qrect rgn_bbox(gaddr rgn) { return qrect_get(rd32(rgn) + 2); }
 
-/* Why the screen cannot change size under the program, or NULL: one that
- * has the whole screen (draws on it outside its windows, hides the menu
- * bar, has a window covering it, uses DrawSprocket) may keep the screen's
- * address, row length and size in its own variables, and would draw
- * across the rows of a screen of another width. */
+/* Why the screen cannot change size under the program, or NULL: one whose
+ * own code stores into the screen's memory may keep the screen's address,
+ * row length and size in its own variables, and would draw across the
+ * rows of a screen of another width.  One that only draws with QuickDraw
+ * (however much of the screen it takes: a hidden menu bar, a window
+ * covering it, another depth, DrawSprocket's blits) draws through the
+ * ports, which change with the screen, as does one that handles the
+ * Display Manager's Display Notice, sent when the screen changes. */
 const char *wm_screen_fixed(void)
+{
+    bool display_program_stored_screen(void);
+    /* (unless it takes the Display Manager's Display Notice: then it
+     * knows to look at the screen again) */
+    if (display_program_stored_screen() && !aem_handles_display_notice())
+        return "it draws on the screen itself";
+    return NULL;
+}
+
+/* Why the program has the whole screen, or NULL: it hides the menu bar,
+ * covers the screen with a window, or wants it shown whole (display.c).
+ * A snapshot made before builds watched for the program's own stores to
+ * the screen (wm_screen_fixed) can't say whether such a one makes them. */
+const char *machine_screen_whole(void)
 {
     const char *why = machine_screen_mode_wanted();
     if (why)
         return why;
-    if (!rd16(LM_MBarHeight))
+    int mbar = (int16_t)rd16(LM_MBarHeight);
+    if (!mbar)
         return "it hides the menu bar";
     for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
-        if (!wvisible(w))
-            continue;
         qrect s = rgn_bbox(WindowRecord_strucRgn(w));
-        if (s.left <= 0 && s.top <= 0 && s.right >= g_screen_width && s.bottom >= g_screen_height)
+        if (wvisible(w) && s.left <= 0 && s.top <= mbar && s.right >= g_screen_width && s.bottom >= g_screen_height)
             return "it has a window covering the screen";
     }
     return NULL;
@@ -1002,7 +1019,7 @@ const char *wm_screen_fixed(void)
  * and the desk cover the new one, a window left off it is brought back (as
  * the Display Manager moved those of a program not aware of it), and
  * everything is redrawn, the program's windows by update events. */
-void wm_screen_resized(void)
+void wm_screen_resized(int old_w, int old_h)
 {
     qrect screen = { 0, 0, (int16_t)g_screen_height, (int16_t)g_screen_width };
     gaddr wports[2] = { rd32(LM_WMgrPort), rd32(LM_WMgrCPort) };
@@ -1017,6 +1034,26 @@ void wm_screen_resized(void)
         qrect_put(desk_window + GrafPort_portRect_off, screen);
         tb_CopyRgn(rd32(LM_GrayRgn), WindowRecord_strucRgn(desk_window));
         tb_CopyRgn(rd32(LM_GrayRgn), WindowRecord_contRgn(desk_window));
+    }
+    /* A window that covered the whole screen (a game's), or all of it
+     * below the menu bar, covers the new one the same way. */
+    gaddr covering[8];
+    int ncovering = 0;
+    for (gaddr w = wlist(); w; w = WindowRecord_nextWindow(w)) {
+        qrect s = rgn_bbox(WindowRecord_strucRgn(w));
+        if (!wvisible(w) || s.left > 0 || s.top > mbar || s.right < old_w || s.bottom < old_h)
+            continue;
+        if (ncovering < 8)
+            covering[ncovering++] = w;
+        qrect c = global_content(w);
+        int grow_h = g_screen_width - old_w, grow_v = g_screen_height - old_h;
+        /* Sized without SizeWindow's repaint: what it shows stays (a game
+         * that painted its backdrop once), what is new is painted below. */
+        gaddr saved = qd_port();
+        tb_SetPort(w);
+        tb_PortSize((int16_t)(c.right - c.left + grow_h), (int16_t)(c.bottom - c.top + grow_v));
+        tb_SetPort(saved);
+        call_wdef(w, wCalcRgns, 0);
     }
     /* A window over the screen's new edge is moved back by as much, if it
      * then fits (below the menu bar); one too big to fit stays where it is
@@ -1042,7 +1079,72 @@ void wm_screen_resized(void)
         qrect c = global_content(w);
         tb_MoveWindow(w, (int16_t)(c.left + dh), (int16_t)(c.top + dv), 0);
     }
-    repaint_all();
+    /* Painted again: what the screen has that the old one had not, and
+     * the old and new screens' rounded corners (what the screen showed
+     * stays: a game that painted its backdrop once never paints it again). */
+    hrgn fresh, part;
+    hrgn_init(&fresh);
+    hrgn_init(&part);
+    hrgn_rect(&fresh, screen);
+    hrgn_rect(&part, (qrect){ 0, 0, (int16_t)old_h, (int16_t)old_w });
+    hrgn_op(&fresh, &fresh, &part, RGN_DIFF);
+    int corners[2][2] = { { old_w, old_h }, { g_screen_width, g_screen_height } };
+    for (int i = 0; i < 2; i++) {
+        int cw = corners[i][0], ch = corners[i][1];
+        qrect sq[4] = { { 0, 0, 16, 16 },
+                        { 0, (int16_t)(cw - 16), 16, (int16_t)cw },
+                        { (int16_t)(ch - 16), 0, (int16_t)ch, 16 },
+                        { (int16_t)(ch - 16), (int16_t)(cw - 16), (int16_t)ch, (int16_t)cw } };
+        for (int k = 0; k < 4; k++) {
+            hrgn_rect(&part, sq[k]);
+            hrgn_op(&fresh, &fresh, &part, RGN_UNION);
+        }
+    }
+    hrgn_rect(&part, screen);
+    hrgn_op(&fresh, &fresh, &part, RGN_SECT);
+    /* The screen's corners outside the desk and the menu bar: black. */
+    hrgn black, desk;
+    hrgn_init(&black);
+    hrgn_init(&desk);
+    hrgn_rect(&black, screen);
+    gray_rgn(&desk);
+    hrgn_op(&black, &black, &desk, RGN_DIFF);
+    hrgn_rect(&part, (qrect){ 0, 16, (int16_t)mbar, (int16_t)(g_screen_width - 16) });
+    hrgn_op(&black, &black, &part, RGN_DIFF);
+    hrgn_op(&black, &black, &fresh, RGN_SECT);
+    if (rd32(LM_WMgrPort)) {
+        gaddr saved = qd_port();
+        tb_SetPort(rd32(LM_WMgrPort));
+        qd_fill_region(rd32(LM_WMgrPort), &black, qd_pat_black, patCopy);
+        tb_SetPort(saved);
+    }
+    hrgn_free(&black);
+    hrgn_free(&desk);
+    calc_all_vis();
+    repaint(&fresh);
+    /* A program with the whole screen (a game: it hides the menu bar, a
+     * window of its covers the screen, it draws there itself) has what is
+     * new painted the colour of the old screen's corner, not erased white
+     * or the desk's gray: it painted its backdrop once and would leave
+     * the strip it never knew of blank. */
+    if (ncovering || !mbar || machine_screen_mode_wanted()) {
+        /* made from the old screen's edge, not erased white or painted
+         * the desk's gray: the game painted its backdrop once and would
+         * leave the strips it never knew of blank */
+        qd_screen_extend(old_w, old_h, mbar);
+        /* and its covering windows have no update for it: one would be
+         * erased white again, the game drawing only what it always did */
+        for (int i = 0; i < ncovering; i++) {
+            hrgn upd;
+            hrgn_init(&upd);
+            rgn_read(WindowRecord_updateRgn(covering[i]), &upd);
+            hrgn_op(&upd, &upd, &fresh, RGN_DIFF);
+            rgn_write(WindowRecord_updateRgn(covering[i]), &upd);
+            hrgn_free(&upd);
+        }
+    }
+    hrgn_free(&fresh);
+    hrgn_free(&part);
     if (mbar)
         tb_DrawMenuBar();
     display_windows_changed();

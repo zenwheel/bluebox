@@ -58,13 +58,17 @@ public struct HibernateRecord: Codable, Equatable, Sendable {
     /// What made it: nil for Hibernate, "savepoint" for a save point (the
     /// program went on running).
     public var kind: String?
+    /// The build that made it watched for the program's own stores to the
+    /// screen (machine_screen_fixed), so a resume can tell whether the
+    /// screen may change size.  Older snapshots have none.
+    public var screenStores: Bool?
 
     public static let savePointKind = "savepoint"
     public var isSavePoint: Bool { kind == Self.savePointKind }
 
     public init(args: [String], program: String, title: String, saved: Date, instructions: UInt64, drainedAt: String,
                 screen: [Int32]? = nil, depth: Int32? = nil, display: String? = nil, machine: String? = nil,
-                thumbnail: Data? = nil, kind: String? = nil) {
+                thumbnail: Data? = nil, kind: String? = nil, screenStores: Bool? = nil) {
         self.args = args
         self.program = program
         self.title = title
@@ -77,6 +81,7 @@ public struct HibernateRecord: Codable, Equatable, Sendable {
         self.machine = machine
         self.thumbnail = thumbnail
         self.kind = kind
+        self.screenStores = screenStores
     }
 
     /// The arguments a resumed run repeats: not those the settings now
