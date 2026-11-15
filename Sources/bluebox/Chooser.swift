@@ -19,6 +19,10 @@ func hostFullUserName() -> String {
 
 /// The host's printers, by queue name: those set up, and those CUPS finds
 /// on the network (AirPrint), which it prints to without setting them up.
+/// Read afresh each time.  It waits for lpstat without running the
+/// caller's run loop (waitUntilExit does, and on the main thread inside a
+/// SwiftUI update that broke the shell's light and dark mode); still, the
+/// shell calls it only off the main thread (ShellModel.refreshHostPrinters).
 func hostPrinterNames() -> [String] {
     var names: [String] = []
     #if canImport(AppKit)
@@ -30,9 +34,11 @@ func hostPrinterNames() -> [String] {
     let out = Pipe()
     p.standardOutput = out
     p.standardError = FileHandle.nullDevice
+    let exited = DispatchSemaphore(value: 0)
+    p.terminationHandler = { _ in exited.signal() }
     if (try? p.run()) != nil {
         let data = out.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
+        exited.wait()
         for n in String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init) where !names.contains(n) {
             names.append(n)
         }
