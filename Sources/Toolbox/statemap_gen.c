@@ -1494,6 +1494,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/display.c", "ov_top", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/display.c", "ov_version", 4, 0, 0x4984645b460455b1 },
     { "Toolbox/display.c", "pending_choice", 4, 0, 0xb34e18f570e7c710 },
+    { "Toolbox/display.c", "program_stored", 1, 0, 0xa6aba2e36699f918 },
     { "Toolbox/display.c", "screen_reason", 8, 2, 0x3f8fbaebd5612a91 },
     { "Toolbox/display.c", "screen_watch_len", 4, 0, 0x4984645b460455b1 },
     { "Toolbox/display.c", "screen_watch_lo", 4, 0, 0x4984645b460455b1 },
@@ -2708,7 +2709,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1706;
+const unsigned hb_nstatics = 1707;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

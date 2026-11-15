@@ -397,8 +397,10 @@ int16_t slot_manager(uint16_t sel, gaddr spb);
 void slots_reset(void);
 void slots_screen_changed(void); /* the screen's size changed */
 const char *wm_screen_fixed(void);
-void wm_screen_resized(void);
+void wm_screen_resized(int old_w, int old_h);
 void aem_display_notice(void);
+bool aem_handles_display_notice(void);
+void machine_screen_request_poll(void);
 void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
 /* Virtual memory's calls by _MemoryDispatch selector (driverservices.c);
  * *a0_out is A0 after. */

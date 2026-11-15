@@ -270,8 +270,9 @@ bool qd_screen_set_depth(int depth)
  * The screen made another size while a program runs, as a Mac changed
  * resolution (a resumed program on a display, or at a scale, other than
  * the one it hibernated on): the device, screenBits, ScreenRow and every
- * port drawing on the screen take the new size, the contents are lost
- * and the Window Manager redraws (wm_screen_resized).  A port's bounds
+ * port drawing on the screen take the new size, what it shows stays
+ * where it was, and the Window Manager paints what is new
+ * (wm_screen_resized).  A port's bounds
  * keep their top left (the port's place on the screen). */
 static void resize_bounds(gaddr r, int width, int height)
 {
@@ -291,10 +292,25 @@ bool qd_screen_set_size(int width, int height)
     if (width < 512 || height < 342 || width > 4096 || height > 4096 || !fits(screen_depth, width, height))
         return false;
     uint32_t old_rb = screen_row_bytes;
+    int old_w = g_screen_width, old_h = g_screen_height;
+    /* What the screen shows stays where it was, from the top left: a game
+     * that painted its backdrop once and draws only what moves, at places
+     * it worked out for the old screen, goes on matching it.  What is new
+     * is white until the Window Manager paints it. */
+    uint32_t keep_rows = (uint32_t)(old_h < height ? old_h : height);
+    uint32_t keep_bytes = row_bytes_for(screen_depth, old_w < width ? old_w : width);
+    uint8_t *old = bb_malloc((size_t)old_rb * keep_rows, BB_BYTES);
+    if (old)
+        memcpy(old, gptr(GA_SCREEN), (size_t)old_rb * keep_rows);
     g_screen_width = width;
     g_screen_height = height;
     screen_row_bytes = row_bytes_for(screen_depth, width);
     gmemset(GA_SCREEN, screen_depth >= 16 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
+    if (old) {
+        for (uint32_t y = 0; y < keep_rows; y++)
+            memcpy(gptr(GA_SCREEN + y * screen_row_bytes), old + (size_t)y * old_rb, keep_bytes);
+        bb_free(old);
+    }
     gaddr gd = rd32(rd32(LM_MainDevice));
     gaddr pm = rd32(GDevice_gdPMap(gd));
     qrect screen = { 0, 0, (int16_t)height, (int16_t)width };
@@ -326,6 +342,34 @@ bool qd_screen_set_size(int width, int height)
     }
     video_mode_changed();
     return true;
+}
+
+/* What a larger screen has beyond an old one of old_w x old_h, below row
+ * top, made from the old screen's edge repeated: a game's backdrop (a
+ * texture, black) goes on to the new edges.  The old screen's last 16
+ * pixels are made again too (its rounded corners).  Widths are whole
+ * numbers of 16 pixels, so every depth's pixels are whole bytes. */
+void qd_screen_extend(int old_w, int old_h, int top)
+{
+    int x0 = old_w - 16, y0 = old_h - 16;
+    if (x0 < 16 || y0 <= top + 16)
+        return;
+    uint32_t bpp = (uint32_t)screen_depth, rb = screen_row_bytes;
+    if (g_screen_width > old_w) {
+        int band = x0 < 128 ? x0 : 128; /* the edge repeated, this wide */
+        for (int y = top; y < (old_h < g_screen_height ? old_h : g_screen_height); y++) {
+            uint8_t *row = gptr(GA_SCREEN + (uint32_t)y * rb);
+            for (int x = x0; x < g_screen_width; x += band) {
+                int n = g_screen_width - x < band ? g_screen_width - x : band;
+                memcpy(row + (uint32_t)x * bpp / 8, row + (uint32_t)(x0 - band) * bpp / 8, (size_t)n * bpp / 8);
+            }
+        }
+    }
+    if (g_screen_height > old_h) {
+        int band = y0 - top < 64 ? y0 - top : 64;
+        for (int y = y0; y < g_screen_height; y++)
+            memcpy(gptr(GA_SCREEN + (uint32_t)y * rb), gptr(GA_SCREEN + (uint32_t)(y0 - band + (y - y0) % band) * rb), rb);
+    }
 }
 
 gaddr tb_GetMainDevice(void) { return rd32(LM_MainDevice); }

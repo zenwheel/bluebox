@@ -1,5 +1,6 @@
 import BlueBoxHost
 import CCore
+import CPU68K
 import Foundation
 import Testing
 import Toolbox
@@ -124,19 +125,90 @@ extension BlueBox {
             #expect(bbox(rd32(w + UInt32(WindowRecord_strucRgn_off))) == before)
         }
 
-        /// A program with the whole screen keeps it: one that hid the menu
-        /// bar, or covers the screen with a window.
-        @Test func wholeScreenProgramsKeepTheirScreen() {
+        /// A program that has the whole screen but draws with QuickDraw
+        /// (a hidden menu bar, a window covering the screen) may have a
+        /// larger screen, not a smaller one: it laid out what it shows for
+        /// the screen it had, which a smaller one would cut off.
+        @Test func wholeScreenProgramsGrowOnly() {
             _ = setUp([100, 100, 300, 400])
             defer { machine_set_screen(1024, 768) }
             wr16(UInt32(LM_MBarHeight), 0)
-            #expect(machine_screen_fixed() != nil)
+            #expect(machine_screen_fixed() == nil)
+            #expect(machine_screen_fixed_at(832, 624).map { String(cString: $0) }
+                    == "it has the whole screen, laid out for a larger one")
             #expect(!machine_resize_screen(832, 624))
             #expect(size() == (1024, 768))
+            #expect(machine_resize_screen(1280, 960))
+            #expect(size() == (1280, 960))
+        }
 
-            _ = setUp([0, 0, 768, 1024])
-            #expect(machine_screen_fixed().map { String(cString: $0) } == "it has a window covering the screen")
+        /// A window covering the screen (a game's) covers the larger one,
+        /// and what is new beyond the old screen is made from its edge, not
+        /// erased: a game paints its backdrop once.
+        @Test func coveringWindowGrowsWithTheScreen() {
+            let w = setUp([0, 0, 768, 1024])
+            defer { machine_set_screen(1024, 768) }
+            #expect(machine_screen_whole().map { String(cString: $0) } == "it has a window covering the screen")
+            tb_SetPort(w)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [0, 0, 768, 1024].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            tb_PaintRect(r) // a black backdrop
             #expect(!machine_resize_screen(832, 624))
+            #expect(machine_resize_screen(1280, 960))
+            #expect(bbox(rd32(w + UInt32(WindowRecord_contRgn_off))) == [0, 0, 960, 1280])
+            var px = [UInt8](repeating: 0, count: 4)
+            for (x, y) in [(1200, 400), (500, 900), (1270, 950), (10, 30)] {
+                machine_screen_rgba(Int32(x), Int32(y), 1, 1, &px)
+                #expect(px[0] < 0x40 && px[1] < 0x40 && px[2] < 0x40, Comment(rawValue: "\(x),\(y): \(px)"))
+            }
+            // and no update for it, which would erase it white again
+            #expect(bbox(rd32(w + UInt32(WindowRecord_updateRgn_off)))[3] <= 1024)
+        }
+
+        /// What the screen shows stays where it was.
+        @Test func contentsStay() {
+            let w = setUp([100, 100, 300, 400])
+            defer { machine_set_screen(1024, 768) }
+            tb_SetPort(w)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [20, 20, 40, 40].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            tb_PaintRect(r)
+            #expect(machine_resize_screen(1280, 960))
+            var px = [UInt8](repeating: 0, count: 4)
+            machine_screen_rgba(130, 130, 1, 1, &px)
+            #expect(px[0] < 0x40)
+        }
+
+        /// A program whose own code stores into the screen keeps it: it
+        /// may hold the screen's address and row length itself.
+        @Test func programThatDrawsOnTheScreenKeepsIt() {
+            _ = setUp([100, 100, 300, 400])
+            defer { machine_set_screen(1024, 768) }
+            display_sync()
+            let at = rd32(UInt32(LM_ScrnBase)) + 150 * qd_screen_row_bytes() + 600 * UInt32(qd_screen_depth()) / 8
+            let words: [UInt16] = [0x23FC, 0xFFFF, 0xFFFF, UInt16(at >> 16), UInt16(at & 0xFFFF), 0xA9F4]
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            let cpu = g_cpu!
+            cpu.pointee.a.7 = tb_NewPtr(4096, false, true) + 4096 - 16
+            cpu.pointee.pc = code
+            cpu.pointee.halted = false
+            _ = cpu_run(cpu, 100)
+            display_sync()
+            #expect(machine_screen_fixed().map { String(cString: $0) } == "it draws on the screen itself")
+            #expect(!machine_resize_screen(1280, 960))
+            #expect(size() == (1024, 768))
+        }
+
+        /// The host's request (its window or display resized) is taken at
+        /// the program's next event call.
+        @Test func requestTakenAtTheNextEventCall() {
+            _ = setUp([100, 100, 300, 400])
+            defer { machine_set_screen(1024, 768) }
+            machine_request_screen_size(1152, 870)
+            #expect(size() == (1024, 768))
+            machine_screen_request_poll()
+            #expect(size() == (1152, 870))
         }
 
         /// The snapshot's arguments a resumed run repeats leave out what the

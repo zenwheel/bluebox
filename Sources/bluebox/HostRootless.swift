@@ -22,11 +22,32 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
 /// Hiding the menu bar and Dock for screen mode changes the visible area,
 /// and clicks were then mapped a menu bar's height below the pointer.
 @MainActor private var mappedScreenFrame: NSRect?
+/// The display's frame then, and how far in from it the visible area was.
+@MainActor private var mappedDisplay: (frame: NSRect, left: CGFloat, bottom: CGFloat, right: CGFloat, top: CGFloat)?
 @MainActor func rootlessScreenFrame() -> NSRect {
     if let f = mappedScreenFrame { return f }
-    let f = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 748)
+    let screen = NSScreen.main ?? NSScreen.screens.first
+    let f = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 748)
     mappedScreenFrame = f
+    if let d = screen?.frame {
+        mappedDisplay = (d, f.minX - d.minX, f.minY - d.minY, d.maxX - f.maxX, d.maxY - f.maxY)
+    }
     return f
+}
+
+/// The display changed (another resolution, another main display): the
+/// area mapped again, true if it moved or changed size.  The visible area
+/// is the new display's less what the menu bar and Dock took of the old
+/// one (hidden for screen mode, they leave the visible area the whole
+/// display).
+@MainActor func remapRootlessScreen() -> Bool {
+    guard let old = mappedDisplay, let d = (NSScreen.main ?? NSScreen.screens.first)?.frame, d != old.frame else {
+        return false
+    }
+    mappedScreenFrame = NSRect(x: d.minX + old.left, y: d.minY + old.bottom, width: d.width - old.left - old.right,
+                               height: d.height - old.bottom - old.top)
+    mappedDisplay = (d, old.left, old.bottom, old.right, old.top)
+    return true
 }
 
 /// The Mac screen's size for the host's visible area at the display scale:
@@ -485,11 +506,53 @@ final class TransientView: NSView {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
+                                               object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { (NSApp.delegate as? RootlessHost)?.displayChanged() }
+        }
         DragOut.shared.refresh = { [weak self] in
             guard let self else { return }
             for w in self.windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
             (self.screenWindow?.contentView as? MacWindowView)?.refresh(force: false)
         }
+    }
+
+    /// The display changed: the Mac screen follows it, as it does a
+    /// resumed program's (machine_request_screen_size; the program gets it
+    /// at its next event call), and the windows are placed again.
+    func displayChanged() {
+        guard remapRootlessScreen() else { return }
+        if hidingChrome, let backdrop, let screen = NSScreen.main ?? NSScreen.screens.first {
+            backdrop.setFrame(screen.frame, display: false)
+        }
+        let (w, h) = rootlessMacScreenSize()
+        var sw: Int32 = 0, sh: Int32 = 0
+        machine_screen_size(&sw, &sh)
+        if (w, h) != (sw, sh) {
+            if let why = machine_screen_fixed_at(w, h) {
+                eprint("bluebox: the screen stays \(sw)×\(sh), not this display's \(w)×\(h): \(String(cString: why))\n")
+            } else {
+                machine_request_screen_size(w, h)
+            }
+        }
+        screenSizeShown = (0, 0) // placed again at the next tick
+    }
+
+    /// The Mac screen's size when the windows were last placed.
+    var screenSizeShown: (Int32, Int32) = (0, 0)
+
+    /// The whole screen's window over the Mac screen as it now is.
+    func reframeWholeScreen() {
+        guard let window = screenWindow, let view = window.contentView as? MacWindowView else { return }
+        var sw: Int32 = 0, sh: Int32 = 0
+        machine_screen_size(&sw, &sh)
+        let origin = macToHost(0, CGFloat(sh))
+        let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(sw) * displayScale, height: CGFloat(sh) * displayScale)
+        window.setFrame(frame, display: false)
+        view.frame = NSRect(origin: .zero, size: frame.size)
+        view.macBounds = (0, 0, Int16(sh), Int16(sw))
+        view.mask = [UInt8](repeating: 1, count: Int(sw) * Int(sh))
+        view.refresh(force: true)
     }
 
     func tick() {
@@ -507,6 +570,17 @@ final class TransientView: NSView {
             lastMouse = mouse
             let (x, y) = hostToMac(mouse)
             machine_post_mouse(x, y, -1)
+        }
+        var sw: Int32 = 0, sh: Int32 = 0
+        machine_screen_size(&sw, &sh)
+        if (sw, sh) != screenSizeShown {
+            // The screen changed size (the display did): every window placed again.
+            let first = screenSizeShown == (0, 0) && windowsVersion == .max
+            screenSizeShown = (sw, sh)
+            if !first {
+                windowsVersion = .max
+                reframeWholeScreen()
+            }
         }
         syncWindows()
         for w in windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }

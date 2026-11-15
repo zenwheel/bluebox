@@ -620,7 +620,6 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var screenGiven = false
     var screenSize: (Int32, Int32)? // --screen's
     var appearanceSet = false // by --appearance or the settings
-    var resumedTooLarge = false // resumed on a screen that could not change, larger than this display
     var appletalkGiven = false
     var portsGiven = Set<Int32>()
     var screenshot: String?
@@ -988,9 +987,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
         machine_set_screen(sz.0, sz.1)
         if interactive { screenWindow = true }
     } else if interactive && !screenWindow {
-        // Rootless: the Mac screen covers the host display's visible area.
+        // Rootless: the Mac screen covers the host display's visible area;
+        // the whole screen in a window: the window's on that display.
         MainActor.assumeIsolated {
-            let (w, h) = rootlessMacScreenSize()
+            let (w, h) = saved.display == "screen" && !background ? screenWindowMacSize() : rootlessMacScreenSize()
             machine_set_screen(w, h)
         }
     }
@@ -1149,25 +1149,29 @@ func runCommand(_ args: [String], resume: String? = nil) {
         print("resumed: \(resume) at instruction \(machine_instruction_count())")
         if let r = resumeRecord, let sc = r.screen, sc.count == 2 {
             #if canImport(AppKit)
-            let display = interactive ? MainActor.assumeIsolated { rootlessMacScreenSize() } : nil
+            // Shown whole (in a window) or rootless, the Mac screen this
+            // display and scale call for.
+            let whole = screenWindow || saved.display == "screen" || (machine_is_finder() && saved.display != "rootless")
+            let display = interactive
+                ? MainActor.assumeIsolated { whole && !background ? screenWindowMacSize() : rootlessMacScreenSize() } : nil
             #else
             let display: (Int32, Int32)? = nil
             #endif
             // Asked for on this run's command line, else what this display
             // and scale call for (a headless run keeps its screen).
             if let target = screenSize ?? display {
-                resizeResumedScreen(title: r.title, from: (sc[0], sc[1]), to: target)
+                resizeResumedScreen(title: r.title, from: (sc[0], sc[1]), to: target, storesWatched: r.screenStores == true)
             }
             #if canImport(AppKit)
             // A screen that could not change and is larger than this
-            // display at this scale is shown in a window.
+            // display at this scale is shown in a window, at the scale, the
+            // view panning over it.
             var w: Int32 = 0, h: Int32 = 0
             machine_screen_size(&w, &h)
-            if let (dw, dh) = display, !background, w > dw || h > dh {
-                resumedTooLarge = true
+            if let (dw, dh) = display, !background, !screenWindow, w > dw || h > dh {
                 screenWindow = true
                 eprint("bluebox: \(r.title) keeps a \(w)×\(h) screen, larger than this display's \(dw)×\(dh): "
-                       + "shown in a window\n")
+                       + "shown in a window that follows the mouse\n")
             }
             #endif
             machine_screen_size(&bootWidth, &bootHeight) // what its next snapshot records
@@ -1275,10 +1279,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
         hibernateContext = HibernateContext(app: app, args: args, title: title, screen: [bootWidth, bootHeight],
                                             depth: bootDepth, display: background ? "background" : screenWindow ? "screen" : "rootless")
         if screenWindow {
-            // A resumed screen that could not take this display's size and
-            // is larger than it: scaled to fit it (the only time the scale
-            // setting gives way; any other screen is made this display's size).
-            if resumedTooLarge { MainActor.assumeIsolated { fitDisplayScale() } }
+            // A resumed screen larger than the window: shown first around
+            // the program's front window, then around its mouse.
+            if resume != nil { MainActor.assumeIsolated { ScreenView.startAtFrontWindow = true } }
             MainActor.assumeIsolated { runHostWindow(title: title, icon: dockImage(icons)) }
         } else {
             MainActor.assumeIsolated {

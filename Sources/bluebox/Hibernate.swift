@@ -127,17 +127,24 @@ func runArgsToKeep(_ args: [String]) -> [String] {
 /// redrawn, those left off it moved back on.  One that has the whole
 /// screen (a game drawing on it directly, say) keeps the screen it
 /// hibernated with.
-func resizeResumedScreen(title: String, from: (Int32, Int32), to: (Int32, Int32)) {
+func resizeResumedScreen(title: String, from: (Int32, Int32), to: (Int32, Int32), storesWatched: Bool) {
     var (w, h) = to
     machine_fit_screen(&w, &h)
     guard (w, h) != from else { return }
+    // An older snapshot can't say whether a program with the whole screen
+    // draws on it itself: it keeps its screen.
+    if !storesWatched, let why = machine_screen_whole() {
+        eprint("bluebox: \(title) keeps the \(from.0)×\(from.1) screen it hibernated with (\(String(cString: why)), "
+               + "in a snapshot from an older build), not \(w)×\(h)\n")
+        return
+    }
     if machine_resize_screen(w, h) {
         var nw: Int32 = 0, nh: Int32 = 0
         machine_screen_size(&nw, &nh)
         let less = (nw, nh) != (w, h) ? " (as large as its depth fits, of \(w)×\(h))" : ""
         print("resumed on a \(nw)×\(nh) screen\(less) (hibernated on \(from.0)×\(from.1))")
     } else {
-        let why = machine_screen_fixed().map { String(cString: $0) } ?? "the screen cannot be that size"
+        let why = machine_screen_fixed_at(w, h).map { String(cString: $0) } ?? "the screen cannot be that size"
         eprint("bluebox: \(title) keeps the \(from.0)×\(from.1) screen it hibernated with (\(why)), not \(w)×\(h)\n")
     }
 }
@@ -198,7 +205,7 @@ func snapshotRecord(app: String, runArgs: [String], kind: String? = nil) -> Hibe
                            title: ctx?.title ?? (app as NSString).lastPathComponent, saved: Date(),
                            instructions: machine_instruction_count(), drainedAt: String(cString: machine_drain_point()),
                            screen: ctx?.screen, depth: ctx?.depth, display: ctx?.display, machine: presentedMachine(),
-                           thumbnail: screenThumbnail(), kind: kind)
+                           thumbnail: screenThumbnail(), kind: kind, screenStores: true)
 }
 
 /// The machine stopped at a safe point (machine_hibernatable): its snapshot

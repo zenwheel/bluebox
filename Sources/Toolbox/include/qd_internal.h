@@ -300,6 +300,7 @@ bool qd_screen_supports(int depth);
 bool qd_screen_set_depth(int depth);
 bool qd_screen_set_size(int width, int height);
 bool qd_screen_size_fits(int width, int height);
+void qd_screen_extend(int old_w, int old_h, int top);
 gaddr qd_screen_bits(void);
 void wm_repaint_all(void);
 

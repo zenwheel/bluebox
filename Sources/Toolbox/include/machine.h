@@ -140,6 +140,14 @@ void machine_fit_screen(int *width, int *height);
  * it cannot change: machine_screen_fixed says why. */
 bool machine_resize_screen(int width, int height);
 const char *machine_screen_fixed(void);
+const char *machine_screen_fixed_at(int width, int height);
+/* From the host while the program runs: the screen made that size at its
+ * next event call (machine_screen_size says when it has; it stays as it is
+ * when machine_screen_fixed says it can't). */
+void machine_request_screen_size(int width, int height);
+/* Why the program has the whole screen (hidden menu bar, a window covering
+ * it, its own drawing there), or NULL. */
+const char *machine_screen_whole(void);
 /* A running program's appearance changed (after a resume, to its
  * settings'; machine_load_theme first for a theme): its windows' frames
  * measured again and everything redrawn. */

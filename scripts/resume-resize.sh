@@ -17,12 +17,23 @@
 #   Prints one line a resume: pass or FAIL, the program, the sizes and,
 #   for a failure, why; exits 1 if any fails.  Screens are kept in the
 #   work dir.
+#
+# PLAY=1 resumes the games of scripts/hibernate-play.tsv instead, each in
+# play on the default 1024x768 screen, onto SIZES (default 832x624
+# 1280x960), JOBS (default 4) at a time, and prints for each resume:
+# resized or kept (and why), whether it still runs, and its screenshots
+# (two, 20 million instructions apart, to look at).
 set -eu
 LC_ALL=C
 export LC_ALL
 BLUEBOX_NO_TRASH=1
 export BLUEBOX_NO_TRASH
 
+one=
+if [ "${1:-}" = --play-one ]; then
+	one=1
+	shift
+fi
 corpus=${1:?usage: resume-resize.sh <corpus dir> <work dir> [bluebox binary]}
 work=${2:?usage: resume-resize.sh <corpus dir> <work dir> [bluebox binary]}
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -90,6 +101,64 @@ check() {
 		fi
 	done
 }
+
+# One game of hibernate-play.tsv (its fields as arguments).
+play_one() {
+	prog=$1 k=$2 before=$3 after=$4 flags=$5
+	case $prog in
+	/*) path=$prog ;;
+	*) path=$corpus/$prog ;;
+	esac
+	name=$(basename "$path" | tr -c 'A-Za-z0-9._\n-' '_')
+	dir=$work/play/$name
+	rm -rf "$dir"
+	mkdir -p "$dir/home"
+	cp -cR "$(dirname "$path")" "$dir/app" 2>/dev/null || cp -R "$(dirname "$path")" "$dir/app"
+	app=$dir/app/$(basename "$path")
+	runflags=$(printf '%s\n' "$flags" | tr ' ' '\n' | grep -v '=' | tr '\n' ' ')
+	# shellcheck disable=SC2086
+	HOME="$dir/home" timeout 900 "$bin" run "$app" --headless $runflags --keys "$before" \
+		--max $((k + 50000000)) --hibernate-at "$k" --hibernate-to "$dir/snap.bbhib" >"$dir/hibernate.log" 2>&1 || true
+	if [ ! -f "$dir/snap.bbhib" ]; then
+		printf 'none\t%s\tdid not hibernate\n' "$name"
+		return
+	fi
+	for to in $SIZES; do
+		rm -rf "$dir/h"
+		cp -R "$dir/home" "$dir/h"
+		# shellcheck disable=SC2086
+		out=$(HOME="$dir/h" timeout 900 "$bin" resume "$dir/snap.bbhib" --headless $runflags --screen "$to" \
+			--keys "$after,wait:20000000,snap:$dir/$to-1.png,wait:20000000,snap:$dir/$to-2.png" --max 120000000 2>&1) || true
+		printf '%s\n' "$out" >"$dir/$to.log"
+		if printf '%s\n' "$out" | grep -q '^resumed on a '; then
+			what=resized
+		elif printf '%s\n' "$out" | grep -q 'keeps the'; then
+			what="kept: $(printf '%s\n' "$out" | sed -n 's/.*hibernated with (\(.*\)), not.*/\1/p' | head -n 1)"
+		else
+			what="same size"
+		fi
+		end=$(printf '%s\n' "$out" | grep -E '^stopped:|^instruction limit|halted|crashed|signal' | head -n 1)
+		moving=static
+		[ -f "$dir/$to-1.png" ] && [ -f "$dir/$to-2.png" ] && ! cmp -s "$dir/$to-1.png" "$dir/$to-2.png" && moving=moving
+		printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$to" "$what" "$moving" "${end:-no end}" "$dir/$to-2.png"
+	done
+}
+
+if [ -n "$one" ]; then
+	shift 3
+	SIZES=${SIZES:-832x624 1280x960}
+	play_one "$@"
+	exit 0
+fi
+
+if [ -n "${PLAY:-}" ]; then
+	SIZES=${SIZES:-832x624 1280x960}
+	export SIZES
+	grep -v '^#' "$root/scripts/hibernate-play.tsv" | while IFS='	' read -r prog k before after flags _; do
+		printf '%s\0%s\0%s\0%s\0%s\0' "$prog" "$k" "$before" "$after" "$flags"
+	done | xargs -0 -n 5 -P "${JOBS:-4}" sh "$0" --play-one "$corpus" "$work" "$bin"
+	exit 0
+fi
 
 # TeachText: text typed, its window made smaller and dragged to the lower
 # right (off a smaller screen), more typed after the resume.
