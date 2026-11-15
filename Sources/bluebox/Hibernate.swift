@@ -649,13 +649,34 @@ func hibernateDiffCommand(_ args: [String]) {
     exit(n == 0 ? 0 : 1)
 }
 
-/// bluebox fingerprint [--manifest | <snapshot>...]: this build's identity
-/// and state fingerprint (a snapshot resumes in any build with the same),
-/// the manifest it is a hash of, or whether each snapshot resumes here.
+/// bluebox fingerprint [--manifest | --baseline | --check FILE | <snapshot>...]:
+/// this build's identity and state fingerprint, the manifest it is a hash
+/// of, that manifest as a baseline for a later build (without where each
+/// static is), what would stop snapshots of a baseline's build resuming in
+/// this one (nothing when they all resume), or whether each snapshot
+/// resumes here.
 func fingerprintCommand(_ args: [String]) {
     var id = [CChar](repeating: 0, count: 33), fp = [CChar](repeating: 0, count: 33)
     hb_build_id(&id)
     hb_fingerprint(&fp)
+    if args.first == "--baseline" {
+        var b: UnsafeMutablePointer<CChar>?
+        let n = hb_baseline(&b)
+        if let b {
+            FileHandle.standardOutput.write(Data(bytes: b, count: n))
+            hb_free_buffer(UnsafeMutableRawPointer(b).assumingMemoryBound(to: UInt8.self))
+        }
+        exit(n > 0 ? 0 : 1)
+    }
+    if args.first == "--check" {
+        // What would stop snapshots of the baseline's build resuming in this
+        // one: nothing printed when they all resume.
+        guard args.count == 2, let base = FileManager.default.contents(atPath: args[1]) else { usage() }
+        let n = base.withUnsafeBytes { p in
+            hb_check_against(p.baseAddress?.assumingMemoryBound(to: CChar.self), base.count, stdout)
+        }
+        exit(n == 0 ? 0 : 1)
+    }
     if args.first == "--manifest" {
         var m: UnsafePointer<CChar>?
         let n = hb_manifest(&m)

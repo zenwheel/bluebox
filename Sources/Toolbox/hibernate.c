@@ -51,15 +51,44 @@
  * place in its section, size, pointer layout and whole type (the map's
  * shape), each tagged type's, the sections' sizes, the format, and the
  * guest-side layout the host lays the guest's memory out by (bbmem.h's
- * layout records).  Those put the sections back whole.  So does any build
- * whose statics are only elsewhere, or some of them only in one build
- * (manifest_explain): it puts them back a static at a time, by name,
- * from the manifest the snapshot carries ("Statics put back by name").  The
- * code may differ: a commit that changes a function's body, or adds or
- * takes away a static, keeps every snapshot; one that changes a saved
- * static's or tagged type's type, or the guest-side layout, does not.  A
- * snapshot file carries its build's manifest in its head too, so a
- * refusal names the first thing that differs without inflating the rest.
+ * layout records).  Those put the sections back whole.  Any other build
+ * puts them back a static at a time, by name, from the manifest the
+ * snapshot carries ("Statics put back by name"), when what differs is of
+ * a kind it can carry across (manifest_explain): a static only one build
+ * has, a static or tagged type whose type changed but keeps all the old
+ * one held ("Carrying a saved value across a change of its type").  The
+ * code may differ freely.  A snapshot file carries its build's manifest
+ * in its head too, so a refusal names the first thing that differs
+ * without inflating the rest.
+ *
+ * Keeping snapshots resumable (for whoever changes saved state; the
+ * user's snapshots of hibernated programs and save points depend on it):
+ *   - Adding a static, or taking one away, is free.  A new static keeps
+ *     what booting left in it after a resume: a block it points to is
+ *     kept, a native's stub it holds is found again; a guest address
+ *     other than a stub, or a host pointer into the guest's memory,
+ *     refuses the snapshot, so give such state a zero default and set it
+ *     when first needed.  Type guest addresses as gaddr (the map's kind
+ *     G), not uint32_t.
+ *   - Changing an existing static's or tagged type's type is free when
+ *     the new keeps all the old held: add struct members anywhere (they
+ *     are zero after a resume, so make zero a good default), grow an
+ *     array, make an array of what was one, widen an integer or an enum
+ *     (keeping its values).  Renaming a member, removing one, narrowing,
+ *     changing signedness, an int to a pointer, a union's or bitfield's
+ *     members, or a guest-side layout record (bbmem.h's BB_LAYOUT) breaks
+ *     every older snapshot.
+ *   - When a change would break them and a compatible way exists (a new
+ *     static beside the old, a new member rather than a changed one),
+ *     prefer it.  When it must break them, say so in the commit message
+ *     ("Breaks snapshots: ...") and the report.
+ *   - scripts/snapshot-check.sh says, after a release build, whether
+ *     this tree breaks the snapshots of the last recorded baseline
+ *     (scripts/snapshot-baseline.txt): nothing printed when not.  Run it
+ *     after changing saved state, and record the baseline again (--record)
+ *     with a flagged break.
+ *   - Run scripts/state-map.py after a debug build whenever saved state
+ *     changes: a stale map gives a wrong fingerprint.
  */
 #include "hibernate.h"
 #include "hibernate_map.h"
@@ -1422,10 +1451,31 @@ static bool manifest_has_whole(const char *m, size_t len, const char *file, cons
  * them has (the snapshot's is dropped; this build's keeps the value it
  * booted with, carried: carry_plan_make), a static elsewhere in
  * the saved state, the sections' sizes, a layout record only one has. */
-static int manifest_explain(const char *old, size_t oldlen, char *why, size_t whylen)
+/* One thing that stands in the way: the first kept for why, each written
+ * to out (a list of them all). */
+typedef struct {
+    int count;
+    char first[512];
+    FILE *out;
+} explain_ctx;
+
+static void explain_note(explain_ctx *x, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static void explain_note(explain_ctx *x, const char *fmt, ...)
 {
-    int count = 0;
-    char first[512] = "";
+    char d[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(d, sizeof d, fmt, ap);
+    va_end(ap);
+    if (!x->count++)
+        snprintf(x->first, sizeof x->first, "%s", d);
+    if (x->out)
+        fprintf(x->out, "%s\n", d);
+}
+
+static int manifest_explain_to(const char *old, size_t oldlen, char *why, size_t whylen, FILE *out)
+{
+    explain_ctx x = { 0, "", out };
     char a[1024], b[1024];
     const char *fa[8], *fb[8];
     /* The two builds' shapes: a static or type whose type changed so that
@@ -1450,8 +1500,7 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
         const char *o = manifest_find(manifest, manifest_len, fa, nkey, &ol);
         if (!o && fa[0][0] == 'S' && na >= 3 && manifest_has_whole(manifest, manifest_len, fa[1], fa[2])) {
             /* Whole in one build, in pieces in the other (or other pieces). */
-            if (!count++)
-                snprintf(first, sizeof first, "the static %.*s (%s) is split otherwise by this build's optimizer",
+            explain_note(&x, "the static %.*s (%s) is split otherwise by this build's optimizer",
                          (int)whole_len(fa[2]), fa[2], fa[1]);
             continue;
         }
@@ -1466,33 +1515,27 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
             if (have_shapes && strlen(fa[7]) == 16 && strlen(fb[7]) == 16 && strcmp(fa[7], fb[7]) &&
                 whole_len(fa[2]) == strlen(fa[2]) && shape_compat(&sp, hex64(fa[7]), hex64(fb[7]), 0))
                 continue; /* its type changed, its value carried */
-            count++;
-            if (*first)
-                continue;
             if (strcmp(fa[5], fb[5]))
-                snprintf(first, sizeof first, "the static %s (%s) is %s bytes in the snapshot, %s here", fa[2], fa[1],
-                         fa[5], fb[5]);
+                explain_note(&x, "the static %s (%s) is %s bytes in the snapshot, %s here", fa[2], fa[1], fa[5],
+                             fb[5]);
             else
-                snprintf(first, sizeof first, "the static %s (%s) %s", fa[2], fa[1],
-                         strcmp(fa[7], fb[7]) ? "has another type" : "has its pointers elsewhere");
+                explain_note(&x, "the static %s (%s) %s", fa[2], fa[1],
+                             strcmp(fa[7], fb[7]) ? "has another type" : "has its pointers elsewhere");
             continue;
         }
-        if (fa[0][0] == 'T' && na >= 6 && nb >= 6 && have_shapes && strlen(fa[5]) == 16 && strlen(fb[5]) == 16 &&
-            strcmp(fa[5], fb[5]) && shape_compat(&sp, hex64(fa[5]), hex64(fb[5]), 0))
-            continue;
-        count++;
-        if (*first)
-            continue;
         if (fa[0][0] == 'T' && na >= 6 && nb >= 6) {
+            if (have_shapes && strlen(fa[5]) == 16 && strlen(fb[5]) == 16 && strcmp(fa[5], fb[5]) &&
+                shape_compat(&sp, hex64(fa[5]), hex64(fb[5]), 0))
+                continue;
             if (strcmp(fa[3], fb[3]))
-                snprintf(first, sizeof first, "the tagged type %s (%s) is %s bytes in the snapshot, %s here", fa[2],
-                         fa[1], fa[3], fb[3]);
+                explain_note(&x, "the tagged type %s (%s) is %s bytes in the snapshot, %s here", fa[2], fa[1], fa[3],
+                             fb[3]);
             else
-                snprintf(first, sizeof first, "the tagged type %s (%s) differs", fa[2], fa[1]);
+                explain_note(&x, "the tagged type %s (%s) differs", fa[2], fa[1]);
         } else if (fa[0][0] == 'L') {
-            snprintf(first, sizeof first, "the guest-side layout %s differs", fa[1]);
+            explain_note(&x, "the guest-side layout %s differs", fa[1]);
         } else {
-            snprintf(first, sizeof first, "it was saved in another format or for another machine");
+            explain_note(&x, "it was saved in another format or for another machine");
         }
     }
     /* This build's pieces the snapshot's build had whole, or not at all. */
@@ -1505,20 +1548,24 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
         if (na < 3 || fa[0][0] != 'S' || manifest_find(old, oldlen, fa, 3, &ol) ||
             !manifest_has_whole(old, oldlen, fa[1], fa[2]))
             continue;
-        if (!count++)
-            snprintf(first, sizeof first, "the static %.*s (%s) is split otherwise by this build's optimizer",
-                     (int)whole_len(fa[2]), fa[2], fa[1]);
+        explain_note(&x, "the static %.*s (%s) is split otherwise by this build's optimizer", (int)whole_len(fa[2]),
+                     fa[2], fa[1]);
     }
-    if (!count)
+    if (!x.count)
         snprintf(why, whylen, "its saved state has this build's shape");
-    else if (count == 1)
-        snprintf(why, whylen, "%s", first);
+    else if (x.count == 1)
+        snprintf(why, whylen, "%s", x.first);
     else
-        snprintf(why, whylen, "%s (and %d more differences)", first, count - 1);
+        snprintf(why, whylen, "%s (and %d more differences)", x.first, x.count - 1);
     shape_table_free(&olds);
     bb_host_free(otext);
     bb_host_free(olines);
-    return count;
+    return x.count;
+}
+
+static int manifest_explain(const char *old, size_t oldlen, char *why, size_t whylen)
+{
+    return manifest_explain_to(old, oldlen, why, whylen, NULL);
 }
 
 static bool ready(char *err, size_t errlen)
@@ -4230,4 +4277,50 @@ const void *hb_resolve_symbol(const char *file, const char *name, uint64_t off)
         return NULL;
     const isym *s = isym_named(file ? file : "", name);
     return s && off <= s->size ? (const void *)(s->addr + off) : NULL;
+}
+
+int hb_check_against(const char *old, size_t len, FILE *out)
+{
+    char err[128], why[512];
+    if (!ready(err, sizeof err)) {
+        if (out)
+            fprintf(out, "%s\n", err);
+        return 1;
+    }
+    return manifest_explain_to(old, len, why, sizeof why, out);
+}
+
+size_t hb_baseline(char **out)
+{
+    /* The manifest without where each static is (it moves with any
+     * change and matters not for what resumes): a baseline to check a
+     * later build against (scripts/snapshot-check.sh). */
+    char err[128];
+    *out = NULL;
+    if (!ready(err, sizeof err))
+        return 0;
+    char *b = bb_host_malloc(manifest_len + 1);
+    if (!b)
+        return 0;
+    size_t n = 0;
+    char a[1024];
+    const char *f[8];
+    for (const char *p = manifest; p < manifest + manifest_len;) {
+        const char *e = memchr(p, '\n', (size_t)(manifest + manifest_len - p));
+        size_t len = e ? (size_t)(e - p) : (size_t)(manifest + manifest_len - p);
+        const char *line = p;
+        p += len + 1;
+        if (line[0] == 'R')
+            continue;
+        if (line[0] == 'S' && manifest_fields(line, len, a, sizeof a, f) >= 8) {
+            n += (size_t)snprintf(b + n, manifest_len + 1 - n, "S\t%s\t%s\t-\t-\t%s\t%s\t%s\n", f[1], f[2], f[5], f[6],
+                                  f[7]);
+            continue;
+        }
+        memcpy(b + n, line, len);
+        n += len;
+        b[n++] = '\n';
+    }
+    *out = b;
+    return n;
 }
