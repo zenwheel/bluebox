@@ -70,6 +70,26 @@ uint32_t native_register(native_fn fn, const char *name, uint16_t trapword)
     return a;
 }
 
+bool native_stub_info(uint32_t addr, native_fn *fn, const char **name, uint16_t *trapword)
+{
+    int i = native_index_for(addr);
+    if (i < 0 || mem_strip(addr) != addr)
+        return false;
+    *fn = natives[i].fn;
+    *name = natives[i].name;
+    *trapword = natives[i].trapword;
+    return true;
+}
+
+uint32_t native_stub_for(native_fn fn, const char *name, uint16_t trapword)
+{
+    for (unsigned i = 0; i < native_count; i++)
+        if (natives[i].fn == fn && natives[i].trapword == trapword &&
+            (natives[i].name == name || (natives[i].name && name && !strcmp(natives[i].name, name))))
+            return STUB_BASE + i * STUB_SIZE;
+    return native_register(fn, name, trapword);
+}
+
 const char *native_name_at(int index) { return index >= 0 && (unsigned)index < native_count ? natives[index].name : NULL; }
 
 native_fn native_fn_at(int index) { return index >= 0 && (unsigned)index < native_count ? natives[index].fn : NULL; }

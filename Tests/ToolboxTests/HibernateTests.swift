@@ -221,51 +221,89 @@ extension BlueBox {
             #expect(differences(sA, save()) == 0)
         }
 
-        /// A static the snapshot's build had and this one has not is dropped;
-        /// one this build has and the snapshot's had not keeps its value when
-        /// that is as compiled, and is refused, naming it, when booting set it
-        /// (it could hold a stub's place among this boot's natives).
-        @Test func aStaticOnlyOneBuildHas() {
+        /// A snapshot as another build's, in which the static file:name was
+        /// called otherwise (its name's last letter's case): the snapshot's is
+        /// dropped, and this build's is new to it.
+        func renamed(_ snap: [UInt8], _ file: String, _ name: String) -> [UInt8]? {
+            var s = snap
+            s[16] ^= 0xFF
+            s[32] ^= 0xFF
+            let key = "S\t\(file)\t\(name)\t"
+            guard let at = manifestLine(s, key) else { return nil }
+            s[at + key.utf8.count - 2] ^= 0x20
+            return s
+        }
+
+        /// A static new to the snapshot keeps what booting left in it, and
+        /// what that depends on is carried: a block it points to is kept, not
+        /// freed with the boot's others.
+        @Test func aNewStaticsBlockIsKept() {
+            _ = setUp()
+            _ = machine_run(50_000)
+            let snap = save()
+            guard let p = hb_resolve_symbol("Toolbox/cfm.c", "missing_imports", 0) else {
+                Issue.record("no missing_imports")
+                return
+            }
+            let slot = UnsafeMutableRawPointer(mutating: p)
+            let before = slot.load(as: UInt.self)
+            let made = bb_strdup("made as this build booted")!
+            slot.storeBytes(of: UInt(bitPattern: made), as: UInt.self)
+            defer { slot.storeBytes(of: before, as: UInt.self) }
+            guard let other = renamed(snap, "Toolbox/cfm.c", "missing_imports") else {
+                Issue.record("not in the manifest")
+                return
+            }
+            let (ok, err, st) = restore(other)
+            #expect(ok, Comment(rawValue: err))
+            #expect(st.statics_new == 1 && st.statics_dropped == 1 && st.blocks_kept == 1, "\(st)")
+            #expect(slot.load(as: UInt.self) == UInt(bitPattern: made) && bb_block_of(made) != nil)
+            #expect(String(cString: made) == "made as this build booted")
+            #expect(hb_scan(stderr, 10, 0).host_to_blocks == 0)
+        }
+
+        /// A new static holding a native's stub has it found again among the
+        /// snapshot's natives, whose table replaces the boot's.
+        @Test func aNewStaticsStubIsFoundAgain() {
+            _ = setUp()
+            _ = machine_run(50_000)
+            let snap = save()
+            guard let other = renamed(snap, "Toolbox/trap.c", "unimpl_stub"),
+                  let p = hb_resolve_symbol("Toolbox/trap.c", "unimpl_stub", 0) else {
+                Issue.record("no unimpl_stub")
+                return
+            }
+            let stub = p.load(as: UInt32.self)
+            let fn = native_fn_at(native_index_for(stub)).map { unsafeBitCast($0, to: UnsafeRawPointer.self) }
+            let (ok, err, st) = restore(other)
+            #expect(ok, Comment(rawValue: err))
+            #expect(st.stubs_found >= 1, "\(st)")
+            let now = p.load(as: UInt32.self)
+            #expect(native_index_for(now) >= 0)
+            #expect(native_fn_at(native_index_for(now)).map { unsafeBitCast($0, to: UnsafeRawPointer.self) } == fn)
+        }
+
+        /// A new static holding another guest address booting made (not a
+        /// native's stub) is refused, naming it: what it names is in a guest
+        /// memory the snapshot replaces.
+        @Test func aNewStaticsGuestAddressIsRefused() {
             let out = setUp()
             _ = machine_run(50_000)
-            var snap = save()
-            snap[16] ^= 0xFF
-            snap[32] ^= 0xFF
-            // natives (trap.c), set as the machine booted, renamed in the
-            // snapshot: the snapshot's Natives is dropped, this build's natives new.
-            var set = snap
-            guard let at = manifestLine(set, "S\tToolbox/trap.c\tnatives\t") else {
-                Issue.record("no manifest in the snapshot")
+            let snap = save()
+            guard let other = renamed(snap, "Toolbox/aem.c", "current_event_desc"),
+                  let p = hb_resolve_symbol("Toolbox/aem.c", "current_event_desc", 0) else {
+                Issue.record("no current_event_desc")
                 return
             }
-            set[at + 17] = UInt8(ascii: "N")
+            let slot = UnsafeMutableRawPointer(mutating: p)
+            let was = slot.load(as: UInt32.self)
+            slot.storeBytes(of: UInt32(0x1230), as: UInt32.self)
+            defer { slot.storeBytes(of: was, as: UInt32.self) }
             let before = fingerprint(out)
-            let (ok, err, _) = restore(set)
-            // (Set, or holding a pointer to a name made as it booted.)
-            #expect(!ok && err.contains("the static natives (Toolbox/trap.c), new in this build, ")
-                    && err.hasSuffix("as this build booted"), Comment(rawValue: err))
+            let (ok, err, _) = restore(other)
+            #expect(!ok && err.contains("the static current_event_desc (Toolbox/aem.c), new in this build, holds a guest address (0x00001230)"),
+                    Comment(rawValue: err))
             #expect(fingerprint(out) == before)
-            // A static of zeros now, with no pointer: renamed, it is put back
-            // as a new static, keeping its zeros.
-            let lines = manifest().split(separator: "\n").map(String.init)
-            var zero: String?
-            for l in lines where l.hasPrefix("S\t") {
-                let f = l.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
-                guard f.count >= 8, f[3] == "1", let size = Int(f[5]), size > 0, size <= 64,
-                      let p = hb_resolve_symbol(f[1], f[2], 0) else { continue }
-                if (0..<size).allSatisfy({ p.load(fromByteOffset: $0, as: UInt8.self) == 0 }) {
-                    zero = "S\t\(f[1])\t\(f[2])\t"
-                    break
-                }
-            }
-            guard let zero, let z = manifestLine(snap, zero) else {
-                Issue.record("no static of zeros")
-                return
-            }
-            snap[z + zero.utf8.count - 2] ^= 0x20 // its name's last letter's case
-            let (ok2, err2, st) = restore(snap)
-            #expect(ok2, Comment(rawValue: err2))
-            #expect(st.statics_dropped == 1 && st.statics_new == 1, "\(st)")
         }
 
         /// Another build's snapshot with this build's state fingerprint is put

@@ -66,6 +66,7 @@
 #include "lowmem_gen.h"
 
 #include "mem.h"
+#include "trap.h"
 
 #include <dlfcn.h>
 #include <stdarg.h>
@@ -78,7 +79,6 @@
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
-#include <mach-o/fat.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
 #include <mach-o/stab.h>
@@ -165,10 +165,6 @@ typedef struct {
     uint8_t uuid[16];
     uint8_t *sect[NSAVED];
     size_t sect_size[NSAVED];
-    /* Where each saved section's initial bytes are in the binary's file (0:
-     * zero filled), and the file. */
-    uint64_t sect_fileoff[NSAVED];
-    char path[1024];
     uint8_t *host[NHOSTSECT];
     size_t host_size[NHOSTSECT];
     /* Every section, by its number in the symbol table (from 1). */
@@ -277,7 +273,6 @@ static bool image_load(char *err, size_t errlen)
     }
     const struct mach_header_64 *mh = info.dli_fbase;
     img.base = (uint8_t *)info.dli_fbase;
-    snprintf(img.path, sizeof img.path, "%s", info.dli_fname ? info.dli_fname : "");
     const struct load_command *lc = (const void *)(mh + 1);
     const struct segment_command_64 *text = NULL, *linkedit = NULL;
     const struct symtab_command *symtab = NULL;
@@ -334,7 +329,6 @@ static bool image_load(char *err, size_t errlen)
                 if (!strncmp(sec->sectname, saved_names[n], 16)) {
                     img.sect[n] = (uint8_t *)(sec->addr + img.slide);
                     img.sect_size[n] = sec->size;
-                    img.sect_fileoff[n] = (sec->flags & SECTION_TYPE) == S_ZEROFILL ? 0 : sec->offset;
                 }
             for (int n = 0; n < NHOSTSECT; n++)
                 if (!strncmp(sec->sectname, host_names[n], 16)) {
@@ -890,6 +884,8 @@ static uint64_t runs_hash(uint32_t layout)
     const hb_layout *l = &hb_layouts[layout];
     for (uint32_t r = 0; r < l->n; r++) {
         const hb_run *run = &hb_runs[l->first + r];
+        if (run->kind == 'G')
+            continue; /* where guest addresses are: no part of what a snapshot holds */
         uint32_t v[6] = { run->off, (uint32_t)(uint8_t)run->kind, run->count, run->stride, run->count2, run->stride2 };
         h = bb_layout_hash(h, v, sizeof v);
     }
@@ -1034,7 +1030,7 @@ static bool manifest_has_whole(const char *m, size_t len, const char *file, cons
  * tagged type both have that differs; a guest-side layout record both
  * have with another value.  What does not: a static or type only one of
  * them has (the snapshot's is dropped; this build's keeps the value it
- * booted with, if that is safe: new_statics_safe), a static elsewhere in
+ * booted with, carried: carry_plan_make), a static elsewhere in
  * the saved state, the sections' sizes, a layout record only one has. */
 static int manifest_explain(const char *old, size_t oldlen, char *why, size_t whylen)
 {
@@ -1217,7 +1213,7 @@ static void each_field(uint32_t layout, size_t base, size_t limit, field_fn fn, 
         for (uint32_t i = 0; i < run->count; i++)
             for (uint32_t j = 0; j < run->count2; j++) {
                 size_t off = base + run->off + (size_t)i * run->stride + (size_t)j * run->stride2;
-                if (off + 8 <= limit)
+                if (off + (run->kind == 'G' || run->kind == 'x' ? 4 : 8) <= limit)
                     fn(ctx, off, run->kind);
             }
     }
@@ -1595,7 +1591,7 @@ static void add_reloc(save_ctx *c, size_t off, int kind, uint32_t tgt, uint64_t 
 static void save_field(void *vctx, size_t off, char kind)
 {
     save_ctx *c = vctx;
-    if (kind == 'Y' || kind == 'D' || kind == 'I' || kind == 'X' || kind == 'x')
+    if (kind == 'Y' || kind == 'D' || kind == 'I' || kind == 'X' || kind == 'x' || kind == 'G')
         return;
     uint64_t v;
     memcpy(&v, c->live + off, 8);
@@ -1994,7 +1990,7 @@ static bool wrapper_fits(FILE *f, const file_wrapper *fw, char *why, size_t whyl
     bb_host_free(m);
     /* Only statics one build has and the other not: put back by name.
      * (Whether this build's new statics are as they were compiled is
-     * known only once it has booted: new_statics_safe says.) */
+     * known only once it has booted: carry_plan_make says.) */
     if (differences == 0)
         return true;
     snprintf(why, whylen, "it was saved by a build of Blue Box whose saved state differs from this one's%s%s",
@@ -2116,10 +2112,11 @@ static void *lib_symbol(const extern_ref *e)
  * one away, so the others moved) is put back a static at a time, by file
  * and name, from where its manifest says each was.  The snapshot's static
  * this build has not is dropped (and a pointer into it refused); this
- * build's static the snapshot has not keeps what it has, if that is as it
- * was compiled: booting may have set it to something that depends on the
- * machine it booted (a stub's address among the natives, a block), which
- * the snapshot replaces, so one set otherwise is refused (new_statics_safe). */
+ * build's static the snapshot has not keeps what booting left in it, and
+ * what that depends on of the machine it booted, which the snapshot
+ * replaces, is carried across: the blocks it points to are kept, a
+ * native's stub it holds is found again among the snapshot's natives
+ * (carry_plan_make). */
 
 typedef struct {
     uint32_t sect, size;
@@ -2242,101 +2239,218 @@ static void old_static_name(const old_static *o, char *out, size_t n)
         snprintf(out, n, "a static");
 }
 
-/* The saved sections' bytes as the binary's file has them (a section of
- * zeros has none: NULL), read once. */
-BB_HOST static uint8_t *initial[NSAVED];
-BB_HOST static bool initial_read;
+/* What booting left in this build's new statics, carried across the
+ * restore (carry_plan): each tracked block they point to (and each that
+ * one points to, and so on), kept rather than freed; each native's stub
+ * they hold the address of, found again (or registered) among the
+ * snapshot's natives, whose table and stubs replace the boot's.  What
+ * cannot be carried is refused: a pointer into the guest's memory, or a
+ * guest address (gaddr) that is not a native's stub, which name what the
+ * boot put in a guest memory the snapshot replaces. */
 
-static void initial_load(void)
+typedef struct {
+    uintptr_t at; /* the 4 bytes holding it: in a static, or a block kept */
+    native_fn fn;
+    const char *name;
+    uint16_t trapword;
+} stub_fix;
+
+typedef struct {
+    block_index bi;  /* the boot's blocks */
+    type_cache tc;
+    bool *kept;      /* by the boot's block */
+    uint32_t *queue; /* blocks kept, to look into */
+    size_t nqueue;
+    stub_fix *stubs;
+    size_t nstubs, scap;
+    char why[400];
+    const char *owner; /* what is being looked into, for why */
+} carry_plan;
+
+static void carry_free(carry_plan *cp)
 {
-    if (initial_read)
-        return;
-    initial_read = true;
-    FILE *f = fopen(img.path, "rb");
-    if (!f)
-        return;
-    /* A universal binary: this machine's slice. */
-    uint64_t slice = 0;
-    struct fat_header fh;
-    if (fread(&fh, 1, sizeof fh, f) == sizeof fh && OSSwapBigToHostInt32(fh.magic) == FAT_MAGIC) {
-        const struct mach_header_64 *mh = (const void *)img.base;
-        for (uint32_t i = 0; i < OSSwapBigToHostInt32(fh.nfat_arch); i++) {
-            struct fat_arch fa;
-            if (fread(&fa, 1, sizeof fa, f) != sizeof fa)
-                break;
-            if ((cpu_type_t)OSSwapBigToHostInt32((uint32_t)fa.cputype) == mh->cputype)
-                slice = OSSwapBigToHostInt32(fa.offset);
-        }
+    free_index(&cp->bi);
+    bb_host_free(cp->tc.slots);
+    bb_host_free(cp->kept);
+    bb_host_free(cp->queue);
+    bb_host_free(cp->stubs);
+    memset(cp, 0, sizeof *cp);
+}
+
+static bool in_region(uintptr_t v)
+{
+    for (int i = 0; i < bb_region_count(); i++) {
+        const bb_region *r = bb_region_at(i);
+        if (v >= (uintptr_t)r->base && v < (uintptr_t)r->base + r->size)
+            return true;
     }
-    for (int i = 0; i < NSAVED; i++) {
-        if (!img.sect_fileoff[i] || !img.sect_size[i])
-            continue;
-        initial[i] = bb_host_malloc(img.sect_size[i]);
-        if (initial[i] && (fseeko(f, (off_t)(slice + img.sect_fileoff[i]), SEEK_SET) != 0 ||
-                           fread(initial[i], 1, img.sect_size[i], f) != img.sect_size[i])) {
-            bb_host_free(initial[i]);
-            initial[i] = NULL;
-        }
+    return false;
+}
+
+static void carry_block(carry_plan *cp, uint32_t index)
+{
+    if (!cp->kept[index]) {
+        cp->kept[index] = true;
+        cp->queue[cp->nqueue++] = index;
     }
-    fclose(f);
+}
+
+/* A host pointer booting made: kept, its block carried, or refused. */
+static void carry_pointer(carry_plan *cp, uint64_t v, bool may_be_data)
+{
+    if (!v || (v >= img.lo && v < img.hi) || *cp->why)
+        return; /* none, or the binary's (a constant, a function, a static) */
+    const block_span *b = block_at(&cp->bi, (uintptr_t)v);
+    if (b) {
+        carry_block(cp, b->index);
+        return;
+    }
+    if (in_region((uintptr_t)v) && !may_be_data)
+        snprintf(cp->why, sizeof cp->why, "%s, new in this build, points into the guest's memory as this build "
+                                          "booted it, which the snapshot replaces", cp->owner);
+    /* Anything else is the host's own memory (a library's, malloc's): a
+     * restore leaves it be. */
+}
+
+/* A 4-byte value booting left: a native's stub is found again later. */
+static bool carry_stub(carry_plan *cp, uintptr_t at, uint32_t v)
+{
+    native_fn fn;
+    const char *name;
+    uint16_t tw;
+    if (!v || !native_stub_info(v, &fn, &name, &tw))
+        return false;
+    if (cp->nstubs == cp->scap) {
+        size_t cap = cp->scap ? cp->scap * 2 : 16;
+        stub_fix *n = bb_host_realloc(cp->stubs, cap * sizeof *n);
+        if (!n) {
+            snprintf(cp->why, sizeof cp->why, "out of memory");
+            return true;
+        }
+        cp->stubs = n;
+        cp->scap = cap;
+    }
+    cp->stubs[cp->nstubs++] = (stub_fix){ at, fn, name, tw };
+    carry_pointer(cp, (uint64_t)(uintptr_t)name, false); /* a name made as it booted */
+    return true;
 }
 
 typedef struct {
-    const uint8_t *live;
-    uint8_t *skip;   /* bytes not compared with the file's */
-    bool pointer_made; /* a pointer to something booting made */
-} fresh_ctx;
+    carry_plan *cp;
+    uint8_t *base;
+    uint8_t *field; /* bytes a field of the map's holds */
+} carry_ctx;
 
-static void fresh_field(void *vctx, size_t off, char kind)
+static void carry_field(void *vctx, size_t off, char kind)
 {
-    fresh_ctx *c = vctx;
-    if (kind == 'I' || kind == 'U')
-        return; /* data, compared (a union's pointer, if any, is not as compiled either) */
-    memset(c->skip + off, 1, kind == 'x' || kind == 'D' ? 4 : 8);
-    if (kind != 'P' && kind != 'F' && kind != 'H')
-        return; /* the host's own values: a clock, a lock */
-    uint64_t v;
-    memcpy(&v, c->live + off, 8);
-    if (!v || (v >= img.lo && v < img.hi))
-        return; /* none, or the binary's (a constant, a function, a static) */
-    Dl_info info;
-    if (kind != 'H' && dladdr((const void *)(uintptr_t)v, &info) && info.dli_fname)
-        return; /* a library's */
-    c->pointer_made = true;
+    carry_ctx *c = vctx;
+    size_t w = kind == 'G' || kind == 'x' ? 4 : 8;
+    memset(c->field + off, 1, w);
+    if (kind == 'P' || kind == 'F' || kind == 'H' || kind == 'U' || kind == 'I') {
+        uint64_t v;
+        memcpy(&v, c->base + off, 8);
+        carry_pointer(c->cp, v, kind == 'U' || kind == 'I');
+    } else if (kind == 'G') {
+        uint32_t v;
+        memcpy(&v, c->base + off, 4);
+        if (v && !carry_stub(c->cp, (uintptr_t)(c->base + off), v) && !*c->cp->why)
+            snprintf(c->cp->why, sizeof c->cp->why, "%s, new in this build, holds a guest address (0x%08X) of the "
+                                                    "machine this build booted, which the snapshot replaces",
+                     c->cp->owner, v);
+    }
 }
 
-/* Each static this build has and the snapshot has not, as it was compiled
- * but for pointers to the binary or a library: else why not. */
-static bool new_statics_safe(const static_map *sm, hb_stats *st, char *why, size_t whylen)
+/* Each word of the area booting left: the map's fields as their kinds
+ * say; elsewhere, a native's stub as a 4-byte value (a stub's address in
+ * a plain integer), and in an area no type describes, a pointer to a block
+ * as 8. */
+static void carry_area(carry_plan *cp, uint8_t *base, size_t size, uint32_t layout, const bb_block *block,
+                       bool untyped)
 {
-    initial_load();
-    for (size_t i = 0; i < nstatics; i++) {
+    uint8_t *field = bb_host_calloc(size + 8, 1);
+    if (!field) {
+        snprintf(cp->why, sizeof cp->why, "out of memory");
+        return;
+    }
+    carry_ctx c = { cp, base, field };
+    if (block)
+        each_block_field(&cp->tc, block, carry_field, &c);
+    else if (layout)
+        each_field(layout, 0, size, carry_field, &c);
+    for (size_t o = 0; o + 4 <= size && !*cp->why; o += 4) {
+        if (field[o] || field[o + 3])
+            continue;
+        uint32_t v;
+        memcpy(&v, base + o, 4);
+        carry_stub(cp, (uintptr_t)(base + o), v);
+        if (untyped && o % 8 == 0 && o + 8 <= size && !field[o + 4]) {
+            uint64_t p;
+            memcpy(&p, base + o, 8);
+            if (block_at(&cp->bi, (uintptr_t)p))
+                carry_pointer(cp, p, true);
+        }
+    }
+    bb_host_free(field);
+}
+
+/* What this build's statics the snapshot has not hold, as they booted:
+ * the plan to carry it, or false and why not. */
+static bool carry_plan_make(const static_map *sm, carry_plan *cp, hb_stats *st, char *why, size_t whylen)
+{
+    memset(cp, 0, sizeof *cp);
+    cp->tc.cap = 4096;
+    cp->tc.slots = bb_host_calloc(cp->tc.cap, sizeof *cp->tc.slots);
+    bb_blocks_lock();
+    bool ok = index_blocks(&cp->bi) && cp->tc.slots;
+    cp->kept = ok ? bb_host_calloc(cp->bi.n + 1, sizeof *cp->kept) : NULL;
+    cp->queue = ok ? bb_host_calloc(cp->bi.n + 1, sizeof *cp->queue) : NULL;
+    if (!ok || !cp->kept || !cp->queue) {
+        bb_blocks_unlock();
+        carry_free(cp);
+        snprintf(why, whylen, "out of memory");
+        return false;
+    }
+    char owner[400];
+    for (size_t i = 0; i < nstatics && !*cp->why; i++) {
         if (sm->matched[i])
             continue;
-        int w = 0;
-        in_saved(statics[i].addr, &w);
-        size_t size = statics[i].size;
-        uint8_t *skip = bb_host_calloc(size + 8, 1);
-        if (!skip) {
-            snprintf(why, whylen, "out of memory");
-            return false;
-        }
-        fresh_ctx c = { (const uint8_t *)statics[i].addr, skip, false };
-        if (statics[i].layout)
-            each_field(statics[i].layout, 0, size, fresh_field, &c);
-        const uint8_t *was = initial[w] ? initial[w] + (statics[i].addr - (uintptr_t)img.sect[w]) : NULL;
-        bool set = false;
-        for (size_t k = 0; k < size && !set; k++)
-            set = !skip[k] && c.live[k] != (was ? was[k] : 0);
-        bb_host_free(skip);
-        if (c.pointer_made || set) {
-            snprintf(why, whylen, "the static %s (%s), new in this build, %s as this build booted", placed_name(&statics[i]),
-                     statics[i].map->file, c.pointer_made ? "holds a pointer made" : "was set");
-            return false;
-        }
+        snprintf(owner, sizeof owner, "the static %s (%s)", placed_name(&statics[i]), statics[i].map->file);
+        cp->owner = owner;
+        carry_area(cp, (uint8_t *)statics[i].addr, statics[i].size, statics[i].layout, NULL, false);
         st->statics_new++;
     }
+    /* The blocks they point to, and those these point to. */
+    for (size_t k = 0; k < cp->nqueue && !*cp->why; k++) {
+        bb_block *b = cp->bi.blocks[cp->queue[k]];
+        if (b->type->form == BB_FORM_BYTES)
+            continue;
+        snprintf(owner, sizeof owner, "a block of %s (%s:%u) one points to", b->type->name, b->type->file,
+                 b->type->line);
+        cp->owner = owner;
+        carry_area(cp, BB_BLOCK_DATA(b), b->size, 0, b->type->form == BB_FORM_UNTYPED ? NULL : b,
+                   b->type->form == BB_FORM_UNTYPED);
+    }
+    bb_blocks_unlock();
+    if (*cp->why) {
+        snprintf(why, whylen, "%s", cp->why);
+        carry_free(cp);
+        return false;
+    }
+    st->blocks_kept = (uint32_t)cp->nqueue;
+    st->stubs_found = (uint32_t)cp->nstubs;
     return true;
+}
+
+/* Once the snapshot is back: the blocks kept live again, the stubs found
+ * among its natives. */
+static void carry_apply(carry_plan *cp, bb_block **old)
+{
+    for (size_t k = 0; k < cp->nqueue; k++)
+        bb_blocks_keep(old, cp->bi.blocks[cp->queue[k]]);
+    for (size_t k = 0; k < cp->nstubs; k++) {
+        uint32_t v = native_stub_for(cp->stubs[k].fn, cp->stubs[k].name, cp->stubs[k].trapword);
+        memcpy((void *)cp->stubs[k].at, &v, 4);
+    }
 }
 
 /* For a snapshot put back by name: where each relocation in a static is
@@ -2344,7 +2458,7 @@ static bool new_statics_safe(const static_map *sm, hb_stats *st, char *why, size
  * to a static points here; false (and why) for a pointer into a static
  * this build has not, or a new static booting has set. */
 static bool statics_by_name(const uint8_t *buf, const file_header *h, const static_map *sm, uintptr_t **at,
-                            uintptr_t **to, hb_stats *st, char *why, size_t whylen)
+                            uintptr_t **to, carry_plan *cp, hb_stats *st, char *why, size_t whylen)
 {
     *at = bb_host_calloc(h->nrelocs + 1, sizeof **at);
     *to = bb_host_calloc(h->nrelocs + 1, sizeof **to);
@@ -2379,7 +2493,7 @@ static bool statics_by_name(const uint8_t *buf, const file_header *h, const stat
     for (size_t i = 0; i < sm->n; i++)
         if (!sm->list[i].here)
             st->statics_dropped++;
-    return new_statics_safe(sm, st, why, whylen);
+    return carry_plan_make(sm, cp, st, why, whylen);
 }
 
 /* What a snapshot's names are in this binary. */
@@ -2636,7 +2750,10 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     uintptr_t *state_at = NULL; /* by relocation, by name: where it is written, and what it points to */
     uintptr_t *state_to = NULL;
     bool resolved_ok = resolve(buf, &h, same_build, unnamed, &rs, why, sizeof why);
-    bool fits = resolved_ok && (!by_name || statics_by_name(buf, &h, &sm, &state_at, &state_to, st, why, sizeof why));
+    carry_plan cp;
+    memset(&cp, 0, sizeof cp);
+    bool fits = resolved_ok &&
+                (!by_name || statics_by_name(buf, &h, &sm, &state_at, &state_to, &cp, st, why, sizeof why));
     if (!fits) {
         if (resolved_ok)
             free_resolved(&rs);
@@ -2784,6 +2901,8 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
             bb_region_add(region_name[i], region_base[i], region_size[i], region_ext[i]);
             munmap(region_old[i], region_size[i]);
         }
+    carry_apply(&cp, &old);
+    carry_free(&cp);
     bb_blocks_release(old);
     bb_host_free(block_at_);
     bb_host_free(fresh_blocks);
@@ -2844,12 +2963,13 @@ typedef struct {
 static void mark_field(void *vctx, size_t off, char kind)
 {
     scan_ctx *c = vctx;
-    uint8_t m = kind == 'I' ? W_LOOK : kind == 'Y' || kind == 'D' || kind == 'X' || kind == 'x' ? W_DATA
+    uint8_t m = kind == 'I' ? W_LOOK : kind == 'Y' || kind == 'D' || kind == 'X' || kind == 'x' || kind == 'G' ? W_DATA
               : kind == 'U' ? W_UNION : kind == 'H' ? W_HANDLE : W_PTR;
     /* A field at any offset: every word it touches (a word a field of
      * the map's starts at is that field's; one it only reaches into is
      * not looked at). */
-    for (size_t w = off / 8; w <= (off + 7) / 8 && w < c->words; w++) {
+    size_t width = kind == 'G' || kind == 'x' ? 4 : 8;
+    for (size_t w = off / 8; w <= (off + width - 1) / 8 && w < c->words; w++) {
         if (w * 8 == off)
             c->word[w] = m;
         else if (c->word[w] == W_LOOK)

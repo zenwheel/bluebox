@@ -61,6 +61,12 @@ uint32_t native_register(native_fn fn, const char *name, uint16_t trapword);
 native_fn native_fn_at(int index); /* the function of a native, or NULL */
 const char *native_name_at(int index); /* and its name */
 int native_index_for(uint32_t addr);
+/* For a snapshot another build saved (hibernate.c): a stub's native as
+ * this table has it (false for any other address), and, once the
+ * snapshot's table is back, the stub of the native with that function and
+ * name, registered if that table has none. */
+bool native_stub_info(uint32_t addr, native_fn *fn, const char **name, uint16_t *trapword);
+uint32_t native_stub_for(native_fn fn, const char *name, uint16_t trapword);
 
 /* Call a Pascal-convention routine (guest code, or one of our stubs) whose
  * result space and arguments the caller has already pushed.  Registers other

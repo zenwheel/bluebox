@@ -37,6 +37,9 @@ typedef struct hb_stats {
      * snapshot's statics this build has not (dropped), and this build's the
      * snapshot has not (kept as they booted, being as compiled). */
     uint32_t statics_dropped, statics_new;
+    /* What booting left in the new ones, carried: blocks kept, natives'
+     * stubs found again among the snapshot's. */
+    uint32_t blocks_kept, stubs_found;
     uint64_t file_bytes;                  /* the file written, compressed */
 } hb_stats;
 

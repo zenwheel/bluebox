@@ -24,6 +24,9 @@ Each field is one of
      hibernate-diff leaves it out, as it does D
   I  an integer as wide as a pointer: data, but where a pointer the map
      does not know of could hide (the scan looks there)
+  G  an address in the guest's memory (gaddr, 4 bytes): data; a static new
+     in a build that resumes another's snapshot is looked at there
+     (hibernate.c: a native's stub is found again, anything else refused)
 H, Y and D belong in the host's section (BB_HOST); in a saved static they
 fail the check unless scripts/state-allow.txt names the static, with why.
 The check also fails for a static the compiler left in plain __data, __bss
@@ -44,6 +47,7 @@ name, tref = census.name, census.tref
 
 SAVED = {'__bbdata', '__bbbss'}
 HOST_VALUES = {'bb_host_value64': 'X', 'bb_host_value32': 'x'}  # bbstate.h
+GUEST_ADDRESS = 'gaddr'  # mem.h: an address in the guest's memory, 4 bytes
 HOSTSECT = {'__bbhost', '__bbhostz'}
 PLAIN = {'__data', '__bss', '__common'}
 NMLINE = re.compile(r'^([0-9a-f]+) \((\w+),(\w+)\) (?:non-)?external (?:\[[^\]]*\] )?(\S+)')
@@ -130,6 +134,8 @@ class Layouts:
         for n in names:
             if n in HOST_VALUES:
                 return [(0, HOST_VALUES[n], 1, 0, 1, 0)]
+            if n == GUEST_ADDRESS:
+                return [(0, 'G', 1, 0, 1, 0)]
             if census.SYNC_NAMES.search(n):
                 return [(0, 'Y', 1, 0, 1, 0)]
             if census.HOST_NAMES.search(n):
@@ -158,7 +164,9 @@ class Layouts:
             return sorted(set(out))
         if t == 'DW_TAG_array_type':
             n = self.c.count(d)
-            et, _, _ = self.c.strip(tref(d))
+            et, enames, _ = self.c.strip(tref(d))
+            if GUEST_ADDRESS in enames and n:
+                return [(0, 'G', n, 4, 1, 0)]
             if n == 0 or et is None or et['tag'] == 'DW_TAG_enumeration_type':
                 return []
             if et['tag'] == 'DW_TAG_base_type':
