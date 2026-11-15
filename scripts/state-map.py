@@ -416,7 +416,7 @@ def shape_hash(shape):
 
 
 def cstr(s):
-    return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return '"' + s.replace('\\', '\\\\').replace('"', '\\"').replace('\t', '\\t') + '"'
 
 
 def main():
