@@ -265,6 +265,69 @@ bool qd_screen_set_depth(int depth)
     return true;
 }
 
+/* ---- Changing size ----
+ *
+ * The screen made another size while a program runs, as a Mac changed
+ * resolution (a resumed program on a display, or at a scale, other than
+ * the one it hibernated on): the device, screenBits, ScreenRow and every
+ * port drawing on the screen take the new size, the contents are lost
+ * and the Window Manager redraws (wm_screen_resized).  A port's bounds
+ * keep their top left (the port's place on the screen). */
+static void resize_bounds(gaddr r, int width, int height)
+{
+    qrect b = qrect_get(r);
+    b.bottom = (int16_t)(b.top + height);
+    b.right = (int16_t)(b.left + width);
+    qrect_put(r, b);
+}
+
+/* Whether the screen fits its space at another size, at its depth. */
+bool qd_screen_size_fits(int width, int height) { return fits(screen_depth, width, height); }
+
+bool qd_screen_set_size(int width, int height)
+{
+    if (width == g_screen_width && height == g_screen_height)
+        return true;
+    if (width < 512 || height < 342 || width > 4096 || height > 4096 || !fits(screen_depth, width, height))
+        return false;
+    uint32_t old_rb = screen_row_bytes;
+    g_screen_width = width;
+    g_screen_height = height;
+    screen_row_bytes = row_bytes_for(screen_depth, width);
+    gmemset(GA_SCREEN, screen_depth >= 16 ? 0xFF : 0, screen_row_bytes * (uint32_t)height);
+    gaddr gd = rd32(rd32(LM_MainDevice));
+    gaddr pm = rd32(GDevice_gdPMap(gd));
+    qrect screen = { 0, 0, (int16_t)height, (int16_t)width };
+    qrect_put(gd + GDevice_gdRect_off, screen);
+    qrect_put(pm + PixMap_bounds_off, screen);
+    PixMap_set_rowBytes(pm, (int16_t)(screen_row_bytes | 0x8000));
+    wr16(LM_ScreenRow, (uint16_t)screen_row_bytes);
+    gaddr sb = qd_screen_bits();
+    if (sb && BitMap_baseAddr(sb) == GA_SCREEN) {
+        BitMap_set_rowBytes(sb, (int16_t)screen_row_bytes);
+        qrect_put(sb + BitMap_bounds_off, screen);
+    }
+    for (unsigned i = 0; i < nports; i++) {
+        gaddr p = ports[i];
+        if (qd_port_is_color(p)) {
+            gaddr h = rd32(p + CGrafPort_portPixMap_off);
+            gaddr ppm = h ? rd32(h) : 0;
+            if (!ppm || PixMap_baseAddr(ppm) != GA_SCREEN)
+                continue;
+            PixMap_set_rowBytes(ppm, PixMap_rowBytes(pm));
+            resize_bounds(ppm + PixMap_bounds_off, width, height);
+        } else {
+            gaddr bm = p + GrafPort_portBits_off;
+            if (BitMap_baseAddr(bm) != GA_SCREEN || ((uint16_t)BitMap_rowBytes(bm) & 0x3FFF) != old_rb)
+                continue;
+            BitMap_set_rowBytes(bm, (int16_t)screen_row_bytes);
+            resize_bounds(bm + BitMap_bounds_off, width, height);
+        }
+    }
+    video_mode_changed();
+    return true;
+}
+
 gaddr tb_GetMainDevice(void) { return rd32(LM_MainDevice); }
 gaddr tb_GetDeviceList(void) { return rd32(LM_DeviceList); }
 gaddr tb_GetGDevice(void) { return rd32(LM_TheGDevice); }

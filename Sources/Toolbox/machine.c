@@ -47,6 +47,55 @@ void machine_set_screen(int width, int height)
     }
 }
 
+/* Why the running program's screen cannot change size, or NULL (see
+ * wm_screen_fixed): a machine chosen by name keeps its built-in screen. */
+const char *machine_screen_fixed(void)
+{
+    if (hw_machine_chosen() && hw_machine()->screen_w)
+        return "its Mac's screen is built in";
+    return wm_screen_fixed();
+}
+
+/* The running program's screen made another size, as a Mac's resolution
+ * was changed under it (a resumed program on another display, or at
+ * another scale): QuickDraw's screen and ports, the Window Manager's
+ * desk, ports and windows, the cursor's pin rectangle, the video card's
+ * parameters, and a Display Notice for a program that takes one. */
+bool machine_resize_screen(int width, int height)
+{
+    machine_fit_screen(&width, &height);
+    /* Its depth stays: a screen too large for the video memory at that
+     * depth (a 24-bit program's megabyte) is made smaller, its shape
+     * kept, as large as fits. */
+    for (int w = width; w >= 512 && !qd_screen_size_fits(width, height); w -= 64) {
+        int h = (int)((int64_t)height * w / width) / 2 * 2;
+        if (qd_screen_size_fits(w, h)) {
+            width = w;
+            height = h;
+        }
+    }
+    if (width == g_screen_width && height == g_screen_height)
+        return true;
+    if (machine_screen_fixed() || !qd_screen_set_size(width, height))
+        return false;
+    machine_set_screen(width, height);
+    qrect_put(LM_CrsrPin, (qrect){ 0, 0, (int16_t)height, (int16_t)width });
+    uint32_t pt = rd32(LM_MouseLocation);
+    int16_t v = (int16_t)(pt >> 16), h = (int16_t)pt;
+    if (v >= height || h >= width) {
+        v = v >= height ? (int16_t)(height - 1) : v;
+        h = h >= width ? (int16_t)(width - 1) : h;
+        pt = (uint32_t)(uint16_t)v << 16 | (uint16_t)h;
+        wr32(LM_MTemp, pt);
+        wr32(LM_MouseLocation, pt);
+        wr32(LM_MouseLocation2, pt);
+    }
+    slots_screen_changed();
+    wm_screen_resized();
+    aem_display_notice();
+    return true;
+}
+
 /* A screen a Mac could have had for a host area of width x height: as wide
  * as a whole number of 64 pixels and as tall as a whole number of 2, as
  * every Mac screen was (512x342, 640x480, 832x624, 1152x870, 1600x1200).
