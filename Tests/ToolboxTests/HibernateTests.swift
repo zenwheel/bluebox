@@ -234,6 +234,114 @@ extension BlueBox {
             return s
         }
 
+        /// A snapshot as another build's whose manifest is the given one's
+        /// change (its manifest is last in it: the header's offsets after it
+        /// move with it).
+        func withManifest(_ snap: [UInt8], _ change: (String) -> String) -> [UInt8] {
+            func u64(_ at: Int) -> Int { Int(snap[at..<at + 8].reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }) }
+            let off = u64(200), len = u64(208), total = u64(216)
+            let old = String(decoding: snap[off..<off + len], as: UTF8.self)
+            let m = Array(change(old).utf8)
+            var out = Array(snap[0..<off]) + m + Array(snap[(off + len)...])
+            func put(_ at: Int, _ v: Int) { for i in 0..<8 { out[at + i] = UInt8((UInt64(v) >> (8 * UInt64(i))) & 0xFF) } }
+            put(208, m.count)
+            put(216, total + m.count - len)
+            out[16] ^= 0xFF
+            out[32] ^= 0xFF
+            return out
+        }
+
+        /// A manifest line's tab-separated fields changed.
+        func edit(_ m: String, _ prefix: String, _ change: (inout [String]) -> Void) -> String {
+            m.split(separator: "\n", omittingEmptySubsequences: false).map { l -> String in
+                guard l.hasPrefix(prefix) else { return String(l) }
+                var f = l.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+                change(&f)
+                return f.joined(separator: "\t")
+            }.joined(separator: "\n")
+        }
+
+        func shapeLine(_ m: String, _ hash: String) -> [String] {
+            m.split(separator: "\n").first { $0.hasPrefix("Y\t\(hash)\t") }
+                .map { $0.split(separator: "\t", omittingEmptySubsequences: false).map(String.init) } ?? []
+        }
+
+        /// A static whose array grew (keys_tapped, [16] then [2][16], 32
+        /// bytes in all): the snapshot's value is carried into the first 16,
+        /// the rest zero.
+        @Test func aGrownArrayIsCarried() {
+            _ = setUp()
+            _ = machine_run(50_000)
+            guard let p = hb_resolve_symbol("Toolbox/events.c", "keys_tapped", 0) else {
+                Issue.record("no keys_tapped")
+                return
+            }
+            let keys = UnsafeMutableRawPointer(mutating: p)
+            for i in 0..<32 { keys.storeBytes(of: UInt8(i < 16 ? 0x11 : 0x22), toByteOffset: i, as: UInt8.self) }
+            defer { for i in 0..<32 { keys.storeBytes(of: UInt8(0), toByteOffset: i, as: UInt8.self) } }
+            let snap = withManifest(save()) { m in
+                var y = ""
+                let out = edit(m, "S\tToolbox/events.c\tkeys_tapped\t") { f in
+                    let grown = self.shapeLine(m, f[7])  // Y, hash, A, 32 (both dimensions), the element
+                    guard grown.count == 5 else { return }
+                    y = "Y\t00000000000000cc\tA\t16\t\(grown[4])\n"
+                    f[5] = "16"
+                    f[7] = "00000000000000cc"
+                }
+                return out + y
+            }
+            for i in 0..<32 { keys.storeBytes(of: UInt8(0x33), toByteOffset: i, as: UInt8.self) }
+            let (ok, err, _) = restore(snap)
+            #expect(ok, Comment(rawValue: err))
+            #expect((0..<16).allSatisfy { keys.load(fromByteOffset: $0, as: UInt8.self) == 0x11 })
+            #expect((16..<32).allSatisfy { keys.load(fromByteOffset: $0, as: UInt8.self) == 0 })
+        }
+
+        /// A static struct that gained a member (reattach.c's saved, without
+        /// host_ns in the snapshot's build): each old member carried by name,
+        /// the new one zero; a member's type changing to one that cannot hold
+        /// the old value is refused, naming the static.
+        @Test func anAppendedMemberIsCarried() {
+            _ = setUp()
+            _ = machine_run(50_000)
+            guard let p = hb_resolve_symbol("Toolbox/reattach.c", "saved", 0) else {
+                Issue.record("no saved")
+                return
+            }
+            let saved = UnsafeMutableRawPointer(mutating: p)
+            let was = (0..<4).map { saved.load(fromByteOffset: $0 * 8, as: UInt64.self) }
+            defer { for (i, v) in was.enumerated() { saved.storeBytes(of: v, toByteOffset: i * 8, as: UInt64.self) } }
+            for i in 0..<4 { saved.storeBytes(of: UInt64(100 + i), toByteOffset: i * 8, as: UInt64.self) }
+            let snap0 = save()
+            func older(_ memberType: ((String) -> String)?) -> [UInt8] {
+                withManifest(snap0) { m in
+                    var y: [String] = []
+                    let out = edit(m, "S\tToolbox/reattach.c\tsaved\t") { f in
+                        var s = self.shapeLine(m, f[7])  // Y, hash, S, size, members
+                        guard s.count == 5 else { return }
+                        var members = s[4].split(separator: ";").map(String.init).filter { !$0.hasPrefix("host_ns@") }
+                        if let memberType { members = members.map(memberType) }
+                        s[1] = "00000000000000aa"
+                        s[3] = "24"
+                        s[4] = members.joined(separator: ";")
+                        y = s
+                        f[5] = "24"
+                        f[7] = s[1]
+                    }
+                    return out + y.joined(separator: "\t") + "\n"
+                }
+            }
+            for i in 0..<4 { saved.storeBytes(of: UInt64(0x99), toByteOffset: i * 8, as: UInt64.self) }
+            let (ok, err, _) = restore(older(nil))
+            #expect(ok, Comment(rawValue: err))
+            #expect((0..<3).map { saved.load(fromByteOffset: $0 * 8, as: UInt64.self) } == [100, 101, 102])
+            #expect(saved.load(fromByteOffset: 24, as: UInt64.self) == 0)
+            // wall as a pointer in the snapshot's build: not carried.
+            let pointer = older { $0.hasPrefix("wall@") ? "wall@0x08=00000000000000bb" : $0 }
+            let (ok2, err2, _) = restore(pointer)
+            #expect(!ok2 && err2.contains("the static saved (Toolbox/reattach.c)"), Comment(rawValue: err2))
+        }
+
         /// A static new to the snapshot keeps what booting left in it, and
         /// what that depends on is carried: a block it points to is kept, not
         /// freed with the boot's others.

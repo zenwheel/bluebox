@@ -46,5 +46,9 @@ extern const hb_static hb_statics[];
 extern const unsigned hb_nstatics;
 extern const hb_typemap hb_types[];
 extern const unsigned hb_ntypes;
+/* Each shape by its hash, a line apiece: "hash<TAB>kind<TAB>..."
+ * (scripts/state-map.py's shape_nodes). */
+extern const char *const hb_shape_lines[];
+extern const unsigned hb_nshape_lines;
 
 #endif

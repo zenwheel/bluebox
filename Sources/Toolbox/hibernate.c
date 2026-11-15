@@ -837,6 +837,9 @@ static void place_one(void *vctx, const char *file, const char *name, uintptr_t 
  *      pointers' layout, its shape (the whole type, from the map)
  *   T  a tagged type: file, the type as written, size, layout, shape
  *   L  a record of the guest-side layout (bbmem.h): name and value
+ *   Y  a shape by its hash: how it is made (struct members, array length,
+ *      base type), for carrying a saved value across a change of type
+ *      (shape_compat); last, and not in the fingerprint
  * The fingerprint is a hash of it; two builds with the same manifest put
  * back each other's snapshots. */
 
@@ -931,13 +934,400 @@ static bool manifest_make(void)
         manifest_add("L\t%s\t%016llx\n", recs[i]->name,
                      (unsigned long long)(recs[i]->hash ? recs[i]->hash() : recs[i]->value));
     bb_host_free(recs);
+    /* The fingerprint is of all but the shapes' lines, which say only how
+     * a shape is made, for carrying a value across a change. */
+    size_t fingerprinted = manifest_len;
+    for (unsigned i = 0; i < hb_nshape_lines; i++)
+        manifest_add("Y\t%s\n", hb_shape_lines[i]);
     if (manifest_len == SIZE_MAX)
         return false;
-    uint64_t a = bb_layout_hash(0, manifest, manifest_len);
-    uint64_t b = bb_layout_hash(0x84222325cbf29ce4ull, manifest, manifest_len);
+    uint64_t a = bb_layout_hash(0, manifest, fingerprinted);
+    uint64_t b = bb_layout_hash(0x84222325cbf29ce4ull, manifest, fingerprinted);
     memcpy(fingerprint, &a, 8);
     memcpy(fingerprint + 8, &b, 8);
     return true;
+}
+
+/* ---- Carrying a saved value across a change of its type ----
+ *
+ * Two builds' shapes of a static or a tagged type, by their hashes, from
+ * each manifest's Y lines (the snapshot's and this build's).  A value of
+ * the old shape is carried into the new (shape_migrate) when the new keeps
+ * all the old one held (shape_compat):
+ *   a struct    each old member by name (anywhere in the new), carried;
+ *               members the new adds are zero
+ *   an array    as long or longer, each element carried; a value that
+ *               becomes an array becomes its first element
+ *   an integer  as wide or wider, of the same signedness
+ *   an enum     as wide or wider, keeping every old value
+ *   a union, a bitfield's struct, a pointer, anything else: the same
+ * And each place in the old value has its place in the new (shape_place),
+ * for the pointers in it and to it. */
+
+typedef struct {
+    uint64_t *keys;
+    const char **lines; /* "hash<TAB>kind<TAB>...", NUL-ended */
+    size_t cap;
+} shape_table;
+
+typedef struct {
+    char kind;
+    uint64_t size, count, elem;
+    const char *rest; /* S, U: the members; E: the values; B: the encoding */
+} shape_node;
+
+static uint64_t hex64(const char *p)
+{
+    uint64_t v = 0;
+    for (int i = 0; i < 16; i++) {
+        char c = p[i];
+        v = v << 4 | (uint64_t)(c >= 'a' ? c - 'a' + 10 : c >= 'A' ? c - 'A' + 10 : c - '0');
+    }
+    return v;
+}
+
+static void shape_table_free(shape_table *t)
+{
+    bb_host_free(t->keys);
+    bb_host_free(t->lines);
+    memset(t, 0, sizeof *t);
+}
+
+static bool shape_table_make(shape_table *t, const char *const *lines, size_t n)
+{
+    memset(t, 0, sizeof *t);
+    size_t cap = 16;
+    while (cap < n * 2 + 16)
+        cap <<= 1;
+    t->keys = bb_host_calloc(cap, sizeof *t->keys);
+    t->lines = bb_host_calloc(cap, sizeof *t->lines);
+    if (!t->keys || !t->lines) {
+        shape_table_free(t);
+        return false;
+    }
+    t->cap = cap;
+    for (size_t i = 0; i < n; i++) {
+        if (strlen(lines[i]) < 18)
+            continue;
+        uint64_t k = hex64(lines[i]);
+        for (size_t h = (k ^ k >> 29) & (cap - 1);; h = (h + 1) & (cap - 1))
+            if (!t->lines[h] || t->keys[h] == k) {
+                t->keys[h] = k;
+                t->lines[h] = lines[i];
+                break;
+            }
+    }
+    return true;
+}
+
+static const char *shape_line(const shape_table *t, uint64_t k)
+{
+    if (!t->cap)
+        return NULL;
+    for (size_t h = (k ^ k >> 29) & (t->cap - 1); t->lines[h]; h = (h + 1) & (t->cap - 1))
+        if (t->keys[h] == k)
+            return t->lines[h];
+    return NULL;
+}
+
+static uint64_t shape_size(const shape_table *t, uint64_t k, int depth);
+
+static bool shape_get(const shape_table *t, uint64_t k, shape_node *n, int depth)
+{
+    const char *l = shape_line(t, k);
+    if (!l || depth > 32)
+        return false;
+    memset(n, 0, sizeof *n);
+    n->kind = l[17];
+    const char *f = l + 19; /* after "hash\tK\t" */
+    char *end;
+    switch (n->kind) {
+    case 'S':
+    case 'U':
+    case 'E':
+        n->size = strtoull(f, &end, 10);
+        n->rest = *end == '\t' ? end + 1 : end;
+        return true;
+    case 'A':
+        n->count = strtoull(f, &end, 10);
+        if (*end != '\t' || strlen(end + 1) < 16)
+            return false;
+        n->elem = hex64(end + 1);
+        n->size = n->count * shape_size(t, n->elem, depth + 1);
+        return true;
+    case 'B': {
+        const char *tab = strchr(f, '\t');
+        if (!tab)
+            return false;
+        n->size = strtoull(tab + 1, &end, 10);
+        n->rest = *end == '\t' ? end + 1 : end;
+        return true;
+    }
+    case 'P':
+        n->size = 8;
+        return true;
+    }
+    return true; /* O: size not known (0) */
+}
+
+static uint64_t shape_size(const shape_table *t, uint64_t k, int depth)
+{
+    shape_node n;
+    return shape_get(t, k, &n, depth) ? n.size : 0;
+}
+
+/* The members of an S or U line, one at a time. */
+typedef struct {
+    char name[128];
+    uint64_t off, child;
+    bool bits;
+} shape_member;
+
+static const char *member_next(const char *p, shape_member *m)
+{
+    if (!p || !*p)
+        return NULL;
+    const char *at = strchr(p, '@'), *eq = at ? strchr(at, '=') : NULL;
+    if (!at || !eq || strlen(eq + 1) < 16)
+        return NULL;
+    size_t nl = (size_t)(at - p) < sizeof m->name - 1 ? (size_t)(at - p) : sizeof m->name - 1;
+    memcpy(m->name, p, nl);
+    m->name[nl] = 0;
+    m->off = strtoull(at + 1, NULL, 16);
+    m->bits = memchr(at, ':', (size_t)(eq - at)) != NULL;
+    m->child = hex64(eq + 1);
+    const char *next = eq + 17;
+    return *next == ';' ? next + 1 : next;
+}
+
+static bool member_named(const char *members, const char *name, shape_member *out)
+{
+    shape_member m;
+    for (const char *p = members; (p = member_next(p, &m));)
+        if (!strcmp(m.name, name)) {
+            *out = m;
+            return true;
+        }
+    return false;
+}
+
+static bool enc_integer(const char *enc)
+{
+    return !strcmp(enc, "DW_ATE_signed") || !strcmp(enc, "DW_ATE_unsigned") || !strcmp(enc, "DW_ATE_signed_char") ||
+           !strcmp(enc, "DW_ATE_unsigned_char");
+}
+
+typedef struct {
+    const shape_table *old, *cur;
+} shape_pair;
+
+static bool shape_compat(const shape_pair *sp, uint64_t o, uint64_t n, int depth);
+
+/* Whether the old value becomes the new array's first element (an array
+ * made of what was one: keys_tapped[16] then [2][16]) rather than an
+ * array that grew. */
+static bool into_element(const shape_pair *sp, const shape_node *a, const shape_node *b, uint64_t o, int depth)
+{
+    if (b->kind != 'A' || b->count < 1)
+        return false;
+    if (a->kind == 'A' && b->count >= a->count && shape_compat(sp, a->elem, b->elem, depth + 1))
+        return false;
+    return shape_compat(sp, o, b->elem, depth + 1);
+}
+
+static bool shape_compat(const shape_pair *sp, uint64_t o, uint64_t n, int depth)
+{
+    if (o == n)
+        return true;
+    shape_node a, b;
+    if (depth > 32 || !shape_get(sp->old, o, &a, 0) || !shape_get(sp->cur, n, &b, 0))
+        return false;
+    if (into_element(sp, &a, &b, o, depth))
+        return true;
+    if (a.kind != b.kind)
+        return false;
+    shape_member m, nm;
+    switch (a.kind) {
+    case 'S':
+    case 'U':
+        for (const char *p = a.rest; (p = member_next(p, &m));) {
+            if (m.bits || !member_named(b.rest, m.name, &nm) || nm.bits)
+                return false;
+            if (a.kind == 'U' ? m.off != nm.off || m.child != nm.child : !shape_compat(sp, m.child, nm.child, depth + 1))
+                return false;
+        }
+        return true;
+    case 'A':
+        return b.count >= a.count && shape_compat(sp, a.elem, b.elem, depth + 1);
+    case 'B': {
+        char ea[64], eb[64];
+        snprintf(ea, sizeof ea, "%s", a.rest ? a.rest : "");
+        snprintf(eb, sizeof eb, "%s", b.rest ? b.rest : "");
+        bool sa = strstr(ea, "unsigned") == NULL, sb = strstr(eb, "unsigned") == NULL;
+        return enc_integer(ea) && enc_integer(eb) && sa == sb && b.size >= a.size;
+    }
+    case 'E': {
+        if (b.size < a.size)
+            return false;
+        /* Each old name=value among the new ones. */
+        const char *p = a.rest;
+        while (p && *p) {
+            const char *comma = strchr(p, ',');
+            size_t len = comma ? (size_t)(comma - p) : strlen(p);
+            bool found = false;
+            for (const char *q = b.rest; q && *q;) {
+                const char *qc = strchr(q, ',');
+                size_t ql = qc ? (size_t)(qc - q) : strlen(q);
+                if (ql == len && !memcmp(p, q, len)) {
+                    found = true;
+                    break;
+                }
+                q = qc ? qc + 1 : NULL;
+            }
+            if (!found)
+                return false;
+            p = comma ? comma + 1 : NULL;
+        }
+        return true;
+    }
+    }
+    return false;
+}
+
+/* The old value at src carried into dst (zero where the new adds). */
+static void shape_migrate(const shape_pair *sp, uint64_t o, uint64_t n, const uint8_t *src, uint8_t *dst, int depth)
+{
+    shape_node a, b;
+    if (o == n) {
+        memcpy(dst, src, shape_size(sp->old, o, 0));
+        return;
+    }
+    if (depth > 32 || !shape_get(sp->old, o, &a, 0) || !shape_get(sp->cur, n, &b, 0))
+        return;
+    if (into_element(sp, &a, &b, o, depth)) {
+        shape_migrate(sp, o, b.elem, src, dst, depth + 1);
+        return;
+    }
+    shape_member m, nm;
+    switch (a.kind) {
+    case 'S':
+        for (const char *p = a.rest; (p = member_next(p, &m));)
+            if (member_named(b.rest, m.name, &nm))
+                shape_migrate(sp, m.child, nm.child, src + m.off, dst + nm.off, depth + 1);
+        break;
+    case 'U':
+        memcpy(dst, src, a.size);
+        break;
+    case 'A': {
+        uint64_t es = shape_size(sp->old, a.elem, 0), ns = shape_size(sp->cur, b.elem, 0);
+        for (uint64_t i = 0; i < a.count; i++)
+            shape_migrate(sp, a.elem, b.elem, src + i * es, dst + i * ns, depth + 1);
+        break;
+    }
+    case 'B':
+    case 'E': {
+        uint64_t v = 0;
+        memcpy(&v, src, a.size < 8 ? a.size : 8);
+        bool sign = a.kind == 'B' && a.rest && !strstr(a.rest, "unsigned") && a.size < 8 &&
+                    (v >> (a.size * 8 - 1)) & 1;
+        if (sign)
+            v |= ~(uint64_t)0 << (a.size * 8);
+        memcpy(dst, &v, b.size < 8 ? b.size : 8);
+        break;
+    }
+    }
+}
+
+/* Where the old value's byte off is in the new, or -1 (in padding, or a
+ * member the new has not).  One past the end is the new one's end. */
+static int64_t shape_place(const shape_pair *sp, uint64_t o, uint64_t n, uint64_t off, int depth)
+{
+    if (o == n)
+        return (int64_t)off;
+    shape_node a, b;
+    if (depth > 32 || !shape_get(sp->old, o, &a, 0) || !shape_get(sp->cur, n, &b, 0))
+        return -1;
+    if (into_element(sp, &a, &b, o, depth))
+        return shape_place(sp, o, b.elem, off, depth + 1);
+    if (off == a.size)
+        return (int64_t)b.size;
+    shape_member m, nm;
+    switch (a.kind) {
+    case 'S':
+        for (const char *p = a.rest; (p = member_next(p, &m));) {
+            uint64_t ms = shape_size(sp->old, m.child, 0);
+            if (off >= m.off && off < m.off + ms && member_named(b.rest, m.name, &nm)) {
+                int64_t in = shape_place(sp, m.child, nm.child, off - m.off, depth + 1);
+                return in < 0 ? -1 : (int64_t)nm.off + in;
+            }
+        }
+        return -1;
+    case 'U':
+        return (int64_t)off;
+    case 'A': {
+        uint64_t es = shape_size(sp->old, a.elem, 0), ns = shape_size(sp->cur, b.elem, 0);
+        if (!es)
+            return -1;
+        int64_t in = shape_place(sp, a.elem, b.elem, off % es, depth + 1);
+        return in < 0 ? -1 : (int64_t)((off / es) * ns) + in;
+    }
+    }
+    return off == 0 ? 0 : -1;
+}
+
+/* This build's shapes, made once; a snapshot's, from its manifest (lines
+ * copied and NUL-ended into *text, freed with the table). */
+BB_HOST static shape_table cur_shapes;
+
+static const shape_table *current_shapes(void)
+{
+    if (!cur_shapes.cap)
+        shape_table_make(&cur_shapes, hb_shape_lines, hb_nshape_lines);
+    return &cur_shapes;
+}
+
+static bool manifest_shapes(const char *m, size_t len, shape_table *t, char **text, const char ***lines)
+{
+    *text = NULL;
+    *lines = NULL;
+    const char *y = NULL;
+    for (const char *p = m; p < m + len;) {
+        const char *e = memchr(p, '\n', (size_t)(m + len - p));
+        if (p[0] == 'Y' && p + 1 < m + len && p[1] == '\t') {
+            y = p;
+            break;
+        }
+        p = e ? e + 1 : m + len;
+    }
+    if (!y) {
+        memset(t, 0, sizeof *t);
+        return false; /* an older snapshot's: none */
+    }
+    size_t n = 0, tl = (size_t)(m + len - y);
+    char *c = bb_host_malloc(tl + 1);
+    if (!c)
+        return false;
+    memcpy(c, y, tl);
+    c[tl] = 0;
+    for (size_t i = 0; i < tl; i++)
+        n += c[i] == '\n';
+    const char **l = bb_host_calloc(n + 1, sizeof *l);
+    if (!l) {
+        bb_host_free(c);
+        return false;
+    }
+    size_t k = 0;
+    for (char *p = c; *p;) {
+        char *e = strchr(p, '\n');
+        if (e)
+            *e = 0;
+        if (p[0] == 'Y' && p[1] == '\t')
+            l[k++] = p + 2;
+        p = e ? e + 1 : p + strlen(p);
+    }
+    *text = c;
+    *lines = l;
+    return shape_table_make(t, l, k);
 }
 
 /* The fields of a manifest line (up to 8), split in place of a copy. */
@@ -1038,13 +1428,20 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
     char first[512] = "";
     char a[1024], b[1024];
     const char *fa[8], *fb[8];
+    /* The two builds' shapes: a static or type whose type changed so that
+     * the old value can be carried into the new is no difference. */
+    shape_table olds;
+    char *otext;
+    const char **olines;
+    bool have_shapes = manifest_shapes(old, oldlen, &olds, &otext, &olines);
+    shape_pair sp = { &olds, current_shapes() };
     for (const char *p = old; p < old + oldlen;) {
         const char *e = memchr(p, '\n', (size_t)(old + oldlen - p));
         size_t n = e ? (size_t)(e - p) : (size_t)(old + oldlen - p);
         const char *line = p;
         int na = manifest_fields(p, n, a, sizeof a, fa);
         p += n + 1;
-        if (na < 2 || fa[0][0] == 'R')
+        if (na < 2 || fa[0][0] == 'R' || fa[0][0] == 'Y')
             continue;
         int nkey = manifest_key_fields(fa[0][0]);
         if (na < nkey)
@@ -1066,6 +1463,9 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
         if (fa[0][0] == 'S' && na >= 8 && nb >= 8) {
             if (!strcmp(fa[5], fb[5]) && !strcmp(fa[6], fb[6]) && !strcmp(fa[7], fb[7]))
                 continue; /* only its place differs */
+            if (have_shapes && strlen(fa[7]) == 16 && strlen(fb[7]) == 16 && strcmp(fa[7], fb[7]) &&
+                whole_len(fa[2]) == strlen(fa[2]) && shape_compat(&sp, hex64(fa[7]), hex64(fb[7]), 0))
+                continue; /* its type changed, its value carried */
             count++;
             if (*first)
                 continue;
@@ -1077,6 +1477,9 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
                          strcmp(fa[7], fb[7]) ? "has another type" : "has its pointers elsewhere");
             continue;
         }
+        if (fa[0][0] == 'T' && na >= 6 && nb >= 6 && have_shapes && strlen(fa[5]) == 16 && strlen(fb[5]) == 16 &&
+            strcmp(fa[5], fb[5]) && shape_compat(&sp, hex64(fa[5]), hex64(fb[5]), 0))
+            continue;
         count++;
         if (*first)
             continue;
@@ -1112,6 +1515,9 @@ static int manifest_explain(const char *old, size_t oldlen, char *why, size_t wh
         snprintf(why, whylen, "%s", first);
     else
         snprintf(why, whylen, "%s (and %d more differences)", first, count - 1);
+    shape_table_free(&olds);
+    bb_host_free(otext);
+    bb_host_free(olines);
     return count;
 }
 
@@ -2124,13 +2530,27 @@ typedef struct {
     uintptr_t here;   /* where it is in this build; 0: not in it */
     const char *line; /* its line in the snapshot's manifest */
     size_t line_len;
+    /* Its type changed: its old and new shape and its size here (its
+     * value carried by shape_migrate). */
+    bool changed;
+    uint64_t oshape, nshape;
+    uint32_t nsize;
 } old_static;
 
 typedef struct {
     old_static *list; /* by section and offset */
     size_t n;
     bool *matched;    /* by placed static: the snapshot has it */
+    const shape_pair *sp;
 } static_map;
+
+/* Where a static's old byte off is here, or -1. */
+static int64_t old_static_place(const static_map *sm, const old_static *o, uint64_t off)
+{
+    if (!o->changed)
+        return (int64_t)off;
+    return shape_place(sm->sp, o->oshape, o->nshape, off, 0);
+}
 
 static int cmp_old_static(const void *a, const void *b)
 {
@@ -2146,9 +2566,11 @@ static void free_static_map(static_map *sm)
     bb_host_free(sm->matched);
 }
 
-static bool static_map_make(const char *m, size_t len, const uint64_t sect_size[NSAVED], static_map *sm)
+static bool static_map_make(const char *m, size_t len, const uint64_t sect_size[NSAVED], const shape_pair *sp,
+                            static_map *sm)
 {
     memset(sm, 0, sizeof *sm);
+    sm->sp = sp;
     size_t cap = 0;
     for (const char *p = m; p < m + len; p++)
         cap += *p == '\n';
@@ -2194,8 +2616,20 @@ static bool static_map_make(const char *m, size_t len, const uint64_t sect_size[
                 break;
             }
         }
-        if (k >= 0 && statics[k].size == o.size) {
+        if (k >= 0 && statics[k].size == o.size && hex64(f[7]) == statics[k].map->shape) {
             o.here = statics[k].addr;
+            sm->matched[k] = true;
+        } else if (k >= 0 && sp && !statics[k].piece && strlen(f[7]) == 16 &&
+                   shape_compat(sp, hex64(f[7]), statics[k].map->shape, 0)) {
+            /* Its type changed (manifest_explain let it): carried. */
+            o.here = statics[k].addr;
+            o.changed = true;
+            o.oshape = hex64(f[7]);
+            o.nshape = statics[k].map->shape;
+            o.nsize = statics[k].size;
+            sm->matched[k] = true;
+        } else if (k >= 0 && statics[k].size == o.size) {
+            o.here = statics[k].addr; /* the same shape by older reckoning */
             sm->matched[k] = true;
         }
         sm->list[sm->n++] = o;
@@ -2475,7 +2909,8 @@ static bool statics_by_name(const uint8_t *buf, const file_header *h, const stat
                 snprintf(why, whylen, "the snapshot is damaged (a pointer outside its statics)");
                 return false;
             }
-            (*at)[i] = o->here ? o->here + (rl.off - o->off) : 0;
+            int64_t in = o->here ? old_static_place(sm, o, rl.off - o->off) : -1;
+            (*at)[i] = in >= 0 ? o->here + (uint64_t)in : 0;
         }
         if ((int)(rl.what >> 24) == R_STATE) {
             const old_static *o = static_map_at(sm, rl.what & 0xFFFFFFu, rl.value);
@@ -2487,7 +2922,14 @@ static bool statics_by_name(const uint8_t *buf, const file_header *h, const stat
                          o ? name : "a static of its own");
                 return false;
             }
-            (*to)[i] = o->here + (rl.value - o->off);
+            int64_t in = old_static_place(sm, o, rl.value - o->off);
+            if (in < 0) {
+                char name[512];
+                old_static_name(o, name, sizeof name);
+                snprintf(why, whylen, "the snapshot points into a part of %s this build's has not", name);
+                return false;
+            }
+            (*to)[i] = o->here + (uint64_t)in;
         }
     }
     for (size_t i = 0; i < sm->n; i++)
@@ -2497,11 +2939,61 @@ static bool statics_by_name(const uint8_t *buf, const file_header *h, const stat
 }
 
 /* What a snapshot's names are in this binary. */
+/* A tagged type whose shape changed, its blocks carried into the new one
+ * (shape_migrate): its old and new shape and size. */
+typedef struct {
+    bool on;
+    uint64_t oshape, nshape;
+    uint32_t osize, nsize, form;
+} type_change;
+
 typedef struct {
     uintptr_t *syms, *cstrs;
     bool *code;
     const bb_type **types;
+    type_change *changes; /* by the snapshot's type */
 } resolved;
+
+/* A block's size in the new type, and where its old byte off is. */
+static uint64_t changed_size(const type_change *tc, uint64_t size)
+{
+    if (tc->form == BB_FORM_HEAD)
+        return size >= tc->osize ? tc->nsize + (size - tc->osize) : size;
+    uint64_t n = size / tc->osize;
+    return n * tc->nsize + size % tc->osize;
+}
+
+static int64_t changed_place(const shape_pair *sp, const type_change *tc, uint64_t size, uint64_t off)
+{
+    if (tc->form == BB_FORM_HEAD) {
+        if (off >= tc->osize)
+            return (int64_t)(tc->nsize + (off - tc->osize));
+        return shape_place(sp, tc->oshape, tc->nshape, off, 0);
+    }
+    uint64_t n = size / tc->osize, e = off / tc->osize;
+    if (e >= n)
+        return (int64_t)(n * tc->nsize + (off - n * tc->osize));
+    int64_t in = shape_place(sp, tc->oshape, tc->nshape, off % tc->osize, 0);
+    return in < 0 ? -1 : (int64_t)(e * tc->nsize) + in;
+}
+
+/* The old block's bytes carried into the new one (zeroed). */
+static void changed_copy(const shape_pair *sp, const type_change *tc, const uint8_t *src, uint64_t size, uint8_t *dst)
+{
+    if (tc->form == BB_FORM_HEAD) {
+        if (size < tc->osize) {
+            memcpy(dst, src, size);
+            return;
+        }
+        shape_migrate(sp, tc->oshape, tc->nshape, src, dst, 0);
+        memcpy(dst + tc->nsize, src + tc->osize, size - tc->osize);
+        return;
+    }
+    uint64_t n = size / tc->osize;
+    for (uint64_t e = 0; e < n; e++)
+        shape_migrate(sp, tc->oshape, tc->nshape, src + e * tc->osize, dst + e * tc->nsize, 0);
+    memcpy(dst + n * tc->nsize, src + n * tc->osize, size % tc->osize);
+}
 
 static void free_resolved(resolved *rs)
 {
@@ -2509,6 +3001,7 @@ static void free_resolved(resolved *rs)
     bb_host_free(rs->cstrs);
     bb_host_free(rs->code);
     bb_host_free(rs->types);
+    bb_host_free(rs->changes);
 }
 
 static const char *pool_at(const uint8_t *buf, const file_header *h, uint32_t off)
@@ -2518,7 +3011,8 @@ static const char *pool_at(const uint8_t *buf, const file_header *h, uint32_t of
 
 /* Each symbol, string constant and block type the snapshot names, found
  * here; false (and why) when one is not, or is not as it was. */
-static bool resolve(const uint8_t *buf, const file_header *h, bool same_build, uint64_t unnamed, resolved *rs,
+static bool resolve(const uint8_t *buf, const file_header *h, bool same_build, uint64_t unnamed,
+                    const shape_pair *sp, resolved *rs,
                     char *why, size_t whylen)
 {
     memset(rs, 0, sizeof *rs);
@@ -2536,7 +3030,8 @@ static bool resolve(const uint8_t *buf, const file_header *h, bool same_build, u
     rs->code = bb_host_calloc(h->nsyms + 1, sizeof *rs->code);
     rs->cstrs = bb_host_calloc(h->ncstrs + 1, sizeof *rs->cstrs);
     rs->types = bb_host_calloc(h->ntypes + 1, sizeof *rs->types);
-    if (!rs->syms || !rs->code || !rs->cstrs || !rs->types || (h->ncstrs && !cstrings_ready())) {
+    rs->changes = bb_host_calloc(h->ntypes + 1, sizeof *rs->changes);
+    if (!rs->changes || !rs->syms || !rs->code || !rs->cstrs || !rs->types || (h->ncstrs && !cstrings_ready())) {
         free_resolved(rs);
         snprintf(why, whylen, "out of memory");
         return false;
@@ -2570,6 +3065,22 @@ static bool resolve(const uint8_t *buf, const file_header *h, bool same_build, u
     for (uint64_t i = 0; i < h->ntypes; i++) {
         const char *name = pool_at(buf, h, ft[i].name), *file = pool_at(buf, h, ft[i].file);
         rs->types[i] = descriptor_for(name, file, ft[i].size, ft[i].form, ft[i].line);
+        if (sp && (ft[i].form == BB_FORM_ARRAY || ft[i].form == BB_FORM_HEAD)) {
+            /* Another build's: its type as the snapshot's manifest has it
+             * against this build's, carried when it changed. */
+            const char *key[3] = { "T", file, name };
+            size_t ol;
+            const char *o = manifest_find((const char *)buf + h->manifest_off, h->manifest_len, key, 3, &ol);
+            char a[1024];
+            const char *f[8];
+            const hb_typemap *m = map_type(file, name);
+            const bb_type *any = m ? descriptor_for(name, file, m->size, ft[i].form, ft[i].line) : NULL;
+            if (o && m && any && manifest_fields(o, ol, a, sizeof a, f) >= 6 && strlen(f[5]) == 16 &&
+                hex64(f[5]) != m->shape && ft[i].size && shape_compat(sp, hex64(f[5]), m->shape, 0)) {
+                rs->types[i] = any;
+                rs->changes[i] = (type_change){ true, hex64(f[5]), m->shape, ft[i].size, m->size, ft[i].form };
+            }
+        }
         if (!rs->types[i]) {
             snprintf(why, whylen, "the snapshot holds a block of %s (%s, %u bytes), a type this build does not tag",
                      name, file, ft[i].size);
@@ -2578,6 +3089,15 @@ static bool resolve(const uint8_t *buf, const file_header *h, bool same_build, u
         }
     }
     return true;
+}
+
+/* Where block i's old byte off is now (its type may have changed). */
+static int64_t block_place(const uint8_t *buf, const uint64_t *block_at_, const resolved *rs, const shape_pair *sp,
+                           uint64_t i, uint64_t off)
+{
+    const file_block *fb = (const file_block *)(buf + block_at_[i]);
+    const type_change *tc = &rs->changes[fb->type];
+    return tc->on ? changed_place(sp, tc, fb->size, off) : (int64_t)off;
 }
 
 bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stats, char *err, size_t errlen)
@@ -2640,8 +3160,21 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
         sect_size[i] = fs.size;
         at = pad8(at + sizeof fs + fs.size);
     }
+    /* Its shapes and this build's: what changed type is carried. */
+    shape_table olds;
+    char *otext = NULL;
+    const char **olines = NULL;
+    bool have_shapes = by_name && manifest_shapes((const char *)buf + h.manifest_off, h.manifest_len, &olds, &otext,
+                                                  &olines);
+    if (!have_shapes)
+        memset(&olds, 0, sizeof olds);
+    shape_pair spair = { &olds, current_shapes() };
+    const shape_pair *sp = have_shapes ? &spair : NULL;
     static_map sm = { 0 };
-    if (by_name && !static_map_make((const char *)buf + h.manifest_off, h.manifest_len, sect_size, &sm)) {
+    if (by_name && !static_map_make((const char *)buf + h.manifest_off, h.manifest_len, sect_size, sp, &sm)) {
+        shape_table_free(&olds);
+        bb_host_free(otext);
+        bb_host_free(olines);
         snprintf(err, errlen, "the snapshot is damaged");
         return false;
     }
@@ -2749,7 +3282,7 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     char why[512] = "";
     uintptr_t *state_at = NULL; /* by relocation, by name: where it is written, and what it points to */
     uintptr_t *state_to = NULL;
-    bool resolved_ok = resolve(buf, &h, same_build, unnamed, &rs, why, sizeof why);
+    bool resolved_ok = resolve(buf, &h, same_build, unnamed, sp, &rs, why, sizeof why);
     carry_plan cp;
     memset(&cp, 0, sizeof cp);
     bool fits = resolved_ok &&
@@ -2758,6 +3291,9 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
         if (resolved_ok)
             free_resolved(&rs);
         free_static_map(&sm);
+        shape_table_free(&olds);
+        bb_host_free(otext);
+        bb_host_free(olines);
         bb_host_free(state_at);
         bb_host_free(state_to);
         bb_host_free(block_at_);
@@ -2771,7 +3307,9 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     for (uint64_t i = 0; i < h.nblocks; i++) {
         const file_block *fb = (const file_block *)(buf + block_at_[i]);
         const bb_type *t = rs.types[fb->type];
-        uint8_t *p = bb_malloc(fb->size, t);
+        const type_change *tc = &rs.changes[fb->type];
+        uint64_t size = tc->on ? changed_size(tc, fb->size) : fb->size;
+        uint8_t *p = bb_malloc(size, t);
         if (!p) {
             /* Too late to go back: what was there is gone too. */
             snprintf(err, errlen, "out of memory putting the snapshot back");
@@ -2779,7 +3317,12 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
             bb_host_free(fresh_blocks);
             return false;
         }
-        memcpy(p, fb + 1, fb->size);
+        if (tc->on) {
+            memset(p, 0, size);
+            changed_copy(sp, tc, (const uint8_t *)(fb + 1), fb->size, p);
+        } else {
+            memcpy(p, fb + 1, fb->size);
+        }
         fresh_blocks[i] = p;
         st->block_bytes += fb->size;
         st->blocks++;
@@ -2838,8 +3381,12 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     }
     for (size_t i = 0; by_name && i < sm.n; i++) {
         const old_static *o = &sm.list[i];
-        if (o->here)
+        if (o->here && o->changed) {
+            memset((void *)o->here, 0, o->nsize);
+            shape_migrate(sp, o->oshape, o->nshape, buf + sect_at[o->sect] + o->off, (uint8_t *)o->here, 0);
+        } else if (o->here) {
             memcpy((void *)o->here, buf + sect_at[o->sect] + o->off, o->size);
+        }
     }
     const extern_ref *externs = (const extern_ref *)(buf + h.externs_off);
     void **lib_at = bb_host_calloc(h.nexterns ? h.nexterns : 1, sizeof *lib_at);
@@ -2850,12 +3397,21 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
         memcpy(&rl, buf + h.relocs_off + i * sizeof rl, sizeof rl);
         int kind = (int)(rl.what >> 24);
         uint32_t tgt = rl.what & 0xFFFFFFu;
-        uint8_t *dst = rl.where >= NSAVED ? fresh_blocks[rl.where - NSAVED] + rl.off
-                       : by_name          ? (uint8_t *)state_at[i]
-                                          : img.sect[rl.where] + rl.off;
+        uint8_t *dst;
+        if (rl.where >= NSAVED) {
+            int64_t in = block_place(buf, block_at_, &rs, sp, rl.where - NSAVED, rl.off);
+            dst = in >= 0 ? fresh_blocks[rl.where - NSAVED] + in : NULL; /* NULL: a part this build's type has not */
+        } else {
+            dst = by_name ? (uint8_t *)state_at[i] : img.sect[rl.where] + rl.off;
+        }
         uint64_t v = 0;
         switch (kind) {
-        case R_BLOCK: v = (uint64_t)(uintptr_t)fresh_blocks[tgt] + rl.value; st->to_blocks++; break;
+        case R_BLOCK: {
+            int64_t in = block_place(buf, block_at_, &rs, sp, tgt, rl.value);
+            v = in >= 0 ? (uint64_t)(uintptr_t)fresh_blocks[tgt] + (uint64_t)in : 0;
+            st->to_blocks++;
+            break;
+        }
         case R_STATE:
             v = by_name ? (uint64_t)state_to[i] : (uint64_t)(uintptr_t)img.sect[tgt] + rl.value;
             st->to_statics++;
@@ -2910,6 +3466,9 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     free_static_map(&sm);
     bb_host_free(state_at);
     bb_host_free(state_to);
+    shape_table_free(&olds);
+    bb_host_free(otext);
+    bb_host_free(olines);
     /* The JIT's translations are of the code that was there; the
      * instruction cache came back with the rest of the machine. */
     mem_code_after_restore();
