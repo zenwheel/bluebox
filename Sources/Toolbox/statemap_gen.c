@@ -2507,6 +2507,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/events.c", "woken", 1, 0, 0xa6aba2e36699f918 },
     { "Toolbox/events.c", "written_pt", 4, 0, 0x4984645b460455b1 },
     { "Toolbox/filemgr.c", "any_dirty", 1, 0, 0xa6aba2e36699f918 },
+    { "Toolbox/filemgr.c", "app_root", 1024, 0, 0xaed46b2759dc8470 },
     { "Toolbox/filemgr.c", "appls", 8, 3, 0x21dcff6dd7f3e98e },
     { "Toolbox/filemgr.c", "appls_scanned", 1, 0, 0xa6aba2e36699f918 },
     { "Toolbox/filemgr.c", "block_maps", 33152, 0, 0x0d0fa7f82656c239 },
@@ -3588,7 +3589,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1707;
+const unsigned hb_nstatics = 1708;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

@@ -795,6 +795,91 @@ extension BlueBox {
             #expect(tb_PBHDelete(pb, false) != 0)
             #expect(FileManager.default.fileExists(atPath: home.path))
         }
+
+        /// The application's folder, outside ~ and the volume, is a folder
+        /// at the volume's root under its own name, so its paths stay short
+        /// as ~'s do: run from a deep folder (the hibernate sweep's), Alpha's
+        /// path through Host passed 127 characters, and read as a signed
+        /// byte its length asked TempNewHandle for a negative size.  Host
+        /// does not list it, an old path through Host leads to the same
+        /// IDs, and it can be neither renamed nor deleted.
+        @Test func applicationFolderIsAtTheRoot() throws {
+            let home = tempDir()
+            defer { try? FileManager.default.removeItem(at: home) }
+            machine_set_home_folder(home.path)
+            defer { machine_set_home_folder(nil) }
+            let dir = launchTestApp()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let app = realpath(dir.path, nil).map { p in defer { free(p) }; return String(cString: p) } ?? dir.path
+            let sub = app + "/Sub", doc = sub + "/Doc"
+            try FileManager.default.createDirectory(atPath: sub, withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: URL(fileURLWithPath: doc))
+            func macPath(_ host: String) -> String {
+                var buf = [UInt8](repeating: 0, count: 1024)
+                let n = fm_mac_path_of_host(host, &buf, buf.count)
+                return String(decoding: buf.prefix(n), as: UTF8.self)
+            }
+            // Its name: its own, made a Mac name (31 bytes at most).
+            let name = String(macPath(app).dropFirst("Macintosh HD:".count))
+            #expect(!name.isEmpty && !name.contains(":") && name.utf8.count <= 31)
+            #expect(name.hasPrefix(String(dir.lastPathComponent.prefix(25))))
+            func hostPath(_ mac: String) -> String? {
+                let bytes = Array(mac.utf8)
+                var out = [CChar](repeating: 0, count: 1024)
+                guard fm_host_of_mac_path(bytes, bytes.count, &out, out.count) else { return nil }
+                return String(cString: out)
+            }
+            #expect(macPath(doc) == "Macintosh HD:\(name):Sub:Doc")
+            #expect(hostPath("Macintosh HD:\(name):Sub:Doc") == doc)
+
+            let pb = tb_NewPtr(128, false, true), pname = tb_NewPtr(256, false, true)
+            func dirID(_ path: String) -> UInt32? {
+                guestPString(path, at: pname)
+                wr32(pb + 18, pname)
+                wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, 0); wr32(pb + 48, 2)
+                return tb_PBGetCatInfo(pb, false) == 0 ? rd32(pb + 48) : nil
+            }
+            let viaHost = ":Host" + app.replacingOccurrences(of: "/", with: ":")
+            let subID = try #require(dirID(":\(name):Sub"))
+            #expect(dirID(viaHost + ":Sub") == subID)
+            #expect(dirID(":\(name):Sub:::") == 2) // up from it is the root
+            func walk(from start: UInt32) -> [String] {
+                var names: [String] = [], id = start
+                for _ in 0..<64 {
+                    wr32(pb + 18, pname)
+                    wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, UInt16(bitPattern: -1)); wr32(pb + 48, id)
+                    guard tb_PBGetCatInfo(pb, false) == 0 else { return names + ["error"] }
+                    names.append(pstring(at: pname))
+                    if id == 2 { break }
+                    id = rd32(pb + 100)
+                }
+                return names
+            }
+            #expect(walk(from: subID) == ["Sub", name, "Macintosh HD"])
+            func list(_ id: UInt32) -> [String] {
+                var names: [String] = []
+                for idx in 1...64 {
+                    wr32(pb + 18, pname)
+                    wr16(pb + 22, UInt16(bitPattern: -1)); wr16(pb + 28, UInt16(idx)); wr32(pb + 48, id)
+                    if tb_PBGetCatInfo(pb, false) != 0 { break }
+                    names.append(pstring(at: pname))
+                }
+                return names
+            }
+            #expect(list(2).contains(name))
+            let parent = (app as NSString).deletingLastPathComponent
+            let parentID = try #require(dirID(":Host" + parent.replacingOccurrences(of: "/", with: ":")))
+            #expect(!list(parentID).contains(name))
+            // The folder can be neither renamed nor deleted.
+            guestPString(":\(name)", at: pname)
+            let newName = tb_NewPtr(32, false, true)
+            guestPString("Away", at: newName)
+            wr32(pb + 18, pname); wr16(pb + 22, UInt16(bitPattern: -1)); wr32(pb + 28, newName); wr32(pb + 48, 2)
+            #expect(tb_PBHRename(pb, false) != 0)
+            wr32(pb + 18, pname); wr16(pb + 22, UInt16(bitPattern: -1)); wr32(pb + 48, 2)
+            #expect(tb_PBHDelete(pb, false) != 0)
+            #expect(FileManager.default.fileExists(atPath: app))
+        }
     }
 }
 }
