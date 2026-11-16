@@ -816,6 +816,75 @@ def gen_ppc(impl, sigs):
     return len(table)
 
 
+# ---------------------------------------------------------------------------
+# The debugger's view of a routine's arguments and result (macsbug.c): a
+# string per signature row, "conv|result|name=Ksize[@REG],...".  conv is P
+# (Pascal: on the stack, the last on top), R (registers) or C (C: longs on
+# the stack, the first on top).  K is how to show a value: i/u (signed or
+# unsigned number), b (Boolean), e (OSErr/OSStatus), t (a four-character
+# code), s (a Pascal string's address), c (a C string's), h (a handle), r (a
+# Rect's address), P (a Point by value), p (another address).
+
+def typedef_chain(t):
+    names = []
+    t = clean(t)
+    while t and t not in names:
+        names.append(t)
+        nxt = typedefs.get(t)
+        if not nxt:
+            break
+        t = clean(nxt)
+    return names
+
+
+def arg_kind(type_name, ti):
+    chain = typedef_chain(type_name)
+    base = chain[-1] if chain else ""
+    def has(*names):
+        return any(n in names for n in chain)
+    if has("OSType", "ResType", "FourCharCode"):
+        return "t"
+    if has("OSErr", "OSStatus"):
+        return "e"
+    if has("Boolean", "bool"):
+        return "b"
+    if has("Point") and not ti.ptr:
+        return "P"
+    if ti.ptr:
+        if any(re.match(r"^(Const)?Str\d+(Param)?$", n) or n in ("StringPtr", "ConstStringPtr") for n in chain) \
+                or re.match(r"^(const )?(unsigned char|Byte|UInt8) ?\*$", clean(type_name)):
+            return "s"
+        if "Ptr" not in chain and re.match(r"^(const )?char ?\*$", base):
+            return "c"
+        if any(n.endswith("Handle") or n == "Handle" for n in chain) or base in ("Ptr*",):
+            return "h"
+        if any(re.match(r"^Rect ?\*$", n) or n == "RectPtr" for n in chain):
+            return "r"
+        return "p"
+    if not ti.scalar:
+        return "u"
+    return "i" if ti.signed else "u"
+
+
+def arg_desc(fn, sig):
+    conv = {"stack": "P", "reg": "R", "c": "C"}[sig["conv"]]
+    ret = ""
+    if sig["rti"] is not None:
+        ret = arg_kind(fn.get("return", ""), sig["rti"]) + str(sig["rti"].size)
+        if sig["retreg"]:
+            ret += "@" + sig["retreg"]
+    elif sig["memerr"]:
+        ret = "e2@D0"  # MemErr
+    args = []
+    for (name, cls), a in zip(sig["args"], fn.get("args") or []):
+        kind, reg, ti = cls
+        d = f"{name}={arg_kind(a['type'], ti)}{ti.size}"
+        if kind == "reg":
+            d += "@" + reg
+        args.append(d)
+    return f"{conv}|{ret}|{','.join(args)}"
+
+
 def gen_traps():
     impl = implemented_names()
     os_names = {}
@@ -882,6 +951,7 @@ def gen_traps():
 
     # Signatures of every undispatched trap (for census stubs), and glue entries.
     c.append("const trap_sig trap_sigs[] = {\n")
+    trap_args = []
     for t in sorted(by_trap):
         fn = by_trap[t]
         sig = sigs.get(fn["name"])
@@ -890,9 +960,11 @@ def gen_traps():
         g = f"glue_{fn['name']}" if fn["name"] in impl else "0"
         conv = "CONV_STACK" if sig["conv"] == "stack" else "CONV_REG"
         c.append(f'    {{0x{t:04X}, -1, "{fn["name"]}", {conv}, {sig["argbytes"]}, {sig["retbytes"]}, {g}}},\n')
+        trap_args.append(arg_desc(fn, sig))
     c.append("};\nconst unsigned trap_sig_count = sizeof trap_sigs / sizeof trap_sigs[0];\n\n")
 
     c.append("const dispatch_sig dispatch_sigs[] = {\n")
+    disp_args = []
     for dname in sorted(by_disp):
         d = dispatchers.get(dname)
         if d is None:
@@ -906,7 +978,15 @@ def gen_traps():
             g = f"glue_{fn['name']}" if fn["name"] in impl else "0"
             conv = "CONV_STACK" if sig["conv"] == "stack" else "CONV_REG"
             c.append(f'    {{0x{t:04X}, (int32_t)0x{sel & 0xFFFFFFFF:X}u, "{fn["name"]}", {conv}, {sig["argbytes"]}, {sig["retbytes"]}, {g}}},\n')
+            disp_args.append(arg_desc(fn, sig))
     c.append("};\nconst unsigned dispatch_sig_count = sizeof dispatch_sigs / sizeof dispatch_sigs[0];\n\n")
+
+    # The arguments and results of each row above, for the debugger.
+    c.append("const char *const trap_sig_args[] = {\n")
+    c.extend(f'    "{d}",\n' for d in trap_args)
+    c.append("};\nconst char *const dispatch_sig_args[] = {\n")
+    c.extend(f'    "{d}",\n' for d in disp_args)
+    c.append("};\n\n")
 
     c.append("const dispatcher_info dispatchers[] = {\n")
     for dname in sorted(dispatchers):

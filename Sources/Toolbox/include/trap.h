@@ -48,6 +48,9 @@ extern const trap_sig trap_sigs[];
 extern const unsigned trap_sig_count;
 extern const dispatch_sig dispatch_sigs[];
 extern const unsigned dispatch_sig_count;
+/* Each row's arguments and result, for the debugger (gen.py's arg_desc). */
+extern const char *const trap_sig_args[];
+extern const char *const dispatch_sig_args[];
 extern const dispatcher_info dispatchers[];
 extern const unsigned dispatcher_count;
 
@@ -101,6 +104,11 @@ void trap_set_current_word(uint16_t w); /* calls that come from PowerPC code: no
 /* The CPU hooks. */
 void trap_aline(cpu68k *c, uint16_t op);
 void trap_native(cpu68k *c, uint16_t index);
+
+/* The routine trap word tw calls, the CPU as it is at the trap: its name,
+ * its arguments as trap_sig_args describes them, and the bytes of
+ * selector its caller pushed after them (NULL if unknown). */
+const char *trap_routine(const cpu68k *c, uint16_t tw, const char **args, unsigned *sel_bytes);
 
 /* Name of a trap word ("GetResource", "_A9A0" if unknown). */
 const char *trap_name(uint16_t trapword);

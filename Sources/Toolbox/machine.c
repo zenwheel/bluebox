@@ -1323,6 +1323,7 @@ void machine_set_log(unsigned mask)
 {
     g_log_mask = mask;
     cpu.trace = (mask & LOG_CPU) ? trace_cpu : hist ? trace_68k : NULL;
+    macsbug_retrace();
 }
 
 unsigned machine_census(census_row *rows, unsigned max)

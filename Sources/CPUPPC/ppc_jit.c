@@ -1209,7 +1209,9 @@ uint64_t ppc_jit_run(ppc_cpu *c, uint64_t max)
         return c->icount - start;
     }
     E.ctx.mem = g_mem;
-    while (!c->halted && !c->stop) {
+    /* A trace hook set meanwhile (the debugger's, from a native that
+     * stopped in it) sends the rest of the run to the interpreter. */
+    while (!c->halted && !c->stop && !c->trace) {
         uint64_t done = c->icount - start;
         if (done >= max)
             break;

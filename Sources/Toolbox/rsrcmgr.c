@@ -279,6 +279,26 @@ static bool find_handle(gaddr h, gaddr *maph_out, uint32_t *ref_out, uint32_t *t
     return false;
 }
 
+/* For the debugger (macsbug.c): what GetResInfo would say, ResErr left. */
+bool rsrc_info_of(gaddr h, uint32_t *type, int16_t *id, char *name, size_t n, int16_t *refnum)
+{
+    gaddr maph;
+    uint32_t r, t;
+    if (!find_handle(h, &maph, &r, &t))
+        return false;
+    gaddr m = mp_of(maph);
+    *type = t;
+    *id = (int16_t)rd16(m + r);
+    *refnum = map_refnum(maph);
+    if (n) {
+        name[0] = 0;
+        uint16_t noff = rd16(m + r + 2);
+        if (noff != 0xFFFF)
+            pstr_to_c(m + rd16(m + 26) + noff, name, n);
+    }
+    return true;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Loading */
 

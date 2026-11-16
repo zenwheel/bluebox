@@ -1650,3 +1650,38 @@ void raw_InitZone(cpu68k *c, uint16_t tw)
     c->d[0] = 0;
 }
 
+
+/* ---------------------------------------------------------------------- */
+/* The debugger's view of a zone (macsbug.c) */
+
+gaddr mm_zone_limit(gaddr z) { return z_lim(z); }
+
+/* The block at *b in zone z (the first when *b is 0) described, and *b
+ * moved on to the next; false at the zone's end, or at a block whose size
+ * cannot be right (damage: the walk would go astray). */
+bool mm_zone_block(gaddr z, gaddr *b, mm_block *out)
+{
+    gaddr lim = z_lim(z);
+    gaddr at = *b ? *b : z_first(z);
+    if (at >= lim)
+        return false;
+    uint32_t ps = b_psize(at);
+    memset(out, 0, sizeof *out);
+    out->addr = at;
+    out->data = b_data(at);
+    out->psize = ps;
+    out->header = HDR;
+    if (ps < HDR || at + ps > lim) {
+        out->damaged = true;
+        *b = lim;
+        return true;
+    }
+    out->use = (int)b_use(at);
+    out->lsize = b_lsize(at);
+    out->sizec = b_sizec(at);
+    out->state = blk_state(z, at);
+    if (out->use == USE_REL)
+        out->mp = z + b_loc(at);
+    *b = at + ps;
+    return true;
+}

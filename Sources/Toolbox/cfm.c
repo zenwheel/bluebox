@@ -138,6 +138,10 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
         ppc_halt(c, "code changed before %s", natives[index].name);
         return;
     }
+    /* The debugger's trap breaks, traces and records (macsbug.c): true
+     * when the call is not to be made (its PC moved there). */
+    if (g_macsbug_traps && macsbug_native(c, natives[index].name, at))
+        return;
     call_regs r;
     int outer = level_call;
     if (level) {
@@ -147,6 +151,8 @@ static void dispatch_native(ppc_cpu *c, uint32_t index)
     }
     natives[index].fn(c);
     level_call = outer;
+    if (g_macsbug_traps)
+        macsbug_native_done(c);
     if (level && !c->halted && drain_take_rewind_ppc(c, natives[index].name)) {
         memcpy(c->gpr, r.gpr, sizeof r.gpr);
         c->cr = r.cr, c->lr = r.lr, c->ctr = r.ctr, c->xer = r.xer;
@@ -801,6 +807,53 @@ static bool frag_find_export(const fragment *f, const char *name, gaddr *addr, u
                 *cls = f->exports[i].cls;
             return true;
         }
+    return false;
+}
+
+/* An export's code address: a routine's transition vector holds it. */
+static gaddr export_code(const frag_export *e)
+{
+    return e->cls == kTVectorCFragSymbol ? rd32(e->addr) : e->cls == kCodeCFragSymbol ? e->addr : 0;
+}
+
+/* For the debugger (macsbug.c): the fragment whose code holds a, as
+ * "Fragment" (the application's file name for the application) and the
+ * nearest exported routine at or before a. */
+bool cfm_describe(gaddr a, char *frag, size_t fn, char *sym, size_t sn, uint32_t *sym_off, uint32_t *frag_off)
+{
+    for (int i = 0; i < nfrags; i++) {
+        const fragment *f = &frags[i];
+        if (!f->code || a < f->code || a - f->code >= f->code_size)
+            continue;
+        const char *slash = strrchr(f->path, '/');
+        snprintf(frag, fn, "%s", f->name[0] ? f->name : f->app_name[0] ? f->app_name : slash ? slash + 1 : f->path);
+        *frag_off = a - f->code;
+        const frag_export *best = NULL;
+        for (uint32_t j = 0; j < f->nexports; j++) {
+            gaddr c = export_code(&f->exports[j]);
+            if (c && c <= a && (!best || c > export_code(best)))
+                best = &f->exports[j];
+        }
+        if (sn)
+            sym[0] = 0;
+        if (best) {
+            snprintf(sym, sn, "%s", best->name);
+            *sym_off = a - export_code(best);
+        }
+        return true;
+    }
+    return false;
+}
+
+/* The code address of a routine some fragment exports by that name. */
+bool cfm_symbol_code(const char *name, gaddr *addr)
+{
+    for (int i = 0; i < nfrags; i++)
+        for (uint32_t j = 0; j < frags[i].nexports; j++)
+            if (!strcmp(frags[i].exports[j].name, name) && export_code(&frags[i].exports[j])) {
+                *addr = export_code(&frags[i].exports[j]);
+                return true;
+            }
     return false;
 }
 
@@ -1666,6 +1719,7 @@ static bool ppc_trace_wanted(void) { return getenv("BLUEBOX_PPC_TRACE") != NULL;
 void cfm_after_resume(void)
 {
     g_ppc.trace = ppc_cpu_ready && ppc_trace_wanted() ? trace_instruction : NULL;
+    macsbug_retrace();
     g_ppc.stop = false;
 }
 
@@ -1704,6 +1758,7 @@ bool cfm_ppc_cpu(void)
     g_ppc.native = dispatch_native;
     g_ppc.illegal = name_nil_call;
     g_ppc.trace = ppc_trace_wanted() ? trace_instruction : NULL;
+    macsbug_retrace();
     g_ppc.gpr[1] = (stack + stack_size - 64) & ~15u;
     wr32(g_ppc.gpr[1], 0);
     ppc_cpu_ready = true;
