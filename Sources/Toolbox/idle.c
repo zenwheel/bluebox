@@ -831,10 +831,10 @@ static const char *quiet_names[] = {
  * bsearch. */
 static const char *const answer_names[] = {
     "ActivateControl", "AddPt", "CheckItem", "DeactivateControl", "DialogSelect", "DisableItem", "EnableItem",
-    "FindWindow", "GetControlData", "GetDialogItemAsControl", "GetKeyboardFocus", "GlobalToLocal", "HideControl",
-    "InsetRect", "LocalToGlobal", "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect",
-    "SetControlValue", "SetItemCmd", "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "ShowControl",
-    "SndChannelStatus", "StdFilterProc", "SubPt", "TEIdle", "UnionRect",
+    "FindWindow", "GetControlData", "GetDialogItem", "GetDialogItemAsControl", "GetKeyboardFocus", "GlobalToLocal",
+    "HideControl", "InsetRect", "LocalToGlobal", "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle",
+    "ScalePt", "SectRect", "SetControlValue", "SetItemCmd", "SetItemMark", "SetItemStyle", "SetPt", "SetRect",
+    "ShowControl", "SndChannelStatus", "StdFilterProc", "SubPt", "TEIdle", "UnionRect",
 };
 
 /* More calls with no lasting effect (beside quiet_names, whose size is

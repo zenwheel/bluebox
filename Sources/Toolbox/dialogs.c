@@ -810,12 +810,18 @@ void tb_GetDialogItem(gaddr d, int16_t n, gaddr itype, gaddr item, gaddr r)
     if (n < 1 || n > item_count(d))
         return;
     gaddr it = item_at(d, n);
-    if (itype)
+    if (itype) {
         wr16(itype, rd8(it + 12));
-    if (item)
+        idle_wrote(itype, 2);
+    }
+    if (item) {
         wr32(item, rd32(it));
-    if (r)
+        idle_wrote(item, 4);
+    }
+    if (r) {
         gmemcpy(r, it + 4, 8);
+        idle_wrote(r, 8);
+    }
 }
 
 void tb_SetDialogItem(gaddr d, int16_t n, int16_t itype, gaddr item, gaddr r)
