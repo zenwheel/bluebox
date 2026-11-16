@@ -71,6 +71,7 @@ enum {
     SAME_BEFORE_WATCH = 3, /* idle iterations in a row before the stores are watched */
     MOST_BEFORE_WATCH = 256, /* ... after watching found work again and again */
     MAX_RUN = 1000000,     /* instructions a poll loop's iteration may run */
+    OWN_LOOP_AFTER = 20000, /* ... after which its slices may show a loop of its own, or calls end it */
     MAX_STORES = 64,       /* places an idle iteration may store to */
     MAX_RANGES = 8,        /* ... and longer stretches a call wrote (BlockMove) */
     RANGE_FROM = 17,       /* bytes from which a call's answer is a stretch */
@@ -839,6 +840,36 @@ void idle_work(void)
     }
 }
 
+/* A poll loop's iteration may run long (MegaSeg's computing between its
+ * polls); a loop of the program's own after a poll (Fastback's) shows as
+ * two slices the same, registers and place, and is judged by its slices
+ * from there. */
+BB_HOST static struct {
+    bool valid;
+    regs r;
+    uint32_t pc;
+    uint64_t hw;
+} probe;
+
+static bool own_loop(void)
+{
+    if (executed() - st.at < OWN_LOOP_AFTER) {
+        probe.valid = false;
+        return false;
+    }
+    regs r;
+    take(&r, false);
+    uint32_t pc = pc_now();
+    uint64_t hw = hw_device_accesses();
+    bool same = probe.valid && !memcmp(&r, &probe.r, sizeof r) &&
+                (pc > probe.pc ? pc - probe.pc : probe.pc - pc) < PC_NEAR && hw == probe.hw;
+    probe.valid = !same;
+    probe.r = r;
+    probe.pc = pc;
+    probe.hw = hw;
+    return same;
+}
+
 void idle_slice(void)
 {
     if (!on() || in_interrupt())
@@ -846,16 +877,17 @@ void idle_slice(void)
     check_over();
     if (calls != st.calls) {
         /* Calls in the slice: a poll loop's, its polls say; a long way from
-         * the last poll, not a poll loop. */
+         * the last poll, not a poll loop (only one calling nothing between
+         * its polls may run long). */
         if (st.mode != POLLS) {
             chain_break();
             st.calls = calls;
-        } else if (executed() - st.at >= MAX_RUN) {
+        } else if (executed() - st.at >= OWN_LOOP_AFTER) {
             chain_break();
         }
         return;
     }
-    if (st.mode == POLLS && executed() - st.at < MAX_RUN)
+    if (st.mode == POLLS && executed() - st.at < MAX_RUN && !own_loop())
         return; /* between two polls */
     if (iteration_end(SLICES))
         idle_sleep();
