@@ -437,6 +437,17 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// TempNewHandle with a negative size fails as NewHandle does
+        /// (memFullErr, in its result too), rather than giving an empty
+        /// block the program goes on to fill (Alpha, its path's length read
+        /// as a signed byte).
+        @Test func tempNewHandleOfANegativeSizeFails() {
+            let err = tb_NewPtr(2, false, true)
+            #expect(tb_TempNewHandle(-119, err) == 0)
+            #expect(memErr() == -108 && Int16(bitPattern: rd16(err)) == -108)
+            #expect(tb_TempNewHandle(0, err) != 0 && rd16(err) == 0)
+        }
+
         /// A pointer disposed of inside such a zone leaves the zone known
         /// (Hornet Logbook, a Director projector, makes its heaps in
         /// temporary memory): its handles still grow in it, not memWZErr
