@@ -125,7 +125,8 @@ final class ScreenView: NSView, MacScreenView {
                     self?.setCaptured(false)
                     return
                 }
-                self?.refreshIfChanged()
+                // Unseen, nothing to show: the machine is throttled too.
+                if noteHostVisibility() < 2 { self?.refreshIfChanged() }
                 self?.updateCapture()
                 self?.followMouse()
                 CursorSync.shared.tick()
@@ -1639,5 +1640,26 @@ import UserNotifications
             alert.runModal()
         }
     }
+}
+#endif
+
+#if canImport(AppKit)
+/// Tells the machine what the host shows of it (machine_set_host_visibility):
+/// 0, a window of ours in front (or, rootless, the program frontmost: its
+/// menu bar is up, its first window may be yet to come); 1, one shown
+/// behind another application's; 2, none shown (minimized, hidden,
+/// covered).  The status item's window, in the menu bar, doesn't count.
+@MainActor @discardableResult func noteHostVisibility(frontIsSeen: Bool = false) -> Int32 {
+    if frontIsSeen && NSApp.isActive {
+        machine_set_host_visibility(0)
+        return 0
+    }
+    let shown = !NSApp.isHidden && NSApp.windows.contains { w in
+        w.isVisible && !w.isMiniaturized && w.occlusionState.contains(.visible)
+            && !String(describing: type(of: w)).hasPrefix("NSStatusBar")
+    }
+    let level: Int32 = shown ? (NSApp.isActive ? 0 : 1) : 2
+    machine_set_host_visibility(level)
+    return level
 }
 #endif

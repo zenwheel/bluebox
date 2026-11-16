@@ -583,7 +583,12 @@ final class TransientView: NSView {
             }
         }
         syncWindows()
-        for w in windows.values { (w.contentView as? MacWindowView)?.refresh(force: false) }
+        // A window unseen is drawn when it shows again (the machine is
+        // throttled meanwhile when none is seen).
+        noteHostVisibility(frontIsSeen: true)
+        for w in windows.values where w.occlusionState.contains(.visible) {
+            (w.contentView as? MacWindowView)?.refresh(force: false)
+        }
         if let view = screenWindow?.contentView as? MacWindowView {
             view.clearDesktop = !NSApp.isActive
             view.refresh(force: false)

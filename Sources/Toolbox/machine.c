@@ -1051,6 +1051,7 @@ void machine_set_realtime(bool on) { realtime = on; }
 bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
 void ev_idle_sleep(uint64_t ns);
+void ev_wake(void);
 
 /* What the machine's thread sleeping must wake for: a Time Manager task's
  * time, the next tick while VBL tasks are installed, every few ms while
@@ -1073,13 +1074,16 @@ uint64_t machine_work_due_in(uint64_t ns)
     return in < LEAST_NS && ns > LEAST_NS ? LEAST_NS : in;
 }
 
-/* The machine's thread waits up to ns of real time, or until input comes,
- * waking when interrupt-time work is due to do it.  The time it waited. */
-static uint64_t wall_wait(uint64_t ns)
+/* The machine's thread waits up to ns of real time, or until input comes
+ * (or over says the wait is over), waking when interrupt-time work is due
+ * to do it.  The time it waited. */
+static uint64_t wall_wait(uint64_t ns, bool (*over)(void))
 {
     uint64_t start = now_ns(), now = start;
-    while (now - start < ns && !cpu.halted) {
+    while (now - start < ns && !cpu.halted && !(over && over())) {
         uint64_t left = machine_work_due_in(ns - (now - start));
+        if (over && left > 4000000)
+            left = 4000000;
         uint32_t input = ev_input_serial();
         ev_idle_sleep(left);
         machine_advance_ticks();
@@ -1098,7 +1102,64 @@ uint64_t machine_realtime_wait(uint64_t ns)
 {
     if (!realtime || events_host_attached() || drain_wanted())
         return 0;
-    return wall_wait(ns);
+    return wall_wait(ns, NULL);
+}
+
+/* How much of the host the machine may use while its windows aren't
+ * seen (machine_set_host_visibility): in front, all of it; shown behind
+ * another application's windows, half; with none of them shown
+ * (minimized, hidden, covered), a tenth.  The clock goes on, so a program
+ * timed by it keeps its time, drawing fewer frames; interrupt-time work
+ * (sound, the Time Manager, the network) goes on between.
+ * BLUEBOX_THROTTLE=0 turns it off. */
+enum { THROTTLE_PERIOD_NS = 1000000000u / 60 };
+static const unsigned throttle_duty[3] = { 100, 50, 10 }; /* percent of a period */
+BB_HOST static _Atomic int host_visibility;
+BB_HOST static int throttled_at;
+BB_HOST static uint64_t throttle_period, throttle_cpu0;
+BB_HOST static int throttle_enabled = -1; /* the run's environment */
+
+void machine_set_host_visibility(int level)
+{
+    if (level < 0 || level > 2)
+        level = 0;
+    if (atomic_exchange(&host_visibility, level) > level)
+        ev_wake(); /* seen again: the throttle's wait is over */
+}
+
+static bool shown_more(void) { return atomic_load(&host_visibility) < throttled_at; }
+
+static uint64_t thread_cpu_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+}
+
+/* At a slice's end: once the machine has used its share of this period's
+ * host time, it waits out the rest. */
+static void throttle(void)
+{
+    int v = atomic_load(&host_visibility);
+    if (throttle_enabled < 0) {
+        const char *e = getenv("BLUEBOX_THROTTLE");
+        throttle_enabled = !(e && e[0] == '0');
+    }
+    if (!v || !throttle_enabled || !events_host_attached() || drain_wanted()) {
+        throttle_period = 0;
+        return;
+    }
+    uint64_t now = now_ns(), used = thread_cpu_ns();
+    if (!throttle_period || now - throttle_period >= THROTTLE_PERIOD_NS) {
+        throttle_period = now;
+        throttle_cpu0 = used;
+        return;
+    }
+    if (used - throttle_cpu0 < (uint64_t)THROTTLE_PERIOD_NS * throttle_duty[v] / 100)
+        return;
+    throttled_at = v;
+    wall_wait(throttle_period + THROTTLE_PERIOD_NS - now, shown_more);
+    throttle_period = 0;
 }
 
 /* With accurate timing a 68000 (PLAN M22) keeps a compact Mac's time: its
@@ -1354,6 +1415,7 @@ run_status machine_run(uint64_t max)
         }
         realtime_from_here();
         idle_slice();
+        throttle();
         machine_advance_ticks();
         events_script_pump(cpu.icount);
         events_sync_lowmem();

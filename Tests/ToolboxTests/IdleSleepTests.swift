@@ -349,6 +349,30 @@ extension BlueBox {
             #expect(wall >= 0.08 && wall < 1, "WaitNextEvent's 6 ticks took \(wall) s")
         }
 
+        /// Its windows unseen (machine_set_host_visibility), the machine uses
+        /// a tenth of the host's time; the clock goes on all the same.
+        @Test func anUnseenMachineIsThrottledAndKeepsTime() throws {
+            func cpu() -> Double {
+                var ts = timespec()
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts)
+                return Double(ts.tv_sec) + Double(ts.tv_nsec) / 1e9
+            }
+            let loop = [0xD081, 0xE388, 0x5281]         // a computation, never idle
+            var c0 = 0.0, ticks0: UInt32 = 0
+            let r = try run(loop + [back(loop.count)], seconds: 0.6, host: true, chunk: 50000) {
+                machine_set_host_visibility(2)
+                machine_advance_ticks()
+                ticks0 = rd32(UInt32(LM_Ticks))
+                c0 = cpu()
+            }
+            let used = cpu() - c0
+            machine_set_host_visibility(0)
+            let ticks = rd32(UInt32(LM_Ticks)) - ticks0
+            #expect(!r.halted)
+            #expect(used < r.wall * 0.3, "used \(used) s of \(r.wall)")
+            #expect(Double(ticks) > r.wall * 60 * 0.8, "\(ticks) ticks in \(r.wall) s")
+        }
+
         /// A computation going round in a few registers, calling nothing.
         @Test func aComputationIsWork() throws {
             let loop = [0xD081, 0xE388, 0x5281]         // ADD.L D1,D0; LSL.L #1,D0; ADDQ.L #1,D1
