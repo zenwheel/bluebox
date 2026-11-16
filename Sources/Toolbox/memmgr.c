@@ -1439,10 +1439,38 @@ void tb_MaxApplZone(void)
 
 void tb_SetApplBase(gaddr newbase) { set_mem_err(noErr); }
 
+/* The zones' shape, for idle.c: their headers and every block's (size,
+ * use, state, its master pointer's place), so that a loop making handles
+ * and disposing of them is seen to leave the heaps as it found them.  0
+ * if a walk goes astray. */
+uint64_t mm_heap_fingerprint(void)
+{
+    uint64_t h = 0xCBF29CE484222325ull;
+    gaddr zones[2] = { sys_zone(), appl_zone() };
+    for (int i = 0; i < 2; i++) {
+        gaddr z = zones[i];
+        if (!z)
+            continue;
+        for (uint32_t k = 0; k < Zone_heapData_off; k++)
+            h = (h ^ rd8(z + k)) * 0x100000001B3ull;
+        gaddr lim = Zone_bkLim(z);
+        unsigned n = 0;
+        for (gaddr b = z_first(z); b < lim; b = b_next(b)) {
+            if (++n > 1000000)
+                return 0;
+            for (uint32_t k = 0; k < HDR; k += 4)
+                h = (h ^ rd32(b + k)) * 0x100000001B3ull;
+        }
+    }
+    return h | 1;
+}
+
 void tb_BlockMove(gaddr src, gaddr dst, int32_t cnt, bool flush_p)
 {
-    if (cnt > 0)
+    if (cnt > 0) {
         gmemcpy(dst, src, (uint32_t)cnt);
+        idle_wrote(dst, (uint32_t)cnt);
+    }
     set_mem_err(noErr);
 }
 
@@ -1459,6 +1487,7 @@ int16_t tb_HandToHand(uint32_t *h)
     if (!nh)
         return memFullErr;
     gmemcpy(rd32(nh), rd32(src), (uint32_t)n);
+    idle_wrote(rd32(nh), (uint32_t)n);
     *h = nh;
     return noErr;
 }

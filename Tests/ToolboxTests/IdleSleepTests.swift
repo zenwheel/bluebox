@@ -336,6 +336,20 @@ extension BlueBox {
             #expect(rd32(out) * 2 >= ticks, "the VBL task ran \(rd32(out)) times in \(ticks) ticks")
         }
 
+        /// A handle made for a moment and disposed of at each turn (Director's
+        /// projectors): the heap as it was, nothing new; one kept each turn is
+        /// the heap growing, work.
+        @Test func aHandleMadeAndDisposedOfLetsTheHostSleep() throws {
+            let loop = [0x7010, 0xA122, 0xA023] + button // MOVEQ #16,D0; _NewHandle; _DisposeHandle
+            let r = try run(loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        @Test func aHandleKeptEachTimeIsWork() throws {
+            let loop = [0x7010, 0xA122, 0x91C8] + button  // MOVEQ #16,D0; _NewHandle; SUBA.L A0,A0
+            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+        }
+
         /// A loop working a while between its polls (MegaSeg's), the same
         /// each time: 30000 turns of a count kept in a register, put back
         /// before the poll.

@@ -23,8 +23,9 @@
  *     Mode's ways into code, which is the iteration's like the rest; a
  *     dispatcher's routine by its selector), one whose answer it writes
  *     into the program's memory and says so (answer_names, idle_wrote:
- *     SetRect, GlobalToLocal, FindWindow, EnableItem ..., taken as the
- *     program's own stores below), or drawing
+ *     SetRect, GlobalToLocal, FindWindow, EnableItem, BlockMove ..., taken
+ *     as the program's own stores below), one making or disposing of blocks
+ *     (heap_names: the heaps' shape is compared below), or drawing
  *     (draw_names: CopyBits, PaintRect, DrawString, PlotCIcon, RGBForeColor,
  *     SetEntries ...), no sound, file or memory work;
  *   - the registers are as they were at the iteration before ending at the
@@ -35,7 +36,9 @@
  *   - its stores, watched once the rest has held for a few iterations,
  *     left the places it stored to as that iteration left them (the
  *     same arguments pushed again; a counter kept in memory shows), its own
- *     frames below the stack pointer apart;
+ *     frames below the stack pointer apart; and if it made or disposed of
+ *     blocks, the heaps' shape is as it was (a handle made and disposed of
+ *     again; a handle kept each time shows);
  *   - what it drew, watched the same way, left the pixels as that iteration
  *     left them: QuickDraw's pixels are written from here, which the
  *     store watch doesn't see, so its blitters say which rectangle of which
@@ -69,6 +72,9 @@ enum {
     MOST_BEFORE_WATCH = 256, /* ... after watching found work again and again */
     MAX_RUN = 1000000,     /* instructions a poll loop's iteration may run */
     MAX_STORES = 64,       /* places an idle iteration may store to */
+    MAX_RANGES = 8,        /* ... and longer stretches a call wrote (BlockMove) */
+    RANGE_FROM = 17,       /* bytes from which a call's answer is a stretch */
+    RANGE_MOST = 65536,    /* bytes a stretch may have */
     MAX_DRAWN = 16,        /* destinations it may draw into */
     MAX_PORTS = 8,         /* ports it may draw with */
     MAX_PALETTES = 16,     /* palettes whose colours are compared */
@@ -148,10 +154,32 @@ static struct {
     store stores[MAX_STORES];
 } shots[NSITES + 1];
 
+/* Beside them (and not saved, being new): the longer stretches of the
+ * program's memory calls wrote (BlockMove, HandToHand) and the heaps'
+ * shape, for iterations that made or disposed of blocks; the same for the
+ * iteration going on. */
+typedef struct {
+    gaddr a;
+    uint32_t len;
+    uint64_t hash;
+} range;
+BB_HOST static struct {
+    int n; /* -1: none yet in this wait */
+    range r[MAX_RANGES];
+    uint64_t heap; /* 0: the heaps untouched */
+} more_shots[NSITES + 1];
+BB_HOST static struct {
+    int n;
+    bool overflow;
+    range r[MAX_RANGES];
+    bool heap;   /* blocks made or disposed of */
+    uint64_t fp; /* ... and the heaps' shape at its end */
+} more;
+
 static void forget_shots(void)
 {
     for (int i = 0; i <= NSITES; i++)
-        shots[i].n = -1;
+        shots[i].n = more_shots[i].n = -1;
 }
 
 static struct {
@@ -348,8 +376,20 @@ static void store_seen(gaddr a, uint32_t len)
  * another is work. */
 void idle_wrote(gaddr a, uint32_t len)
 {
-    for (uint32_t k = 0; k < len; k += 4)
-        store_seen(a + k, len - k < 4 ? len - k : 4);
+    if (len < RANGE_FROM) {
+        for (uint32_t k = 0; k < len; k += 4)
+            store_seen(a + k, len - k < 4 ? len - k : 4);
+        return;
+    }
+    if (!st.watching || in_interrupt())
+        return;
+    for (int i = 0; i < more.n; i++)
+        if (more.r[i].a == a && more.r[i].len == len)
+            return;
+    if (more.n == MAX_RANGES || len > RANGE_MOST)
+        more.overflow = true;
+    else
+        more.r[more.n++] = (range){ a, len, 0 };
 }
 
 /* Whether this iteration's stores left memory as the last one's did (a
@@ -580,6 +620,34 @@ static int drawn_verdict(int site)
     return SAME;
 }
 
+/* Whether the stretches calls wrote, and the heaps' shape if the
+ * iteration made or disposed of blocks, are as the last one left them. */
+static int more_verdict(int site)
+{
+    if (!st.watched)
+        return UNKNOWN;
+    if (more.overflow)
+        return CHANGED;
+    more.fp = more.heap ? mm_heap_fingerprint() : 0;
+    if (more.heap && !more.fp)
+        return CHANGED;
+    for (int i = 0; i < more.n; i++)
+        more.r[i].hash = hash_guest(0x9E3779B97F4A7C15ull, more.r[i].a, more.r[i].len);
+    const int n = more_shots[site].n;
+    if (n < 0)
+        return UNKNOWN;
+    if (n != more.n || more_shots[site].heap != more.fp)
+        return CHANGED;
+    for (int i = 0; i < more.n; i++) {
+        int j = 0;
+        while (j < n && (more_shots[site].r[j].a != more.r[i].a || more_shots[site].r[j].len != more.r[i].len))
+            j++;
+        if (j == n || more_shots[site].r[j].hash != more.r[i].hash)
+            return CHANGED;
+    }
+    return SAME;
+}
+
 static void watch(bool w)
 {
     if (st.watching != w)
@@ -637,7 +705,9 @@ static bool iteration_end(int mode)
         w = W_FAR;
     if (idle && mode == SLICES && !(idle = hw_device_accesses() == st.hw))
         w = W_HW;
-    int stores = stores_verdict(site), pixels = drawn_verdict(site);
+    int stores = stores_verdict(site), pixels = drawn_verdict(site), others = more_verdict(site);
+    if (others < stores)
+        stores = others;
     if (idle && stores == CHANGED)
         w = W_STORES;
     else if (idle && pixels == CHANGED)
@@ -666,6 +736,9 @@ static bool iteration_end(int mode)
         memcpy(shots[site].d, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
         shots[site].n = st.ndrawn;
         shots[site].look = st.look;
+        memcpy(more_shots[site].r, more.r, (size_t)more.n * sizeof *more.r);
+        more_shots[site].n = more.n;
+        more_shots[site].heap = more.fp;
     } else {
         st.nprev_drawn = 0;
         forget_shots();
@@ -679,6 +752,8 @@ static bool iteration_end(int mode)
     st.busy = false;
     st.nstores = 0;
     st.overflow = false;
+    more.n = 0;
+    more.overflow = more.heap = false;
     st.drew = false;
     st.ndrawn = st.nports = 0;
     st.drawn_overflow = false;
@@ -830,11 +905,12 @@ static const char *quiet_names[] = {
  * to handle, not a null one; HideControl a control shown).  In order, for
  * bsearch. */
 static const char *const answer_names[] = {
-    "ActivateControl", "AddPt", "CheckItem", "DeactivateControl", "DialogSelect", "DisableItem", "EnableItem",
-    "FindWindow", "GetControlData", "GetDialogItem", "GetDialogItemAsControl", "GetKeyboardFocus", "GlobalToLocal",
-    "HideControl", "InsetRect", "LocalToGlobal", "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle",
-    "ScalePt", "SectRect", "SetControlValue", "SetItemCmd", "SetItemMark", "SetItemStyle", "SetPt", "SetRect",
-    "ShowControl", "SndChannelStatus", "StdFilterProc", "SubPt", "TEIdle", "UnionRect",
+    "ActivateControl", "AddPt", "BlockMove", "BlockMoveData", "CheckItem", "DeactivateControl", "DialogSelect",
+    "DisableItem", "EnableItem", "FindWindow", "GetControlData", "GetDialogItem", "GetDialogItemAsControl",
+    "GetKeyboardFocus", "GlobalToLocal", "HideControl", "InsetRect", "LocalToGlobal", "MapPt", "MapRect",
+    "NumToString", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect", "SetControlValue", "SetItemCmd",
+    "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "ShowControl", "SndChannelStatus", "StdFilterProc", "SubPt",
+    "TEIdle", "UnionRect",
 };
 
 /* More calls with no lasting effect (beside quiet_names, whose size is
@@ -844,8 +920,18 @@ static const char *const answer_names[] = {
  * whose drawing shows in the pixels).  In order, for bsearch. */
 static const char *const query_names[] = {
     "CallOSTrapUniversalProc", "CallUniversalProc", "FindDialogItem", "FreeMem", "GetControlOwner", "GetEvQHdr",
-    "HMGetBalloons", "HMIsBalloon", "HPurge", "IdleControls", "IsControlActive", "IsControlHilited",
-    "IsControlVisible", "MaxBlock", "Mixed Mode return", "StackSpace",
+    "HMGetBalloons", "HMIsBalloon", "HPurge", "IUMagIDString", "IUMagString", "IdleControls", "InfoScrap",
+    "IsControlActive", "IsControlHilited", "IsControlVisible", "MaxBlock", "Mixed Mode return", "StackSpace",
+};
+
+/* Calls that make or dispose of blocks, or move or resize them: what they
+ * leave is the heaps' shape, compared at the iteration's end (a loop making
+ * a handle for a moment and disposing of it, as Director's projectors do,
+ * leaves it as it was); what they copy, HandToHand says.  In order, for
+ * bsearch. */
+static const char *const heap_names[] = {
+    "DisposeHandle", "DisposePtr", "HandToHand", "MoveHHi", "NewHandle", "NewHandleClear", "NewPtr", "NewPtrClear",
+    "SetHandleSize", "SetPtrSize",
 };
 
 /* Drawing, and the port and colour settings it is done with: what they
@@ -884,7 +970,7 @@ static bool in_list(const char *name, const char **list, size_t n)
 }
 
 /* What a call is: */
-enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK };
+enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK, HEAP };
 
 static uint8_t kind_of(const char *name)
 {
@@ -894,6 +980,8 @@ static uint8_t kind_of(const char *name)
     if (name && (bsearch(&name, answer_names, sizeof answer_names / sizeof *answer_names, sizeof(char *), by_name) ||
                  bsearch(&name, query_names, sizeof query_names / sizeof *query_names, sizeof(char *), by_name)))
         return QUIET;
+    if (name && bsearch(&name, heap_names, sizeof heap_names / sizeof *heap_names, sizeof(char *), by_name))
+        return HEAP;
     if (in_list(name, draw_names, sizeof draw_names / sizeof *draw_names))
         return DRAWS;
     for (size_t i = 0; name && i < sizeof by_selector / sizeof *by_selector; i++)
@@ -930,6 +1018,8 @@ static void call_kind(uint8_t kind, const char *name)
         why_work(name);
     } else if (kind == DRAWS) {
         drawing();
+    } else if (kind == HEAP) {
+        more.heap = true;
     }
 }
 
@@ -988,6 +1078,7 @@ void idle_reset(void)
     memset(&st, 0, sizeof st);
     watch_after = SAME_BEFORE_WATCH;
     memset(sites, 0, sizeof sites);
+    memset(&more, 0, sizeof more);
     forget_shots();
     interrupt_depth = 0;
     int_68k = int_ppc = 0;

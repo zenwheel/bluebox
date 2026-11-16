@@ -224,6 +224,7 @@ void tb_NumToString(int32_t l, gaddr s)
     int n = snprintf(buf, sizeof buf, "%d", (int)l);
     wr8(s, (uint8_t)n);
     gput(s + 1, buf, (uint32_t)n);
+    idle_wrote(s, (uint32_t)n + 1);
 }
 
 /* Like the ROM: no error checking; a leading sign, then digits, each
