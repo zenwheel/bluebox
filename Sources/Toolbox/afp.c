@@ -41,6 +41,15 @@
 #include "afp.h"
 #include "asp.h"
 
+uint64_t host_clock_ms(void); /* reattach.c */
+
+/* Seconds for the tickles: the server times a session out by real time,
+ * so the host's clock, not the machine's; its monotonic one (host_clock_ms),
+ * which a resumed process goes on with, and which no change of the host's
+ * date moves.  One that went back (a session from a snapshot an older
+ * build made by the date) tickles now. */
+static time_t now_secs(void) { return (time_t)(host_clock_ms() / 1000u); }
+
 /* AFP result codes */
 enum {
     kFPNoErr = 0, kFPAccessDenied = -5000, kFPBadUAM = -5002, kFPBadVersNum = -5003, kFPEOFErr = -5009,
@@ -184,7 +193,7 @@ static bool dsi_send(afp_session *s, int flags, int cmd, uint16_t id, uint32_t c
                 return false;
             done += (int)w;
         }
-    s->last_sent = time(NULL);
+    s->last_sent = now_secs();
     return true;
 }
 
@@ -371,7 +380,7 @@ static int call(afp_session *s, const block *k, int *rlen)
         *rlen = 0;
         return kFPSessClosed;
     }
-    s->last_sent = time(NULL);
+    s->last_sent = now_secs();
     return asp_command(s->asp, k->b, k->n, s->buf, s->bufcap, rlen);
 }
 
@@ -383,7 +392,7 @@ static int call_write(afp_session *s, const block *k, const uint8_t *data, int d
         *rlen = 0;
         return kFPSessClosed;
     }
-    s->last_sent = time(NULL);
+    s->last_sent = now_secs();
     return asp_write(s->asp, k->b, k->n, data, dlen, s->buf, s->bufcap, rlen);
 }
 
@@ -493,7 +502,7 @@ void afp_close(afp_session *s)
 
 void afp_idle(afp_session *s)
 {
-    if (!s || !s->alive || time(NULL) - s->last_sent < 30)
+    if (!s || !s->alive || (now_secs() - s->last_sent < 30 && now_secs() >= s->last_sent))
         return;
     if (s->tcp) {
         /* a tickle, and whatever the server sent meanwhile */
@@ -506,7 +515,7 @@ void afp_idle(afp_session *s)
         }
     } else {
         asp_tickle(s->asp);
-        s->last_sent = time(NULL);
+        s->last_sent = now_secs();
     }
 }
 

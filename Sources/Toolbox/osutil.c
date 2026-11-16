@@ -51,6 +51,31 @@ int64_t machine_unix_now(void)
     return (int64_t)t - lt.tm_gmtoff;
 }
 
+/* Random numbers for what the Toolbox makes up itself (the Moose's
+ * remarks, UUIDs, a QuickTime movie's random operand): seeded from the
+ * host's clock with a host attached; headless, from the machine's date and
+ * clock, so that a run makes the same ones each time, and a snapshot
+ * carries where the sequence was. */
+static uint64_t random_state;
+
+uint32_t machine_random(void)
+{
+    if (!random_state) {
+        if (machine_wall_clock()) {
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            random_state = (uint64_t)ts.tv_sec * 1000003u ^ (uint64_t)ts.tv_nsec << 20;
+        } else {
+            random_state = (uint64_t)mac_now() << 32 ^ machine_time_ns();
+        }
+        random_state |= 1;
+    }
+    random_state ^= random_state << 13;
+    random_state ^= random_state >> 7;
+    random_state ^= random_state << 17;
+    return (uint32_t)(random_state >> 16);
+}
+
 /* A resumed program whose date does not catch up (reattach.c): the
  * clock as it was when it hibernated, the seconds away taken off. */
 void osutil_clock_back(int64_t secs) { clock_set -= secs; }

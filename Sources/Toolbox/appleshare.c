@@ -223,7 +223,8 @@ static bool connected(share *sh)
 {
     if (sh->s)
         return true;
-    if (sh->failed && time(NULL) - sh->failed_at < 15)
+    time_t now = (time_t)(host_clock_ms() / 1000u); /* real time, as afp.c's tickles */
+    if (sh->failed && now - sh->failed_at < 15 && now >= sh->failed_at)
         return false; /* (AppleTalk's link may still be coming up) */
     char err[256] = "";
     sh->s = sh->atalk ? afp_connect_atalk(sh->server, sh->user, sh->password, err, sizeof err)
@@ -244,7 +245,7 @@ static bool connected(share *sh)
             notify_host((int)(sh - shares), text);
         }
         sh->failed = true;
-        sh->failed_at = time(NULL);
+        sh->failed_at = now;
         return false;
     }
     add_dir(sh, sh->root, 2);

@@ -1169,17 +1169,13 @@ int16_t tb_QTCreateUUID(gaddr outUUID, int32_t creationFlags)
     (void)creationFlags;
     if (!outUUID)
         return paramErr;
+    /* Headless, the same UUIDs each run (machine_random), as
+     * CFUUIDCreate's. */
     uint8_t u[16];
-#if defined(__APPLE__) || defined(__OpenBSD__)
-    arc4random_buf(u, sizeof u);
-#else
-    FILE *f = fopen("/dev/urandom", "rb");
-    if (!f || fread(u, 1, sizeof u, f) != sizeof u)
-        for (int i = 0; i < 16; i++)
-            u[i] = (uint8_t)rand();
-    if (f)
-        fclose(f);
-#endif
+    for (int i = 0; i < 16; i += 4) {
+        uint32_t r = machine_random();
+        u[i] = (uint8_t)(r >> 24), u[i + 1] = (uint8_t)(r >> 16), u[i + 2] = (uint8_t)(r >> 8), u[i + 3] = (uint8_t)r;
+    }
     u[6] = (uint8_t)((u[6] & 0x0F) | 0x40);
     u[8] = (uint8_t)((u[8] & 0x3F) | 0x80);
     gput(outUUID, u, sizeof u);

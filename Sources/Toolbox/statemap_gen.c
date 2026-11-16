@@ -2939,6 +2939,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/osutil.c", "adb_talk.odd_v", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/osutil.c", "clock_set", 8, 19, 0xbfaeadbb81e358d8 },
     { "Toolbox/osutil.c", "cursor_devices", 4, 1, 0x4984645b460455b1 },
+    { "Toolbox/osutil.c", "random_state", 8, 19, 0x003ae18bf90d2c1c },
     { "Toolbox/osutil.c", "xpram", 256, 0, 0x078d2f2df9f075d7 },
     { "Toolbox/ot_68k.c", "adapter.regs", 656, 63, 0x81078426e75acdae },
     { "Toolbox/ot_68k.c", "bound", 65536, 156, 0xae7e94a5a1c893bc },
@@ -3590,7 +3591,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1708;
+const unsigned hb_nstatics = 1709;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

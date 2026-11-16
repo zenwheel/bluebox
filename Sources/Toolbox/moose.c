@@ -199,7 +199,7 @@ static int next_joke(int total)
         for (int i = 0; i < total; i++)
             order[i] = i + 1;
         for (int i = total - 1; i > 0; i--) {
-            int j = (int)arc4random_uniform((uint32_t)i + 1);
+            int j = (int)(machine_random() % ((uint32_t)i + 1));
             int t = order[i];
             order[i] = order[j];
             order[j] = t;
@@ -418,9 +418,10 @@ bool moose_host_start(void)
     if (!h)
         return false;
     /* QuickDraw starts randSeed at 1, so the Moose would make its idle
-     * remarks in the same order at every start: a seed from the host. */
+     * remarks in the same order at every start: a seed from the host
+     * (headless, the same each run: machine_random). */
     gaddr qd = rd32(rd32(LM_CurrentA5)) - QDGlobals_thePort_off;
-    wr32(qd + QDGlobals_randSeed_off, arc4random() | 1);
+    wr32(qd + QDGlobals_randSeed_off, machine_random() | 1);
     int r = moose_start(true);
     gaddr m = moose_globals();
     LOGF(LOG_TRAPS, "StartMoose(TRUE) = %d: globals %08X rate %d pitch %d delay %d enable %d animate %d pauses %d flags %08X\n",
