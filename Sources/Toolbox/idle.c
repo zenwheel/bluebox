@@ -67,7 +67,7 @@
 enum {
     SAME_BEFORE_WATCH = 3, /* idle iterations in a row before the stores are watched */
     MOST_BEFORE_WATCH = 256, /* ... after watching found work again and again */
-    MAX_RUN = 20000,       /* instructions a poll loop's iteration may run */
+    MAX_RUN = 1000000,     /* instructions a poll loop's iteration may run */
     MAX_STORES = 64,       /* places an idle iteration may store to */
     MAX_DRAWN = 16,        /* destinations it may draw into */
     MAX_PORTS = 8,         /* ports it may draw with */
@@ -613,6 +613,10 @@ static void check_over(void)
     }
 }
 
+/* When the iteration began, on the machine's clock, and how long the
+ * last one took the host. */
+BB_HOST static uint64_t iteration_began, iteration_took;
+
 /* An iteration ends: whether it was idle (and enough of them in a row,
  * watched, to sleep); the next one starts. */
 static bool iteration_end(int mode)
@@ -680,6 +684,9 @@ static bool iteration_end(int mode)
     st.drawn_overflow = false;
     st.watched = st.watching;
     st.at = executed();
+    uint64_t t = machine_time_ns();
+    iteration_took = t - iteration_began;
+    iteration_began = t;
     return sleep;
 }
 
@@ -695,8 +702,11 @@ static void chain_break(void)
     forget_shots();
 }
 
-/* Sleep until the next tick, a Time Manager task's time or input, a few
- * milliseconds at most. */
+/* Sleep until the next tick, a Time Manager task's time or input: a few
+ * milliseconds at most, or four times as long as the iteration took the
+ * host if that is longer (one computing for a while between its polls,
+ * MegaSeg's, woke after each iteration's 2 ms as often as one of a few
+ * instructions). */
 static void idle_sleep(void)
 {
     uint64_t now = machine_time_ns();
@@ -704,8 +714,9 @@ static void idle_sleep(void)
     uint64_t until = tick, due = time_next_due();
     if (due && due < until)
         until = due;
-    if (until > now + MAX_SLEEP_NS)
-        until = now + MAX_SLEEP_NS;
+    uint64_t most = iteration_took > MAX_SLEEP_NS / 4 ? iteration_took * 4 : MAX_SLEEP_NS;
+    if (until > now + most)
+        until = now + most;
     if (until <= now)
         return;
     ev_idle_sleep(until - now);
@@ -732,6 +743,7 @@ static void idle_sleep(void)
      * end (S.C.OUT's music stopped while "Perfect" waits for a key). */
     time_pump();
     st.at = executed();
+    iteration_began = machine_time_ns();
 }
 
 bool idle_poll(void)

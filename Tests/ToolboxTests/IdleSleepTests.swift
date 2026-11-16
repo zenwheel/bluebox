@@ -336,6 +336,17 @@ extension BlueBox {
             #expect(rd32(out) * 2 >= ticks, "the VBL task ran \(rd32(out)) times in \(ticks) ticks")
         }
 
+        /// A loop working a while between its polls (MegaSeg's), the same
+        /// each time: 30000 turns of a count kept in a register, put back
+        /// before the poll.
+        @Test func aLongIterationTheSameEachTimeLetsTheHostSleep() throws {
+            let loop = [0x303C, 29999,                  // MOVE.W #29999,D0
+                        0x51C8, 0xFFFE]                 // DBRA D0,*
+                + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(r.sleeps > 10, "slept \(r.sleeps) times")
+        }
+
         /// A --realtime run's WaitNextEvent sleeps on the wall clock, as a
         /// window's does, so that it uses the host as a window would.
         @Test func aRealtimeWaitNextEventSleepTakesItsTime() {
