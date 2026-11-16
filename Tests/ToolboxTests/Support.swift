@@ -108,7 +108,7 @@ func tempDir() -> URL {
 /// Returns the folder it lives in.
 @discardableResult
 func launchTestApp(_ extra: [TestResource] = [], sizeFlags: UInt16 = 0, documents: [String] = [],
-                   name: String = "Test App") -> URL {
+                   name: String = "Test App", relative: Bool = false) -> URL {
     bootMachine()
     let jt = cat(be16(0), be16(0x3F3C), be16(1), be16(0xA9F0))
     let code0 = cat(be32(40), be32(256), be32(8), be32(32), jt)
@@ -128,7 +128,15 @@ func launchTestApp(_ extra: [TestResource] = [], sizeFlags: UInt16 = 0, document
     var err = [CChar](repeating: 0, count: 256)
     #expect(appledouble_write(path, &f, &err, err.count))
     withCStrings(documents) { machine_set_launch_documents($0, Int32(documents.count)) }
-    #expect(machine_launch(path, &err, err.count))
+    if relative {
+        // Launched by its name from its own folder, as from a shell there.
+        let cwd = FileManager.default.currentDirectoryPath
+        FileManager.default.changeCurrentDirectoryPath(dir.path)
+        defer { FileManager.default.changeCurrentDirectoryPath(cwd) }
+        #expect(machine_launch(name, &err, err.count))
+    } else {
+        #expect(machine_launch(path, &err, err.count))
+    }
     return dir
 }
 
