@@ -98,12 +98,14 @@ typedef struct {
 /* How a thread waits while another runs: not at all yet (or running), in
  * a Thread Manager call at its own level (PowerPC or 68k), at an idle call
  * of its own level it has not made, set aside for a drain (PowerPC or
- * 68k), or elsewhere. */
-enum { PARK_NONE, PARK_PPC, PARK_68K, PARK_DEEP, PARK_IDLE_PPC, PARK_IDLE_68K };
+ * 68k), elsewhere, or a Multiprocessing task in a wait of its own level
+ * that it makes again once resumed (mp_call_remade). */
+enum { PARK_NONE, PARK_PPC, PARK_68K, PARK_DEEP, PARK_IDLE_PPC, PARK_IDLE_68K, PARK_REMAKE_PPC };
 
 static bool parked_at_level(uint8_t park)
 {
-    return park == PARK_PPC || park == PARK_68K || park == PARK_IDLE_PPC || park == PARK_IDLE_68K;
+    return park == PARK_PPC || park == PARK_68K || park == PARK_IDLE_PPC || park == PARK_IDLE_68K ||
+           park == PARK_REMAKE_PPC;
 }
 
 static thread threads[MAX_THREADS];
@@ -341,6 +343,8 @@ static void note_park(thread *f)
          * NATIVE word, the return in lr. */
         if (switching_ppc(x->ppc.pc - 4))
             f->park = PARK_PPC;
+        else if (base && mp_is_task_thread(f->id) && mp_call_remade(f->park_in))
+            f->park = PARK_REMAKE_PPC;
     } else if (x->trap.call_depth == base && x->ppc_depth == 0 && (base || !main_ppc)) {
         /* The glue has popped its arguments: A7 is at the result, and the
          * program counter is the return address the caller pushed. */
@@ -371,16 +375,21 @@ const char *threads_blocker(void)
     BB_HOST static char reason[200];
     if (current != 0)
         return "one of the program's threads (Thread Manager) is running";
-    if (mp_have_tasks())
-        return "the program runs Multiprocessing Services tasks, which a snapshot cannot carry yet";
     for (int i = 1; i < MAX_THREADS; i++) {
         const thread *t = &threads[i];
         if (!t->used || !hosts[i] || !hosts[i]->started || parked_at_level(t->park))
             continue;
         const exec_ctx *x = t->ctx;
         bool deep = !x || x->ppc_trap.depth || x->trap.call_depth + x->ppc_depth > 1;
-        snprintf(reason, sizeof reason, "thread %u of the program's (Thread Manager) waits in %s, %s", t->id,
-                 t->park_in, deep ? "called from a routine of its own the Toolbox called" : "not a Thread Manager call");
+        if (mp_is_task_thread(t->id))
+            snprintf(reason, sizeof reason, "a Multiprocessing Services task (thread %u) waits in %s, %s", t->id,
+                     t->park_in,
+                     deep ? "called from a routine of its own the Toolbox called"
+                          : "not a wait or a yield of Multiprocessing Services' it could make again");
+        else
+            snprintf(reason, sizeof reason, "thread %u of the program's (Thread Manager) waits in %s, %s", t->id,
+                     t->park_in,
+                     deep ? "called from a routine of its own the Toolbox called" : "not a Thread Manager call");
         return reason;
     }
     return NULL;
@@ -409,13 +418,17 @@ static uint32_t resume_entry(thread *t)
 {
     cpu68k *c = g_cpu;
     LOGF(LOG_IDLE, "threads: thread %u goes on after resuming, from %s at %08X\n", t->id, t->park_in,
-         t->park == PARK_PPC ? g_ppc.lr : t->park == PARK_IDLE_PPC ? g_ppc.pc : c->pc);
+         t->park == PARK_PPC ? g_ppc.lr : t->park == PARK_IDLE_PPC || t->park == PARK_REMAKE_PPC ? g_ppc.pc : c->pc);
     /* Set aside at an idle call: it makes the call now. */
     if (t->park == PARK_IDLE_PPC)
         return ppc_call_resume();
     if (t->park == PARK_IDLE_68K) {
         guest_call_resume(t->park_trapword);
         return cpu_pop32(c);
+    }
+    if (t->park == PARK_REMAKE_PPC) {
+        g_ppc.pc -= 4; /* back on its NATIVE word: the call made again */
+        return ppc_call_resume();
     }
     if (t->park == PARK_PPC) {
         g_ppc.gpr[3] = noErr;
