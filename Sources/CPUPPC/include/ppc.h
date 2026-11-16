@@ -83,6 +83,9 @@ void ppc_jit_get_stats(ppc_jit_stats *s);
  * number of mismatches; describes the first in `why`. */
 int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scratch, char *why, int whylen);
 
+/* Disassemble instruction word op, found at addr (for branch targets), into buf. */
+void ppc_disasm(uint32_t addr, uint32_t op, char *buf, int bufsize);
+
 #include <string.h>
 static inline double ppc_fpr(const ppc_cpu *c, int n)
 {

@@ -121,5 +121,7 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
 
 /* Disassemble one instruction at addr into buf; returns its length in bytes. */
 int cpu_disasm(uint32_t addr, char *buf, int bufsize);
+/* The same, an A-line word shown by the name aline_name gives it ("_GetResource"). */
+int cpu_disasm_named(uint32_t addr, char *buf, int bufsize, const char *(*aline_name)(uint16_t op));
 
 #endif
