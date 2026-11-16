@@ -1052,17 +1052,34 @@ bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
 void ev_idle_sleep(uint64_t ns);
 
+/* What the machine's thread sleeping must wake for: a Time Manager task's
+ * time, the next tick while VBL tasks are installed, every few ms while
+ * sound plays or speech is spoken.  An open sound channel with nothing to
+ * play, or a task far off, no longer wakes it every 5 ms. */
+uint64_t machine_work_due_in(uint64_t ns)
+{
+    enum { SOON_NS = 4000000, LEAST_NS = 1000000 };
+    uint64_t in = ns, now = machine_time_ns();
+    if (in > SOON_NS && (sound_active() || speech_waiting()))
+        in = SOON_NS;
+    uint64_t due = time_next_due();
+    if (due && (due > now ? due - now : 0) < in)
+        in = due > now ? due - now : 0;
+    if (time_vbl_tasks()) {
+        uint64_t tick = (now * 60 / 1000000000u + 1) * 1000000000u / 60 + 1;
+        if (tick - now < in)
+            in = tick - now;
+    }
+    return in < LEAST_NS && ns > LEAST_NS ? LEAST_NS : in;
+}
+
 /* The machine's thread waits up to ns of real time, or until input comes,
- * cut into slices with interrupt-time work between them while there is
- * any: sound refills, Time Manager and VBL tasks, speech callbacks.  The
- * time it waited. */
+ * waking when interrupt-time work is due to do it.  The time it waited. */
 static uint64_t wall_wait(uint64_t ns)
 {
     uint64_t start = now_ns(), now = start;
     while (now - start < ns && !cpu.halted) {
-        uint64_t left = ns - (now - start);
-        if (left > 4000000 && (sound_busy() || time_busy() || speech_waiting()))
-            left = 4000000;
+        uint64_t left = machine_work_due_in(ns - (now - start));
         uint32_t input = ev_input_serial();
         ev_idle_sleep(left);
         machine_advance_ticks();

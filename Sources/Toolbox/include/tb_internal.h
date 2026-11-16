@@ -255,6 +255,13 @@ void io_complete_later_queued(gaddr dce, gaddr pb, int16_t result);
 void io_complete_queued_now(gaddr dce, gaddr pb, int16_t result); /* KillIO's */
 bool time_busy(void);  /* a Time Manager or VBL task waiting */
 bool sound_busy(void); /* a sound channel open */
+bool time_vbl_tasks(void); /* a VBL task installed */
+uint64_t time_next_due(void); /* the next Time Manager task's time (machine ns), 0 if none */
+bool sound_active(void);   /* a sound channel playing, or with commands waiting */
+/* Up to ns: how long the machine's thread may sleep before interrupt-time
+ * work is due (a Time Manager task, the next tick for VBL tasks, sound
+ * playing), at least a millisecond. */
+uint64_t machine_work_due_in(uint64_t ns);
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */
 void adb_pump(void);    /* the mouse to a program's service routine, at interrupt time */
 /* Let the application see and change a host file (and its neighbours) or,

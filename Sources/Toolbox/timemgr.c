@@ -431,6 +431,15 @@ bool time_busy(void)
     return false;
 }
 
+/* Whether a VBL task is installed: it runs at every tick. */
+bool time_vbl_tasks(void)
+{
+    for (int i = 0; i < MAX_TASKS; i++)
+        if (vbls[i])
+            return true;
+    return false;
+}
+
 /* When the next Time Manager task is due (machine ns), 0 if none. */
 uint64_t time_next_due(void)
 {

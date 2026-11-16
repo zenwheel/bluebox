@@ -853,6 +853,22 @@ bool sound_busy(void)
     return sound_input_busy();
 }
 
+/* Whether a channel has sound playing or commands waiting (a double
+ * buffer, a file, a queue): what needs pumping while the program sleeps.
+ * An open channel with none of these waits for the program. */
+static gaddr sd_pb;
+
+bool sound_active(void)
+{
+    uint64_t t = now_ns();
+    for (int i = 0; i < MAX_CHANNELS; i++) {
+        const channel *c = &chans[i];
+        if (c->chan && (c->head != c->tail || t < c->busy_until || c->db || c->file_playing))
+            return true;
+    }
+    return sd_pb || qt_tune_playing() || sound_input_busy();
+}
+
 void sound_pump(void)
 {
     if (in_pump)
@@ -1593,7 +1609,7 @@ void sound_beep(void)
 enum { ffMode = 0, ftMode = 1, swMode = -1, abortErr = -27 };
 #define MAC_RATE 22254.5454
 static channel sd_chan;
-static gaddr sd_pb;            /* the write playing */
+static gaddr sd_pb; /* the Sound Driver's write playing */
 /* Whether it was asynchronous: only then does its completion routine run
  * (a synchronous call's ioCompletion is whatever was on the stack: the
  * Reversi games' parameter block lives in their frame). */
