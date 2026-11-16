@@ -265,6 +265,7 @@ import Toolbox
             DispatchQueue.main.async { MainActor.assumeIsolated { SavePointer.shared.save() } }
         case .restoreSavePoint:
             DispatchQueue.main.async { MainActor.assumeIsolated { SavePointer.shared.restore() } }
+        case .debugger: DebuggerConsole.shared.breakIn()
         case .ignore: break
         }
         return true
@@ -287,7 +288,7 @@ import Toolbox
                     return true
                 }
                 let kind = HostKey.classify(flags, key, suspended: me.suspended, programHas: { _ in false })
-                guard [.hibernate, .savePoint, .restoreSavePoint].contains(kind) else { return false }
+                guard [.hibernate, .savePoint, .restoreSavePoint, .debugger].contains(kind) else { return false }
                 me.hibernateKeyCode = code
                 if !repeated { _ = me.handle(kind) }
                 return true
@@ -306,7 +307,7 @@ import Toolbox
     /// The application menu's Hide items, then Suspend, Quit and their
     /// alternates.
     func applicationMenuItems(title: String) -> [NSMenuItem] {
-        HostHideItems.items(title: title) + menuItems(title: title)
+        HostHideItems.items(title: title) + DebuggerConsole.shared.menuItems() + menuItems(title: title)
     }
 
     /// Suspend, Hibernate, the save points, Quit and their alternates.

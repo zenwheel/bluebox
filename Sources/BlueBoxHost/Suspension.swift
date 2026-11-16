@@ -196,6 +196,9 @@ public enum HostKey: Equatable {
     /// Control-Option-Command-R: back to the latest (SavePoint.swift).
     /// The host's always, as Hibernate's.
     case savePoint, restoreSavePoint
+    /// Control-Option-Command-D: the programmer's switch, into MacsBug,
+    /// when the Debug menu is there (debuggerEnabled).  The host's then.
+    case debugger
     /// Anything else while suspended: nothing.
     case ignore
 
@@ -209,6 +212,10 @@ public enum HostKey: Equatable {
     /// macOS Control-Option-Command key either.
     public static let savePointKey = "s"
     public static let restoreKey = "r"
+    /// The debugger's key, with Hibernate's modifiers (no macOS key either),
+    /// and whether it is the host's in this run.
+    public static let debuggerKey = "d"
+    nonisolated(unsafe) public static var debuggerEnabled = false
 
     /// `programHas`: whether the program's current menu bar has an item
     /// with Command and this key, asked as the key comes, since programs
@@ -222,6 +229,7 @@ public enum HostKey: Equatable {
             case hibernateKey: return .hibernate
             case savePointKey: return .savePoint
             case restoreKey: return .restoreSavePoint
+            case debuggerKey where debuggerEnabled: return .debugger
             default: break
             }
         }

@@ -44,6 +44,7 @@ struct AppSettings: Codable {
     var appleShare: String? /* an AppleShare volume to mount (machine_mount_appleshare's spec; "": none) */
     var display: String? /* rootless, or screen (the whole Mac screen in one window); chosen by itself when unset */
     var jit: Bool? /* translate the program's code to host code (--jit) */
+    var debugger: String? /* menu (the Debug menu), stop (and the program's Debugger calls open it), off; unset: the menu with the developer tools */
     var internet: InternetSettings? /* Internet Config's preferences */
     var keepSnapshots: Int? /* hibernated snapshots kept per program; unset: HibernatedSnapshots.defaultKeep */
     var keepSavePoints: Int? /* save points kept per program, apart; unset: HibernatedSnapshots.defaultKeepSavePoints */
@@ -51,7 +52,7 @@ struct AppSettings: Codable {
         depth == nil && cpu == nil && fpu == nil && addressing == nil && timing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
             && appleShare == nil && display == nil
-            && jit == nil
+            && jit == nil && debugger == nil
             && (internet?.isEmpty ?? true)
             && keepSnapshots == nil && keepSavePoints == nil
     }
@@ -71,6 +72,7 @@ struct AppSettings: Codable {
             + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)"), "
             + "display \(display ?? "default (rootless, the whole screen when the program wants it)"), "
             + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (off)"), "
+            + "debugger \(debugger ?? "default (the Debug menu when the developer tools are installed)"), "
             + "keep-snapshots \(keepSnapshots.map(String.init) ?? "default (\(HibernatedSnapshots.defaultKeep))"), "
             + "keep-save-points \(keepSavePoints.map(String.init) ?? "default (\(HibernatedSnapshots.defaultKeepSavePoints))")"
             + (internet.map { $0.isEmpty ? "" : ", " + $0.summary } ?? "")
@@ -86,6 +88,7 @@ struct AppSettings: Codable {
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
                            printer: printer ?? f.printer, userName: userName ?? f.userName,
                            appleShare: appleShare ?? f.appleShare, display: display ?? f.display, jit: jit ?? f.jit,
+                           debugger: debugger ?? f.debugger,
                            internet: internet.map { $0.over(f.internet) } ?? f.internet,
                            keepSnapshots: keepSnapshots ?? f.keepSnapshots,
                            keepSavePoints: keepSavePoints ?? f.keepSavePoints)
@@ -515,6 +518,9 @@ func setCommand(_ args: [String]) {
         case "jit":
             guard ["on", "off", "default"].contains(value) else { fail("jit expects on, off or default") }
             s.jit = value == "default" ? nil : value == "on"
+        case "debugger":
+            guard ["menu", "stop", "off", "default"].contains(value) else { fail("debugger expects menu, stop, off or default") }
+            s.debugger = value == "default" ? nil : value
         case "keep-snapshots":
             if value == "default" {
                 s.keepSnapshots = nil
