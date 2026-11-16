@@ -18,13 +18,20 @@
  *   - it ran fewer than MAX_RUN instructions (a poll loop) or, with no
  *     calls, stayed within a few hundred bytes of code;
  *   - every Toolbox call it made is a query with no lasting effect
- *     (quiet_names: polls, FrontWindow, GetPort, LoadSeg, BitTst, FixMul,
- *     PtInRect ...: what only reads and answers) or drawing
+ *     (quiet_names, query_names: polls, FrontWindow, GetPort, LoadSeg,
+ *     BitTst, FixMul, PtInRect ...: what only reads and answers; Mixed
+ *     Mode's ways into code, which is the iteration's like the rest; a
+ *     dispatcher's routine by its selector), one whose answer it writes
+ *     into the program's memory and says so (answer_names, idle_wrote:
+ *     SetRect, GlobalToLocal, FindWindow, EnableItem ..., taken as the
+ *     program's own stores below), or drawing
  *     (draw_names: CopyBits, PaintRect, DrawString, PlotCIcon, RGBForeColor,
  *     SetEntries ...), no sound, file or memory work;
  *   - the registers are as they were at the iteration before ending at the
- *     same poll (a count kept in a register shows) and, with no calls, no
- *     device was touched;
+ *     same poll, from the same depth of the stack (a count kept in a
+ *     register shows; a routine polling for callers at different depths is
+ *     compared with itself for each) and, with no calls, no device was
+ *     touched;
  *   - its stores, watched once the rest has held for a few iterations,
  *     left the places it stored to as that iteration left them (the
  *     same arguments pushed again; a counter kept in memory shows), its own
@@ -92,9 +99,10 @@ static void why_regs(const regs *was, const regs *now);
 /* Whether the registers are as they were last time at this poll. */
 static bool same_at_site(const regs *r, int *site)
 {
+    const int sp = r->r[35] ? 1 : 15; /* r1, a7: a routine polling for callers at different depths */
     for (int i = 0; i < NSITES; i++)
         if (sites[i].used && sites[i].r.r[34] == r->r[34] && sites[i].r.r[32] == r->r[32] &&
-            sites[i].r.r[35] == r->r[35]) {
+            sites[i].r.r[35] == r->r[35] && sites[i].r.r[sp] == r->r[sp]) {
             bool same = !memcmp(&sites[i].r, r, sizeof *r);
             if (!same)
                 why_regs(&sites[i].r, r);
@@ -332,6 +340,16 @@ static void store_seen(gaddr a, uint32_t len)
     }
     st.stores[st.nstores].a = a;
     st.stores[st.nstores++].len = len;
+}
+
+/* A quiet call's answer written into the program's memory (a point
+ * converted in place, a rectangle set, intersected or offset): taken as a
+ * store of the program's, so that the same answer again is the same, and
+ * another is work. */
+void idle_wrote(gaddr a, uint32_t len)
+{
+    for (uint32_t k = 0; k < len; k += 4)
+        store_seen(a + k, len - k < 4 ? len - k : 4);
 }
 
 /* Whether this iteration's stores left memory as the last one's did (a
@@ -794,6 +812,25 @@ static const char *quiet_names[] = {
     "TestDeviceAttribute", "TextWidth", "TickCount", "UnloadSeg", "UnlockPixels", "WaitMouseUp", "WaitNextEvent",
 };
 
+/* Calls whose only effect is the answer they write into the program's
+ * memory, which they say (idle_wrote): the same answer again is the same.
+ * In order, for bsearch. */
+static const char *const answer_names[] = {
+    "AddPt", "CheckItem", "DisableItem", "EnableItem", "FindWindow", "GlobalToLocal", "InsetRect", "LocalToGlobal",
+    "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect", "SetItemCmd", "SetItemMark",
+    "SetItemStyle", "SetPt", "SetRect", "SndChannelStatus", "SubPt", "UnionRect",
+};
+
+/* More calls with no lasting effect (beside quiet_names, whose size is
+ * saved state): queries, and Mixed Mode's ways into and out of code
+ * (what runs there is the program's iteration, its calls and stores
+ * watched as any).  In order, for bsearch. */
+static const char *const query_names[] = {
+    "CallOSTrapUniversalProc", "CallUniversalProc", "FindDialogItem", "FreeMem", "GetControlOwner", "GetEvQHdr",
+    "HMGetBalloons", "HMIsBalloon", "HPurge", "IsControlActive", "IsControlHilited", "IsControlVisible", "MaxBlock",
+    "Mixed Mode return", "StackSpace",
+};
+
 /* Drawing, and the port and colour settings it is done with: what they
  * leave is the pixels drawn (qd_drawn), the ports drawn with and the
  * colours shown, which the iteration's end compares with the last's. */
@@ -837,6 +874,9 @@ static uint8_t kind_of(const char *name)
     /* The low-memory accessors' getters (LMGetTicks, LMGetMBarHeight) only read. */
     if (in_list(name, quiet_names, sizeof quiet_names / sizeof *quiet_names) || (name && !strncmp(name, "LMGet", 5)))
         return QUIET;
+    if (name && (bsearch(&name, answer_names, sizeof answer_names / sizeof *answer_names, sizeof(char *), by_name) ||
+                 bsearch(&name, query_names, sizeof query_names / sizeof *query_names, sizeof(char *), by_name)))
+        return QUIET;
     if (in_list(name, draw_names, sizeof draw_names / sizeof *draw_names))
         return DRAWS;
     for (size_t i = 0; name && i < sizeof by_selector / sizeof *by_selector; i++)
@@ -879,11 +919,13 @@ static void call_kind(uint8_t kind, const char *name)
 /* A 68k trap, by its number. */
 static uint8_t trap_kind[2048];
 
-void idle_trap(uint16_t op)
+void idle_trap(uint16_t op, bool by_selector)
 {
     if (in_interrupt())
         return;
     calls++;
+    if (by_selector)
+        return; /* a dispatcher of ours (SoundDispatch, Pack7 ...): idle_selector says */
     unsigned k = (op & 0x0800) ? 1024 + (op & 0x3FFu) : (op & 0xFFu);
     if (!trap_kind[k])
         trap_kind[k] = kind_of(trap_name(op));

@@ -131,11 +131,45 @@ extension BlueBox {
             #expect(try run(loop + [back(loop.count)]).sleeps == 0)
         }
 
-        /// A Toolbox call that does something (here SetRect) between polls.
+        /// A Toolbox call that does something (here OffsetRect, moving a
+        /// rect along) between polls.
         @Test func aCallThatDoesSomethingIsWork() throws {
+            let offsetRect = [0x486D, 0xFFF0, 0x3F3C, 1, 0x4267, 0xA8A8] // OffsetRect(-16(A5), 1, 0)
+            let loop = offsetRect + button
+            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        /// A call whose answer is written into the program's memory, the
+        /// same answer each time (a rect set to the same place, a point
+        /// converted to the port's coordinates): nothing new (Moon Egg and
+        /// the puzzles of Iris Puzzle's kind, at their title screens).
+        @Test func aRectSetTheSameAgainLetsTheHostSleep() throws {
             let setRect = [0x486D, 0xFFF0, 0x4267, 0x4267, 0x3F3C, 0x0010, 0x3F3C, 0x0010, 0xA8A7]
             let loop = setRect + button
-            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+            let r = try run(loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        @Test func aPointConvertedTheSameAgainLetsTheHostSleep() throws {
+            let loop = [0x2B7C, 0x0010, 0x0020, 0xFFF0,       // MOVE.L #$00100020,-16(A5)
+                        0x486D, 0xFFF0, 0xA871]               // GlobalToLocal(-16(A5))
+                + button
+            let r = try run(drawSetup + loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// The poll in a routine the loop calls from two depths of its
+        /// stack (Dole15's): each place compared with itself.
+        @Test func aPollCalledFromTwoDepthsLetsTheHostSleep() throws {
+            let body = [0x6100, 12,                           // loop: BSR.W sub
+                        0x2F00,                               // MOVE.L D0,-(SP)
+                        0x6100, 6,                            // BSR.W sub
+                        0x588F,                               // ADDQ.L #4,SP
+                        back(6)]                              // BRA.S loop
+                + button + [0x4E75]                           // sub: Button; RTS
+            let r = try run(body)
+            #expect(!r.halted)
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
         }
 
         /// GetKeys into -48(A5), then BitTst of its Caps Lock bit (57).

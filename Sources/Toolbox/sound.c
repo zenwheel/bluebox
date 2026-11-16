@@ -1167,8 +1167,10 @@ int16_t tb_SndChannelStatus(gaddr chan, int16_t length, gaddr statusp)
     st[14] = c->paused ? 1 : 0;
     uint32_t attr = (uint32_t)c->init;
     st[16] = (uint8_t)(attr >> 24), st[17] = (uint8_t)(attr >> 16), st[18] = (uint8_t)(attr >> 8), st[19] = (uint8_t)attr;
-    if (length > 0)
+    if (length > 0) {
         gput(statusp, st, (uint32_t)length);
+        idle_wrote(statusp, (uint32_t)length);
+    }
     return noErr;
 }
 
