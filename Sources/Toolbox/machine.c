@@ -7,6 +7,7 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "carbon_events.h"
 #include "forks.h"
@@ -908,6 +909,18 @@ int machine_app_addressing(const char *app_path)
 
 bool machine_launch(const char *app_path, char *err, size_t errlen)
 {
+    /* A path from the current folder made whole: the program's own file
+     * keeps it, and the File Manager names its folder by it (CCaption's
+     * copy protection finds its file by name there, and a relative path
+     * is outside every place the program may see). */
+    char whole[PATH_MAX];
+    if (app_path[0] != '/') {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof cwd) && strlen(cwd) + 1 + strlen(app_path) < sizeof whole) {
+            snprintf(whole, sizeof whole, "%s/%s", cwd, app_path);
+            app_path = whole;
+        }
+    }
     mac_file mf;
     if (!appledouble_read(app_path, &mf, err, errlen))
         return false;
