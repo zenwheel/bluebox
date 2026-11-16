@@ -1616,7 +1616,9 @@ uint64_t cpu_jit_run(cpu68k *c, uint64_t max)
     }
     E.ctx.mem = g_mem;
     check_mode(c);
-    while (!c->halted && !c->stopped) {
+    /* A trace hook set meanwhile (the debugger's, from a native that
+     * stopped in it) sends the rest of the run to the interpreter. */
+    while (!c->halted && !c->stopped && !c->trace) {
         uint64_t done = c->icount - start;
         if (done >= max)
             break;

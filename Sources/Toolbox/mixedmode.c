@@ -260,6 +260,11 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
     return_code = rtv ? rd32(rtv) : 0;
     ppc_cpu saved = g_ppc;
     uint32_t sp = (g_ppc.gpr[1] - 512) & ~15u;
+    /* From 68k code (a trap it made, or a routine descriptor it called):
+     * the debugger's stack crawl crosses here (macsbug.c). */
+    bool from_68k = !g_ppc_mode || running_68k || mm_level_68k();
+    if (from_68k)
+        macsbug_switch_push(true, sp);
     wr32(sp, g_ppc.gpr[1]);
     for (int i = 0; i < nargs; i++) {
         if (i < 8)
@@ -281,6 +286,8 @@ uint32_t ppc_call(gaddr tvector, const uint32_t *args, int nargs)
     ppc_depth++;
     run_to_return();
     ppc_depth--;
+    if (from_68k)
+        macsbug_switch_pop();
     uint32_t result = g_ppc.gpr[3];
     bool returned = ppc_returned;
     ppc_returned = false;
@@ -894,7 +901,9 @@ static uint32_t call_68k(gaddr code, uint32_t pi, const uint32_t *args, int narg
     running_68k++;
     gaddr sp = g_cpu->a[7];
     if (set_up_68k(pi, args, nargs)) {
+        macsbug_switch_push(false, g_cpu->a[7]);
         guest_call_regs(code);
+        macsbug_switch_pop();
         r = result_68k(pi, args, nargs, sp);
     } else {
         ppc_halt(&g_ppc, "Mixed Mode: calling convention %d (procInfo %08X) to 68k code", conv, pi);
@@ -991,6 +1000,7 @@ static bool level_call_68k(ppc_cpu *c, gaddr code, uint32_t pi, const uint32_t *
     LOGF(LOG_TRAPS, "Mixed Mode: 68k routine %08X on the guest, procInfo %08X, %d arguments (%08X %08X)\n", code, pi,
          nargs, nargs > 0 ? args[0] : 0, nargs > 1 ? args[1] : 0);
     set_up_68k(pi, args, nargs);
+    macsbug_switch_push(false, m->a[7]);
     cpu_push32(m, level_stub);
     m->pc = code;
     running_68k++;
@@ -1024,6 +1034,7 @@ static void level_returned(cpu68k *m, uint16_t tw)
     m->sr = rd16(f + LF_SR);
     running_68k--;
     level_frame = 0;
+    macsbug_switch_pop();
     m->stopped = true;
     level_switched = true;
 }

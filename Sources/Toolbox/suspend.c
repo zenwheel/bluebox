@@ -27,6 +27,8 @@ BB_HOST static bool frozen;           /* the clock stands still, since pause_sin
 BB_HOST static uint64_t pause_since;  /* the clock when the machine stopped */
 BB_HOST static _Atomic uint64_t pause_total; /* time spent suspended before that */
 BB_HOST static uint64_t pause_until;  /* a timed pause (pause:N): when it ends, or 0 */
+BB_HOST static atomic_bool held;      /* the debugger's: the clock stands still since held_since */
+BB_HOST static uint64_t held_since;
 
 static uint64_t mono_ns(void)
 {
@@ -104,18 +106,37 @@ bool machine_pause_parked(void)
  * while suspended, and less every suspension before. */
 uint64_t machine_unpaused_ns(uint64_t now)
 {
-    if (!atomic_load(&pause_wanted) && !pause_total)
+    if (!atomic_load(&pause_wanted) && !pause_total && !atomic_load(&held))
         return now;
     pthread_mutex_lock(&pause_lock);
     if (atomic_load(&pause_wanted) && frozen && now > pause_since)
         now = pause_since;
+    if (atomic_load(&held) && now > held_since)
+        now = held_since;
     now -= pause_total;
     pthread_mutex_unlock(&pause_lock);
     return now;
 }
 
+/* The debugger (macsbug.c) holds the clock still while it has the
+ * machine stopped, as a suspension does, so that the program finds no
+ * jump in Ticks or the Time Manager when it goes on. */
+void machine_clock_hold(bool on)
+{
+    pthread_mutex_lock(&pause_lock);
+    if (on && !atomic_load(&held)) {
+        held_since = mono_ns();
+        atomic_store(&held, true);
+    } else if (!on && atomic_load(&held)) {
+        pause_total += mono_ns() - held_since;
+        atomic_store(&held, false);
+    }
+    pthread_mutex_unlock(&pause_lock);
+}
+
 void machine_pause_point(void)
 {
+    macsbug_poll(); /* the host's break: the debugger's hooks go in */
     if (!atomic_load(&pause_wanted))
         return;
 #ifdef __APPLE__

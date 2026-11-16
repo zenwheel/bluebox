@@ -375,6 +375,7 @@ void events_script_pump(uint64_t now)
         case 8: machine_post_wheel(s.a, s.b, s.c, 0); break; /* sideways, c columns (left) */
         case 9: machine_pause_for((uint32_t)s.a); break; /* held still from the next pause point */
         case 10: break; /* sync: no input, only a point the clock stops at */
+        case 12: machine_debug_break(); break; /* the programmer's switch: into the debugger */
         case 11: /* a save point made or put back: by the host, at the next safe point */
             if (s.a == MACHINE_SAVEPOINT_SAVE) {
                 save_step_due = s.at;
