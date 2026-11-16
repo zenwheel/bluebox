@@ -1181,14 +1181,25 @@ gaddr tb_NewPalette(int16_t n, gaddr srcColors, int16_t usage, int16_t tolerance
     return h;
 }
 
-/* 'pltt': the Palette record as stored (entries, then ColorInfo records). */
+/* 'pltt': the Palette record as stored (entries, then ColorInfo records).
+ * The palette made from it has room for as many entries as it says, as
+ * the Palette Manager's did, those the resource leaves out zero: SoundEdit
+ * 16's 'pltt' 9100 says 16 and holds 12, and a copy of the resource alone
+ * had the private fields cleared past its end, over the next block. */
 gaddr tb_GetNewPalette(int16_t id)
 {
     gaddr r = tb_GetResource((int32_t)fourcc("pltt"), id);
     if (!r || !rd32(r))
         return 0;
-    uint32_t h = r;
-    tb_HandToHand(&h);
+    uint32_t have = (uint32_t)tb_GetHandleSize(r);
+    if (have < Palette_pmInfo_off)
+        return 0;
+    int n = (int16_t)rd16(rd32(r) + Palette_pmEntries_off);
+    uint32_t size = Palette_pmInfo_off + (uint32_t)(n > 0 ? n : 0) * ColorInfo_SIZEOF;
+    gaddr h = tb_NewHandle((int32_t)size, false, true);
+    if (!h)
+        return 0;
+    gmemcpy(rd32(h), rd32(r), have < size ? have : size);
     for (int i = 0; i < entries(h); i++)
         wr32(entry(h, i) + ColorInfo_ciPrivate_off, 0);
     return h;

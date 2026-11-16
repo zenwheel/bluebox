@@ -94,6 +94,8 @@ void carbonlib_init(void);
  * thread that isn't a task); due MP timers fire.  Returns how many ran. */
 int mp_run_tasks(void);
 bool mp_have_tasks(void);
+bool mp_call_remade(const char *name);   /* a task's call made again once resumed */
+bool mp_is_task_thread(uint32_t thread); /* a Thread Manager thread running a task */
 void mp_reset(void);
 
 /* The Thread Manager's side (threadmgr.c): told when thread id ends, and

@@ -358,9 +358,9 @@ static double operand(wctx *x, uint32_t oprn)
         tb_DisposePtr(keys);
         return down;
     }
-    case 5123: { /* kOperandRandom: between its two parameters */
+    case 5123: { /* kOperandRandom: between its two parameters (headless, the same each run) */
         double lo = param(x, o, 1, 'h'), hi = param(x, o, 2, 'h');
-        return lo + (double)(rand() % (int)(hi - lo + 1 > 0 ? hi - lo + 1 : 1));
+        return lo + (double)(machine_random() % (uint32_t)(hi - lo + 1 > 0 ? hi - lo + 1 : 1));
     }
     case 5124: case 5125: return 0;
     case 8192: return sin(param(x, o, 1, 'F'));

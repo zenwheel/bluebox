@@ -11,6 +11,17 @@
  * those same moments, on the machine's clock.
  *
  * IDs are opaque references (ref_new, carbon_events.c).
+ *
+ * A snapshot (hibernate.c) carries the tasks with the rest: each waits,
+ * when the main task comes to a safe point, in a call of its own level, a
+ * wait (MPWaitOnQueue, MPWaitOnSemaphore, MPWaitForEvent,
+ * MPEnterCriticalRegion, MPDelayUntil) or MPYield, its registers as they
+ * were at the call, and none of it taken yet; once resumed it makes the
+ * call again (threadmgr.c's PARK_REMAKE_PPC), going on to the deadline it
+ * had.  A task that never ran starts at its entry point.  The main task's
+ * own wait is abandoned for a drain and made again (drain_give_up).
+ * Queues, semaphores, event groups, critical regions, notifications and
+ * timers are tracked blocks, and go with it as they are.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +35,7 @@
 #define RETURN(v) do { c->gpr[3] = (uint32_t)(v); c->pc = c->lr; return; } while (0)
 /* A wait the machine's stopping cut short is left unfinished (going on
  * runs it again), not answered with a timeout. */
-#define RETURN_WAIT(v) do { if (g_cpu->halted) return; RETURN(v); } while (0)
+#define RETURN_WAIT(v) do { if (g_cpu->halted || wait_abandoned) { wait_abandoned = false; return; } RETURN(v); } while (0)
 
 enum {
     kMPIterationEndErr = -29275,
@@ -69,6 +80,10 @@ typedef struct task {
     gaddr blocked_on; /* the object it waits on now (os9left_mp.c's MPQueryBlocking) */
     uint32_t storage[MAX_STORAGE];
     struct task *next;
+    /* In a wait (wait_for) now, and until when: a resumed task makes its
+     * call again, and goes on to the same deadline. */
+    bool waiting;
+    uint64_t wait_until;
 } task;
 
 /* What a wait can be on: each kind keeps waiters from being freed under
@@ -231,6 +246,21 @@ int mp_run_tasks(void)
 
 bool mp_have_tasks(void) { return tasks != NULL; }
 
+/* A call a task, set aside in it at its own level, makes again once
+ * resumed: a wait or a yield, nothing of it taken yet (threadmgr.c). */
+bool mp_call_remade(const char *name)
+{
+    static const char *const calls[] = { "MPWaitOnQueue", "MPWaitOnSemaphore", "MPWaitForEvent",
+                                         "MPEnterCriticalRegion", "MPDelayUntil", "MPDelayUntilSys",
+                                         "MPYield", "MPYieldWithHint" };
+    for (size_t i = 0; i < sizeof calls / sizeof calls[0]; i++)
+        if (!strcmp(name, calls[i]))
+            return true;
+    return false;
+}
+
+bool mp_is_task_thread(uint32_t thread) { return task_of_thread(thread) != NULL; }
+
 /* Waiting: a task hands back its turn; the main task gives the tasks
  * theirs, and when none of them got anywhere, time passes. */
 static void pause_once(void)
@@ -246,14 +276,34 @@ static void pause_once(void)
         ev_wait_tick();
 }
 
+/* The main task's wait given up for a drain: its call is left unanswered,
+ * to be made again (cfm.c puts the registers back). */
+BB_HOST static bool wait_abandoned;
+
+static bool given_up(void)
+{
+    if (current_task() != &main_task || !drain_give_up())
+        return false;
+    wait_abandoned = true;
+    return true;
+}
+
 /* Wait until ready(arg) or the timeout: noErr, kMPTimeoutErr, or
  * kMPDeletedErr when the object goes. */
 static int32_t wait_for(object *o, bool (*ready)(void *), void *arg, int32_t timeout)
 {
     uint64_t deadline = timeout == kDurationForever ? UINT64_MAX : now_ns() + duration_ns(timeout);
     task *me = current_task();
+    /* A task's wait made again once resumed: the deadline it had, and it
+     * was counted among the object's waiters already. */
+    if (me != &main_task && me->waiting && me->blocked_on == o->id) {
+        deadline = me->wait_until;
+        o->waiters--;
+    }
     gaddr was = me->blocked_on;
     me->blocked_on = o->id;
+    me->waiting = me != &main_task;
+    me->wait_until = deadline;
     o->waiters++;
     int32_t err = noErr;
     for (;;) {
@@ -263,7 +313,7 @@ static int32_t wait_for(object *o, bool (*ready)(void *), void *arg, int32_t tim
         }
         if (ready(arg))
             break;
-        if (timeout == kDurationImmediate || now_ns() >= deadline || g_cpu->halted) {
+        if (timeout == kDurationImmediate || now_ns() >= deadline || g_cpu->halted || given_up()) {
             err = kMPTimeoutErr;
             break;
         }
@@ -271,6 +321,7 @@ static int32_t wait_for(object *o, bool (*ready)(void *), void *arg, int32_t tim
     }
     o->waiters--;
     me->blocked_on = was;
+    me->waiting = false;
     return err;
 }
 
@@ -890,7 +941,7 @@ static void mp_MPDelayUntil(ppc_cpu *c)
     if (!R(0))
         RETURN(paramErr);
     uint64_t until = rd64(R(0)) * NS_PER_ABS;
-    while (now_ns() < until && !g_cpu->halted)
+    while (now_ns() < until && !g_cpu->halted && !given_up())
         pause_once();
     RETURN_WAIT(noErr);
 }

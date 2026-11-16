@@ -470,5 +470,141 @@ extension BlueBox {
             #expect(rd32(vars + 4) > count)
             #expect(rd16(vars) == 0)                       // noErr
         }
+
+        /// A Multiprocessing Services call made from here, as the program
+        /// would: its result.
+        @discardableResult
+        func mp(_ name: String, _ args: [UInt32] = []) -> UInt32 {
+            withUnsafeMutableBytes(of: &g_ppc.gpr) { gpr in
+                for (i, a) in args.enumerated() { gpr.storeBytes(of: a, toByteOffset: (3 + i) * 4, as: UInt32.self) }
+            }
+            guard let fn = cfm_export_fn(name) else {
+                Issue.record("\(name) is not exported")
+                return 0xFFFF_FFFF
+            }
+            fn(&g_ppc)
+            return g_ppc.gpr.3
+        }
+
+        /// A Multiprocessing task waiting in each kind of wait (a queue, a
+        /// semaphore, an event group, a critical region, a yield) is saved
+        /// with the program; restored, it makes its call again and its loop
+        /// goes on, its waits answered noErr.
+        @Test(arguments: ["queue", "semaphore", "event", "region"])
+        func aMultiprocessingTaskGoesOnAfterARestore(kind: String) {
+            defer { g_ppc_mode = false }
+            let forever: UInt32 = 0x7FFF_FFFF
+            let id = ptr(4), vars = ptr(12) // result, count, the queue's message
+            var waitCall: [UInt32], after: [UInt32] = [], signal: [UInt32]
+            switch kind {
+            case "queue":
+                #expect(mp("MPCreateQueue", [id]) == 0)
+                waitCall = load(3, rd32(id)) + [0x389D_0008, 0x38A0_0000, 0x38C0_0000] + load(7, forever)
+                    + call(export("MPWaitOnQueue"))                   // MPWaitOnQueue(q, &msg, 0, 0, forever)
+                signal = load(3, rd32(id)) + [0x3880_0001, 0x38A0_0000, 0x38C0_0000] + call(export("MPNotifyQueue"))
+            case "semaphore":
+                #expect(mp("MPCreateSemaphore", [100, 0, id]) == 0)
+                waitCall = load(3, rd32(id)) + load(4, forever) + call(export("MPWaitOnSemaphore"))
+                signal = load(3, rd32(id)) + call(export("MPSignalSemaphore"))
+            case "event":
+                #expect(mp("MPCreateEvent", [id]) == 0)
+                waitCall = load(3, rd32(id)) + [0x389D_0008] + load(5, forever) + call(export("MPWaitForEvent"))
+                signal = load(3, rd32(id)) + [0x3880_0001] + call(export("MPSetEvent"))
+            default: // the main task holds the region but while it yields
+                #expect(mp("MPCreateCriticalRegion", [id]) == 0)
+                #expect(mp("MPEnterCriticalRegion", [rd32(id), forever]) == 0)
+                waitCall = load(3, rd32(id)) + load(4, forever) + call(export("MPEnterCriticalRegion"))
+                after = load(3, rd32(id)) + call(export("MPExitCriticalRegion")) + call(export("MPYield"))
+                signal = load(3, rd32(id)) + call(export("MPExitCriticalRegion")) + call(export("MPYield"))
+                    + load(3, rd32(id)) + load(4, forever) + call(export("MPEnterCriticalRegion"))
+            }
+            // the task: loop { result := wait; count += 1; after }
+            let body = waitCall + [0x907D_0000, 0x839D_0004, 0x3B9C_0001, 0x939D_0004] + after
+            let entry = tvector(code(load(29, vars) + body + [branch(back: body.count)]))
+            #expect(mp("MPCreateTask", [entry, 0, 0, 0, 0, 0, 0, id]) == 0)
+            // the program: loop { signal; MPYield; SystemTask }
+            let main = signal + call(export("MPYield")) + call(export("SystemTask"))
+            _ = start(main + [branch(back: main.count)])
+            _ = machine_run(300_000)
+            #expect(rd32(vars + 4) > 0)
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(String(cString: machine_drain_point()) == "SystemTask")
+            #expect(machine_hibernate_blocker() == nil, Comment(rawValue: machine_hibernate_blocker().map { String(cString: $0) } ?? ""))
+            #expect(threads_parked() == 1)
+            let snap = snapshot("mptask-\(kind).bbhib")
+            machine_drain_end()
+            restore(snap)
+            let count = rd32(vars + 4)
+            wr32(vars, 0x7777)
+            _ = machine_run(300_000)
+            #expect(rd32(vars + 4) > count)
+            #expect(rd32(vars) == 0)                       // noErr
+        }
+
+        /// A task waiting deeper than its own level, in MPYield inside a
+        /// routine of its own it had MPRemoteCall run: the call could not be
+        /// made again, so the snapshot is refused, saying which task waits
+        /// where.
+        @Test func aTaskWaitingInsideARoutineIsRefused() {
+            defer { g_ppc_mode = false }
+            let id = ptr(4), vars = ptr(8)
+            // the routine: MPYield, its return address kept on its stack
+            let routine = tvector(code([0x7C08_02A6, 0x9001_0008, 0x9421_FFC0] + call(export("MPYield"))
+                                       + [0x3821_0040, 0x8001_0008, 0x7C08_03A6, 0x4E80_0020]))
+            // the task: loop { MPRemoteCall(routine, 0, 0); count += 1 }
+            let body = load(3, routine) + [0x3880_0000, 0x38A0_0000] + call(export("MPRemoteCall"))
+                + [0x839D_0004, 0x3B9C_0001, 0x939D_0004]
+            let entry = tvector(code(load(29, vars) + body + [branch(back: body.count)]))
+            #expect(mp("MPCreateTask", [entry, 0, 0, 0, 0, 0, 0, id]) == 0)
+            let main = call(export("MPYield")) + call(export("SystemTask"))
+            _ = start(main + [branch(back: main.count)])
+            _ = machine_run(300_000)
+            #expect(rd32(vars + 4) > 0)
+            machine_drain_begin(true)
+            _ = machine_run(10_000_000)
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            let why = String(cString: machine_drain_reason())
+            #expect(why.contains("Multiprocessing Services task") && why.contains("MPYield")
+                        && why.contains("a routine of its own"), Comment(rawValue: why))
+            machine_drain_end()
+        }
+
+        /// The main task waiting on a queue a task fills: its wait is
+        /// abandoned for the drain (the registers as at the call), the task
+        /// is saved in its MPYield, and restored both go on.
+        @Test func aMainTasksWaitIsAbandonedAndMadeAgain() {
+            defer { g_ppc_mode = false }
+            let forever: UInt32 = 0x7FFF_FFFF
+            let id = ptr(4), vars = ptr(16) // the main task's count, the task's, the message
+            #expect(mp("MPCreateQueue", [id]) == 0)
+            let q = rd32(id)
+            // the task: loop { MPNotifyQueue(q, 1, 0, 0); count += 1; MPYield }
+            let body = load(3, q) + [0x3880_0001, 0x38A0_0000, 0x38C0_0000] + call(export("MPNotifyQueue"))
+                + [0x839D_0004, 0x3B9C_0001, 0x939D_0004] + call(export("MPYield"))
+            let entry = tvector(code(load(29, vars) + body + [branch(back: body.count)]))
+            #expect(mp("MPCreateTask", [entry, 0, 0, 0, 0, 0, 0, id]) == 0)
+            // the program: loop { MPWaitOnQueue(q, &msg, 0, 0, forever); count += 1 }
+            let main = load(3, q) + [0x389D_0008, 0x38A0_0000, 0x38C0_0000] + load(7, forever)
+                + call(export("MPWaitOnQueue")) + [0x839D_0000, 0x3B9C_0001, 0x939D_0000]
+            _ = start(load(29, vars) + main + [branch(back: main.count)])
+            _ = machine_run(300_000)
+            #expect(rd32(vars) > 0 && rd32(vars + 4) > 0)
+            machine_drain_begin(true)
+            #expect(machine_run(10_000_000) == RUN_DRAINED)
+            #expect(String(cString: machine_drain_point()) == "MPWaitOnQueue (abandoned)")
+            #expect(machine_hibernatable(), Comment(rawValue: String(cString: machine_drain_reason())))
+            #expect(gpr(3) == q && gpr(7) == forever)    // as at the call
+            let snap = snapshot("mpmain.bbhib")
+            machine_drain_end()
+            func goOn() {
+                let mine = rd32(vars), its = rd32(vars + 4)
+                _ = machine_run(300_000)
+                #expect(rd32(vars) > mine && rd32(vars + 4) > its)
+            }
+            goOn()
+            restore(snap)
+            goOn()
+        }
     }
 }

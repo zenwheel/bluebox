@@ -17,6 +17,25 @@ extension BlueBox {
             return p
         }
 
+        /// A 'pltt' saying more entries than it holds (SoundEdit 16's 9100:
+        /// 16 entries, 12 there) makes a palette with room for them all,
+        /// those left out zero; a copy of the resource alone had its private
+        /// fields cleared past its end, over the next block.
+        @Test func aShortPlttMakesAWholePalette() {
+            var pltt = cat(be16(16), be16(0), be32(0), be32(0), be32(0))
+            for i in 0..<12 { pltt += cat(be16(i * 1000), be16(0), be16(0), be16(2), be16(0), be16(0), be32(0x1234_5678)) }
+            launchTestApp([TestResource(type: "pltt", id: 9100, data: pltt)])
+            let pal = tb_GetNewPalette(9100)
+            #expect(pal != 0)
+            #expect(tb_GetHandleSize(pal) == 16 + 16 * 16)
+            #expect(rd16(rd32(pal)) == 16)
+            #expect(rd16(rd32(pal) + 16 + 11 * 16) == 11000) // the last there, as it was
+            #expect(rd32(rd32(pal) + 16 + 11 * 16 + 12) == 0) // its private field cleared
+            #expect(rd16(rd32(pal) + 16 + 15 * 16) == 0)      // the four left out
+            #expect(mm_check_zone(rd32(UInt32(LM_ApplZone))))
+            tb_DisposePalette(pal)
+        }
+
         @Test func gworldDrawsIntoItsOwnPixels() {
             launchTestApp()
             _ = initToolbox()
