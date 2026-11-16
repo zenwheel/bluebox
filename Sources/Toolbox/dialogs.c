@@ -1658,8 +1658,10 @@ enum { errItemNotControl = -30596 };
  * items as user panes). */
 int16_t tb_GetDialogItemAsControl(gaddr d, int16_t n, gaddr out)
 {
-    if (out)
+    if (out) {
         wr32(out, 0);
+        idle_wrote(out, 4);
+    }
     if (!is_dialog(d) || n < 1 || n > item_count(d))
         return errItemNotControl;
     int type = item_type(d, n) & 0x7F;

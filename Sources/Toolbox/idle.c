@@ -815,22 +815,25 @@ static const char *quiet_names[] = {
 /* Calls whose only effect is the answer they write into the program's
  * memory, which they say (idle_wrote): the same answer again is the same;
  * or which say when they do more (idle_work: DialogSelect given an event
- * to handle, not a null one).  In order, for bsearch. */
+ * to handle, not a null one; HideControl a control shown).  In order, for
+ * bsearch. */
 static const char *const answer_names[] = {
-    "AddPt", "CheckItem", "DialogSelect", "DisableItem", "EnableItem", "FindWindow", "GlobalToLocal", "InsetRect",
-    "LocalToGlobal", "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect", "SetItemCmd",
-    "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "SndChannelStatus", "StdFilterProc", "SubPt", "TEIdle",
-    "UnionRect",
+    "ActivateControl", "AddPt", "CheckItem", "DeactivateControl", "DialogSelect", "DisableItem", "EnableItem",
+    "FindWindow", "GetControlData", "GetDialogItemAsControl", "GetKeyboardFocus", "GlobalToLocal", "HideControl",
+    "InsetRect", "LocalToGlobal", "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect",
+    "SetControlValue", "SetItemCmd", "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "ShowControl",
+    "SndChannelStatus", "StdFilterProc", "SubPt", "TEIdle", "UnionRect",
 };
 
 /* More calls with no lasting effect (beside quiet_names, whose size is
  * saved state): queries, and Mixed Mode's ways into and out of code
  * (what runs there is the program's iteration, its calls and stores
- * watched as any).  In order, for bsearch. */
+ * watched as any; IdleControls's control definitions likewise, or ours,
+ * whose drawing shows in the pixels).  In order, for bsearch. */
 static const char *const query_names[] = {
     "CallOSTrapUniversalProc", "CallUniversalProc", "FindDialogItem", "FreeMem", "GetControlOwner", "GetEvQHdr",
-    "HMGetBalloons", "HMIsBalloon", "HPurge", "IsControlActive", "IsControlHilited", "IsControlVisible", "MaxBlock",
-    "Mixed Mode return", "StackSpace",
+    "HMGetBalloons", "HMIsBalloon", "HPurge", "IdleControls", "IsControlActive", "IsControlHilited",
+    "IsControlVisible", "MaxBlock", "Mixed Mode return", "StackSpace",
 };
 
 /* Drawing, and the port and colour settings it is done with: what they

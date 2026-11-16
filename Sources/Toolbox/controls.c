@@ -1520,7 +1520,8 @@ void tb_ShowControl(gaddr ch)
         return;
     }
     if (ControlRecord_contrlVis(cp(ch)))
-        return;
+        return; /* shown already: nothing done, for idle.c */
+    idle_work();
     ControlRecord_set_contrlVis(cp(ch), 255);
     show_subs(ch);
     tb_Draw1Control(ch);
@@ -1532,7 +1533,8 @@ void tb_HideControl(gaddr ch)
     if (c)
         c->hidden_with_parent = false;
     if (!ControlRecord_contrlVis(cp(ch)))
-        return;
+        return; /* hidden already: nothing done, for idle.c */
+    idle_work();
     ControlRecord_set_contrlVis(cp(ch), 0);
     hide_subs(ch);
     if (c && c->is_root)
@@ -1612,6 +1614,8 @@ int16_t tb_ActivateControl(gaddr ch)
     bool was = chilite(ch) != 255;
     c->inactive_with_parent = false;
     set_active(ch, true, false);
+    if (!was) /* active already: nothing done, for idle.c */
+        idle_work();
     if (!was && ControlRecord_contrlVis(cp(ch)))
         tb_Draw1Control(ch);
     return noErr;
@@ -1624,6 +1628,8 @@ int16_t tb_DeactivateControl(gaddr ch)
         return errUnknownControl;
     bool was = chilite(ch) != 255;
     set_active(ch, false, false);
+    if (was) /* inactive already: nothing done, for idle.c */
+        idle_work();
     if (was && ControlRecord_contrlVis(cp(ch)))
         tb_Draw1Control(ch);
     return noErr;
@@ -1673,6 +1679,9 @@ static void clamp_and_draw(gaddr ch)
 
 void tb_SetControlValue(gaddr ch, int16_t v)
 {
+    /* The same value again draws the control the same: for idle.c, only
+     * the value, which it compares. */
+    idle_wrote(cp(ch) + ControlRecord_contrlValue_off, 2);
     ControlRecord_set_contrlValue(cp(ch), v);
     clamp_and_draw(ch);
 }
@@ -2083,6 +2092,7 @@ int16_t tb_GetKeyboardFocus(gaddr w, gaddr out)
             focus = ap_item_control(w, field + 1, 16);
     }
     wr32(out, focus);
+    idle_wrote(out, 4);
     return noErr;
 }
 
@@ -2289,6 +2299,10 @@ int16_t tb_SetControlData(gaddr ch, int16_t part, int32_t tag, int32_t size, gad
 
 int16_t tb_GetControlData(gaddr ch, int16_t part, int32_t tag, int32_t size, gaddr buffer, gaddr actual)
 {
+    if (buffer && size > 0)
+        idle_wrote(buffer, (uint32_t)size);
+    if (actual)
+        idle_wrote(actual, 4);
     int16_t movie_err;
     if (qt_movie_control_data(ch, (uint32_t)tag, size, buffer, actual, &movie_err)) /* QuickTime's movie controls */
         return movie_err;
