@@ -18,17 +18,27 @@
  *   - it ran fewer than MAX_RUN instructions (a poll loop) or, with no
  *     calls, stayed within a few hundred bytes of code;
  *   - every Toolbox call it made is a query with no lasting effect
- *     (quiet_names: polls, FrontWindow, GetPort, LoadSeg, BitTst, FixMul,
- *     PtInRect ...: what only reads and answers) or drawing
+ *     (quiet_names, query_names: polls, FrontWindow, GetPort, LoadSeg,
+ *     BitTst, FixMul, PtInRect ...: what only reads and answers; Mixed
+ *     Mode's ways into code, which is the iteration's like the rest; a
+ *     dispatcher's routine by its selector), one whose answer it writes
+ *     into the program's memory and says so (answer_names, idle_wrote:
+ *     SetRect, GlobalToLocal, FindWindow, EnableItem, BlockMove ..., taken
+ *     as the program's own stores below), one making or disposing of blocks
+ *     (heap_names: the heaps' shape is compared below), or drawing
  *     (draw_names: CopyBits, PaintRect, DrawString, PlotCIcon, RGBForeColor,
  *     SetEntries ...), no sound, file or memory work;
  *   - the registers are as they were at the iteration before ending at the
- *     same poll (a count kept in a register shows) and, with no calls, no
- *     device was touched;
+ *     same poll, from the same depth of the stack (a count kept in a
+ *     register shows; a routine polling for callers at different depths is
+ *     compared with itself for each) and, with no calls, no device was
+ *     touched;
  *   - its stores, watched once the rest has held for a few iterations,
  *     left the places it stored to as that iteration left them (the
  *     same arguments pushed again; a counter kept in memory shows), its own
- *     frames below the stack pointer apart;
+ *     frames below the stack pointer apart; and if it made or disposed of
+ *     blocks, the heaps' shape is as it was (a handle made and disposed of
+ *     again; a handle kept each time shows);
  *   - what it drew, watched the same way, left the pixels as that iteration
  *     left them: QuickDraw's pixels are written from here, which the
  *     store watch doesn't see, so its blitters say which rectangle of which
@@ -60,8 +70,12 @@
 enum {
     SAME_BEFORE_WATCH = 3, /* idle iterations in a row before the stores are watched */
     MOST_BEFORE_WATCH = 256, /* ... after watching found work again and again */
-    MAX_RUN = 20000,       /* instructions a poll loop's iteration may run */
+    MAX_RUN = 1000000,     /* instructions a poll loop's iteration may run */
+    OWN_LOOP_AFTER = 20000, /* ... after which its slices may show a loop of its own, or calls end it */
     MAX_STORES = 64,       /* places an idle iteration may store to */
+    MAX_RANGES = 8,        /* ... and longer stretches a call wrote (BlockMove) */
+    RANGE_FROM = 17,       /* bytes from which a call's answer is a stretch */
+    RANGE_MOST = 65536,    /* bytes a stretch may have */
     MAX_DRAWN = 16,        /* destinations it may draw into */
     MAX_PORTS = 8,         /* ports it may draw with */
     MAX_PALETTES = 16,     /* palettes whose colours are compared */
@@ -87,18 +101,23 @@ static struct {
 } sites[NSITES];
 static unsigned next_site;
 
+static void why_regs(const regs *was, const regs *now);
+
 /* Whether the registers are as they were last time at this poll. */
 static bool same_at_site(const regs *r, int *site)
 {
+    const int sp = r->r[35] ? 1 : 15; /* r1, a7: a routine polling for callers at different depths */
     for (int i = 0; i < NSITES; i++)
         if (sites[i].used && sites[i].r.r[34] == r->r[34] && sites[i].r.r[32] == r->r[32] &&
-            sites[i].r.r[35] == r->r[35]) {
+            sites[i].r.r[35] == r->r[35] && sites[i].r.r[sp] == r->r[sp]) {
             bool same = !memcmp(&sites[i].r, r, sizeof *r);
+            if (!same)
+                why_regs(&sites[i].r, r);
             sites[i].r = *r;
             *site = i;
             return same;
         }
-    *site = (int)next_site;
+    *site = -1 - (int)next_site; /* new */
     sites[next_site].used = true;
     sites[next_site].r = *r;
     next_site = (next_site + 1) % NSITES;
@@ -136,10 +155,32 @@ static struct {
     store stores[MAX_STORES];
 } shots[NSITES + 1];
 
+/* Beside them (and not saved, being new): the longer stretches of the
+ * program's memory calls wrote (BlockMove, HandToHand) and the heaps'
+ * shape, for iterations that made or disposed of blocks; the same for the
+ * iteration going on. */
+typedef struct {
+    gaddr a;
+    uint32_t len;
+    uint64_t hash;
+} range;
+BB_HOST static struct {
+    int n; /* -1: none yet in this wait */
+    range r[MAX_RANGES];
+    uint64_t heap; /* 0: the heaps untouched */
+} more_shots[NSITES + 1];
+BB_HOST static struct {
+    int n;
+    bool overflow;
+    range r[MAX_RANGES];
+    bool heap;   /* blocks made or disposed of */
+    uint64_t fp; /* ... and the heaps' shape at its end */
+} more;
+
 static void forget_shots(void)
 {
     for (int i = 0; i <= NSITES; i++)
-        shots[i].n = -1;
+        shots[i].n = more_shots[i].n = -1;
 }
 
 static struct {
@@ -190,6 +231,80 @@ bool time_in_interrupt(void);
 void ev_idle_sleep(uint64_t ns);
 bool qd_region_recording(void);
 void machine_pass_time(uint64_t ns);
+
+static uint32_t pc_now(void);
+
+/* BLUEBOX_IDLE_WHY=1 with --log idle: each second of the program's time
+ * with no sleep, why its iterations weren't idle (for finding the loops
+ * this doesn't recognise). */
+enum { W_MODE, W_WORK, W_NEWSITE, W_REGS, W_LONG, W_FAR, W_HW, W_STORES, W_PIXELS, W_UNKNOWN, W_BREAK, W_SLEPT, W_N };
+static const char *const why_names[W_N] = { "first", "work", "new site", "registers", "long", "far", "device", "stores",
+                                             "pixels", "unwatched", "broken", "slept" };
+BB_HOST static struct {
+    int on; /* -1: not yet asked */
+    uint64_t since;
+    uint64_t n[W_N];
+    const char *name[8];
+    uint64_t count[8];
+    uint64_t reg[36]; /* the registers that differed */
+} why = { -1 };
+
+static void why_regs(const regs *was, const regs *now)
+{
+    if (why.on > 0)
+        for (int i = 0; i < 36; i++)
+            if (was->r[i] != now->r[i])
+                why.reg[i]++;
+}
+
+static void why_work(const char *name)
+{
+    if (why.on <= 0)
+        return;
+    name = name ? name : "?";
+    for (int i = 0; i < 8; i++)
+        if (!why.name[i] || why.name[i] == name || !strcmp(why.name[i], name)) {
+            why.name[i] = name;
+            why.count[i]++;
+            return;
+        }
+}
+
+static void why_count(int w)
+{
+    if (why.on < 0) {
+        const char *e = getenv("BLUEBOX_IDLE_WHY");
+        why.on = e && e[0] == '1';
+    }
+    if (!why.on)
+        return;
+    why.n[w]++;
+    uint64_t now = machine_time_ns();
+    if (now - why.since < 1000000000u)
+        return;
+    if (!why.n[W_SLEPT]) {
+        char buf[640];
+        int k = snprintf(buf, sizeof buf, "idle: why at %08X (%s):", pc_now(), g_ppc_mode ? "ppc" : "68k");
+        for (int i = 0; i < W_N && k < (int)sizeof buf; i++)
+            if (why.n[i])
+                k += snprintf(buf + k, sizeof buf - (size_t)k, " %s %llu", why_names[i], (unsigned long long)why.n[i]);
+        for (int i = 0; i < 8 && why.name[i] && k < (int)sizeof buf; i++)
+            k += snprintf(buf + k, sizeof buf - (size_t)k, "%s%s %llu", i ? ", " : " (", why.name[i],
+                          (unsigned long long)why.count[i]);
+        if (why.name[0] && k < (int)sizeof buf)
+            k += snprintf(buf + k, sizeof buf - (size_t)k, ")");
+        for (int i = 0; i < 36 && k < (int)sizeof buf; i++)
+            if (why.reg[i] > why.n[W_REGS] / 2)
+                k += snprintf(buf + k, sizeof buf - (size_t)k, " %s%d",
+                              g_ppc_mode ? (i < 32 ? "r" : "spr") : (i < 8 ? "d" : "a"), g_ppc_mode ? i : i % 8);
+        LOGF(LOG_IDLE, "%s\n", buf);
+    }
+    memset(why.n, 0, sizeof why.n);
+    memset(why.name, 0, sizeof why.name);
+    memset(why.count, 0, sizeof why.count);
+    memset(why.reg, 0, sizeof why.reg);
+    why.since = now;
+}
 
 static bool on(void)
 {
@@ -254,6 +369,28 @@ static void store_seen(gaddr a, uint32_t len)
     }
     st.stores[st.nstores].a = a;
     st.stores[st.nstores++].len = len;
+}
+
+/* A quiet call's answer written into the program's memory (a point
+ * converted in place, a rectangle set, intersected or offset): taken as a
+ * store of the program's, so that the same answer again is the same, and
+ * another is work. */
+void idle_wrote(gaddr a, uint32_t len)
+{
+    if (len < RANGE_FROM) {
+        for (uint32_t k = 0; k < len; k += 4)
+            store_seen(a + k, len - k < 4 ? len - k : 4);
+        return;
+    }
+    if (!st.watching || in_interrupt())
+        return;
+    for (int i = 0; i < more.n; i++)
+        if (more.r[i].a == a && more.r[i].len == len)
+            return;
+    if (more.n == MAX_RANGES || len > RANGE_MOST)
+        more.overflow = true;
+    else
+        more.r[more.n++] = (range){ a, len, 0 };
 }
 
 /* Whether this iteration's stores left memory as the last one's did (a
@@ -484,6 +621,34 @@ static int drawn_verdict(int site)
     return SAME;
 }
 
+/* Whether the stretches calls wrote, and the heaps' shape if the
+ * iteration made or disposed of blocks, are as the last one left them. */
+static int more_verdict(int site)
+{
+    if (!st.watched)
+        return UNKNOWN;
+    if (more.overflow)
+        return CHANGED;
+    more.fp = more.heap ? mm_heap_fingerprint() : 0;
+    if (more.heap && !more.fp)
+        return CHANGED;
+    for (int i = 0; i < more.n; i++)
+        more.r[i].hash = hash_guest(0x9E3779B97F4A7C15ull, more.r[i].a, more.r[i].len);
+    const int n = more_shots[site].n;
+    if (n < 0)
+        return UNKNOWN;
+    if (n != more.n || more_shots[site].heap != more.fp)
+        return CHANGED;
+    for (int i = 0; i < more.n; i++) {
+        int j = 0;
+        while (j < n && (more_shots[site].r[j].a != more.r[i].a || more_shots[site].r[j].len != more.r[i].len))
+            j++;
+        if (j == n || more_shots[site].r[j].hash != more.r[i].hash)
+            return CHANGED;
+    }
+    return SAME;
+}
+
 static void watch(bool w)
 {
     if (st.watching != w)
@@ -517,6 +682,10 @@ static void check_over(void)
     }
 }
 
+/* When the iteration began, on the machine's clock, and how long the
+ * last one took the host. */
+BB_HOST static uint64_t iteration_began, iteration_took;
+
 /* An iteration ends: whether it was idle (and enough of them in a row,
  * watched, to sleep); the next one starts. */
 static bool iteration_end(int mode)
@@ -526,16 +695,31 @@ static bool iteration_end(int mode)
     uint32_t pc = pc_now();
     int site = NSITES;
     bool same = mode == POLLS ? same_at_site(&r, &site) : !memcmp(&r, &st.r, sizeof r);
+    bool new_site = site < 0;
+    if (new_site)
+        site = -1 - site;
     bool idle = st.mode == mode && !st.busy && same;
-    if (idle && mode == POLLS)
-        idle = executed() - st.at < MAX_RUN;
-    if (idle && mode == SLICES)
-        idle = (pc > st.pc ? pc - st.pc : st.pc - pc) < PC_NEAR && hw_device_accesses() == st.hw;
-    int stores = stores_verdict(site), pixels = drawn_verdict(site);
+    int w = st.mode != mode ? W_MODE : st.busy ? W_WORK : new_site ? W_NEWSITE : !same ? W_REGS : W_SLEPT;
+    if (idle && mode == POLLS && !(idle = executed() - st.at < MAX_RUN))
+        w = W_LONG;
+    if (idle && mode == SLICES && !(idle = (pc > st.pc ? pc - st.pc : st.pc - pc) < PC_NEAR))
+        w = W_FAR;
+    if (idle && mode == SLICES && !(idle = hw_device_accesses() == st.hw))
+        w = W_HW;
+    int stores = stores_verdict(site), pixels = drawn_verdict(site), others = more_verdict(site);
+    if (others < stores)
+        stores = others;
+    if (idle && stores == CHANGED)
+        w = W_STORES;
+    else if (idle && pixels == CHANGED)
+        w = W_PIXELS;
+    else if (idle && (stores == UNKNOWN || pixels == UNKNOWN))
+        w = W_UNKNOWN;
     if (pixels < stores)
         stores = pixels;
     if (stores == CHANGED)
         idle = false;
+    why_count(w);
     st.same = idle ? st.same + 1 : 0;
     bool sleep = idle && stores == SAME;
     if (!idle)
@@ -553,6 +737,9 @@ static bool iteration_end(int mode)
         memcpy(shots[site].d, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
         shots[site].n = st.ndrawn;
         shots[site].look = st.look;
+        memcpy(more_shots[site].r, more.r, (size_t)more.n * sizeof *more.r);
+        more_shots[site].n = more.n;
+        more_shots[site].heap = more.fp;
     } else {
         st.nprev_drawn = 0;
         forget_shots();
@@ -566,16 +753,22 @@ static bool iteration_end(int mode)
     st.busy = false;
     st.nstores = 0;
     st.overflow = false;
+    more.n = 0;
+    more.overflow = more.heap = false;
     st.drew = false;
     st.ndrawn = st.nports = 0;
     st.drawn_overflow = false;
     st.watched = st.watching;
     st.at = executed();
+    uint64_t t = machine_time_ns();
+    iteration_took = t - iteration_began;
+    iteration_began = t;
     return sleep;
 }
 
 static void chain_break(void)
 {
+    why_count(W_BREAK);
     wait_broken();
     st.mode = NONE;
     st.same = 0;
@@ -585,8 +778,11 @@ static void chain_break(void)
     forget_shots();
 }
 
-/* Sleep until the next tick, a Time Manager task's time or input, a few
- * milliseconds at most. */
+/* Sleep until the next tick, a Time Manager task's time or input: a few
+ * milliseconds at most, or four times as long as the iteration took the
+ * host if that is longer (one computing for a while between its polls,
+ * MegaSeg's, woke after each iteration's 2 ms as often as one of a few
+ * instructions). */
 static void idle_sleep(void)
 {
     uint64_t now = machine_time_ns();
@@ -594,8 +790,9 @@ static void idle_sleep(void)
     uint64_t until = tick, due = time_next_due();
     if (due && due < until)
         until = due;
-    if (until > now + MAX_SLEEP_NS)
-        until = now + MAX_SLEEP_NS;
+    uint64_t most = iteration_took > MAX_SLEEP_NS / 4 ? iteration_took * 4 : MAX_SLEEP_NS;
+    if (until > now + most)
+        until = now + most;
     if (until <= now)
         return;
     ev_idle_sleep(until - now);
@@ -622,6 +819,7 @@ static void idle_sleep(void)
      * end (S.C.OUT's music stopped while "Perfect" waits for a key). */
     time_pump();
     st.at = executed();
+    iteration_began = machine_time_ns();
 }
 
 bool idle_poll(void)
@@ -636,8 +834,40 @@ bool idle_poll(void)
 
 void idle_work(void)
 {
-    if (!in_interrupt())
+    if (!in_interrupt()) {
         st.busy = true;
+        why_work("(input or a wait)");
+    }
+}
+
+/* A poll loop's iteration may run long (MegaSeg's computing between its
+ * polls); a loop of the program's own after a poll (Fastback's) shows as
+ * two slices the same, registers and place, and is judged by its slices
+ * from there. */
+BB_HOST static struct {
+    bool valid;
+    regs r;
+    uint32_t pc;
+    uint64_t hw;
+} probe;
+
+static bool own_loop(void)
+{
+    if (executed() - st.at < OWN_LOOP_AFTER) {
+        probe.valid = false;
+        return false;
+    }
+    regs r;
+    take(&r, false);
+    uint32_t pc = pc_now();
+    uint64_t hw = hw_device_accesses();
+    bool same = probe.valid && !memcmp(&r, &probe.r, sizeof r) &&
+                (pc > probe.pc ? pc - probe.pc : probe.pc - pc) < PC_NEAR && hw == probe.hw;
+    probe.valid = !same;
+    probe.r = r;
+    probe.pc = pc;
+    probe.hw = hw;
+    return same;
 }
 
 void idle_slice(void)
@@ -647,16 +877,17 @@ void idle_slice(void)
     check_over();
     if (calls != st.calls) {
         /* Calls in the slice: a poll loop's, its polls say; a long way from
-         * the last poll, not a poll loop. */
+         * the last poll, not a poll loop (only one calling nothing between
+         * its polls may run long). */
         if (st.mode != POLLS) {
             chain_break();
             st.calls = calls;
-        } else if (executed() - st.at >= MAX_RUN) {
+        } else if (executed() - st.at >= OWN_LOOP_AFTER) {
             chain_break();
         }
         return;
     }
-    if (st.mode == POLLS && executed() - st.at < MAX_RUN)
+    if (st.mode == POLLS && executed() - st.at < MAX_RUN && !own_loop())
         return; /* between two polls */
     if (iteration_end(SLICES))
         idle_sleep();
@@ -700,6 +931,41 @@ static const char *quiet_names[] = {
     "TestDeviceAttribute", "TextWidth", "TickCount", "UnloadSeg", "UnlockPixels", "WaitMouseUp", "WaitNextEvent",
 };
 
+/* Calls whose only effect is the answer they write into the program's
+ * memory, which they say (idle_wrote): the same answer again is the same;
+ * or which say when they do more (idle_work: DialogSelect given an event
+ * to handle, not a null one; HideControl a control shown).  In order, for
+ * bsearch. */
+static const char *const answer_names[] = {
+    "ActivateControl", "AddPt", "BlockMove", "BlockMoveData", "CheckItem", "DeactivateControl", "DialogSelect",
+    "DisableItem", "EnableItem", "FindWindow", "GetControlData", "GetDialogItem", "GetDialogItemAsControl",
+    "GetKeyboardFocus", "GlobalToLocal", "HideControl", "InsetRect", "LocalToGlobal", "MapPt", "MapRect",
+    "NumToString", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect", "SetControlValue", "SetItemCmd",
+    "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "ShowControl", "SndChannelStatus", "StdFilterProc", "SubPt",
+    "TEIdle", "UnionRect",
+};
+
+/* More calls with no lasting effect (beside quiet_names, whose size is
+ * saved state): queries, and Mixed Mode's ways into and out of code
+ * (what runs there is the program's iteration, its calls and stores
+ * watched as any; IdleControls's control definitions likewise, or ours,
+ * whose drawing shows in the pixels).  In order, for bsearch. */
+static const char *const query_names[] = {
+    "CallOSTrapUniversalProc", "CallUniversalProc", "FindDialogItem", "FreeMem", "GetControlOwner", "GetEvQHdr",
+    "HMGetBalloons", "HMIsBalloon", "HPurge", "IUMagIDString", "IUMagString", "IdleControls", "InfoScrap",
+    "IsControlActive", "IsControlHilited", "IsControlVisible", "MaxBlock", "Mixed Mode return", "StackSpace",
+};
+
+/* Calls that make or dispose of blocks, or move or resize them: what they
+ * leave is the heaps' shape, compared at the iteration's end (a loop making
+ * a handle for a moment and disposing of it, as Director's projectors do,
+ * leaves it as it was); what they copy, HandToHand says.  In order, for
+ * bsearch. */
+static const char *const heap_names[] = {
+    "DisposeHandle", "DisposePtr", "HandToHand", "MoveHHi", "NewHandle", "NewHandleClear", "NewPtr", "NewPtrClear",
+    "SetHandleSize", "SetPtrSize",
+};
+
 /* Drawing, and the port and colour settings it is done with: what they
  * leave is the pixels drawn (qd_drawn), the ports drawn with and the
  * colours shown, which the iteration's end compares with the last's. */
@@ -736,13 +1002,18 @@ static bool in_list(const char *name, const char **list, size_t n)
 }
 
 /* What a call is: */
-enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK };
+enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK, HEAP };
 
 static uint8_t kind_of(const char *name)
 {
     /* The low-memory accessors' getters (LMGetTicks, LMGetMBarHeight) only read. */
     if (in_list(name, quiet_names, sizeof quiet_names / sizeof *quiet_names) || (name && !strncmp(name, "LMGet", 5)))
         return QUIET;
+    if (name && (bsearch(&name, answer_names, sizeof answer_names / sizeof *answer_names, sizeof(char *), by_name) ||
+                 bsearch(&name, query_names, sizeof query_names / sizeof *query_names, sizeof(char *), by_name)))
+        return QUIET;
+    if (name && bsearch(&name, heap_names, sizeof heap_names / sizeof *heap_names, sizeof(char *), by_name))
+        return HEAP;
     if (in_list(name, draw_names, sizeof draw_names / sizeof *draw_names))
         return DRAWS;
     for (size_t i = 0; name && i < sizeof by_selector / sizeof *by_selector; i++)
@@ -772,26 +1043,32 @@ static void drawing(void)
         st.ports[st.nports++] = port;
 }
 
-static void call_kind(uint8_t kind)
+static void call_kind(uint8_t kind, const char *name)
 {
-    if (kind == WORK)
+    if (kind == WORK) {
         st.busy = true;
-    else if (kind == DRAWS)
+        why_work(name);
+    } else if (kind == DRAWS) {
         drawing();
+    } else if (kind == HEAP) {
+        more.heap = true;
+    }
 }
 
 /* A 68k trap, by its number. */
 static uint8_t trap_kind[2048];
 
-void idle_trap(uint16_t op)
+void idle_trap(uint16_t op, bool by_selector)
 {
     if (in_interrupt())
         return;
     calls++;
+    if (by_selector)
+        return; /* a dispatcher of ours (SoundDispatch, Pack7 ...): idle_selector says */
     unsigned k = (op & 0x0800) ? 1024 + (op & 0x3FFu) : (op & 0xFFu);
     if (!trap_kind[k])
         trap_kind[k] = kind_of(trap_name(op));
-    call_kind(trap_kind[k]); /* a dispatcher's routine: idle_selector says */
+    call_kind(trap_kind[k], why.on > 0 ? trap_name(op) : NULL); /* a dispatcher's routine: idle_selector says */
 }
 
 /* The routine a dispatcher (QDExtensions, IconDispatch ...) was asked for. */
@@ -800,7 +1077,7 @@ void idle_selector(const char *name)
     if (in_interrupt())
         return;
     uint8_t kind = kind_of(name);
-    call_kind(kind == SELECTOR ? WORK : kind);
+    call_kind(kind == SELECTOR ? WORK : kind, name);
 }
 
 /* A PowerPC import, by its index among the natives. */
@@ -824,7 +1101,7 @@ void idle_native(uint32_t index, const char *name)
     }
     if (!kind[index])
         kind[index] = kind_of(name);
-    call_kind(kind[index] == SELECTOR ? WORK : kind[index]);
+    call_kind(kind[index] == SELECTOR ? WORK : kind[index], name);
 }
 
 void idle_reset(void)
@@ -833,6 +1110,7 @@ void idle_reset(void)
     memset(&st, 0, sizeof st);
     watch_after = SAME_BEFORE_WATCH;
     memset(sites, 0, sizeof sites);
+    memset(&more, 0, sizeof more);
     forget_shots();
     interrupt_depth = 0;
     int_68k = int_ppc = 0;

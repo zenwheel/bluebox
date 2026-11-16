@@ -1073,6 +1073,7 @@ void tb_LocalToGlobal(gaddr pt)
     pixdst d = qd_port_pixels(qd_port());
     wr16(pt, (uint16_t)((int16_t)rd16(pt) - d.bounds.top));
     wr16(pt + 2, (uint16_t)((int16_t)rd16(pt + 2) - d.bounds.left));
+    idle_wrote(pt, 4);
 }
 
 void tb_GlobalToLocal(gaddr pt)
@@ -1080,4 +1081,5 @@ void tb_GlobalToLocal(gaddr pt)
     pixdst d = qd_port_pixels(qd_port());
     wr16(pt, (uint16_t)((int16_t)rd16(pt) + d.bounds.top));
     wr16(pt + 2, (uint16_t)((int16_t)rd16(pt + 2) + d.bounds.left));
+    idle_wrote(pt, 4);
 }

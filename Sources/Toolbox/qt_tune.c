@@ -359,6 +359,14 @@ static void pump_player(player *p, uint64_t now)
     }
 }
 
+bool qt_tune_playing(void)
+{
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        if (players[i].used && players[i].nq)
+            return true;
+    return false;
+}
+
 void qt_tune_pump(void)
 {
     if (pumping)

@@ -905,8 +905,9 @@ void ev_wait_tick(void)
     time_pump();
     if (!host_attached) {
         /* Headless, a tick of the instruction clock passes, so scripted
-         * input arrives. */
+         * input arrives (and with --realtime, a tick of the host's). */
         machine_pass_tick();
+        machine_realtime_wait(16000000);
         return;
     }
     pthread_mutex_lock(&lock);
@@ -1203,6 +1204,10 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     bool got = gne_filtered(evt, false);
     if (!got) {
         machine_idle();
+        /* --realtime: a tick, as with a window above. */
+        uint64_t waited = machine_realtime_wait(16000000);
+        if (waited)
+            machine_pass_time(waited);
         gne_idled = true;
         idle_poll();
     } else {
@@ -1299,15 +1304,16 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
         struct timespec start;
         clock_gettime(CLOCK_MONOTONIC, &start);
         for (;;) {
-            bool busy = sound_busy() || time_busy() || speech_waiting();
             struct timespec now;
             clock_gettime(CLOCK_MONOTONIC, &now);
             uint64_t spent = (uint64_t)(now.tv_sec - start.tv_sec) * 1000000000ULL + (uint64_t)(now.tv_nsec - start.tv_nsec);
             if (spent >= total_ns)
                 break;
-            uint64_t ns = total_ns - spent;
-            if (busy && ns > 5000000)
-                ns = 5000000; /* 5 ms */
+            /* Woken only when the work is due: a Time Manager task's
+             * time, the next tick for VBL tasks, every few ms while sound
+             * plays (an open channel with nothing to play waits). */
+            uint64_t ns = machine_work_due_in(total_ns - spent);
+            bool busy = ns < total_ns - spent;
             uint32_t c0, i0;
             bool hle = (mask & 0x0400) && aem_next_event(&c0, &i0, NULL, false);
             pthread_mutex_lock(&lock);

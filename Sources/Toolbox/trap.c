@@ -686,7 +686,7 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
             census_note(op, -1, entry != unimpl_stub);
         LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
         walker_note_call(c->op_pc, op);
-        idle_trap(op);
+        idle_trap(op, n >= 0 && natives[n].fn == dispatch_native);
         entry_regs er;
         note_entry(c, &er);
         if (!(op & 0x0400))
@@ -756,7 +756,7 @@ static void dispatch_aline(cpu68k *c, uint16_t op)
         census_note(op, -1, entry != unimpl_stub);
     LOGF(LOG_TRAPS, "%08X %s\n", c->op_pc, trap_name(op));
     walker_note_call(c->op_pc, op);
-    idle_trap(op);
+    idle_trap(op, n >= 0 && natives[n].fn == dispatch_native);
     if (n >= 0) {
         if (!mm_debug_before_call(trap_name(op))) {
             cpu_halt(c, "heap damaged before %s", trap_name(op));
@@ -910,8 +910,10 @@ void machine_idle_for(int32_t sleep)
         }
     }
     if (next > c->icount && (!icount_cap || next < icount_cap)) {
-        icount_passed += next - c->icount;
+        uint64_t moved = next - c->icount;
+        icount_passed += moved;
         c->icount = next;
+        machine_realtime_wait(moved * 100u); /* --realtime: the sleep is real */
     }
     events_script_pump(c->icount);
     events_sync_lowmem();

@@ -1879,25 +1879,28 @@ void tb_InitProcMenu(int16_t mbid) { tb_InitMenus(); }
 /* ---------------------------------------------------------------------- */
 /* Items */
 
-void tb_EnableItem(gaddr mh, int16_t item)
+/* An item's enable flag set: the host's menus told only when it changes
+ * (a program adjusting its menus at every turn of its event loop, as
+ * Diablo's does, had the host's menu bar rebuilt each time), and to
+ * idle.c the flags are its answer, the same each time. */
+static void set_enabled(gaddr mh, int16_t item, bool on)
 {
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
-    display_menus_changed();
     gaddr p = menu_ptr(mh);
-    if (item <= 31)
-        MenuInfo_set_enableFlags(p, MenuInfo_enableFlags(p) | (int32_t)(1u << item));
+    if (item > 31) /* beyond the flags: enabled */
+        return;
+    uint32_t was = (uint32_t)MenuInfo_enableFlags(p), bit = 1u << item;
+    uint32_t now = on ? was | bit : was & ~bit;
+    if (now != was) {
+        MenuInfo_set_enableFlags(p, (int32_t)now);
+        display_menus_changed();
+    }
+    idle_wrote(p + MenuInfo_enableFlags_off, 4);
 }
 
-void tb_DisableItem(gaddr mh, int16_t item)
-{
-    if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
-        return;
-    display_menus_changed();
-    gaddr p = menu_ptr(mh);
-    if (item <= 31)
-        MenuInfo_set_enableFlags(p, (int32_t)((uint32_t)MenuInfo_enableFlags(p) & ~(1u << item)));
-}
+void tb_EnableItem(gaddr mh, int16_t item) { set_enabled(mh, item, true); }
+void tb_DisableItem(gaddr mh, int16_t item) { set_enabled(mh, item, false); }
 
 static gaddr item_field(gaddr mh, int item, int field)
 {
@@ -1911,10 +1914,16 @@ void tb_SetItemMark(gaddr mh, int16_t item, int16_t mark)
 {
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
-    display_menus_changed();
     gaddr f = item_field(mh, item, 2);
-    if (f)
+    if (!f) {
+        display_menus_changed();
+        return;
+    }
+    if (rd8(f) != (uint8_t)mark) { /* as set_enabled */
         wr8(f, (uint8_t)mark);
+        display_menus_changed();
+    }
+    idle_wrote(f, 1);
 }
 
 void tb_GetItemMark(gaddr mh, int16_t item, gaddr markp)
@@ -1946,10 +1955,16 @@ void tb_SetItemStyle(gaddr mh, int16_t item, int16_t style)
 {
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
-    display_menus_changed();
     gaddr f = item_field(mh, item, 3);
-    if (f)
+    if (!f) {
+        display_menus_changed();
+        return;
+    }
+    if (rd8(f) != (uint8_t)style) { /* as set_enabled */
         wr8(f, (uint8_t)style);
+        display_menus_changed();
+    }
+    idle_wrote(f, 1);
 }
 
 void tb_GetItemStyle(gaddr mh, int16_t item, gaddr stylep)
@@ -1966,10 +1981,16 @@ void tb_SetItemCmd(gaddr mh, int16_t item, int16_t cmd)
 {
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
-    display_menus_changed();
     gaddr f = item_field(mh, item, 1);
-    if (f)
+    if (!f) {
+        display_menus_changed();
+        return;
+    }
+    if (rd8(f) != (uint8_t)cmd) { /* as set_enabled */
         wr8(f, (uint8_t)cmd);
+        display_menus_changed();
+    }
+    idle_wrote(f, 1);
 }
 
 void tb_GetItemCmd(gaddr mh, int16_t item, gaddr cmdp)

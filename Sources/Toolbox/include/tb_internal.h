@@ -134,11 +134,13 @@ void walker_note_call(uint32_t pc, uint32_t what);
  * Toolbox call made (a trap, a PowerPC import), an empty poll (true if the
  * host slept in it), something done that is not waiting, the end of an
  * emulation slice, and interrupt-time work around guest code. */
-void idle_trap(uint16_t op);
+void idle_trap(uint16_t op, bool by_selector); /* by_selector: idle_selector names the routine */
 void idle_native(uint32_t index, const char *name);
 void idle_selector(const char *name); /* a dispatcher's routine */
 bool idle_poll(void);
 void idle_work(void);
+void idle_wrote(gaddr a, uint32_t len); /* a quiet call's answer, written into the program's memory */
+uint64_t mm_heap_fingerprint(void);     /* the zones' shape, for idle.c (memmgr.c) */
 void idle_slice(void);
 void idle_interrupt_enter(void);
 void idle_interrupt_leave(void);
@@ -270,6 +272,13 @@ void io_complete_later_queued(gaddr dce, gaddr pb, int16_t result);
 void io_complete_queued_now(gaddr dce, gaddr pb, int16_t result); /* KillIO's */
 bool time_busy(void);  /* a Time Manager or VBL task waiting */
 bool sound_busy(void); /* a sound channel open */
+bool time_vbl_tasks(void); /* a VBL task installed */
+uint64_t time_next_due(void); /* the next Time Manager task's time (machine ns), 0 if none */
+bool sound_active(void);   /* a sound channel playing, or with commands waiting */
+/* Up to ns: how long the machine's thread may sleep before interrupt-time
+ * work is due (a Time Manager task, the next tick for VBL tasks, sound
+ * playing), at least a millisecond. */
+uint64_t machine_work_due_in(uint64_t ns);
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */
 void adb_pump(void);    /* the mouse to a program's service routine, at interrupt time */
 /* Let the application see and change a host file (and its neighbours) or,
@@ -385,6 +394,8 @@ bool events_host_attached(void);
 /* A null event in a headless run: counts towards the instruction limit. */
 void machine_idle(void);
 void machine_idle_for(int32_t sleep); /* the same, the clock moving on no more than sleep ticks */
+uint64_t machine_realtime_wait(uint64_t ns); /* headless --realtime: a window's wait, on the wall clock */
+void machine_pass_time(uint64_t ns);         /* headless: the instruction clock moves on by ns */
 unsigned machine_idle_answered(void); /* the wait for a headless alert's answer: no walk step; answers in a row */
 void time_reset(void);
 /* Layers and Open Transport's tasks (vam.c): a new run; the tasks due. */

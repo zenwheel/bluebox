@@ -853,6 +853,22 @@ bool sound_busy(void)
     return sound_input_busy();
 }
 
+/* Whether a channel has sound playing or commands waiting (a double
+ * buffer, a file, a queue): what needs pumping while the program sleeps.
+ * An open channel with none of these waits for the program. */
+static bool sd_write_on(void);
+
+bool sound_active(void)
+{
+    uint64_t t = now_ns();
+    for (int i = 0; i < MAX_CHANNELS; i++) {
+        const channel *c = &chans[i];
+        if (c->chan && (c->head != c->tail || t < c->busy_until || c->db || c->file_playing))
+            return true;
+    }
+    return sd_write_on() || qt_tune_playing() || sound_input_busy();
+}
+
 void sound_pump(void)
 {
     if (in_pump)
@@ -1167,8 +1183,10 @@ int16_t tb_SndChannelStatus(gaddr chan, int16_t length, gaddr statusp)
     st[14] = c->paused ? 1 : 0;
     uint32_t attr = (uint32_t)c->init;
     st[16] = (uint8_t)(attr >> 24), st[17] = (uint8_t)(attr >> 16), st[18] = (uint8_t)(attr >> 8), st[19] = (uint8_t)attr;
-    if (length > 0)
+    if (length > 0) {
         gput(statusp, st, (uint32_t)length);
+        idle_wrote(statusp, (uint32_t)length);
+    }
     return noErr;
 }
 
@@ -1601,6 +1619,8 @@ static uint64_t sd_ft_next;    /* when the next tick of four-tone is due */
 static gaddr sd_gave_up;       /* a synchronous write whose wait gave up for a drain, to be made again */
 static uint64_t sd_ended;      /* when the last asynchronous write to finish had played out (machine ns), or 0 */
 static bool sd_finishing;      /* a write's completion running from the driver */
+
+static bool sd_write_on(void) { return sd_pb != 0; }
 
 /* A tick of four-tone sound, ahead of time: the four voices' wave tables
  * stepped by their rates (fixed point, table positions a sample), the

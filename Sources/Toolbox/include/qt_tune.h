@@ -7,5 +7,6 @@ void qt_tune_register(void);
 
 /* Keep queued tunes playing and deliver their callbacks: a safe point. */
 void qt_tune_pump(void);
+bool qt_tune_playing(void); /* a tune player with notes queued */
 
 #endif

@@ -7,6 +7,7 @@
 void tb_SetRect(gaddr r, int16_t left, int16_t top, int16_t right, int16_t bottom)
 {
     qrect_put(r, (qrect){ top, left, bottom, right });
+    idle_wrote(r, 8);
 }
 
 void tb_OffsetRect(gaddr r, int16_t dh, int16_t dv)
@@ -14,6 +15,7 @@ void tb_OffsetRect(gaddr r, int16_t dh, int16_t dv)
     qrect q = qrect_get(r);
     qrect_put(r, (qrect){ (int16_t)(q.top + dv), (int16_t)(q.left + dh), (int16_t)(q.bottom + dv),
                           (int16_t)(q.right + dh) });
+    idle_wrote(r, 8);
 }
 
 void tb_InsetRect(gaddr r, int16_t dh, int16_t dv)
@@ -23,6 +25,7 @@ void tb_InsetRect(gaddr r, int16_t dh, int16_t dv)
     if (qrect_empty(q))
         q = (qrect){ 0, 0, 0, 0 }; /* QuickDraw empties rather than inverting */
     qrect_put(r, q);
+    idle_wrote(r, 8);
 }
 
 int8_t tb_EmptyRect(gaddr r) { return qrect_empty(qrect_get(r)); }
@@ -34,6 +37,7 @@ int8_t tb_SectRect(gaddr s1, gaddr s2, gaddr dest)
                 a.bottom < b.bottom ? a.bottom : b.bottom, a.right < b.right ? a.right : b.right };
     bool any = !qrect_empty(c);
     qrect_put(dest, any ? c : (qrect){ 0, 0, 0, 0 });
+    idle_wrote(dest, 8);
     return any;
 }
 
@@ -43,6 +47,7 @@ void tb_UnionRect(gaddr s1, gaddr s2, gaddr dest)
     qrect c = { a.top < b.top ? a.top : b.top, a.left < b.left ? a.left : b.left,
                 a.bottom > b.bottom ? a.bottom : b.bottom, a.right > b.right ? a.right : b.right };
     qrect_put(dest, c);
+    idle_wrote(dest, 8);
 }
 
 int8_t tb_PtInRect(uint32_t p, gaddr r)
@@ -57,6 +62,7 @@ void tb_Pt2Rect(uint32_t p1, uint32_t p2, gaddr dest)
 {
     int16_t h1 = pt_h(p1), v1 = pt_v(p1), h2 = pt_h(p2), v2 = pt_v(p2);
     qrect_put(dest, (qrect){ v1 < v2 ? v1 : v2, h1 < h2 ? h1 : h2, v1 > v2 ? v1 : v2, h1 > h2 ? h1 : h2 });
+    idle_wrote(dest, 8);
 }
 
 int8_t tb_EqualRect(gaddr r1, gaddr r2)
@@ -76,24 +82,28 @@ void tb_PtToAngle(gaddr rp, uint32_t p, gaddr angle)
     if (a < 0)
         a += 360;
     wr16(angle, (uint16_t)(int16_t)lround(a) % 360);
+    idle_wrote(angle, 2);
 }
 
 void tb_AddPt(uint32_t src, gaddr dst)
 {
     wr16(dst, (uint16_t)(rd16(dst) + (uint16_t)pt_v(src)));
     wr16(dst + 2, (uint16_t)(rd16(dst + 2) + (uint16_t)pt_h(src)));
+    idle_wrote(dst, 4);
 }
 
 void tb_SubPt(uint32_t src, gaddr dst)
 {
     wr16(dst, (uint16_t)(rd16(dst) - (uint16_t)pt_v(src)));
     wr16(dst + 2, (uint16_t)(rd16(dst + 2) - (uint16_t)pt_h(src)));
+    idle_wrote(dst, 4);
 }
 
 void tb_SetPt(gaddr pt, int16_t h, int16_t v)
 {
     wr16(pt, (uint16_t)v);
     wr16(pt + 2, (uint16_t)h);
+    idle_wrote(pt, 4);
 }
 
 int8_t tb_EqualPt(uint32_t p1, uint32_t p2) { return p1 == p2; }
@@ -111,6 +121,7 @@ void tb_MapPt(gaddr pt, gaddr srcr, gaddr dstr)
     qrect s = qrect_get(srcr), d = qrect_get(dstr);
     wr16(pt, (uint16_t)map1((int16_t)rd16(pt), s.top, s.bottom, d.top, d.bottom));
     wr16(pt + 2, (uint16_t)map1((int16_t)rd16(pt + 2), s.left, s.right, d.left, d.right));
+    idle_wrote(pt, 4);
 }
 
 /* A polygon's bounding box and every point, mapped. */
@@ -146,6 +157,7 @@ void tb_ScalePt(gaddr pt, gaddr srcr, gaddr dstr)
         v = 1;
     wr16(pt, (uint16_t)v);
     wr16(pt + 2, (uint16_t)h);
+    idle_wrote(pt, 4);
 }
 
 void tb_MapRgn(gaddr rh, gaddr srcr, gaddr dstr)

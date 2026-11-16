@@ -810,12 +810,18 @@ void tb_GetDialogItem(gaddr d, int16_t n, gaddr itype, gaddr item, gaddr r)
     if (n < 1 || n > item_count(d))
         return;
     gaddr it = item_at(d, n);
-    if (itype)
+    if (itype) {
         wr16(itype, rd8(it + 12));
-    if (item)
+        idle_wrote(itype, 2);
+    }
+    if (item) {
         wr32(item, rd32(it));
-    if (r)
+        idle_wrote(item, 4);
+    }
+    if (r) {
         gmemcpy(r, it + 4, 8);
+        idle_wrote(r, 8);
+    }
 }
 
 void tb_SetDialogItem(gaddr d, int16_t n, int16_t itype, gaddr item, gaddr r)
@@ -1224,12 +1230,19 @@ int8_t tb_DialogSelect(gaddr evt, gaddr dpp, gaddr itemp)
     /* A program's own loop for a movable modal alert (SimpleText's "Save
      * changes?"): the host's alert answers it. */
     if (d == tb_FrontWindow() && host_alert_instead(d, itemp)) {
+        idle_work();
         if (dpp)
             wr32(dpp, d);
         return 1;
     }
-    if (dpp)
+    /* An event to handle is work; any other (a null event) only blinks
+     * the caret, TEIdle saying what it writes, and answers the dialog. */
+    if (what == updateEvt || what == activateEvt || what == mouseDown || what == keyDown || what == autoKey)
+        idle_work();
+    if (dpp) {
         wr32(dpp, d);
+        idle_wrote(dpp, 4);
+    }
     gaddr saved = qd_port();
     tb_SetPort(d);
     int8_t result = 0;
@@ -1355,7 +1368,8 @@ bool dialog_std_filter(gaddr d, gaddr evt, gaddr itemp)
 {
     int what = (int16_t)rd16(evt);
     if (what != keyDown && what != autoKey)
-        return false;
+        return false; /* nothing done: idle.c takes it for a query */
+    idle_work();
     int c = (int)(rd32(evt + EventRecord_message_off) & 0xFF);
     bool cmd = (rd16(evt + EventRecord_modifiers_off) & 0x0100) != 0;
     int n = 0;
@@ -1650,8 +1664,10 @@ enum { errItemNotControl = -30596 };
  * items as user panes). */
 int16_t tb_GetDialogItemAsControl(gaddr d, int16_t n, gaddr out)
 {
-    if (out)
+    if (out) {
         wr32(out, 0);
+        idle_wrote(out, 4);
+    }
     if (!is_dialog(d) || n < 1 || n > item_count(d))
         return errItemNotControl;
     int type = item_type(d, n) & 0x7F;

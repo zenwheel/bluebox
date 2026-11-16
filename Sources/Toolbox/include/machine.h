@@ -900,6 +900,11 @@ int machine_bpf_helper(const char *sockpath, const char *ifname);
  * run (10 million a second), so runs repeat exactly; real time instead
  * for programs that talk to other programs over the network. */
 void machine_set_realtime(bool on);
+/* What the host shows of the machine: 0, its windows in front; 1, shown
+ * behind another application's; 2, none of them shown (minimized, hidden
+ * or covered).  Behind, the machine uses at most half the host's time;
+ * unseen, a tenth: the clock goes on, a program drawing fewer frames. */
+void machine_set_host_visibility(int level);
 /* Timing: accurate gives a 68000 a compact Mac's speed (its cycles counted
  * at 7.8336 MHz, QuickDraw's drawing charged as ROM QuickDraw's took, and
  * with the wall clock no faster than that), for programs that time

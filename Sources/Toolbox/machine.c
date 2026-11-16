@@ -1063,6 +1063,118 @@ BB_HOST static bool realtime; /* the run's choice, kept when a snapshot is put b
 void machine_set_realtime(bool on) { realtime = on; }
 bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
+void ev_idle_sleep(uint64_t ns);
+void ev_wake(void);
+
+/* What the machine's thread sleeping must wake for: a Time Manager task's
+ * time, the next tick while VBL tasks are installed, every few ms while
+ * sound plays or speech is spoken.  An open sound channel with nothing to
+ * play, or a task far off, no longer wakes it every 5 ms. */
+uint64_t machine_work_due_in(uint64_t ns)
+{
+    enum { SOON_NS = 4000000, LEAST_NS = 1000000 };
+    uint64_t in = ns, now = machine_time_ns();
+    if (in > SOON_NS && (sound_active() || speech_waiting()))
+        in = SOON_NS;
+    uint64_t due = time_next_due();
+    if (due && (due > now ? due - now : 0) < in)
+        in = due > now ? due - now : 0;
+    if (time_vbl_tasks()) {
+        uint64_t tick = (now * 60 / 1000000000u + 1) * 1000000000u / 60 + 1;
+        if (tick - now < in)
+            in = tick - now;
+    }
+    return in < LEAST_NS && ns > LEAST_NS ? LEAST_NS : in;
+}
+
+/* The machine's thread waits up to ns of real time, or until input comes
+ * (or over says the wait is over), waking when interrupt-time work is due
+ * to do it.  The time it waited. */
+static uint64_t wall_wait(uint64_t ns, bool (*over)(void))
+{
+    uint64_t start = now_ns(), now = start;
+    while (now - start < ns && !cpu.halted && !(over && over())) {
+        uint64_t left = machine_work_due_in(ns - (now - start));
+        if (over && left > 4000000)
+            left = 4000000;
+        uint32_t input = ev_input_serial();
+        ev_idle_sleep(left);
+        machine_advance_ticks();
+        time_pump();
+        now = now_ns();
+        if (ev_input_serial() != input)
+            break;
+    }
+    return now - start;
+}
+
+/* A headless --realtime run waits on the wall clock where a window's run
+ * would (WaitNextEvent's sleep, GetNextEvent's tick, a Toolbox loop's), so
+ * that it uses the host as a window does.  The time waited, 0 otherwise. */
+uint64_t machine_realtime_wait(uint64_t ns)
+{
+    if (!realtime || events_host_attached() || drain_wanted())
+        return 0;
+    return wall_wait(ns, NULL);
+}
+
+/* How much of the host the machine may use while its windows aren't
+ * seen (machine_set_host_visibility): in front, all of it; shown behind
+ * another application's windows, half; with none of them shown
+ * (minimized, hidden, covered), a tenth.  The clock goes on, so a program
+ * timed by it keeps its time, drawing fewer frames; interrupt-time work
+ * (sound, the Time Manager, the network) goes on between.
+ * BLUEBOX_THROTTLE=0 turns it off. */
+enum { THROTTLE_PERIOD_NS = 1000000000u / 60 };
+static const unsigned throttle_duty[3] = { 100, 50, 10 }; /* percent of a period */
+BB_HOST static _Atomic int host_visibility;
+BB_HOST static int throttled_at;
+BB_HOST static uint64_t throttle_period, throttle_cpu0;
+BB_HOST static int throttle_enabled = -1; /* the run's environment */
+
+void machine_set_host_visibility(int level)
+{
+    if (level < 0 || level > 2)
+        level = 0;
+    if (atomic_exchange(&host_visibility, level) > level)
+        ev_wake(); /* seen again: the throttle's wait is over */
+}
+
+static bool shown_more(void) { return atomic_load(&host_visibility) < throttled_at; }
+
+static uint64_t thread_cpu_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+}
+
+/* At a slice's end: once the machine has used its share of this period's
+ * host time, it waits out the rest. */
+static void throttle(void)
+{
+    int v = atomic_load(&host_visibility);
+    if (throttle_enabled < 0) {
+        const char *e = getenv("BLUEBOX_THROTTLE");
+        throttle_enabled = !(e && e[0] == '0');
+    }
+    if (!v || !throttle_enabled || !events_host_attached() || drain_wanted()) {
+        throttle_period = 0;
+        return;
+    }
+    uint64_t now = now_ns(), used = thread_cpu_ns();
+    if (!throttle_period || now - throttle_period >= THROTTLE_PERIOD_NS) {
+        throttle_period = now;
+        throttle_cpu0 = used;
+        return;
+    }
+    if (used - throttle_cpu0 < (uint64_t)THROTTLE_PERIOD_NS * throttle_duty[v] / 100)
+        return;
+    throttled_at = v;
+    wall_wait(throttle_period + THROTTLE_PERIOD_NS - now, shown_more);
+    throttle_period = 0;
+}
+
 /* With accurate timing a 68000 (PLAN M22) keeps a compact Mac's time: its
  * clocks at 7.8336 MHz, with about a quarter of the bus going to the
  * screen and the sound, as on a Plus or an SE, so it ran as a 6 MHz 68000
@@ -1253,6 +1365,27 @@ static void pace_68000(void)
     }
 }
 
+/* BLUEBOX_REALTIME_AT=n: a headless run's clock follows the instructions
+ * until n of them, then real time, as with --realtime (a game started by
+ * scripted input on the instruction clock, then measured as it plays:
+ * scripts/cpu-idle.sh). */
+static void realtime_from_here(void)
+{
+    BB_HOST static uint64_t at; /* 0: not yet read; UINT64_MAX: none */
+    if (!at) {
+        const char *e = getenv("BLUEBOX_REALTIME_AT");
+        at = e && *e ? strtoull(e, NULL, 0) : UINT64_MAX;
+    }
+    if (cpu.icount < at || realtime || events_host_attached())
+        return;
+    at = UINT64_MAX;
+    uint64_t ns = machine_time_ns();
+    realtime = true;
+    machine_clock_continue(ns);
+    printf("bluebox: the clock follows real time from %llu instructions\n", (unsigned long long)cpu.icount);
+    fflush(stdout);
+}
+
 run_status machine_run(uint64_t max)
 {
     /* Ticks and the VBL tasks move on between slices: a timed 68000's
@@ -1293,7 +1426,9 @@ run_status machine_run(uint64_t max)
             if (!drain_exits())
                 machine_pause_point();
         }
+        realtime_from_here();
         idle_slice();
+        throttle();
         machine_advance_ticks();
         events_script_pump(cpu.icount);
         events_sync_lowmem();

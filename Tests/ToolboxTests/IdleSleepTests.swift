@@ -131,11 +131,45 @@ extension BlueBox {
             #expect(try run(loop + [back(loop.count)]).sleeps == 0)
         }
 
-        /// A Toolbox call that does something (here SetRect) between polls.
+        /// A Toolbox call that does something (here OffsetRect, moving a
+        /// rect along) between polls.
         @Test func aCallThatDoesSomethingIsWork() throws {
+            let offsetRect = [0x486D, 0xFFF0, 0x3F3C, 1, 0x4267, 0xA8A8] // OffsetRect(-16(A5), 1, 0)
+            let loop = offsetRect + button
+            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        /// A call whose answer is written into the program's memory, the
+        /// same answer each time (a rect set to the same place, a point
+        /// converted to the port's coordinates): nothing new (Moon Egg and
+        /// the puzzles of Iris Puzzle's kind, at their title screens).
+        @Test func aRectSetTheSameAgainLetsTheHostSleep() throws {
             let setRect = [0x486D, 0xFFF0, 0x4267, 0x4267, 0x3F3C, 0x0010, 0x3F3C, 0x0010, 0xA8A7]
             let loop = setRect + button
-            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+            let r = try run(loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        @Test func aPointConvertedTheSameAgainLetsTheHostSleep() throws {
+            let loop = [0x2B7C, 0x0010, 0x0020, 0xFFF0,       // MOVE.L #$00100020,-16(A5)
+                        0x486D, 0xFFF0, 0xA871]               // GlobalToLocal(-16(A5))
+                + button
+            let r = try run(drawSetup + loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// The poll in a routine the loop calls from two depths of its
+        /// stack (Dole15's): each place compared with itself.
+        @Test func aPollCalledFromTwoDepthsLetsTheHostSleep() throws {
+            let body = [0x6100, 12,                           // loop: BSR.W sub
+                        0x2F00,                               // MOVE.L D0,-(SP)
+                        0x6100, 6,                            // BSR.W sub
+                        0x588F,                               // ADDQ.L #4,SP
+                        back(6)]                              // BRA.S loop
+                + button + [0x4E75]                           // sub: Button; RTS
+            let r = try run(body)
+            #expect(!r.halted)
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
         }
 
         /// GetKeys into -48(A5), then BitTst of its Caps Lock bit (57).
@@ -300,6 +334,68 @@ extension BlueBox {
             #expect(!r.halted)
             #expect(r.sleeps > 20 && ticks > 10, "slept \(r.sleeps) times, \(ticks) ticks")
             #expect(rd32(out) * 2 >= ticks, "the VBL task ran \(rd32(out)) times in \(ticks) ticks")
+        }
+
+        /// A handle made for a moment and disposed of at each turn (Director's
+        /// projectors): the heap as it was, nothing new; one kept each turn is
+        /// the heap growing, work.
+        @Test func aHandleMadeAndDisposedOfLetsTheHostSleep() throws {
+            let loop = [0x7010, 0xA122, 0xA023] + button // MOVEQ #16,D0; _NewHandle; _DisposeHandle
+            let r = try run(loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        @Test func aHandleKeptEachTimeIsWork() throws {
+            let loop = [0x7010, 0xA122, 0x91C8] + button  // MOVEQ #16,D0; _NewHandle; SUBA.L A0,A0
+            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        /// A loop working a while between its polls (MegaSeg's), the same
+        /// each time: 30000 turns of a count kept in a register, put back
+        /// before the poll.
+        @Test func aLongIterationTheSameEachTimeLetsTheHostSleep() throws {
+            let loop = [0x303C, 29999,                  // MOVE.W #29999,D0
+                        0x51C8, 0xFFFE]                 // DBRA D0,*
+                + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(r.sleeps > 10, "slept \(r.sleeps) times")
+        }
+
+        /// A --realtime run's WaitNextEvent sleeps on the wall clock, as a
+        /// window's does, so that it uses the host as a window would.
+        @Test func aRealtimeWaitNextEventSleepTakesItsTime() {
+            launchTestApp()
+            machine_set_realtime(true)
+            defer { machine_set_realtime(false) }
+            let evt = tb_NewPtr(16, false, true)
+            let start = Date()
+            _ = tb_WaitNextEvent(0, evt, 6, 0) // no events asked for: the sleep is the wait
+            let wall = Date().timeIntervalSince(start)
+            #expect(wall >= 0.08 && wall < 1, "WaitNextEvent's 6 ticks took \(wall) s")
+        }
+
+        /// Its windows unseen (machine_set_host_visibility), the machine uses
+        /// a tenth of the host's time; the clock goes on all the same.
+        @Test func anUnseenMachineIsThrottledAndKeepsTime() throws {
+            func cpu() -> Double {
+                var ts = timespec()
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts)
+                return Double(ts.tv_sec) + Double(ts.tv_nsec) / 1e9
+            }
+            let loop = [0xD081, 0xE388, 0x5281]         // a computation, never idle
+            var c0 = 0.0, ticks0: UInt32 = 0
+            let r = try run(loop + [back(loop.count)], seconds: 0.6, host: true, chunk: 50000) {
+                machine_set_host_visibility(2)
+                machine_advance_ticks()
+                ticks0 = rd32(UInt32(LM_Ticks))
+                c0 = cpu()
+            }
+            let used = cpu() - c0
+            machine_set_host_visibility(0)
+            let ticks = rd32(UInt32(LM_Ticks)) - ticks0
+            #expect(!r.halted)
+            #expect(used < r.wall * 0.3, "used \(used) s of \(r.wall)")
+            #expect(Double(ticks) > r.wall * 60 * 0.8, "\(ticks) ticks in \(r.wall) s")
         }
 
         /// A computation going round in a few registers, calling nothing.

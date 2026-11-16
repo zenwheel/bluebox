@@ -2003,6 +2003,7 @@ gaddr wm_window_at(uint32_t p)
 int16_t tb_FindWindow(uint32_t p, gaddr wpp)
 {
     wr32(wpp, 0);
+    idle_wrote(wpp, 4); /* written again below: the answer is in place when idle.c looks */
     int16_t action_part = take_action(wpp);
     if (action_part)
         return action_part;
