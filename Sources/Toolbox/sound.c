@@ -856,7 +856,7 @@ bool sound_busy(void)
 /* Whether a channel has sound playing or commands waiting (a double
  * buffer, a file, a queue): what needs pumping while the program sleeps.
  * An open channel with none of these waits for the program. */
-static gaddr sd_pb;
+static bool sd_write_on(void);
 
 bool sound_active(void)
 {
@@ -866,7 +866,7 @@ bool sound_active(void)
         if (c->chan && (c->head != c->tail || t < c->busy_until || c->db || c->file_playing))
             return true;
     }
-    return sd_pb || qt_tune_playing() || sound_input_busy();
+    return sd_write_on() || qt_tune_playing() || sound_input_busy();
 }
 
 void sound_pump(void)
@@ -1609,7 +1609,7 @@ void sound_beep(void)
 enum { ffMode = 0, ftMode = 1, swMode = -1, abortErr = -27 };
 #define MAC_RATE 22254.5454
 static channel sd_chan;
-static gaddr sd_pb; /* the Sound Driver's write playing */
+static gaddr sd_pb;            /* the write playing */
 /* Whether it was asynchronous: only then does its completion routine run
  * (a synchronous call's ioCompletion is whatever was on the stack: the
  * Reversi games' parameter block lives in their frame). */
@@ -1619,6 +1619,8 @@ static uint64_t sd_ft_next;    /* when the next tick of four-tone is due */
 static gaddr sd_gave_up;       /* a synchronous write whose wait gave up for a drain, to be made again */
 static uint64_t sd_ended;      /* when the last asynchronous write to finish had played out (machine ns), or 0 */
 static bool sd_finishing;      /* a write's completion running from the driver */
+
+static bool sd_write_on(void) { return sd_pb != 0; }
 
 /* A tick of four-tone sound, ahead of time: the four voices' wave tables
  * stepped by their rates (fixed point, table positions a sample), the
