@@ -813,12 +813,14 @@ static const char *quiet_names[] = {
 };
 
 /* Calls whose only effect is the answer they write into the program's
- * memory, which they say (idle_wrote): the same answer again is the same.
- * In order, for bsearch. */
+ * memory, which they say (idle_wrote): the same answer again is the same;
+ * or which say when they do more (idle_work: DialogSelect given an event
+ * to handle, not a null one).  In order, for bsearch. */
 static const char *const answer_names[] = {
-    "AddPt", "CheckItem", "DisableItem", "EnableItem", "FindWindow", "GlobalToLocal", "InsetRect", "LocalToGlobal",
-    "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect", "SetItemCmd", "SetItemMark",
-    "SetItemStyle", "SetPt", "SetRect", "SndChannelStatus", "SubPt", "UnionRect",
+    "AddPt", "CheckItem", "DialogSelect", "DisableItem", "EnableItem", "FindWindow", "GlobalToLocal", "InsetRect",
+    "LocalToGlobal", "MapPt", "MapRect", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect", "SetItemCmd",
+    "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "SndChannelStatus", "StdFilterProc", "SubPt", "TEIdle",
+    "UnionRect",
 };
 
 /* More calls with no lasting effect (beside quiet_names, whose size is

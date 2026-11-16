@@ -671,6 +671,9 @@ void tb_TEIdle(gaddr teh)
         return;
     if (!te16(teh, TERec_active_off) || te16(teh, TERec_selStart_off) != te16(teh, TERec_selEnd_off))
         return;
+    /* What a blink writes, for idle.c: between blinks, nothing changes. */
+    idle_wrote(te(teh) + TERec_caretState_off, 1);
+    idle_wrote(te(teh) + TERec_caretTime_off, 4);
     /* caretTime is when the caret next blinks; apps sleep until then. */
     uint32_t now = rd32(LM_Ticks);
     if ((int32_t)(now - (uint32_t)TERec_caretTime(te(teh))) < 0)
