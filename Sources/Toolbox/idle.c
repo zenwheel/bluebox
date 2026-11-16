@@ -87,6 +87,8 @@ static struct {
 } sites[NSITES];
 static unsigned next_site;
 
+static void why_regs(const regs *was, const regs *now);
+
 /* Whether the registers are as they were last time at this poll. */
 static bool same_at_site(const regs *r, int *site)
 {
@@ -94,11 +96,13 @@ static bool same_at_site(const regs *r, int *site)
         if (sites[i].used && sites[i].r.r[34] == r->r[34] && sites[i].r.r[32] == r->r[32] &&
             sites[i].r.r[35] == r->r[35]) {
             bool same = !memcmp(&sites[i].r, r, sizeof *r);
+            if (!same)
+                why_regs(&sites[i].r, r);
             sites[i].r = *r;
             *site = i;
             return same;
         }
-    *site = (int)next_site;
+    *site = -1 - (int)next_site; /* new */
     sites[next_site].used = true;
     sites[next_site].r = *r;
     next_site = (next_site + 1) % NSITES;
@@ -190,6 +194,80 @@ bool time_in_interrupt(void);
 void ev_idle_sleep(uint64_t ns);
 bool qd_region_recording(void);
 void machine_pass_time(uint64_t ns);
+
+static uint32_t pc_now(void);
+
+/* BLUEBOX_IDLE_WHY=1 with --log idle: each second of the program's time
+ * with no sleep, why its iterations weren't idle (for finding the loops
+ * this doesn't recognise). */
+enum { W_MODE, W_WORK, W_NEWSITE, W_REGS, W_LONG, W_FAR, W_HW, W_STORES, W_PIXELS, W_UNKNOWN, W_BREAK, W_SLEPT, W_N };
+static const char *const why_names[W_N] = { "first", "work", "new site", "registers", "long", "far", "device", "stores",
+                                             "pixels", "unwatched", "broken", "slept" };
+BB_HOST static struct {
+    int on; /* -1: not yet asked */
+    uint64_t since;
+    uint64_t n[W_N];
+    const char *name[8];
+    uint64_t count[8];
+    uint64_t reg[36]; /* the registers that differed */
+} why = { -1 };
+
+static void why_regs(const regs *was, const regs *now)
+{
+    if (why.on > 0)
+        for (int i = 0; i < 36; i++)
+            if (was->r[i] != now->r[i])
+                why.reg[i]++;
+}
+
+static void why_work(const char *name)
+{
+    if (why.on <= 0)
+        return;
+    name = name ? name : "?";
+    for (int i = 0; i < 8; i++)
+        if (!why.name[i] || why.name[i] == name || !strcmp(why.name[i], name)) {
+            why.name[i] = name;
+            why.count[i]++;
+            return;
+        }
+}
+
+static void why_count(int w)
+{
+    if (why.on < 0) {
+        const char *e = getenv("BLUEBOX_IDLE_WHY");
+        why.on = e && e[0] == '1';
+    }
+    if (!why.on)
+        return;
+    why.n[w]++;
+    uint64_t now = machine_time_ns();
+    if (now - why.since < 1000000000u)
+        return;
+    if (!why.n[W_SLEPT]) {
+        char buf[640];
+        int k = snprintf(buf, sizeof buf, "idle: why at %08X (%s):", pc_now(), g_ppc_mode ? "ppc" : "68k");
+        for (int i = 0; i < W_N && k < (int)sizeof buf; i++)
+            if (why.n[i])
+                k += snprintf(buf + k, sizeof buf - (size_t)k, " %s %llu", why_names[i], (unsigned long long)why.n[i]);
+        for (int i = 0; i < 8 && why.name[i] && k < (int)sizeof buf; i++)
+            k += snprintf(buf + k, sizeof buf - (size_t)k, "%s%s %llu", i ? ", " : " (", why.name[i],
+                          (unsigned long long)why.count[i]);
+        if (why.name[0] && k < (int)sizeof buf)
+            k += snprintf(buf + k, sizeof buf - (size_t)k, ")");
+        for (int i = 0; i < 36 && k < (int)sizeof buf; i++)
+            if (why.reg[i] > why.n[W_REGS] / 2)
+                k += snprintf(buf + k, sizeof buf - (size_t)k, " %s%d",
+                              g_ppc_mode ? (i < 32 ? "r" : "spr") : (i < 8 ? "d" : "a"), g_ppc_mode ? i : i % 8);
+        LOGF(LOG_IDLE, "%s\n", buf);
+    }
+    memset(why.n, 0, sizeof why.n);
+    memset(why.name, 0, sizeof why.name);
+    memset(why.count, 0, sizeof why.count);
+    memset(why.reg, 0, sizeof why.reg);
+    why.since = now;
+}
 
 static bool on(void)
 {
@@ -526,16 +604,29 @@ static bool iteration_end(int mode)
     uint32_t pc = pc_now();
     int site = NSITES;
     bool same = mode == POLLS ? same_at_site(&r, &site) : !memcmp(&r, &st.r, sizeof r);
+    bool new_site = site < 0;
+    if (new_site)
+        site = -1 - site;
     bool idle = st.mode == mode && !st.busy && same;
-    if (idle && mode == POLLS)
-        idle = executed() - st.at < MAX_RUN;
-    if (idle && mode == SLICES)
-        idle = (pc > st.pc ? pc - st.pc : st.pc - pc) < PC_NEAR && hw_device_accesses() == st.hw;
+    int w = st.mode != mode ? W_MODE : st.busy ? W_WORK : new_site ? W_NEWSITE : !same ? W_REGS : W_SLEPT;
+    if (idle && mode == POLLS && !(idle = executed() - st.at < MAX_RUN))
+        w = W_LONG;
+    if (idle && mode == SLICES && !(idle = (pc > st.pc ? pc - st.pc : st.pc - pc) < PC_NEAR))
+        w = W_FAR;
+    if (idle && mode == SLICES && !(idle = hw_device_accesses() == st.hw))
+        w = W_HW;
     int stores = stores_verdict(site), pixels = drawn_verdict(site);
+    if (idle && stores == CHANGED)
+        w = W_STORES;
+    else if (idle && pixels == CHANGED)
+        w = W_PIXELS;
+    else if (idle && (stores == UNKNOWN || pixels == UNKNOWN))
+        w = W_UNKNOWN;
     if (pixels < stores)
         stores = pixels;
     if (stores == CHANGED)
         idle = false;
+    why_count(w);
     st.same = idle ? st.same + 1 : 0;
     bool sleep = idle && stores == SAME;
     if (!idle)
@@ -576,6 +667,7 @@ static bool iteration_end(int mode)
 
 static void chain_break(void)
 {
+    why_count(W_BREAK);
     wait_broken();
     st.mode = NONE;
     st.same = 0;
@@ -636,8 +728,10 @@ bool idle_poll(void)
 
 void idle_work(void)
 {
-    if (!in_interrupt())
+    if (!in_interrupt()) {
         st.busy = true;
+        why_work("(input or a wait)");
+    }
 }
 
 void idle_slice(void)
@@ -772,12 +866,14 @@ static void drawing(void)
         st.ports[st.nports++] = port;
 }
 
-static void call_kind(uint8_t kind)
+static void call_kind(uint8_t kind, const char *name)
 {
-    if (kind == WORK)
+    if (kind == WORK) {
         st.busy = true;
-    else if (kind == DRAWS)
+        why_work(name);
+    } else if (kind == DRAWS) {
         drawing();
+    }
 }
 
 /* A 68k trap, by its number. */
@@ -791,7 +887,7 @@ void idle_trap(uint16_t op)
     unsigned k = (op & 0x0800) ? 1024 + (op & 0x3FFu) : (op & 0xFFu);
     if (!trap_kind[k])
         trap_kind[k] = kind_of(trap_name(op));
-    call_kind(trap_kind[k]); /* a dispatcher's routine: idle_selector says */
+    call_kind(trap_kind[k], why.on > 0 ? trap_name(op) : NULL); /* a dispatcher's routine: idle_selector says */
 }
 
 /* The routine a dispatcher (QDExtensions, IconDispatch ...) was asked for. */
@@ -800,7 +896,7 @@ void idle_selector(const char *name)
     if (in_interrupt())
         return;
     uint8_t kind = kind_of(name);
-    call_kind(kind == SELECTOR ? WORK : kind);
+    call_kind(kind == SELECTOR ? WORK : kind, name);
 }
 
 /* A PowerPC import, by its index among the natives. */
@@ -824,7 +920,7 @@ void idle_native(uint32_t index, const char *name)
     }
     if (!kind[index])
         kind[index] = kind_of(name);
-    call_kind(kind[index] == SELECTOR ? WORK : kind[index]);
+    call_kind(kind[index] == SELECTOR ? WORK : kind[index], name);
 }
 
 void idle_reset(void)

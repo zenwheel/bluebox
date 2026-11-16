@@ -1050,6 +1050,40 @@ BB_HOST static bool realtime; /* the run's choice, kept when a snapshot is put b
 void machine_set_realtime(bool on) { realtime = on; }
 bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 
+void ev_idle_sleep(uint64_t ns);
+
+/* The machine's thread waits up to ns of real time, or until input comes,
+ * cut into slices with interrupt-time work between them while there is
+ * any: sound refills, Time Manager and VBL tasks, speech callbacks.  The
+ * time it waited. */
+static uint64_t wall_wait(uint64_t ns)
+{
+    uint64_t start = now_ns(), now = start;
+    while (now - start < ns && !cpu.halted) {
+        uint64_t left = ns - (now - start);
+        if (left > 4000000 && (sound_busy() || time_busy() || speech_waiting()))
+            left = 4000000;
+        uint32_t input = ev_input_serial();
+        ev_idle_sleep(left);
+        machine_advance_ticks();
+        time_pump();
+        now = now_ns();
+        if (ev_input_serial() != input)
+            break;
+    }
+    return now - start;
+}
+
+/* A headless --realtime run waits on the wall clock where a window's run
+ * would (WaitNextEvent's sleep, GetNextEvent's tick, a Toolbox loop's), so
+ * that it uses the host as a window does.  The time waited, 0 otherwise. */
+uint64_t machine_realtime_wait(uint64_t ns)
+{
+    if (!realtime || events_host_attached() || drain_wanted())
+        return 0;
+    return wall_wait(ns);
+}
+
 /* With accurate timing a 68000 (PLAN M22) keeps a compact Mac's time: its
  * clocks at 7.8336 MHz, with about a quarter of the bus going to the
  * screen and the sound, as on a Plus or an SE, so it ran as a 6 MHz 68000
@@ -1240,6 +1274,27 @@ static void pace_68000(void)
     }
 }
 
+/* BLUEBOX_REALTIME_AT=n: a headless run's clock follows the instructions
+ * until n of them, then real time, as with --realtime (a game started by
+ * scripted input on the instruction clock, then measured as it plays:
+ * scripts/cpu-idle.sh). */
+static void realtime_from_here(void)
+{
+    BB_HOST static uint64_t at; /* 0: not yet read; UINT64_MAX: none */
+    if (!at) {
+        const char *e = getenv("BLUEBOX_REALTIME_AT");
+        at = e && *e ? strtoull(e, NULL, 0) : UINT64_MAX;
+    }
+    if (cpu.icount < at || realtime || events_host_attached())
+        return;
+    at = UINT64_MAX;
+    uint64_t ns = machine_time_ns();
+    realtime = true;
+    machine_clock_continue(ns);
+    printf("bluebox: the clock follows real time from %llu instructions\n", (unsigned long long)cpu.icount);
+    fflush(stdout);
+}
+
 run_status machine_run(uint64_t max)
 {
     /* Ticks and the VBL tasks move on between slices: a timed 68000's
@@ -1280,6 +1335,7 @@ run_status machine_run(uint64_t max)
             if (!drain_exits())
                 machine_pause_point();
         }
+        realtime_from_here();
         idle_slice();
         machine_advance_ticks();
         events_script_pump(cpu.icount);

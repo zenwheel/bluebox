@@ -302,6 +302,19 @@ extension BlueBox {
             #expect(rd32(out) * 2 >= ticks, "the VBL task ran \(rd32(out)) times in \(ticks) ticks")
         }
 
+        /// A --realtime run's WaitNextEvent sleeps on the wall clock, as a
+        /// window's does, so that it uses the host as a window would.
+        @Test func aRealtimeWaitNextEventSleepTakesItsTime() {
+            launchTestApp()
+            machine_set_realtime(true)
+            defer { machine_set_realtime(false) }
+            let evt = tb_NewPtr(16, false, true)
+            let start = Date()
+            _ = tb_WaitNextEvent(0, evt, 6, 0) // no events asked for: the sleep is the wait
+            let wall = Date().timeIntervalSince(start)
+            #expect(wall >= 0.08 && wall < 1, "WaitNextEvent's 6 ticks took \(wall) s")
+        }
+
         /// A computation going round in a few registers, calling nothing.
         @Test func aComputationIsWork() throws {
             let loop = [0xD081, 0xE388, 0x5281]         // ADD.L D1,D0; LSL.L #1,D0; ADDQ.L #1,D1

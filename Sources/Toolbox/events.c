@@ -904,8 +904,9 @@ void ev_wait_tick(void)
     time_pump();
     if (!host_attached) {
         /* Headless, a tick of the instruction clock passes, so scripted
-         * input arrives. */
+         * input arrives (and with --realtime, a tick of the host's). */
         machine_pass_tick();
+        machine_realtime_wait(16000000);
         return;
     }
     pthread_mutex_lock(&lock);
@@ -1202,6 +1203,10 @@ int8_t tb_GetNextEvent(int16_t em, gaddr evt)
     bool got = gne_filtered(evt, false);
     if (!got) {
         machine_idle();
+        /* --realtime: a tick, as with a window above. */
+        uint64_t waited = machine_realtime_wait(16000000);
+        if (waited)
+            machine_pass_time(waited);
         gne_idled = true;
         idle_poll();
     } else {

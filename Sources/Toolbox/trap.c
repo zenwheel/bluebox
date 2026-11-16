@@ -854,8 +854,10 @@ void machine_idle_for(int32_t sleep)
         }
     }
     if (next > c->icount && (!icount_cap || next < icount_cap)) {
-        icount_passed += next - c->icount;
+        uint64_t moved = next - c->icount;
+        icount_passed += moved;
         c->icount = next;
+        machine_realtime_wait(moved * 100u); /* --realtime: the sleep is real */
     }
     events_script_pump(c->icount);
     events_sync_lowmem();

@@ -1092,6 +1092,25 @@ static bool screen_step(uint64_t now)
     return false;
 }
 
+/* The walk done: the run ends there, or with BLUEBOX_WALK_STAY=1 the
+ * program goes on, left alone, its clock now the wall clock's as with
+ * --realtime (scripts/cpu-idle.sh measures what it uses so). */
+static void walk_finished(const char *why)
+{
+    const char *e = getenv("BLUEBOX_WALK_STAY");
+    if (e && e[0] == '1') {
+        if (!machine_wall_clock()) {
+            uint64_t ns = machine_time_ns();
+            machine_set_realtime(true);
+            machine_clock_continue(ns);
+        }
+        printf("walk: %s, the program goes on\n", why);
+        fflush(stdout);
+        return;
+    }
+    cpu_halt(g_cpu, "%s", why);
+}
+
 /* The end of a screen walk: walked if any of its steps did something;
  * false if none did (the walk ends as it would have without it). */
 static bool screen_walk_over(void)
@@ -1106,7 +1125,7 @@ static bool screen_walk_over(void)
            targets_clicked, keys_given, productive);
     fflush(stdout);
     walking = false;
-    cpu_halt(g_cpu, "screen walk finished");
+    walk_finished("screen walk finished");
     return true;
 }
 
@@ -1312,7 +1331,7 @@ static void no_menu_bar(const char *why)
     printf("walk: %u items chosen, %u buttons pressed, %u dialogs, %u left open\n", chosen, pressed, dialogs, left);
     fflush(stdout);
     walking = false;
-    cpu_halt(g_cpu, "menu walk finished");
+    walk_finished("menu walk finished");
 }
 
 /* The end of a walk that found nothing to do with no menu bar: a program
@@ -1339,7 +1358,7 @@ static void stays_up(int at)
         printf("walk: the program is a dialog, its buttons pressed\n");
         printf("walk: %u items chosen, %u dialogs, %u left open\n", chosen, dialogs, left);
         fflush(stdout);
-        cpu_halt(g_cpu, "menu walk finished");
+        walk_finished("menu walk finished");
         return;
     }
     printf("walk: a dialog stays up after %s\n", last);
@@ -1698,5 +1717,5 @@ void walker_idle(uint64_t icount)
     printf("walk: %u items chosen, %u dialogs, %u left open\n", chosen, dialogs, left);
     fflush(stdout);
     walking = false;
-    cpu_halt(g_cpu, "menu walk finished");
+    walk_finished("menu walk finished");
 }
