@@ -542,6 +542,34 @@ extension BlueBox {
             #expect(rd32(vars) == 0)                       // noErr
         }
 
+        /// A task waiting deeper than its own level, in MPYield inside a
+        /// routine of its own it had MPRemoteCall run: the call could not be
+        /// made again, so the snapshot is refused, saying which task waits
+        /// where.
+        @Test func aTaskWaitingInsideARoutineIsRefused() {
+            defer { g_ppc_mode = false }
+            let id = ptr(4), vars = ptr(8)
+            // the routine: MPYield, its return address kept on its stack
+            let routine = tvector(code([0x7C08_02A6, 0x9001_0008, 0x9421_FFC0] + call(export("MPYield"))
+                                       + [0x3821_0040, 0x8001_0008, 0x7C08_03A6, 0x4E80_0020]))
+            // the task: loop { MPRemoteCall(routine, 0, 0); count += 1 }
+            let body = load(3, routine) + [0x3880_0000, 0x38A0_0000] + call(export("MPRemoteCall"))
+                + [0x839D_0004, 0x3B9C_0001, 0x939D_0004]
+            let entry = tvector(code(load(29, vars) + body + [branch(back: body.count)]))
+            #expect(mp("MPCreateTask", [entry, 0, 0, 0, 0, 0, 0, id]) == 0)
+            let main = call(export("MPYield")) + call(export("SystemTask"))
+            _ = start(main + [branch(back: main.count)])
+            _ = machine_run(300_000)
+            #expect(rd32(vars + 4) > 0)
+            machine_drain_begin(true)
+            _ = machine_run(10_000_000)
+            #expect(machine_drain_state() == Int32(MACHINE_DRAIN_REFUSED))
+            let why = String(cString: machine_drain_reason())
+            #expect(why.contains("Multiprocessing Services task") && why.contains("MPYield")
+                        && why.contains("a routine of its own"), Comment(rawValue: why))
+            machine_drain_end()
+        }
+
         /// The main task waiting on a queue a task fills: its wait is
         /// abandoned for the drain (the registers as at the call), the task
         /// is saved in its MPYield, and restored both go on.
