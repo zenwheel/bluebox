@@ -4,7 +4,8 @@
  * debugger calls enter it.  Entering it logs the message, where it came
  * from and the routine's MacsBug name, and goes on, as typing "g" in
  * MacsBug would; --debugger halt (BLUEBOX_DEBUGGER=halt) stops the run
- * there instead, as before.  A program that enters it over and over (an
+ * there instead, as before; --debugger stop opens Blue Box's own MacsBug
+ * (macsbug.c) there, when it has a console or commands to run.  A program that enters it over and over (an
  * assertion in its event loop) is logged at the first entry and then at
  * the 10th, 100th, 1000th ... from the same place, not every time.
  */
@@ -41,9 +42,23 @@ static int debugger_mode(void)
 {
     if (mode < 0) {
         const char *e = getenv("BLUEBOX_DEBUGGER");
-        mode = e && !strcmp(e, "halt") ? DEBUGGER_HALT : e && !strcmp(e, "quiet") ? DEBUGGER_QUIET : DEBUGGER_LOG;
+        mode = e && !strcmp(e, "halt")    ? DEBUGGER_HALT
+               : e && !strcmp(e, "quiet") ? DEBUGGER_QUIET
+               : e && !strcmp(e, "stop")  ? DEBUGGER_STOP
+                                          : DEBUGGER_LOG;
     }
     return mode;
+}
+
+int machine_debugger_mode(void) { return debugger_mode(); }
+
+bool debugger_stops(void) { return debugger_mode() == DEBUGGER_STOP && macsbug_console(); }
+
+/* An entry MacsBug takes: counted, the message kept for the summary. */
+void debugger_count(const char *kind, const char *msg)
+{
+    entries++;
+    snprintf(last_message, sizeof last_message, "%s%s%s", kind, msg ? ": " : "", msg ? msg : "");
 }
 
 void debugger_reset(void)
@@ -197,6 +212,13 @@ static uint32_t caller_68k(cpu68k *c)
 static bool enter_68k(const char *kind, const char *msg)
 {
     cpu68k *c = g_cpu;
+    if (debugger_stops()) {
+        /* Reached past MacsBug's trap break (a call made from native
+         * code): it stops inside the call. */
+        debugger_count(kind, msg);
+        macsbug_debugger_call(false, kind, msg);
+        return false;
+    }
     if (!enter(kind, msg, c->op_pc, caller_68k(c), false))
         return false;
     machine_dump_68k_trace();
@@ -249,6 +271,11 @@ bool debugger_sys_break(cpu68k *c, int16_t code)
 static void macjmp_entry(cpu68k *c, uint16_t tw)
 {
     (void)tw;
+    if (debugger_stops()) {
+        debugger_count("MacJmp", NULL);
+        macsbug_debugger_call(false, "MacJmp", NULL);
+        return;
+    }
     if (!enter("MacJmp", NULL, 0, mem_strip(rd32(c->a[7])), false))
         return;
     machine_dump_68k_trace();
@@ -265,6 +292,13 @@ static void enter_ppc(ppc_cpu *c, const char *kind, const char *msg)
      * (where the caller saved its LR at 8 in the frame below it). */
     uint32_t back = rd32(c->gpr[1]);
     uint32_t caller = back && !(back & 3) ? rd32(back + 8) : 0;
+    if (debugger_stops()) {
+        /* At the call's return, as MacsBug's "g" would go on from. */
+        debugger_count(kind, msg);
+        c->pc = c->lr;
+        macsbug_debugger_call(true, kind, msg);
+        return;
+    }
     if (enter(kind, msg, c->lr - 4, caller, true)) {
         if (msg)
             ppc_halt(c, "%s: %s", kind, msg);
@@ -327,6 +361,7 @@ void debugger_install(void)
         wr32(0x0120, dbg);
         wr8(0x0BFF, DEBUGGER_FLAGS);
     }
+    macsbug_retrace(); /* the CPUs were made afresh: MacsBug's hooks back if wanted */
 }
 
 /* The run's summary line (empty when the debugger was never entered). */

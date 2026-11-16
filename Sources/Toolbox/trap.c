@@ -526,7 +526,63 @@ void trap_aline(cpu68k *c, uint16_t op)
     }
     if (drain_at_trap(c, op)) /* the machine stops here, the call not made */
         return;
+    /* The debugger's trap breaks, traces and records (macsbug.c): true
+     * when the call is not to be made (its PC moved there). */
+    if (g_macsbug_traps && macsbug_trap(c, op))
+        return;
     dispatch_aline(c, op);
+    if (g_macsbug_traps)
+        macsbug_trap_done(c, op);
+}
+
+/* The routine a trap word calls, the CPU as it is at the trap (no return
+ * address pushed yet): its name and the generator's description of its
+ * arguments (trap_sig_args), and the bytes of selector a dispatcher's
+ * caller pushed after the arguments; NULL if unknown. */
+const char *trap_routine(const cpu68k *c, uint16_t tw, const char **args, unsigned *sel_bytes)
+{
+    *args = NULL;
+    *sel_bytes = 0;
+    const disp_entry *d = find_disp(tw);
+    if (!d) {
+        const trap_sig *s = find_sig(tw);
+        if (!s)
+            return NULL;
+        *args = trap_sig_args[s - trap_sigs];
+        return s->name;
+    }
+    const char *loc = d->loc;
+    int32_t sel;
+    uint32_t mask = 0xFFFFFFFFu;
+    /* An auto-pop trap's caller's return address is over the selector. */
+    gaddr sp = c->a[7] + ((tw & 0x0C00) == 0x0C00 ? 4 : 0);
+    if (!strcmp(loc, "D0W"))
+        sel = (int16_t)c->d[0];
+    else if (!strcmp(loc, "D0L"))
+        sel = (int32_t)c->d[0];
+    else if (!strncmp(loc, "D0<", 3)) {
+        mask = (uint32_t)strtoul(loc + 3, NULL, 0);
+        sel = (int32_t)(c->d[0] & mask);
+    } else if (!strcmp(loc, "TrapBits"))
+        sel = tw & 0x600;
+    else if (!strcmp(loc, "StackW") || !strncmp(loc, "StackWMasked", 12)) {
+        sel = (int16_t)rd16(sp);
+        if (!strncmp(loc, "StackWMasked", 12))
+            sel &= 0xFF;
+        *sel_bytes = 2;
+    } else if (!strcmp(loc, "StackL")) {
+        sel = (int32_t)rd32(sp);
+        *sel_bytes = 4;
+    } else if (!strncmp(loc, "StackWLookahead", 15))
+        sel = rd16(sp) & 0xFF;
+    else
+        return d->name;
+    for (unsigned i = 0; i < d->count; i++)
+        if (((uint32_t)d->first[i].selector & mask) == (uint32_t)sel) {
+            *args = dispatch_sig_args[&d->first[i] - dispatch_sigs];
+            return d->first[i].name;
+        }
+    return d->name;
 }
 
 /* The registers at a trap the program made itself, for a native that

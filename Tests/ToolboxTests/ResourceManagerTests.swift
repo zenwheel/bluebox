@@ -503,6 +503,27 @@ extension BlueBox {
         }
     }
 
+    @Suite struct RelativeLaunch {
+        /// Launched by a relative path, the program still finds its own file
+        /// by name in the folder GetFCBInfo gives (CCaption's copy protection).
+        @Test func findsItsOwnFile() {
+            launchTestApp(relative: true)
+            let rn = rd16(UInt32(LM_CurApRefNum))
+            let pb = tb_NewPtr(128, false, true), name = tb_NewPtr(64, false, true)
+            wr32(pb + 18, name)
+            wr16(pb + 24, rn)
+            #expect(tb_PBGetFCBInfo(pb, false) == 0)
+            let vref = Int16(bitPattern: rd16(pb + 52)), parID = Int32(bitPattern: rd32(pb + 58))
+            let spec = tb_NewPtr(70, false, true)
+            #expect(tb_FSMakeFSSpec(vref, parID, name, spec) == 0)
+            let info = tb_NewPtr(128, false, true)
+            wr32(info + 18, name)
+            wr16(info + 22, UInt16(bitPattern: vref))
+            wr32(info + 48, UInt32(bitPattern: parID))
+            #expect(tb_PBHGetFInfo(info, false) == 0)
+        }
+    }
+
     @Suite struct SidecarOnlyFiles {
         /// A file with an empty data fork may be stored as just its sidecar.
         @Test func sidecarOnlyFileIsFoundAndListed() throws {

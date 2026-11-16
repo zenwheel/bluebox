@@ -75,6 +75,22 @@ int16_t mm_move_handle(gaddr h, bool high); /* MoveHHi, or MoveHLow */
 extern uint32_t g_mem_report_cap;
 /* Check that the zone's blocks tile it correctly; returns false and logs on damage. */
 bool mm_check_zone(gaddr zone);
+/* A zone's blocks, for the debugger: use 0 free, 1 nonrelocatable, 2
+ * relocatable; state the handle's lock $80, purge $40 and resource $20
+ * bits; mp a relocatable block's master pointer; damaged: its size is
+ * wrong, and the walk ends.  *b is 0 for the first, then the next. */
+typedef struct {
+    gaddr addr, data, mp;
+    uint32_t psize, lsize, header;
+    uint8_t state, sizec;
+    int use;
+    bool damaged;
+} mm_block;
+bool mm_zone_block(gaddr z, gaddr *b, mm_block *out);
+gaddr mm_zone_limit(gaddr z);
+/* A resource's type, ID, name (C, MacRoman) and file's reference number
+ * from its handle, without touching ResErr; false if h is none. */
+bool rsrc_info_of(gaddr h, uint32_t *type, int16_t *id, char *name, size_t n, int16_t *refnum);
 /* BLUEBOX_HEAPCHECK: the zones checked after a Toolbox call; false if damaged. */
 bool mm_debug_after_call(const char *name);
 /* BLUEBOX_HEAPCHECK=1: the zones checked before a call too; false if the
@@ -759,6 +775,37 @@ void debugger_install(void);
 void debugger_reset(void);
 bool debugger_sys_break(cpu68k *c, int16_t code);
 void debugger_ppc(struct ppc_cpu *c, const char *kind, int arg);
+/* Whether Debugger, DebugStr and SysBreak open MacsBug now (debugger.c's
+ * DEBUGGER_STOP, with somewhere for its commands to come from), and the
+ * entry counted as debugger.c counts the others. */
+bool debugger_stops(void);
+void debugger_count(const char *kind, const char *msg);
+
+/* MacsBug (macsbug.c).  g_macsbug_traps: trap breaks, traces, records or
+ * a step's report want each call: macsbug_trap (68k, at the trap) and
+ * macsbug_native (PowerPC, at the call's NATIVE word, PC past it) return
+ * true when the call is not to be made; the _done calls follow one that
+ * was.  macsbug_retrace: a CPU's trace hook changed, the debugger's goes
+ * back in front.  macsbug_poll: the host's break, taken on the machine's
+ * thread.  The switch calls: Mixed Mode going into PowerPC code (to_ppc)
+ * or 68k code, with the stack pointer the callee starts on, and back. */
+extern bool g_macsbug_traps;
+bool macsbug_console(void); /* a console attached, or script lines to run */
+bool macsbug_trap(cpu68k *c, uint16_t tw);
+void macsbug_trap_done(cpu68k *c, uint16_t tw);
+bool macsbug_native(struct ppc_cpu *c, const char *name, gaddr at);
+void macsbug_native_done(struct ppc_cpu *c);
+void macsbug_retrace(void);
+void macsbug_poll(void);
+void macsbug_switch_push(bool to_ppc, gaddr callee_sp);
+void macsbug_switch_pop(void);
+/* The debugger's entry from the program's own call (PowerPC: PC already
+ * at the return), kind and message as debugger.c logs them. */
+void macsbug_debugger_call(bool ppc, const char *kind, const char *msg);
+/* cfm.c, for the debugger: the fragment whose code holds a, and the
+ * exported routine nearest before it; an exported routine's code. */
+bool cfm_describe(gaddr a, char *frag, size_t fn, char *sym, size_t sn, uint32_t *sym_off, uint32_t *frag_off);
+bool cfm_symbol_code(const char *name, gaddr *addr);
 /* The Appearance Manager's StandardAlert (dialog.c). */
 int16_t dialog_standard_alert(int16_t type, gaddr error, gaddr explanation, gaddr param, gaddr item_hit);
 bool dialog_alert_like(gaddr d); /* the host would show the dialog as its own alert */

@@ -117,8 +117,53 @@ bool sony_sector_tags(uint32_t sector, uint8_t out[12]);
  * counts them.  BLUEBOX_DEBUGGER=halt or quiet when none is set.  The
  * run's count, the places it came from, the last message, and a summary
  * line (empty if it was never entered). */
-enum { DEBUGGER_LOG, DEBUGGER_HALT, DEBUGGER_QUIET };
+/* DEBUGGER_STOP opens MacsBug (below) there instead, when it has a
+ * console or commands to run; otherwise it logs, as DEBUGGER_LOG. */
+enum { DEBUGGER_LOG, DEBUGGER_HALT, DEBUGGER_QUIET, DEBUGGER_STOP };
 void machine_set_debugger(int mode);
+int machine_debugger_mode(void);
+
+/* MacsBug (macsbug.c): a debugger for the program, with MacsBug's
+ * commands (help lists them), for 68k and PowerPC code.  The machine is
+ * held still while it is stopped there, its clock too.  It stops at a
+ * breakpoint, a trap break, after a step, at the program's own Debugger
+ * calls (DEBUGGER_STOP), or when the host asks (the programmer's switch).
+ *
+ * machine_debug_command runs a command line (commands separated by ";")
+ * at once, on the caller's thread, with the machine not running (stopped
+ * in the debugger, or between runs), its output copied to out; a command
+ * that goes on (g, t, s ...) takes effect when the machine runs.
+ * machine_debug_script: lines for the debugger to run, in order, each
+ * time it stops, until one goes on; with none left it goes on by itself
+ * (unless a console is attached that waits for commands).
+ * machine_debug_take_output: what it printed since the last take, when no
+ * console is attached (malloc'd, the caller frees it).
+ * machine_debug_break: stop at the next instruction, from any thread.
+ * machine_debug_attach: a console, fn told (on the machine's thread) of
+ * each stop (MACHINE_DEBUG_STOP, text the stop's description), output
+ * (MACHINE_DEBUG_OUTPUT) and going on (MACHINE_DEBUG_GO); interactive: a
+ * stop waits for machine_debug_post's commands (from any thread) when the
+ * script has none.  NULL detaches (and a waiting stop goes on).
+ * machine_debug_reset: no breakpoints, trap breaks, records or script. */
+enum { MACHINE_DEBUG_STOP, MACHINE_DEBUG_OUTPUT, MACHINE_DEBUG_GO };
+typedef void (*machine_debug_fn)(void *ctx, int event, const char *text);
+void machine_debug_command(const char *line, char *out, size_t n);
+void machine_debug_script(const char *text);
+char *machine_debug_take_output(void);
+void machine_debug_break(void);
+bool machine_debug_stopped(void);
+void machine_debug_attach(machine_debug_fn fn, void *ctx, bool interactive);
+void machine_debug_post(const char *line);
+void machine_debug_reset(void);
+/* The registers as the debugger shows them ("rd"), for a console's panel. */
+void machine_debug_registers(char *out, size_t n);
+/* A gdb-remote stub (gdbstub.c) on 127.0.0.1:port, for lldb's
+ * "gdb-remote port": the client sees the program's processor (PowerPC or
+ * 68k) as one thread, stopped and driven through MacsBug, whose console it
+ * is while attached.  wait: return once a client has attached. */
+bool machine_gdb_listen(int port, bool wait, char *err, size_t errlen);
+/* The clock held still (the debugger's stop), as a suspension holds it. */
+void machine_clock_hold(bool on);
 uint64_t machine_debugger_entries(void);
 unsigned machine_debugger_places(void);
 const char *machine_debugger_last(void);

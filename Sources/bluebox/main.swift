@@ -111,6 +111,17 @@ func usage() -> Never {
                      often, and go on, as "g" in MacsBug), halt (stop the run there) or quiet
                      (only count them); BLUEBOX_DEBUGGER=halt or quiet does the same.  The run's
                      summary says how often it was entered ("debugger entered N times ...")
+                     stop opens Blue Box's MacsBug there (in a window: its console; headless:
+                     the --debugger-script commands)
+          --gdb PORT  a gdb-remote stub on 127.0.0.1:PORT: the headless run waits for lldb
+                     ("gdb-remote PORT") to attach, then starts stopped for it; it sees the
+                     program's processor (PowerPC, or 68k) with its registers and memory,
+                     and its breakpoints and steps are MacsBug's
+          --debugger-script F  MacsBug's commands from file F (one or more a line, separated
+                     by ";"), run from the first instruction on: each stop runs the next ones
+                     until one goes on (g, t, s ...); with none left the machine goes on.
+                     What it prints goes to stdout.  --debug "cmds" gives them on the line,
+                     e.g. --debug "atb GetResource;g;sc;hd rs;g".  "help" lists the commands
           --gestalt  override a Gestalt selector, e.g. sysv=0x0755
           --lowmem N=V  set a low-memory setting: DoubleTime, CaretTime, KeyThresh,
                      KeyRepThresh (ticks), SdVolume, MenuFlash, DlgFont, SysFontFam,
@@ -214,7 +225,8 @@ func usage() -> Never {
                      the scroll wheel: wheel:x/y/n (n lines up, down when negative),
                      hwheel:x/y/n (n columns left);
                      pause:N suspends the program (as Suspend in its menu) for N ms
-                     of real time; snap:F.png saves the screen; sync gives no input but
+                     of real time; debug stops in MacsBug (the programmer's switch);
+                     snap:F.png saves the screen; sync gives no input but
                      wakes a program sleeping until the next input there (wait:N,sync
                      lets a title timed by the clock go on while it sleeps); pace:N
                      puts a sync every N instructions into the waits after it
@@ -281,6 +293,7 @@ func usage() -> Never {
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
                 [printer panel|pdf|host:NAME|laserwriter:NAME@ZONE|driver:FILE|default] [user-name NAME|default]
                 [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
+                [debugger menu|stop|off|default]
                 [real-name|email|organization|mail-account|smtp-host|news-host|
                  home-page|search-page TEXT|default]
                 [http-proxy|ftp-proxy|gopher-proxy|socks HOST:PORT|none|default]
@@ -292,6 +305,10 @@ func usage() -> Never {
           68040, cpu 68000 for one written for a Mac Plus or SE (with timing accurate
           if it times itself by the Plus's speed), or cpu 68040 for
           a fat application to run its 68k code.
+          debugger menu shows the Debug menu (MacsBug: Control-Option-Command-D
+          breaks in) in the program's application menu even without the developer
+          tools (with them it is there unless off); stop also opens it at the
+          program's own Debugger and DebugStr calls.
           --default sets them for every application without its own (bluebox set
           --default scale 2 doubles every classic window).  The Internet settings
           are Internet Config's preferences, which programs that use it read: bluebox
@@ -501,6 +518,12 @@ func queueScript(_ script: [String], start: UInt64) {
             machine_script_add_snap(at, String(step.dropFirst(5)))
             continue
         }
+        // debug: the programmer's switch, into MacsBug (--debugger-script's
+        // commands, or the console's).
+        if step == "debug" {
+            add(12, 0, 0, after: 0)
+            continue
+        }
         // sync: no input, but a program sleeping in WaitNextEvent wakes
         // here rather than when the next input comes.
         if step == "sync" {
@@ -589,6 +612,29 @@ func queueScript(_ script: [String], start: UInt64) {
     }
 }
 
+/// A headless run's MacsBug: the commands run from its first stop, at the
+/// first instruction (and the program's own Debugger calls stop there too,
+/// unless --debugger says otherwise); what it prints goes to stdout.
+func startDebuggerScript(_ parts: [String], setMode: Bool) {
+    if setMode { machine_set_debugger(Int32(DEBUGGER_STOP)) }
+    machine_debug_attach({ _, event, text in
+        guard event == Int32(MACHINE_DEBUG_OUTPUT), let text else { return }
+        fputs(text, stdout)
+    }, nil, false)
+    machine_debug_script(parts.joined(separator: "\n"))
+    machine_debug_break()
+}
+
+/// --gdb PORT: the run waits for lldb ("gdb-remote PORT") to attach, and
+/// starts stopped at its first instruction for it.
+func startGDBStub(_ port: Int32) {
+    print("gdb: waiting for a debugger on 127.0.0.1:\(port) (lldb: gdb-remote \(port))")
+    fflush(stdout)
+    var err = [CChar](repeating: 0, count: 256)
+    guard machine_gdb_listen(port, true, &err, err.count) else { fail("--gdb: \(str(err))") }
+    print("gdb: attached")
+}
+
 // MARK: - Commands
 
 /// `resume`: a snapshot to put back (bluebox resume) in place of launching
@@ -609,6 +655,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var lowmems: [(String, UInt32)] = []
     var fontFiles: [String] = []
     var keyScript: [String] = []
+    var debuggerScript: [String] = [] // --debugger-script, --debug: MacsBug's commands
+    var debuggerGiven = false
+    var gdbPort: Int32? // --gdb: a gdb-remote stub for lldb
     var headless = false
     var background = false
     var walkMenus = false
@@ -873,7 +922,24 @@ func runCommand(_ args: [String], resume: String? = nil) {
             case "log": machine_set_debugger(Int32(DEBUGGER_LOG))
             case "halt": machine_set_debugger(Int32(DEBUGGER_HALT))
             case "quiet": machine_set_debugger(Int32(DEBUGGER_QUIET))
-            default: fail("--debugger expects log, halt or quiet")
+            case "stop": machine_set_debugger(Int32(DEBUGGER_STOP))
+            default: fail("--debugger expects log, halt, quiet or stop")
+            }
+            debuggerGiven = true
+        case "--gdb":
+            i += 1
+            guard i < args.count, let port = Int32(args[i]), port > 0 else { fail("--gdb expects a port number") }
+            gdbPort = port
+        case "--debugger-script", "--debug":
+            // A file of MacsBug commands, or (--debug) the commands themselves.
+            i += 1
+            guard i < args.count else { usage() }
+            if args[i - 1] == "--debug" {
+                debuggerScript.append(args[i])
+            } else if let text = try? String(contentsOfFile: args[i], encoding: .utf8) {
+                debuggerScript.append(text)
+            } else {
+                fail("could not read \(args[i])")
             }
         case "--gestalt":
             i += 1
@@ -1278,6 +1344,11 @@ func runCommand(_ args: [String], resume: String? = nil) {
         let script = keyScript
         let icons = finderBundle(applicationAt: app).appIcons
         MainActor.assumeIsolated { SavePointer.installScripted() }
+        let debuggerSetting = saved.debugger
+        MainActor.assumeIsolated {
+            DebuggerConsole.shared.configure(title: title, setting: debuggerSetting, modeGiven: debuggerGiven)
+        }
+        if !debuggerScript.isEmpty { machine_debug_script(debuggerScript.joined(separator: "\n")) }
         hibernateContext = HibernateContext(app: app, args: args, title: title, screen: [bootWidth, bootHeight],
                                             depth: bootDepth, display: background ? "background" : screenWindow ? "screen" : "rootless")
         if screenWindow {
@@ -1337,6 +1408,8 @@ func runCommand(_ args: [String], resume: String? = nil) {
     let start = machine_instruction_count()
     machine_set_instruction_limit(start + maxInstructions)
     queueScript(keyScript, start: start)
+    if !debuggerScript.isEmpty { startDebuggerScript(debuggerScript, setMode: !debuggerGiven) }
+    if let gdbPort { startGDBStub(gdbPort) }
     if let hibernateAt { machine_hibernate_at(start + hibernateAt) }
     if !interactive { installHeadlessSavePoints() }
     // With --then the walk starts once the run has hibernated, as a resumed
