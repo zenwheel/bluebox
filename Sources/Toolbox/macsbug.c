@@ -1222,6 +1222,11 @@ static void hook68(cpu68k *c)
 {
     if (prev68)
         prev68(c);
+    if (!hooks_wanted()) {
+        /* Left from before (a resumed snapshot's processor): taken out. */
+        macsbug_retrace();
+        return;
+    }
     char why[256];
     if (check(false, c->pc, c->a[7], why, sizeof why))
         stop(false, "%s", why);
@@ -1231,6 +1236,11 @@ static void hookppc(ppc_cpu *c)
 {
     if (prevppc)
         prevppc(c);
+    if (!hooks_wanted()) {
+        /* Left from before (a resumed snapshot's processor): taken out. */
+        macsbug_retrace();
+        return;
+    }
     char why[256];
     if (check(true, c->pc, c->gpr[1], why, sizeof why))
         stop(true, "%s", why);
