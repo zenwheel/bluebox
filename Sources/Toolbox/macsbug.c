@@ -3016,8 +3016,6 @@ void machine_debug_attach(machine_debug_fn fn, void *ctx, bool interactive)
     console_fn = fn;
     console_ctx = ctx;
     console_interactive = fn && interactive;
-    if (!fn)
-        posted_len = 0;
     pthread_cond_broadcast(&post_cond);
     pthread_mutex_unlock(&post_lock);
     update_traps();

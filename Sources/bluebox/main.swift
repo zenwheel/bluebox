@@ -113,6 +113,10 @@ func usage() -> Never {
                      summary says how often it was entered ("debugger entered N times ...")
                      stop opens Blue Box's MacsBug there (in a window: its console; headless:
                      the --debugger-script commands)
+          --gdb PORT  a gdb-remote stub on 127.0.0.1:PORT: the headless run waits for lldb
+                     ("gdb-remote PORT") to attach, then starts stopped for it; it sees the
+                     program's processor (PowerPC, or 68k) with its registers and memory,
+                     and its breakpoints and steps are MacsBug's
           --debugger-script F  MacsBug's commands from file F (one or more a line, separated
                      by ";"), run from the first instruction on: each stop runs the next ones
                      until one goes on (g, t, s ...); with none left the machine goes on.
@@ -621,6 +625,16 @@ func startDebuggerScript(_ parts: [String], setMode: Bool) {
     machine_debug_break()
 }
 
+/// --gdb PORT: the run waits for lldb ("gdb-remote PORT") to attach, and
+/// starts stopped at its first instruction for it.
+func startGDBStub(_ port: Int32) {
+    print("gdb: waiting for a debugger on 127.0.0.1:\(port) (lldb: gdb-remote \(port))")
+    fflush(stdout)
+    var err = [CChar](repeating: 0, count: 256)
+    guard machine_gdb_listen(port, true, &err, err.count) else { fail("--gdb: \(str(err))") }
+    print("gdb: attached")
+}
+
 // MARK: - Commands
 
 /// `resume`: a snapshot to put back (bluebox resume) in place of launching
@@ -643,6 +657,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var keyScript: [String] = []
     var debuggerScript: [String] = [] // --debugger-script, --debug: MacsBug's commands
     var debuggerGiven = false
+    var gdbPort: Int32? // --gdb: a gdb-remote stub for lldb
     var headless = false
     var background = false
     var walkMenus = false
@@ -911,6 +926,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
             default: fail("--debugger expects log, halt, quiet or stop")
             }
             debuggerGiven = true
+        case "--gdb":
+            i += 1
+            guard i < args.count, let port = Int32(args[i]), port > 0 else { fail("--gdb expects a port number") }
+            gdbPort = port
         case "--debugger-script", "--debug":
             // A file of MacsBug commands, or (--debug) the commands themselves.
             i += 1
@@ -1390,6 +1409,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     machine_set_instruction_limit(start + maxInstructions)
     queueScript(keyScript, start: start)
     if !debuggerScript.isEmpty { startDebuggerScript(debuggerScript, setMode: !debuggerGiven) }
+    if let gdbPort { startGDBStub(gdbPort) }
     if let hibernateAt { machine_hibernate_at(start + hibernateAt) }
     if !interactive { installHeadlessSavePoints() }
     // With --then the walk starts once the run has hibernated, as a resumed

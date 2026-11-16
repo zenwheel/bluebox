@@ -157,6 +157,11 @@ void machine_debug_post(const char *line);
 void machine_debug_reset(void);
 /* The registers as the debugger shows them ("rd"), for a console's panel. */
 void machine_debug_registers(char *out, size_t n);
+/* A gdb-remote stub (gdbstub.c) on 127.0.0.1:port, for lldb's
+ * "gdb-remote port": the client sees the program's processor (PowerPC or
+ * 68k) as one thread, stopped and driven through MacsBug, whose console it
+ * is while attached.  wait: return once a client has attached. */
+bool machine_gdb_listen(int port, bool wait, char *err, size_t errlen);
 /* The clock held still (the debugger's stop), as a suspension holds it. */
 void machine_clock_hold(bool on);
 uint64_t machine_debugger_entries(void);
