@@ -406,12 +406,20 @@ func sendOpenDocuments(_ urls: [URL]) -> Bool {
 /// Text and files dragged in go to the program's Drag Manager handlers for
 /// the window under the pointer (an 'hfs ' flavor per file, 'TEXT' for
 /// text); files a window doesn't take become an Open Documents event.
+/// A drag from the Blue Box Browser brings its items' paths (its own
+/// type, beside the promise it gives the Finder): they are the files
+/// themselves, opened where they are, as a drop from the Finder's window
+/// on a program's did.
 @MainActor enum FileDrops {
-    static let types: [NSPasteboard.PasteboardType] = [.fileURL, .string, DragOut.marker]
+    static let browserPaths = NSPasteboard.PasteboardType(BrowserPaths.pasteboardType)
+    static let types: [NSPasteboard.PasteboardType] = [.fileURL, .string, DragOut.marker, browserPaths]
 
     static func urls(_ info: NSDraggingInfo) -> [URL] {
-        (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
-            as? [URL]) ?? []
+        let pb = info.draggingPasteboard
+        let urls = (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+        if !urls.isEmpty { return urls }
+        let strings = (pb.pasteboardItems ?? []).compactMap { $0.string(forType: browserPaths) }
+        return BrowserPaths.parse(strings).map { URL(fileURLWithPath: $0) }
     }
 
     static func text(_ info: NSDraggingInfo) -> String? {
