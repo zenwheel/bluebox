@@ -1710,7 +1710,8 @@ int32_t tb_MenuSelect(uint32_t p)
             }
         if (title >= 0 && title != open) {
             if (open >= 0) {
-                restore_bits(saved_area, under);
+                if (under) /* nothing was saved under a disabled menu's title */
+                    restore_bits(saved_area, under);
                 under = NULL;
                 tb_HiliteMenu(0);
             }
