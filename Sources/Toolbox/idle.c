@@ -823,13 +823,20 @@ static void idle_sleep(void)
     iteration_began = machine_time_ns();
 }
 
+/* Whether the last poll slept: a frame drawn the same again and again
+ * (a pause screen) is this file's to wait through, not frame pacing's. */
+BB_HOST static bool slept_at_poll;
+bool idle_slept(void) { return slept_at_poll; }
+
 bool idle_poll(void)
 {
+    slept_at_poll = false;
     if (!on() || in_interrupt())
         return false;
     if (!iteration_end(POLLS))
         return false;
     idle_sleep();
+    slept_at_poll = true;
     return true;
 }
 

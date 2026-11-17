@@ -28,7 +28,8 @@
  * Time Manager, VBL tasks, sound, the network) goes on through it, the
  * clock moves on as ever, so TickCount and Microseconds read true, and
  * input ends it at once.  A key or a click that came while the frame was
- * drawn skips it.  The instruction clock (headless runs, the corpus walk)
+ * drawn skips it, and so does a frame drawn the same again and again that
+ * idle.c found the program waiting through and slept for.  The instruction clock (headless runs, the corpus walk)
  * never waits, so those runs stay the same.  BLUEBOX_PACE=0 turns it off;
  * the frames are still counted (--log idle says every five seconds how
  * many were drawn and how many refreshes showed a new one).
@@ -157,7 +158,7 @@ void pace_poll(int rank)
     uint32_t p = ev_press_serial();
     bool pressed = p != presses;
     presses = p;
-    if (frame_tick != tick + 1 || pressed || !pacing() || drain_wanted()) {
+    if (frame_tick != tick + 1 || pressed || idle_slept() || !pacing() || drain_wanted()) {
         if (frame_tick != tick + 1)
             shown++;
         frame_tick = tick + 1;

@@ -144,6 +144,7 @@ uint64_t mm_heap_fingerprint(void);     /* the zones' shape, for idle.c (memmgr.
 void idle_slice(void);
 void idle_interrupt_enter(void);
 bool idle_in_interrupt(void); /* interrupt-time work going on (a task, a callback) */
+bool idle_slept(void);        /* the last poll found the program waiting, and slept */
 /* Frame pacing (pace.c): a poll the program's loop may end a frame at
  * (PACE_INPUT: GetKeys, Button, GetMouse ...; PACE_EVENT: the Event
  * Manager's; PACE_PRESENT: a swap of buffers), where it waits for the next

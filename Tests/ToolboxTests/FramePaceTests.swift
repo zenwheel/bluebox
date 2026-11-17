@@ -116,6 +116,22 @@ extension BlueBox {
             #expect(perSecond > 45 && perSecond < 70, "\(perSecond) rounds a second")
         }
 
+        /// A frame drawn the same again and again (a pause screen, blinking
+        /// by the clock) is waited through by frame pacing and idle.c
+        /// together: the host asleep most of the time.
+        @Test func theSameFrameAgainLetsTheHostSleep() throws {
+            // TickCount; BTST #3,D0; BEQ.S erase; PaintRect; BRA.S on; erase: EraseRect; on: Button
+            let tickCount = [0x42A7, 0xA975, 0x201F]
+            let paintRect = [0x486D, 0xFF20, 0xA8A2]
+            let loop = tickCount + [0x0800, 3, 0x6708] + paintRect + [0x6006, 0x486D, 0xFF20, 0xA8A3] + button
+            var ns0: UInt64 = 0, ns1: UInt64 = 0
+            _ = machine_idle_sleeps(&ns0)
+            let r = try run(drawSetup + loop + [back(loop.count)])
+            _ = machine_idle_sleeps(&ns1)
+            let asleep = r.waited + Double(ns1 - ns0) / 1e9
+            #expect(asleep > r.wall / 2, "asleep \(asleep) s of \(r.wall)")
+        }
+
         /// Drawing elsewhere than on the screen isn't a frame shown.
         @Test func drawingOffTheScreenIsNotPaced() throws {
             let loop = invertRect + button
