@@ -1155,6 +1155,7 @@ static void copy_bits(gaddr src_bm, gaddr dst_bm, qrect sr, qrect dr, int mode, 
     /* Callers pass a PixMap via its handle's master pointer or directly; a
      * CGrafPort's portBits field holds the pixmap handle. */
     pixdst s = bits_at(src_bm), d = bits_at(dst_bm);
+    pace_dest(d.base);
     gaddr port = qd_port();
     uint32_t fg = 1, bk = 0;
     if (port) {

@@ -347,6 +347,7 @@ static void present(rctx *x)
     d.depth = PixMap_pixelSize(pm);
     d.ctab = PixMap_pmTable(pm);
     pixdst_clamp(&d);
+    pace_dest(d.base);
     hrgn clip;
     hrgn_init(&clip);
     if (x->clip && rd32(x->clip))

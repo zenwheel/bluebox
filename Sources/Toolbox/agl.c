@@ -760,14 +760,23 @@ static void agl_SwapBuffers(ppc_cpu *c)
         RETURN(0);
         return;
     }
+    if (a->kind != DRAW_OFFSCREEN && a->kind != DRAW_NONE) { /* a frame shown: it may wait for the refresh */
+        pace_drew();
+        pace_poll(PACE_PRESENT);
+    }
     present(a);
     RETURN(0);
 }
 
 void agl_flushed(bool front)
 {
-    if (current && (!current->fmt.dbl || front))
+    if (current && (!current->fmt.dbl || front)) {
+        if (current->kind != DRAW_OFFSCREEN && current->kind != DRAW_NONE) {
+            pace_drew();
+            pace_poll(PACE_PRESENT);
+        }
         present(current);
+    }
 }
 
 /* ---------------------------------------------------------------------- */

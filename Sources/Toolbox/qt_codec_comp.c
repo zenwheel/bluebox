@@ -146,6 +146,7 @@ void qt_codec_frame_to_pixmap(const uint8_t *rgba, int w, int h, gaddr pm, qrect
     pixdst d;
     if (!pixmap_dst(pm, &d) || w <= 0 || h <= 0)
         return;
+    pace_dest(d.base);
     int dw = r.right - r.left, dh = r.bottom - r.top;
     if (dw <= 0 || dh <= 0)
         return;

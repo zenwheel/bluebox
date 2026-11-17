@@ -16,7 +16,10 @@ extension BlueBox {
         /// host take and the time they took.
         /// With `host`, a host is attached (a window, not --realtime): the
         /// instructions don't move on while the thread sleeps.  `chunk` is
-        /// how many instructions each machine_run call is given.
+        /// how many instructions each machine_run call is given.  Frame
+        /// pacing (pace.c, FramePace's tests), which also lets the host
+        /// sleep while a loop draws on the screen, is off: these find
+        /// idle.c's waits alone.
         func run(_ body: [Int], seconds: Double = 0.3, depth: Int32 = 1, host: Bool = false, chunk: UInt64 = 200,
                  setup: () -> Void = {}) throws -> (sleeps: UInt64, slept: Double, halted: Bool, wall: Double) {
             machine_set_screen_depth(depth)
@@ -41,6 +44,8 @@ extension BlueBox {
             #expect(machine_launch(path, &err, err.count))
             machine_set_realtime(true)
             defer { machine_set_realtime(false) }
+            machine_set_frame_pacing(false)
+            defer { machine_set_frame_pacing(true) }
             if host { machine_attach_host(true) }
             defer { if host { machine_attach_host(false) } }
             setup()

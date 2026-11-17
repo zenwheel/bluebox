@@ -85,6 +85,7 @@ void q3_put_port(const uint32_t *argb, int width, int height, gaddr port, int x,
     if (!port)
         return;
     pixdst d = qd_port_pixels(port);
+    pace_dest(d.base);
     hrgn clip;
     hrgn_init(&clip);
     qd_port_clip(port, &clip);
