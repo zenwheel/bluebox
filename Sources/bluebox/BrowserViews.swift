@@ -97,6 +97,9 @@ func sizeText(_ item: BrowserItem) -> String {
     var onRename: (() -> Void)?
     /// Letters typed: the name so far (type-to-select).
     var onType: ((String) -> Void)?
+    /// An arrow key with nothing selected: true for the first item (Down,
+    /// Right), false for the last (Up, Left), as the Finder picks one.
+    var onArrowFromNothing: ((Bool) -> Void)?
     private var typeSelect = TypeSelect()
 
     override func mouseDown(with event: NSEvent) {
@@ -110,6 +113,11 @@ func sizeText(_ item: BrowserItem) -> String {
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36 || event.keyCode == 76 { onRename?(); return } // Return: rename, as in the Finder
         if event.modifierFlags.contains(.command), event.keyCode == 125 { onOpen?(); return } // Command-Down
+        if let first = arrowFromNothing(event, selected: !selectionIndexPaths.isEmpty) {
+            typeSelect.reset()
+            onArrowFromNothing?(first)
+            return
+        }
         if event.modifierFlags.intersection([.command, .control, .option]).isEmpty, let chars = event.characters,
            let typed = typeSelect.feed(chars, at: event.timestamp) {
             onType?(typed)
@@ -147,6 +155,10 @@ func sizeText(_ item: BrowserItem) -> String {
         collection.setDraggingSourceOperationMask(.every, forLocal: true)
         collection.setDraggingSourceOperationMask([.copy, .move, .generic], forLocal: false)
         collection.onOpen = { [weak self] in self?.openSelection() }
+        collection.onArrowFromNothing = { [weak self] first in
+            guard let self, let item = first ? self.items.first : self.items.last else { return }
+            self.select([item.path])
+        }
         collection.onType = { [weak self] typed in
             guard let self, let i = TypeSelect.match(typed, in: self.items.map(\.name)) else { return }
             self.select([self.items[i].path])
@@ -254,7 +266,25 @@ func sizeText(_ item: BrowserItem) -> String {
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36 || event.keyCode == 76 { onRename?(); return }
         if event.modifierFlags.contains(.command), event.keyCode == 125 { onOpen?(); return }
+        if let first = arrowFromNothing(event, selected: selectedRow >= 0), numberOfRows > 0 {
+            let row = first ? 0 : numberOfRows - 1
+            selectRowIndexes([row], byExtendingSelection: false)
+            scrollRowToVisible(row)
+            return
+        }
         super.keyDown(with: event)
+    }
+}
+
+/// An arrow key pressed with nothing selected: whether it picks the first
+/// item (Down, Right) or the last (Up, Left); nil for any other key, or
+/// when something is selected (the view moves the selection itself).
+@MainActor func arrowFromNothing(_ event: NSEvent, selected: Bool) -> Bool? {
+    guard !selected, event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return nil }
+    switch event.keyCode {
+    case 124, 125: return true  // Right, Down
+    case 123, 126: return false // Left, Up
+    default: return nil
     }
 }
 
