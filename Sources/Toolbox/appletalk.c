@@ -891,6 +891,10 @@ void appletalk_poll(void)
     polling = false;
 }
 
+/* Whether AppleTalk is open: datagrams for its sockets and NBP's answers
+ * are served every few ms. */
+bool appletalk_in_flight(void) { return opened; }
+
 /* An NBP call: answered at once, or waited for (synchronous), or left to
  * the poll (asynchronous). */
 static int16_t nbp_call(gaddr pb, int kind, bool async)

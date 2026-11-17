@@ -222,6 +222,15 @@ void ot_tasks_pump(void)
     }
 }
 
+/* Whether a task is scheduled: served every few ms. */
+bool ot_tasks_in_flight(void)
+{
+    for (int i = 0; i < MAX_OT_TASKS; i++)
+        if (ot_tasks[i].kind && ot_tasks[i].scheduled)
+            return true;
+    return false;
+}
+
 static void ot_CreateTimerTask(ppc_cpu *c) { RETURN(ot_task_new(TASK_TIMER, R(0), R(1))); }
 static void ot_ScheduleTimerTask(ppc_cpu *c) { RETURN(ot_task_schedule(R(0), TASK_TIMER, R(1))); }
 static void ot_CancelTimerTask(ppc_cpu *c) { RETURN(ot_task_cancel(R(0), TASK_TIMER)); }

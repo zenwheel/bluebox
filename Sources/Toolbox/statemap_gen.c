@@ -2624,7 +2624,6 @@ const hb_static hb_statics[] = {
     { "Toolbox/idle.c", "int_ppc", 8, 19, 0x003ae18bf90d2c1c },
     { "Toolbox/idle.c", "int_ppc0", 8, 19, 0x003ae18bf90d2c1c },
     { "Toolbox/idle.c", "interrupt_depth", 4, 0, 0xb34e18f570e7c710 },
-    { "Toolbox/idle.c", "next_site", 4, 0, 0x4984645b460455b1 },
     { "Toolbox/idle.c", "quiet_names", 976, 108, 0x7fa29fc3fdabd1ec },
     { "Toolbox/idle.c", "run_ns", 8, 19, 0x003ae18bf90d2c1c },
     { "Toolbox/idle.c", "run_sleeps", 8, 19, 0x003ae18bf90d2c1c },
@@ -3591,7 +3590,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1709;
+const unsigned hb_nstatics = 1708;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

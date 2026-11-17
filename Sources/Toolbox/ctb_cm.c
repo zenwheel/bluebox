@@ -604,6 +604,15 @@ void cm_poll(void)
             poll_conn(&conns[i]);
 }
 
+/* Whether a connection is open: served every few ms. */
+bool cm_in_flight(void)
+{
+    for (int i = 0; i < MAX_CONNS; i++)
+        if (conns[i].used)
+            return true;
+    return false;
+}
+
 /* ---------------------------------------------------------------------- */
 /* The manager's calls */
 

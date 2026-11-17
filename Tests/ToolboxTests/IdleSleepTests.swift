@@ -19,7 +19,8 @@ extension BlueBox {
         /// how many instructions each machine_run call is given.  Frame
         /// pacing (pace.c, FramePace's tests), which also lets the host
         /// sleep while a loop draws on the screen, is off: these find
-        /// idle.c's waits alone.
+        /// idle.c's waits alone.  With nothing to serve the host sleeps to
+        /// the next tick, some 18 times in 0.3 s.
         func run(_ body: [Int], seconds: Double = 0.3, depth: Int32 = 1, host: Bool = false, chunk: UInt64 = 200,
                  setup: () -> Void = {}) throws -> (sleeps: UInt64, slept: Double, halted: Bool, wall: Double) {
             machine_set_screen_depth(depth)
@@ -77,7 +78,7 @@ extension BlueBox {
             let loop = tickCount + button + eventAvail
             let r = try run(loop + [back(loop.count)])
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
             #expect(r.slept > r.wall / 2, "slept \(r.slept) s of \(r.wall)")
         }
 
@@ -152,7 +153,7 @@ extension BlueBox {
             let setRect = [0x486D, 0xFFF0, 0x4267, 0x4267, 0x3F3C, 0x0010, 0x3F3C, 0x0010, 0xA8A7]
             let loop = setRect + button
             let r = try run(loop + [back(loop.count)])
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         @Test func aPointConvertedTheSameAgainLetsTheHostSleep() throws {
@@ -160,7 +161,7 @@ extension BlueBox {
                         0x486D, 0xFFF0, 0xA871]               // GlobalToLocal(-16(A5))
                 + button
             let r = try run(drawSetup + loop + [back(loop.count)])
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// The poll in a routine the loop calls from two depths of its
@@ -174,7 +175,7 @@ extension BlueBox {
                 + button + [0x4E75]                           // sub: Button; RTS
             let r = try run(body)
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// GetKeys into -48(A5), then BitTst of its Caps Lock bit (57).
@@ -187,7 +188,7 @@ extension BlueBox {
             let loop = keys + button
             let r = try run(loop + [back(loop.count)])
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// BitSet changes the program's memory, which the store watch can't
@@ -220,7 +221,7 @@ extension BlueBox {
             let loop = paintRect + button
             let r = try run(drawSetup + loop + [back(loop.count)])
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
             #expect(r.slept > r.wall / 2, "slept \(r.slept) s of \(r.wall)")
         }
 
@@ -228,7 +229,7 @@ extension BlueBox {
             let loop = copyBits + eventAvailLow
             let r = try run(drawSetup + loop + [back(loop.count)], depth: 8)
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
             #expect(r.slept > r.wall / 2, "slept \(r.slept) s of \(r.wall)")
         }
 
@@ -260,7 +261,7 @@ extension BlueBox {
             let loop = tickCount + [0x0800, 3, 0x6708] + paintRect + [0x6006, 0x486D, 0xFF20, 0xA8A3] + button
             let r = try run(drawSetup + loop + [back(loop.count)], seconds: 0.5)
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
             #expect(r.slept > r.wall / 2, "slept \(r.slept) s of \(r.wall)")
         }
 
@@ -270,7 +271,7 @@ extension BlueBox {
         @Test func theSameFrameStoredOnTheScreenLetsTheHostSleep() throws {
             let loop = [0x2078, 0x0824, 0x20BC, 0xFFFF, 0xFFFF, 0x217C, 0x00FF, 0x00FF, 0x0040] + button
             let r = try run(drawSetup + loop + [back(loop.count)]) // MOVE.L ScrnBase,A0; two longs stored
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         @Test func aCountOnTheScreenIsWork() throws {
@@ -289,13 +290,13 @@ extension BlueBox {
         @Test func theSameColoursSetAgainLetTheHostSleep() throws {
             let loop = setEntries(0xFF00) + button + setEntries(0xFF00) + button
             let r = try run(drawSetup + specs + loop + [back(loop.count)], depth: 8)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         @Test func twoColoursInTurnLetTheHostSleep() throws {
             let loop = setEntries(0xFF00) + button + setEntries(0xFF08) + button
             let r = try run(drawSetup + specs + loop + [back(loop.count)], depth: 8)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         @Test func aColourFadingIsWork() throws {
@@ -310,7 +311,7 @@ extension BlueBox {
             let body = [0x3B7C, 3000, 0xFF10] + button + [0x536D, 0xFF10, 0x66F4] // 3000 times: Button, SUBQ.W #1; then
                 + button + [back(button.count)]                                      // Button for ever
             let r = try run(body, seconds: 0.5)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// While the host sleeps through a poll loop, interrupt-time work
@@ -337,7 +338,7 @@ extension BlueBox {
             }
             let ticks = rd32(UInt32(LM_Ticks)) - ticks0
             #expect(!r.halted)
-            #expect(r.sleeps > 20 && ticks > 10, "slept \(r.sleeps) times, \(ticks) ticks")
+            #expect(r.sleeps > 8 && ticks > 10, "slept \(r.sleeps) times, \(ticks) ticks")
             #expect(rd32(out) * 2 >= ticks, "the VBL task ran \(rd32(out)) times in \(ticks) ticks")
         }
 
@@ -347,7 +348,7 @@ extension BlueBox {
         @Test func aHandleMadeAndDisposedOfLetsTheHostSleep() throws {
             let loop = [0x7010, 0xA122, 0xA023] + button // MOVEQ #16,D0; _NewHandle; _DisposeHandle
             let r = try run(loop + [back(loop.count)])
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         @Test func aHandleKeptEachTimeIsWork() throws {
@@ -419,7 +420,7 @@ extension BlueBox {
             let loop = regionMath + button
             let r = try run(twoRegions + loop + [back(loop.count)])
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// A region moving along (OffsetRgn), or one kept each time, is not.
@@ -436,7 +437,7 @@ extension BlueBox {
         @Test func aRegionMadeAndDisposedOfLetsTheHostSleep() throws {
             let loop = [0x42A7, 0xA8D8, 0xA8D9] + button // NewRgn; DisposeRgn
             let r = try run(loop + [back(loop.count)])
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// The resource file asked for and used again (Interiors'
@@ -444,7 +445,7 @@ extension BlueBox {
         @Test func theSameResourceFileUsedAgainLetsTheHostSleep() throws {
             let loop = [0x4267, 0xA994, 0xA998] + button // UseResFile(CurResFile())
             let r = try run(loop + [back(loop.count)])
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// The mouse read where it was, and nothing else: a poll (Interiors
@@ -453,7 +454,7 @@ extension BlueBox {
             let loop = [0x486D, 0xFFF0, 0xA972]         // GetMouse(-16(A5))
             let r = try run(drawSetup + loop + [back(loop.count)])
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// A Time Manager task removed, put in and primed again each time
@@ -467,7 +468,7 @@ extension BlueBox {
                         0x203C, 0, 1000, 0xA05A] + button          // MOVE.L #1000,D0; _PrimeTime
             let r = try run(setup + loop + [back(loop.count)])
             #expect(!r.halted)
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// A loop storing the same into more places than the saved state
@@ -482,7 +483,7 @@ extension BlueBox {
         @Test func manyStoresTheSameLetTheHostSleep() throws {
             let loop = manyStores + button
             let r = try run(block + loop + [back(loop.count)])
-            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+            #expect(r.sleeps > 8, "slept \(r.sleeps) times")
         }
 
         /// ... and a count kept beside them is still work.
@@ -495,6 +496,101 @@ extension BlueBox {
         @Test func aComputationIsWork() throws {
             let loop = [0xD081, 0xE388, 0x5281]         // ADD.L D1,D0; LSL.L #1,D0; ADDQ.L #1,D1
             #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        /// An interpreter waiting goes round its script polling from the same
+        /// place in many states, more than one place's worth, the time it
+        /// read kept in a register (Frankenstein's Director projector): the
+        /// states seen again, nothing new.
+        @Test func aLoopGoingRoundInManyStatesLetsTheHostSleep() throws {
+            let loop = [0x5247, 0x0247, 0x000F] + tickCount + [0x2C00] + button + eventAvail // ADDQ.W #1,D7; ANDI.W #15,D7; ...; MOVE.L D0,D6
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(!r.halted)
+            #expect(r.sleeps > 8 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+        }
+
+        /// ... but two frames drawn in turn by a phase in a register are a
+        /// game's animation.
+        @Test func twoFramesInTurnByARegisterAreWork() throws {
+            // BCHG #0,D7; BNE.S erase; PaintRect; BRA.S on; erase: EraseRect; on: Button
+            let loop = [0x0847, 0] + [0x6608] + paintRect + [0x6006, 0x486D, 0xFF20, 0xA8A3] + button
+            #expect(try run(drawSetup + loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        /// A script of queries running long between two polls (Frankenstein's
+        /// runs 33000 instructions and 156 calls): still a wait.
+        @Test func aLongStretchOfQueriesBetweenPollsLetsTheHostSleep() throws {
+            let queries = [0x323C, 5999,                       // MOVE.W #5999,D1
+                           0x42A7, 0xA924, 0x588F,             // CLR.L -(SP); _FrontWindow; ADDQ.L #4,SP
+                           0x51C9, 0xFFF8]                     // DBRA D1,*-6
+            let loop = queries + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(r.sleeps > 8 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+        }
+
+        /// A place the loop sets one way and puts back as it was before the
+        /// next poll, only some ways round: nothing new.
+        @Test func aPlacePutBackAsItWasLetsTheHostSleep() throws {
+            // TickCount; BTST #0,D0; BEQ.S on; MOVE.W #1,-8(A5); CLR.W -8(A5); on: Button
+            let loop = tickCount + [0x0800, 0, 0x670A, 0x3B7C, 1, 0xFFF8, 0x426D, 0xFFF8] + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(r.sleeps > 8 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+        }
+
+        /// With nothing at interrupt time to keep up with, the host sleeps
+        /// to the next tick, not 4 ms at a time (MediaPresenter woke 250
+        /// times a second at its main screen).
+        @Test func aWaitWithNothingToServeSleepsToTheTick() throws {
+            let loop = tickCount + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(r.sleeps > 8 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+            #expect(r.slept / Double(max(r.sleeps, 1)) > 0.008, "slept \(r.sleeps) times, \(r.slept) s")
+        }
+
+        nonisolated(unsafe) static var played = 0
+
+        /// A double buffer playing while the program waits: the host wakes
+        /// every few ms to keep it filled, and the sound plays on with no gap
+        /// (as much played as the time passed, its doubleBack refilling each
+        /// buffer as it comes back).
+        @Test func soundPlayingWhileTheProgramWaitsKeepsUp() throws {
+            Self.played = 0
+            machine_set_sound_handler({ _, pcm, frames, _, _, _, _ in
+                if pcm != nil { IdleSleep.played += Int(frames) }
+            }, nil)
+            defer { machine_set_sound_handler(nil, nil) }
+            var chan: UInt32 = 0, refills: UInt32 = 0
+            let loop = tickCount + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.6) {
+                let chanp = tb_NewPtr(4, false, true)
+                #expect(tb_SndNewChannel(chanp, 5, 0, 0) == 0)
+                chan = rd32(chanp)
+                refills = tb_NewPtr(4, false, true)
+                // PROCEDURE doubleBack(chan, buffer): the buffer ready again, counted.
+                let back: [UInt16] = [0x205F, 0x225F, 0x588F,                // MOVEA.L (SP)+,A0; MOVEA.L (SP)+,A1; ADDQ.L #4,SP
+                                      0x00A9, 0, 1, 4,                       // ORI.L #dbBufferReady,dbFlags(A1)
+                                      0x52B9, UInt16(refills >> 16), UInt16(refills & 0xFFFF), // ADDQ.L #1,refills
+                                      0x4ED0]                                // JMP (A0)
+                let code = tb_NewPtr(Int32(back.count * 2), false, false)
+                for (i, w) in back.enumerated() { wr16(code + UInt32(i * 2), w) }
+                let header = tb_NewPtr(24, false, true)
+                wr16(header, 1); wr16(header + 2, 8)
+                wr32(header + 8, 0x5622_0000) // 22050 Hz
+                for i in 0..<2 {
+                    let buf = tb_NewPtr(16 + 441, false, true) // 20 ms each
+                    wr32(buf, 441); wr32(buf + 4, 1)
+                    for k in 0..<441 { wr8(buf + 16 + UInt32(k), UInt8(128 + (k & 16))) }
+                    wr32(header + 12 + UInt32(i * 4), buf)
+                }
+                wr32(header + 20, code)
+                #expect(tb_SndPlayDoubleBuffer(chan, header) == 0)
+            }
+            defer { _ = tb_SndDisposeChannel(chan, 1) }
+            #expect(!r.halted)
+            #expect(r.sleeps > 20 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+            #expect(r.slept / Double(max(r.sleeps, 1)) < 0.006, "slept \(r.sleeps) times, \(r.slept) s")
+            #expect(Double(Self.played) >= 22050 * r.wall, "played \(Self.played) frames in \(r.wall) s")
+            #expect(rd32(refills) * 441 + 882 >= UInt32(Self.played), "\(rd32(refills)) refills for \(Self.played) frames")
         }
     }
 }

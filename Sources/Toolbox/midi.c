@@ -137,6 +137,8 @@ void machine_set_midi_out_handler(machine_midi_out_fn fn, void *ctx)
     out_ctx = ctx;
 }
 
+void ev_wake(void);
+
 void machine_midi_in(const uint8_t *bytes, int n)
 {
     pthread_mutex_lock(&in_lock);
@@ -147,6 +149,7 @@ void machine_midi_in(const uint8_t *bytes, int n)
         in_len += n;
     }
     pthread_mutex_unlock(&in_lock);
+    ev_wake(); /* a program waiting in a poll loop hears it now */
 }
 
 static int find_client(uint32_t id)
@@ -942,6 +945,17 @@ void midi_pump(void)
         restore_regs(d, a, sr);
     }
     in_pump = false;
+}
+
+/* Whether packets wait to be delivered or a time procedure is set: served
+ * every few ms.  An open port waiting for input isn't (the host's bytes
+ * wake the machine's thread). */
+bool midi_in_flight(void)
+{
+    for (int i = 0; i < MAX_PORTS; i++)
+        if (ports[i].used && (ports[i].qn || (ports[i].running && ports[i].wake_set)))
+            return true;
+    return false;
 }
 
 void midi_reset(void)

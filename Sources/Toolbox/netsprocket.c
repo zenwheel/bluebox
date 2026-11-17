@@ -1424,6 +1424,14 @@ void netsprocket_poll(void)
     polling--;
 }
 
+bool netsprocket_in_flight(void)
+{
+    for (int i = 0; i < MAX_GAMES; i++)
+        if (games[i].used)
+            return true;
+    return false;
+}
+
 /* A slice of waiting in a call that waits: false once the time is up.
  * Calls that wait can't be made from the message handler (interrupt time,
  * as NetSprocket said: kNSpCantBlockErr). */

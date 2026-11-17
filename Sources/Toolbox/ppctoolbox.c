@@ -642,6 +642,9 @@ void ppc_toolbox_poll(void)
     }
 }
 
+/* Whether a call waits or a completion is due: served every few ms. */
+bool ppc_toolbox_in_flight(void) { return nwaits || ndone; }
+
 /* A call that may wait: asynchronous, it goes on in the background (and
  * one already answered has its completion routine called all the same);
  * synchronous, it is waited for here. */

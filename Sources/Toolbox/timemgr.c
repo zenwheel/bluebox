@@ -412,6 +412,9 @@ void io_complete_now(gaddr pb, int16_t result)
         call_completion(fn, pb, result);
 }
 
+/* Whether a completion routine or deferred task waits for the next pump. */
+bool time_io_pending(void) { return ncompletions || ndeferred; }
+
 static void run_completions(void)
 {
     /* Those a completion queues wait for the next pump. */

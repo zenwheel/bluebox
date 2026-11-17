@@ -114,6 +114,7 @@ extern const ppc_export nsp_exports[];
 extern const unsigned nsp_export_count;
 void netsprocket_reset(void);
 void netsprocket_poll(void);
+bool netsprocket_in_flight(void); /* a game open */
 /* Open Transport (opentransport.c). */
 extern const ppc_export ot_exports[];
 extern const unsigned ot_export_count;

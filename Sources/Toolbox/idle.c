@@ -7,8 +7,8 @@
  * of its own.  On a Mac that cost nothing; here it keeps a host core busy.
  * When the program's time is on the wall clock (a host attached, or
  * --realtime), such a wait is found and the emulator thread sleeps through
- * it, until the next tick, a Time Manager task's time, input, or a few
- * milliseconds at most.
+ * it, until the next tick, a Time Manager task's time or input (a few
+ * milliseconds at most while sound, I/O or a network must be served).
  *
  * An iteration is the stretch of the program between two of its polls
  * (an empty event poll, an unpressed button, an unchanged keyboard,
@@ -28,17 +28,21 @@
  *     (heap_names: the heaps' shape is compared below), or drawing
  *     (draw_names: CopyBits, PaintRect, DrawString, PlotCIcon, RGBForeColor,
  *     SetEntries ...), no sound, file or memory work;
- *   - the registers are as they were at the iteration before ending at the
+ *   - the registers are as they were at an iteration before ending at the
  *     same poll, from the same depth of the stack (a count kept in a
  *     register shows; a routine polling for callers at different depths is
- *     compared with itself for each) and, with no calls, no device was
- *     touched;
+ *     compared with itself for each; a loop going round in several states,
+ *     a script interpreter's, is in one it was in before, as long as it
+ *     draws nothing; a register holding Ticks as read then holds Ticks as
+ *     read now) and, with no calls, no device was touched;
  *   - its stores, watched once the rest has held for a few iterations,
- *     left the places it stored to as that iteration left them (the
- *     same arguments pushed again; a counter kept in memory shows), its own
- *     frames below the stack pointer apart; and if it made or disposed of
- *     blocks, the heaps' shape is as it was (a handle made and disposed of
- *     again; a handle kept each time shows);
+ *     left the places it stored to as the last iteration between the same
+ *     two states left them, or as they were before it (the same arguments
+ *     pushed again; a counter kept in memory shows), its own frames below
+ *     the stack pointer apart, a place seen going between two values
+ *     taking either; and if it made or disposed of blocks, the heaps'
+ *     shape is as it was (a handle made and disposed of again; a handle
+ *     kept each time shows);
  *   - what it drew, watched the same way, left the pixels as that iteration
  *     left them: QuickDraw's pixels are written from here, which the
  *     store watch doesn't see, so its blitters say which rectangle of which
@@ -51,7 +55,7 @@
  *     drawn are not.
  * Such an iteration repeated is the program doing nothing over and over,
  * and how many times it does it can't show, so the host may sleep between
- * them.  Interrupt-time work (VBL and Time Manager tasks, sound callbacks)
+ * them: once a turn of the loop, at the poll it last slept at.  Interrupt-time work (VBL and Time Manager tasks, sound callbacks)
  * is not the program's iteration and goes on as the clock moves.
  * BLUEBOX_IDLE_SLEEP=0 turns it off.
  */
@@ -72,6 +76,7 @@ enum {
     MOST_BEFORE_WATCH = 256, /* ... after watching found work again and again */
     MAX_RUN = 1000000,     /* instructions a poll loop's iteration may run */
     OWN_LOOP_AFTER = 20000, /* ... after which its slices may show a loop of its own, or calls end it */
+    QUIET_RUN = 100000,    /* ... or calls that were all queries */
     MAX_STORES = 64,       /* places an idle iteration may store to, in the saved state ... */
     MOST_STORES = 256,     /* ... and beside it (Interiors' wait stores to 96) */
     MAX_RANGES = 8,        /* ... and longer stretches a call wrote (BlockMove) */
@@ -82,8 +87,10 @@ enum {
     MAX_PALETTES = 16,     /* palettes whose colours are compared */
     STACK_SCRATCH = 0x10000, /* below the stack pointer: the iteration's own frames */
     PC_NEAR = 256,         /* a loop with no calls: how far apart its slices may end */
-    NSITES = 8,            /* the polls a loop may make, each from its own place */
-    MAX_SLEEP_NS = 4000000, /* the longest sleep: async completions, sound, network polls */
+    NSITES = 8,            /* the places a loop polls from, in the saved state ... */
+    MOST_SITES = 64,       /* ... and with those beside it, the states a loop may poll in */
+    SLICE_SITE = MOST_SITES, /* what a loop of its own's iterations are compared with */
+    MAX_SLEEP_NS = 4000000, /* the longest sleep while sound, I/O or a network needs serving */
     LOG_AFTER_NS = 100000000, /* --log idle: waits this long */
     BREAK_NS = 50000000,   /* busy this long between two waits: two of them */
 };
@@ -97,34 +104,85 @@ typedef struct {
     uint32_t r[36];
 } regs;
 
-/* The registers at each place a loop polls from, last time there: a loop
- * may poll more than once around (Button, then TickCount). */
-static struct {
+/* The registers a loop polled with, each state at each place: a loop may
+ * poll more than once around (Button, then TickCount), and an interpreter
+ * waiting goes round its script polling from the same place in several
+ * states (Frankenstein's: some 15 in a turn, at 9 places).  The first
+ * NSITES are saved state, the rest beside it; the least recently seen is
+ * the one a new state takes. */
+typedef struct {
     bool used;
     regs r;
-} sites[NSITES];
-static unsigned next_site;
+} site_regs;
+static site_regs sites[NSITES];
+BB_HOST static site_regs more_sites[MOST_SITES - NSITES];
+BB_HOST static uint64_t site_seen[MOST_SITES], site_clock;
+BB_HOST static uint32_t site_ticks[MOST_SITES]; /* Ticks then */
+
+static site_regs *site_at(int i) { return i < NSITES ? &sites[i] : &more_sites[i - NSITES]; }
 
 static void why_regs(const regs *was, const regs *now);
 
-/* Whether the registers are as they were last time at this poll. */
-static bool same_at_site(const regs *r, int *site)
+static bool same_place(const regs *a, const regs *b)
 {
-    const int sp = r->r[35] ? 1 : 15; /* r1, a7: a routine polling for callers at different depths */
-    for (int i = 0; i < NSITES; i++)
-        if (sites[i].used && sites[i].r.r[34] == r->r[34] && sites[i].r.r[32] == r->r[32] &&
-            sites[i].r.r[35] == r->r[35] && sites[i].r.r[sp] == r->r[sp]) {
-            bool same = !memcmp(&sites[i].r, r, sizeof *r);
-            if (!same)
-                why_regs(&sites[i].r, r);
-            sites[i].r = *r;
-            *site = i;
-            return same;
+    const int sp = a->r[35] ? 1 : 15; /* r1, a7: a routine polling for callers at different depths */
+    return a->r[34] == b->r[34] && a->r[32] == b->r[32] && a->r[35] == b->r[35] && a->r[sp] == b->r[sp];
+}
+
+/* The same registers, but for the clock: one holding Ticks as it was then
+ * holds Ticks as it is now (a script interpreter keeps the time it read
+ * in a register as it goes round; what it waits for is elsewhere). */
+static bool same_regs(const regs *was, uint32_t was_ticks, const regs *now, uint32_t ticks)
+{
+    if (!memcmp(was, now, sizeof *now))
+        return true;
+    if (was_ticks == ticks)
+        return false;
+    for (int i = 0; i < 32; i++)
+        if (was->r[i] != now->r[i] && !(was->r[i] == was_ticks && now->r[i] == ticks))
+            return false;
+    return !memcmp(was->r + 32, now->r + 32, sizeof was->r - 32 * sizeof was->r[0]);
+}
+
+/* Whether the registers are as they were at this poll before: the last
+ * time there, or (*earlier) an earlier time, the loop having gone round
+ * in other states since.  *site: the state's (-1 - it for a new place). */
+static bool same_at_site(const regs *r, int *site, bool *earlier)
+{
+    const uint32_t ticks = rd32(LM_Ticks);
+    int found = -1, last = -1, oldest = 0;
+    for (int i = 0; i < MOST_SITES; i++) {
+        const site_regs *s = site_at(i);
+        if (!s->used) {
+            if (site_at(oldest)->used)
+                oldest = i;
+            continue;
         }
-    *site = -1 - (int)next_site; /* new */
-    sites[next_site].used = true;
-    sites[next_site].r = *r;
-    next_site = (next_site + 1) % NSITES;
+        if (site_at(oldest)->used && site_seen[i] < site_seen[oldest])
+            oldest = i;
+        if (!same_place(&s->r, r))
+            continue;
+        if (last < 0 || site_seen[i] > site_seen[last])
+            last = i;
+        if (found < 0 && same_regs(&s->r, site_ticks[i], r, ticks))
+            found = i;
+    }
+    site_clock++;
+    *earlier = found >= 0 && found != last;
+    if (found >= 0) {
+        site_seen[found] = site_clock;
+        site_at(found)->r = *r;
+        site_ticks[found] = ticks;
+        *site = found;
+        return true;
+    }
+    if (last >= 0)
+        why_regs(&site_at(last)->r, r);
+    site_at(oldest)->used = true;
+    site_at(oldest)->r = *r;
+    site_seen[oldest] = site_clock;
+    site_ticks[oldest] = ticks;
+    *site = last >= 0 ? oldest : -1 - oldest;
     return false;
 }
 
@@ -151,13 +209,52 @@ typedef struct {
  * in memory and drawn: a loop polling from more than one place (a frame
  * drawn, Button; the clock read, TickCount) is compared with itself round
  * the loop, each stretch with the same stretch last time. */
-static struct {
+typedef struct {
     int n; /* -1: none yet in this wait */
     drawn d[MAX_DRAWN];
     uint64_t look;
     int nstores;
     store stores[MAX_STORES];
-} shots[NSITES + 1];
+} shot;
+static shot shots[NSITES + 1]; /* the saved places', and the last a loop of its own's */
+BB_HOST static shot more_site_shots[MOST_SITES - NSITES];
+
+static shot *shot_at(int site)
+{
+    return site == SLICE_SITE ? &shots[NSITES] : site < NSITES ? &shots[site] : &more_site_shots[site - NSITES];
+}
+
+/* The shots are kept for each stretch between two polls, by the states it
+ * went from and to: a loop reaching one state by more than one way round
+ * (Frankenstein's script, its stack used by other calls on one way)
+ * compares each way with itself. */
+BB_HOST static struct {
+    int from, to;
+    uint64_t seen; /* 0: unused */
+} stretches[MOST_SITES];
+BB_HOST static uint64_t stretch_clock;
+BB_HOST static int last_site = -1; /* where the last iteration ended, -1 none (or a slice) */
+
+static void forget_shot(int slot);
+
+static int stretch_of(int from, int to)
+{
+    int oldest = 0;
+    stretch_clock++;
+    for (int i = 0; i < MOST_SITES; i++) {
+        if (stretches[i].seen && stretches[i].from == from && stretches[i].to == to) {
+            stretches[i].seen = stretch_clock;
+            return i;
+        }
+        if (stretches[i].seen < stretches[oldest].seen)
+            oldest = i;
+    }
+    stretches[oldest].from = from;
+    stretches[oldest].to = to;
+    stretches[oldest].seen = stretch_clock;
+    forget_shot(oldest);
+    return oldest;
+}
 
 /* Beside them (and not saved, being new): the longer stretches of the
  * program's memory calls wrote (BlockMove, HandToHand) and the heaps'
@@ -173,7 +270,7 @@ BB_HOST static struct {
     int n; /* -1: none yet in this wait */
     range r[MAX_RANGES];
     uint64_t heap; /* 0: the heaps untouched */
-} more_shots[NSITES + 1];
+} more_shots[MOST_SITES + 1];
 BB_HOST static struct {
     int n;
     bool overflow;
@@ -182,10 +279,12 @@ BB_HOST static struct {
     uint64_t fp; /* ... and the heaps' shape at its end */
 } more;
 
+static void forget_shot(int slot) { shot_at(slot)->n = more_shots[slot].n = -1; }
+
 static void forget_shots(void)
 {
-    for (int i = 0; i <= NSITES; i++)
-        shots[i].n = more_shots[i].n = -1;
+    for (int i = 0; i <= MOST_SITES; i++)
+        forget_shot(i);
 }
 
 static struct {
@@ -215,12 +314,17 @@ static struct {
 /* The stores past the saved state's room, the iteration's and each
  * shot's. */
 BB_HOST static store st_more_stores[MOST_STORES - MAX_STORES];
-BB_HOST static store shot_more_stores[NSITES + 1][MOST_STORES - MAX_STORES];
+BB_HOST static store shot_more_stores[MOST_SITES + 1][MOST_STORES - MAX_STORES];
+
+/* What each place held before the iteration's first store there, if the
+ * program's own store was the first. */
+BB_HOST static uint8_t st_before[MOST_STORES][4];
+BB_HOST static bool st_had[MOST_STORES];
 
 static store *st_store(int i) { return i < MAX_STORES ? &st.stores[i] : &st_more_stores[i - MAX_STORES]; }
 static store *shot_store(int site, int i)
 {
-    return i < MAX_STORES ? &shots[site].stores[i] : &shot_more_stores[site][i - MAX_STORES];
+    return i < MAX_STORES ? &shot_at(site)->stores[i] : &shot_more_stores[site][i - MAX_STORES];
 }
 
 bool g_qd_drawn_watch;
@@ -372,8 +476,11 @@ static uint32_t pc_now(void) { return g_ppc_mode ? g_ppc.pc : g_cpu->pc; }
 static gaddr sp_now(void) { return g_ppc_mode ? g_ppc.gpr[1] : g_cpu->a[7]; }
 
 static bool drawn_store(gaddr a, uint32_t len);
+static void store_run(gaddr a, uint32_t len);
 
-static void store_seen(gaddr a, uint32_t len)
+/* A place stored to: by the program (before the store, so what the place
+ * held can be read) or by a call answering (after). */
+static void store_place(gaddr a, uint32_t len, bool before)
 {
     if (!st.watching || in_interrupt())
         return;
@@ -396,12 +503,39 @@ static void store_seen(gaddr a, uint32_t len)
         }
     }
     if (st.nstores == MOST_STORES) {
-        st.overflow = true;
+        store_run(a, len);
         return;
     }
+    st_had[st.nstores] = before;
+    for (uint32_t k = 0; before && k < 4; k++)
+        st_before[st.nstores][k] = rd8(a + k);
     st_store(st.nstores)->a = a;
     st_store(st.nstores++)->len = len;
     last = st.nstores;
+}
+
+static void store_seen(gaddr a, uint32_t len) { store_place(a, len, true); }
+
+/* Stores past the places' room: taken as stretches of memory, each store
+ * next to one already taken growing it (a block cleared or filled a long
+ * at a time: Frankenstein's script clears 1 KB at a turn). */
+static void store_run(gaddr a, uint32_t len)
+{
+    for (int i = 0; i < more.n; i++) {
+        range *r = &more.r[i];
+        if (r->handle || a + len < r->a || a > r->a + r->len)
+            continue;
+        gaddr lo = a < r->a ? a : r->a, hi = a + len > r->a + r->len ? a + len : r->a + r->len;
+        if (hi - lo > RANGE_MOST)
+            break;
+        r->a = lo;
+        r->len = hi - lo;
+        return;
+    }
+    if (more.n == MAX_RANGES)
+        st.overflow = true;
+    else
+        more.r[more.n++] = (range){ a, len, 0, false };
 }
 
 /* A quiet call's answer written into the program's memory (a point
@@ -414,7 +548,7 @@ void idle_wrote(gaddr a, uint32_t len)
         return; /* no place given for the answer */
     if (len < RANGE_FROM) {
         for (uint32_t k = 0; k < len; k += 4)
-            store_seen(a + k, len - k < 4 ? len - k : 4);
+            store_place(a + k, len - k < 4 ? len - k : 4, false);
         return;
     }
     if (!st.watching || in_interrupt())
@@ -455,6 +589,34 @@ void idle_wrote_handle(gaddr h)
  * memory), or there is no telling yet. */
 enum { CHANGED, UNKNOWN, SAME };
 
+/* Places whose stores have been seen to go back and forth between two
+ * values, as the loop goes round (a frame's saved register, taken from
+ * what another way round left on the stack): either is nothing new, as
+ * long as nothing is drawn.  Kept by address, across waits. */
+enum { TWO_WAYS = 256 };
+BB_HOST static struct {
+    gaddr a;
+    uint32_t len;
+    uint8_t v[2][4];
+} two_ways[TWO_WAYS];
+
+static unsigned two_ways_at(gaddr a) { return (a * 2654435761u) >> 24; /* < TWO_WAYS */ }
+
+/* Whether the place is known to hold either value; if not, it is now. */
+static bool either_way(gaddr a, uint32_t len, const uint8_t *was, const uint8_t *now)
+{
+    unsigned k = two_ways_at(a);
+    if (two_ways[k].a == a && two_ways[k].len == len &&
+        ((!memcmp(two_ways[k].v[0], was, len) && !memcmp(two_ways[k].v[1], now, len)) ||
+         (!memcmp(two_ways[k].v[1], was, len) && !memcmp(two_ways[k].v[0], now, len))))
+        return true;
+    two_ways[k].a = a;
+    two_ways[k].len = len;
+    memcpy(two_ways[k].v[0], was, len);
+    memcpy(two_ways[k].v[1], now, len);
+    return false;
+}
+
 static int stores_verdict(int site)
 {
     if (!st.watched)
@@ -463,19 +625,28 @@ static int stores_verdict(int site)
         why.overflow = true;
         return CHANGED;
     }
-    const int n = shots[site].n < 0 ? -1 : shots[site].nstores;
+    const int n = shot_at(site)->n < 0 ? -1 : shot_at(site)->nstores;
     int verdict = n < 0 ? UNKNOWN : SAME;
     for (int i = 0; i < st.nstores; i++) {
         store *s = st_store(i);
         for (uint32_t k = 0; k < s->len; k++)
             s->v[k] = rd8(s->a + k);
-        if (verdict != SAME)
+        /* Left as it was before the iteration: nothing new, whatever the
+         * last one did there (a way round storing there only sometimes,
+         * the same value again). */
+        if (verdict != SAME || (st_had[i] && !memcmp(st_before[i], s->v, s->len)))
             continue;
         /* In the same order as last time, as a rule. */
         int j = i < n && shot_store(site, i)->a == s->a ? i : 0;
         while (j < n && (shot_store(site, j)->a != s->a || shot_store(site, j)->len != s->len))
             j++;
-        if (j == n || memcmp(shot_store(site, j)->v, s->v, s->len)) {
+        if (j == n && !st_had[i]) {
+            verdict = CHANGED; /* a new place, what it held unknown */
+            why.store = s->a;
+            continue;
+        }
+        const uint8_t *was = j < n ? shot_store(site, j)->v : st_before[i]; /* not stored last time: as it was */
+        if (memcmp(was, s->v, s->len) && (!either_way(s->a, s->len, was, s->v) || st.drew || st.ndrawn)) {
             verdict = CHANGED;
             why.store = s->a;
         }
@@ -663,19 +834,19 @@ static int drawn_verdict(int site)
         d->hash = h;
     }
     st.look = st.drew ? look_hash() : 0;
-    const int n = shots[site].n;
+    const int n = shot_at(site)->n;
     if (n < 0)
         return UNKNOWN;
-    if (st.ndrawn != n || st.look != shots[site].look)
+    if (st.ndrawn != n || st.look != shot_at(site)->look)
         return CHANGED;
     for (int i = 0; i < st.ndrawn; i++) {
         const drawn *d = &st.drawn[i];
         int j = 0;
-        while (j < n && (shots[site].d[j].base != d->base || shots[site].d[j].row_bytes != d->row_bytes))
+        while (j < n && (shot_at(site)->d[j].base != d->base || shot_at(site)->d[j].row_bytes != d->row_bytes))
             j++;
         if (j == n)
             return CHANGED;
-        const drawn *e = &shots[site].d[j];
+        const drawn *e = &shot_at(site)->d[j];
         if (e->r0 != d->r0 || e->r1 != d->r1 || e->b0 != d->b0 || e->b1 != d->b1 || e->hash != d->hash)
             return CHANGED;
     }
@@ -759,6 +930,12 @@ static void check_over(void)
  * last one took the host. */
 BB_HOST static uint64_t iteration_began, iteration_took;
 
+/* The poll the host last slept at. */
+BB_HOST static struct {
+    bool set;
+    regs r;
+} anchor;
+
 /* An iteration ends: whether it was idle (and enough of them in a row,
  * watched, to sleep); the next one starts. */
 static bool iteration_end(int mode)
@@ -766,11 +943,20 @@ static bool iteration_end(int mode)
     regs r;
     take(&r, mode == POLLS);
     uint32_t pc = pc_now();
-    int site = NSITES;
-    bool same = mode == POLLS ? same_at_site(&r, &site) : !memcmp(&r, &st.r, sizeof r);
+    int site = SLICE_SITE;
+    bool earlier = false;
+    bool same = mode == POLLS ? same_at_site(&r, &site, &earlier) : !memcmp(&r, &st.r, sizeof r);
     bool new_site = site < 0;
     if (new_site)
         site = -1 - site;
+    /* Back in a state the loop was in before its last time here: going
+     * round in several, an interpreter's script.  Drawing so is a game's
+     * frames in turn, its phase in a register: work. */
+    if (earlier && (st.drew || st.ndrawn))
+        same = false;
+    /* What this stretch is compared with: the last the same way round. */
+    int slot = mode == POLLS ? stretch_of(last_site, site) : SLICE_SITE;
+    last_site = mode == POLLS ? site : -1;
     bool idle = st.mode == mode && !st.busy && same;
     int w = st.mode != mode ? W_MODE : st.busy ? W_WORK : new_site ? W_NEWSITE : !same ? W_REGS : W_SLEPT;
     if (idle && mode == POLLS && !(idle = executed() - st.at < MAX_RUN))
@@ -779,7 +965,7 @@ static bool iteration_end(int mode)
         w = W_FAR;
     if (idle && mode == SLICES && !(idle = hw_device_accesses() == st.hw))
         w = W_HW;
-    int stores = stores_verdict(site), pixels = drawn_verdict(site), others = more_verdict(site);
+    int stores = stores_verdict(slot), pixels = drawn_verdict(slot), others = more_verdict(slot);
     if (others < stores)
         stores = others;
     if (idle && stores == CHANGED)
@@ -794,26 +980,34 @@ static bool iteration_end(int mode)
         idle = false;
     why_count(w);
     st.same = idle ? st.same + 1 : 0;
-    bool sleep = idle && stores == SAME;
+    /* Once asleep, again only at the poll it slept at, the loop gone
+     * round once in between: one polling from many places (an
+     * interpreter's 23 polls a turn, a game's Button and TickCount) sees
+     * each tick, not a poll a tick. */
+    bool nothing_new = idle && stores == SAME;
+    bool sleep = nothing_new && (mode != POLLS || !anchor.set || same_place(&anchor.r, &r));
+    if (sleep && mode == POLLS)
+        anchor.r = r;
+    anchor.set = sleep ? mode == POLLS : anchor.set && idle;
     if (!idle)
         wait_broken();
     if (st.watched && stores == CHANGED && watch_after < MOST_BEFORE_WATCH)
         watch_after *= 2;
-    else if (sleep)
+    else if (nothing_new)
         watch_after = SAME_BEFORE_WATCH;
     watch(st.same >= watch_after);
     if (idle && st.watched) {
         for (int i = 0; i < st.nstores; i++)
-            *shot_store(site, i) = *st_store(i);
-        shots[site].nstores = st.nstores;
+            *shot_store(slot, i) = *st_store(i);
+        shot_at(slot)->nstores = st.nstores;
         memcpy(st.prev_drawn, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
         st.nprev_drawn = st.ndrawn;
-        memcpy(shots[site].d, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
-        shots[site].n = st.ndrawn;
-        shots[site].look = st.look;
-        memcpy(more_shots[site].r, more.r, (size_t)more.n * sizeof *more.r);
-        more_shots[site].n = more.n;
-        more_shots[site].heap = more.fp;
+        memcpy(shot_at(slot)->d, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
+        shot_at(slot)->n = st.ndrawn;
+        shot_at(slot)->look = st.look;
+        memcpy(more_shots[slot].r, more.r, (size_t)more.n * sizeof *more.r);
+        more_shots[slot].n = more.n;
+        more_shots[slot].heap = more.fp;
     } else {
         st.nprev_drawn = 0;
         forget_shots();
@@ -844,6 +1038,8 @@ static void chain_break(void)
 {
     why_count(W_BREAK);
     wait_broken();
+    anchor.set = false;
+    last_site = -1;
     st.mode = NONE;
     st.same = 0;
     watch(false);
@@ -852,11 +1048,14 @@ static void chain_break(void)
     forget_shots();
 }
 
-/* Sleep until the next tick, a Time Manager task's time or input: a few
- * milliseconds at most, or four times as long as the iteration took the
- * host if that is longer (one computing for a while between its polls,
- * MegaSeg's, woke after each iteration's 2 ms as often as one of a few
- * instructions). */
+/* Sleep until the next tick, a Time Manager task's time or input.  While
+ * interrupt-time work must be kept up with (sound playing, I/O completing,
+ * a network open: machine_service_soon), a few milliseconds at most, or
+ * four times as long as the iteration took the host if that is longer (one
+ * computing for a while between its polls, MegaSeg's, woke after each
+ * iteration's 2 ms as often as one of a few instructions); with none, a
+ * program waiting at its main screen (MediaPresenter) no longer wakes 250
+ * times a second for nothing. */
 static void idle_sleep(void)
 {
     uint64_t now = machine_time_ns();
@@ -864,9 +1063,11 @@ static void idle_sleep(void)
     uint64_t until = tick, due = time_next_due();
     if (due && due < until)
         until = due;
-    uint64_t most = iteration_took > MAX_SLEEP_NS / 4 ? iteration_took * 4 : MAX_SLEEP_NS;
-    if (until > now + most)
-        until = now + most;
+    if (machine_service_soon()) {
+        uint64_t most = iteration_took > MAX_SLEEP_NS / 4 ? iteration_took * 4 : MAX_SLEEP_NS;
+        if (until > now + most)
+            until = now + most;
+    }
     if (until <= now)
         return;
     ev_idle_sleep(until - now);
@@ -959,11 +1160,13 @@ void idle_slice(void)
     if (calls != st.calls) {
         /* Calls in the slice: a poll loop's, its polls say; a long way from
          * the last poll, not a poll loop (only one calling nothing between
-         * its polls may run long). */
+         * its polls may run long), unless every call was a query (an
+         * interpreter's script between two of its polls: Frankenstein's
+         * runs 33000 instructions and 156 calls). */
         if (st.mode != POLLS) {
             chain_break();
             st.calls = calls;
-        } else if (executed() - st.at >= OWN_LOOP_AFTER) {
+        } else if (executed() - st.at >= (st.busy ? OWN_LOOP_AFTER : QUIET_RUN)) {
             chain_break();
         }
         return;
@@ -1215,6 +1418,12 @@ void idle_reset(void)
     memset(&st, 0, sizeof st);
     watch_after = SAME_BEFORE_WATCH;
     memset(sites, 0, sizeof sites);
+    memset(more_sites, 0, sizeof more_sites);
+    memset(site_seen, 0, sizeof site_seen);
+    memset(stretches, 0, sizeof stretches);
+    memset(two_ways, 0, sizeof two_ways);
+    last_site = -1;
+    anchor.set = false;
     memset(&more, 0, sizeof more);
     forget_shots();
     interrupt_depth = 0;
