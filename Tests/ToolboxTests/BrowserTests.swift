@@ -357,3 +357,31 @@ extension BlueBox {
         }
     }
 }
+
+@Suite("Browser type-select") struct BrowserTypeSelectTests {
+    @Test func matchesAsTheFinderDoes() {
+        let names = ["Zork", "apple", "Dropbox", "drawings", "File 10", "File 9", "Émile"]
+        #expect(TypeSelect.match("d", in: names) == 3) // "drawings" sorts before "Dropbox"
+        #expect(TypeSelect.match("dro", in: names) == 2)
+        #expect(TypeSelect.match("APP", in: names) == 1) // case doesn't matter
+        #expect(TypeSelect.match("emi", in: names) == 6) // nor accents
+        #expect(TypeSelect.match("file 1", in: names) == 4)
+        #expect(TypeSelect.match("c", in: names) == 3) // none starts so: the next one
+        #expect(TypeSelect.match("zz", in: names) == 0) // past them all: the last
+        #expect(TypeSelect.match("", in: names) == nil)
+        #expect(TypeSelect.match("a", in: []) == nil)
+    }
+
+    @Test func typingBuildsANameUntilAPause() {
+        var t = TypeSelect(timeout: 1)
+        #expect(t.feed("d", at: 10) == "d")
+        #expect(t.feed("r", at: 10.5) == "dr")
+        #expect(t.feed(" ", at: 10.8) == "dr ") // a space inside a name counts
+        #expect(t.feed("x", at: 12) == "x") // after a pause it starts again
+        #expect(t.feed(" ", at: 20) == nil) // but doesn't start one
+        #expect(t.feed("\u{F700}", at: 20.1) == nil) // arrow keys aren't letters
+        #expect(t.feed("\t", at: 20.2) == nil)
+        t.reset()
+        #expect(t.feed("q", at: 20.3) == "q")
+    }
+}

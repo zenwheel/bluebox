@@ -95,8 +95,12 @@ func sizeText(_ item: BrowserItem) -> String {
     var onOpen: (() -> Void)?
     var onMenu: ((NSEvent) -> NSMenu?)?
     var onRename: (() -> Void)?
+    /// Letters typed: the name so far (type-to-select).
+    var onType: ((String) -> Void)?
+    private var typeSelect = TypeSelect()
 
     override func mouseDown(with event: NSEvent) {
+        typeSelect.reset()
         super.mouseDown(with: event)
         if event.clickCount == 2 { onOpen?() }
     }
@@ -106,6 +110,12 @@ func sizeText(_ item: BrowserItem) -> String {
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36 || event.keyCode == 76 { onRename?(); return } // Return: rename, as in the Finder
         if event.modifierFlags.contains(.command), event.keyCode == 125 { onOpen?(); return } // Command-Down
+        if event.modifierFlags.intersection([.command, .control, .option]).isEmpty, let chars = event.characters,
+           let typed = typeSelect.feed(chars, at: event.timestamp) {
+            onType?(typed)
+            return
+        }
+        typeSelect.reset()
         super.keyDown(with: event)
     }
 }
@@ -137,6 +147,10 @@ func sizeText(_ item: BrowserItem) -> String {
         collection.setDraggingSourceOperationMask(.every, forLocal: true)
         collection.setDraggingSourceOperationMask([.copy, .move, .generic], forLocal: false)
         collection.onOpen = { [weak self] in self?.openSelection() }
+        collection.onType = { [weak self] typed in
+            guard let self, let i = TypeSelect.match(typed, in: self.items.map(\.name)) else { return }
+            self.select([self.items[i].path])
+        }
         collection.onRename = { [weak self] in
             guard let self, self.selectedItems.count == 1 else { return }
             self.delegate?.browserRename(self.selectedItems[0])
@@ -382,6 +396,12 @@ func sizeText(_ item: BrowserItem) -> String {
     }
 
     func outlineView(_ o: NSOutlineView, isItemExpandable item: Any) -> Bool { (item as? BrowserNode)?.item.isFolder ?? false }
+
+    /// Type-to-select matches the names (the outline view does the rest).
+    func outlineView(_ o: NSOutlineView, typeSelectStringFor col: NSTableColumn?, item: Any) -> String? {
+        guard col == nil || col?.identifier == Col.name else { return nil }
+        return (item as? BrowserNode)?.item.name
+    }
 
     func outlineViewItemDidExpand(_ note: Notification) {
         if let n = note.userInfo?["NSObject"] as? BrowserNode { expanded.insert(n.item.path) }
@@ -646,6 +666,11 @@ func sizeText(_ item: BrowserItem) -> String {
 
     func browser(_ b: NSBrowser, objectValueForItem item: Any?) -> Any? {
         (item as? BrowserColumnNode)?.item?.name ?? ""
+    }
+
+    /// Type-to-select matches the names, not the icon drawn before them.
+    func browser(_ b: NSBrowser, typeSelectStringForRow row: Int, inColumn column: Int) -> String? {
+        (b.item(atRow: row, inColumn: column) as? BrowserColumnNode)?.item?.name ?? ""
     }
 
     /// Each row drawn: its icon (as it is read) before its name, an
