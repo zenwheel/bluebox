@@ -850,8 +850,10 @@ int16_t tb_YieldToThread(int32_t suggested)
             tb_DisposePtr(rec);
         }
     }
-    if (i >= 0)
+    if (i >= 0) {
+        idle_work(); /* another thread's turn; with none ready, a yield is a query */
         switch_to(i, false);
+    }
     return noErr;
 }
 

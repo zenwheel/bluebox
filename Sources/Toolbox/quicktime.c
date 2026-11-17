@@ -1261,6 +1261,7 @@ static void task(movie *m)
     feed_music(m);
     /* A slaved movie goes where its master takes it, back again included. */
     if (!m->master && movie_done(m)) {
+        idle_work(); /* playing on, the frames it draws show; the end, or going round again, is news */
         if (m->looping) {
             m->base_ms = start_ms(m);
             if (m->player)

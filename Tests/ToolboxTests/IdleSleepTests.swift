@@ -403,6 +403,94 @@ extension BlueBox {
             #expect(Double(ticks) > r.wall * 60 * 0.8, "\(ticks) ticks in \(r.wall) s")
         }
 
+        // Region math (Sparkle's wait: the gray region copied, unioned and
+        // differenced each time round).  Two regions made first, their
+        // handles at -64(A5) and -68(A5).
+        let twoRegions = [0x42A7, 0xA8D8, 0x2B5F, 0xFFC0,      // CLR.L -(SP); _NewRgn; MOVE.L (SP)+,-64(A5)
+                          0x42A7, 0xA8D8, 0x2B5F, 0xFFBC]      // ... -68(A5)
+        /// SetRectRgn(first, 0, 0, 20, 10); UnionRgn(first, second, second);
+        /// DiffRgn(second, first, second)
+        let regionMath = [0x2F2D, 0xFFC0, 0x4267, 0x4267, 0x3F3C, 20, 0x3F3C, 10, 0xA8DE,
+                          0x2F2D, 0xFFC0, 0x2F2D, 0xFFBC, 0x2F2D, 0xFFBC, 0xA8E5,
+                          0x2F2D, 0xFFBC, 0x2F2D, 0xFFC0, 0x2F2D, 0xFFBC, 0xA8E6]
+
+        /// The same regions worked out again each time: nothing new.
+        @Test func regionMathTheSameEachTimeLetsTheHostSleep() throws {
+            let loop = regionMath + button
+            let r = try run(twoRegions + loop + [back(loop.count)])
+            #expect(!r.halted)
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// A region moving along (OffsetRgn), or one kept each time, is not.
+        @Test func aRegionMovingIsWork() throws {
+            let loop = [0x2F2D, 0xFFBC, 0x3F3C, 1, 0x4267, 0xA8E0] + button // OffsetRgn(second, 1, 0)
+            #expect(try run(twoRegions + loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        @Test func aRegionKeptEachTimeIsWork() throws {
+            let loop = [0x42A7, 0xA8D8, 0x588F] + button // CLR.L -(SP); _NewRgn; ADDQ.L #4,SP
+            #expect(try run(loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        @Test func aRegionMadeAndDisposedOfLetsTheHostSleep() throws {
+            let loop = [0x42A7, 0xA8D8, 0xA8D9] + button // NewRgn; DisposeRgn
+            let r = try run(loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// The resource file asked for and used again (Interiors'
+        /// CurResFile and UseResFile round each call).
+        @Test func theSameResourceFileUsedAgainLetsTheHostSleep() throws {
+            let loop = [0x4267, 0xA994, 0xA998] + button // UseResFile(CurResFile())
+            let r = try run(loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// The mouse read where it was, and nothing else: a poll (Interiors
+        /// watches it for a move between its picks).
+        @Test func aMouseThatStaysPutLetsTheHostSleep() throws {
+            let loop = [0x486D, 0xFFF0, 0xA972]         // GetMouse(-16(A5))
+            let r = try run(drawSetup + loop + [back(loop.count)])
+            #expect(!r.halted)
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// A Time Manager task removed, put in and primed again each time
+        /// round (Frankenstein's and Massive Projector's timing): nothing
+        /// new.  Its routine (an RTS at -112(A5)) never runs.
+        @Test func aTaskReprimedEachTimeLetsTheHostSleep() throws {
+            let setup = [0x7016, 0xA31E, 0x2B48, 0xFFA0,           // MOVEQ #22,D0; _NewPtrClear; MOVE.L A0,-96(A5)
+                         0x43ED, 0xFF90, 0x32BC, 0x4E75,           // LEA -112(A5),A1; MOVE.W #RTS,(A1)
+                         0x2149, 0x0006]                           // MOVE.L A1,tmAddr(A0)
+            let loop = [0x206D, 0xFFA0, 0xA059, 0xA058,            // MOVEA.L -96(A5),A0; _RmvTime; _InsTime
+                        0x203C, 0, 1000, 0xA05A] + button          // MOVE.L #1000,D0; _PrimeTime
+            let r = try run(setup + loop + [back(loop.count)])
+            #expect(!r.halted)
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// A loop storing the same into more places than the saved state
+        /// has room for (Interiors' wait stores to 96), in a block at
+        /// -96(A5): still the same.
+        let block = [0x203C, 0, 512, 0xA31E, 0x2B48, 0xFFA0]  // MOVE.L #512,D0; _NewPtrClear; MOVE.L A0,-96(A5)
+        let manyStores = [0x206D, 0xFFA0,                     // MOVEA.L -96(A5),A0
+                          0x323C, 95,                         // MOVE.W #95,D1
+                          0x20C2,                             // MOVE.L D2,(A0)+
+                          0x51C9, 0xFFFC]                     // DBRA D1,*-2
+
+        @Test func manyStoresTheSameLetTheHostSleep() throws {
+            let loop = manyStores + button
+            let r = try run(block + loop + [back(loop.count)])
+            #expect(r.sleeps > 20, "slept \(r.sleeps) times")
+        }
+
+        /// ... and a count kept beside them is still work.
+        @Test func aCountBesideManyStoresIsWork() throws {
+            let loop = manyStores + [0x52AD, 0xFFF8] + button // ADDQ.L #1,-8(A5)
+            #expect(try run(block + loop + [back(loop.count)]).sleeps == 0)
+        }
+
         /// A computation going round in a few registers, calling nothing.
         @Test func aComputationIsWork() throws {
             let loop = [0xD081, 0xE388, 0x5281]         // ADD.L D1,D0; LSL.L #1,D0; ADDQ.L #1,D1

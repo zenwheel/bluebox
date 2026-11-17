@@ -140,6 +140,7 @@ void idle_selector(const char *name); /* a dispatcher's routine */
 bool idle_poll(void);
 void idle_work(void);
 void idle_wrote(gaddr a, uint32_t len); /* a quiet call's answer, written into the program's memory */
+void idle_wrote_handle(gaddr h);        /* ... into a handle (a region) */
 uint64_t mm_heap_fingerprint(void);     /* the zones' shape, for idle.c (memmgr.c) */
 void idle_slice(void);
 void idle_interrupt_enter(void);

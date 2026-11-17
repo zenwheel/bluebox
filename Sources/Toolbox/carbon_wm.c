@@ -504,8 +504,10 @@ static void wm_GetWindowBounds(ppc_cpu *c)
     }
     int16_t err = noErr;
     qrect r = (uint16_t)R(1) == kWindowGlobalPortRgn ? global_port_rect(w) : region_bounds(w, (uint16_t)R(1), &err);
-    if (!err)
+    if (!err) {
         qrect_put(R(2), r);
+        idle_wrote(R(2), 8);
+    }
     RETURN((uint32_t)(int32_t)err);
 }
 

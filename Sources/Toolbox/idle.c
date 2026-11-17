@@ -72,7 +72,8 @@ enum {
     MOST_BEFORE_WATCH = 256, /* ... after watching found work again and again */
     MAX_RUN = 1000000,     /* instructions a poll loop's iteration may run */
     OWN_LOOP_AFTER = 20000, /* ... after which its slices may show a loop of its own, or calls end it */
-    MAX_STORES = 64,       /* places an idle iteration may store to */
+    MAX_STORES = 64,       /* places an idle iteration may store to, in the saved state ... */
+    MOST_STORES = 256,     /* ... and beside it (Interiors' wait stores to 96) */
     MAX_RANGES = 8,        /* ... and longer stretches a call wrote (BlockMove) */
     RANGE_FROM = 17,       /* bytes from which a call's answer is a stretch */
     RANGE_MOST = 65536,    /* bytes a stretch may have */
@@ -88,6 +89,9 @@ enum {
 };
 
 enum { NONE, POLLS, SLICES };
+
+/* What a call is (trap_kind's values: new ones go at the end): */
+enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK, HEAP };
 
 typedef struct {
     uint32_t r[36];
@@ -163,6 +167,7 @@ typedef struct {
     gaddr a;
     uint32_t len;
     uint64_t hash;
+    bool handle; /* a: a handle, its block whatever it is at the end (a region written) */
 } range;
 BB_HOST static struct {
     int n; /* -1: none yet in this wait */
@@ -207,6 +212,17 @@ static struct {
     uint64_t look;             /* the ports' state and the colours shown, hashed */
 } st;
 
+/* The stores past the saved state's room, the iteration's and each
+ * shot's. */
+BB_HOST static store st_more_stores[MOST_STORES - MAX_STORES];
+BB_HOST static store shot_more_stores[NSITES + 1][MOST_STORES - MAX_STORES];
+
+static store *st_store(int i) { return i < MAX_STORES ? &st.stores[i] : &st_more_stores[i - MAX_STORES]; }
+static store *shot_store(int site, int i)
+{
+    return i < MAX_STORES ? &shots[site].stores[i] : &shot_more_stores[site][i - MAX_STORES];
+}
+
 bool g_qd_drawn_watch;
 
 /* Idle iterations in a row before the stores are watched: more each time
@@ -237,6 +253,7 @@ static uint32_t pc_now(void);
 /* BLUEBOX_IDLE_WHY=1 with --log idle: each second of the program's time
  * with no sleep, why its iterations weren't idle (for finding the loops
  * this doesn't recognise). */
+enum { WHY_NAMES = 16 }; /* the calls named */
 enum { W_MODE, W_WORK, W_NEWSITE, W_REGS, W_LONG, W_FAR, W_HW, W_STORES, W_PIXELS, W_UNKNOWN, W_BREAK, W_SLEPT, W_N };
 static const char *const why_names[W_N] = { "first", "work", "new site", "registers", "long", "far", "device", "stores",
                                              "pixels", "unwatched", "broken", "slept" };
@@ -244,9 +261,11 @@ BB_HOST static struct {
     int on; /* -1: not yet asked */
     uint64_t since;
     uint64_t n[W_N];
-    const char *name[8];
-    uint64_t count[8];
+    const char *name[WHY_NAMES];
+    uint64_t count[WHY_NAMES];
     uint64_t reg[36]; /* the registers that differed */
+    gaddr store;      /* the last place whose store differed */
+    bool overflow;    /* ... or too many places stored to */
 } why = { -1 };
 
 static void why_regs(const regs *was, const regs *now)
@@ -262,7 +281,7 @@ static void why_work(const char *name)
     if (why.on <= 0)
         return;
     name = name ? name : "?";
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < WHY_NAMES; i++)
         if (!why.name[i] || why.name[i] == name || !strcmp(why.name[i], name)) {
             why.name[i] = name;
             why.count[i]++;
@@ -283,16 +302,20 @@ static void why_count(int w)
     if (now - why.since < 1000000000u)
         return;
     if (!why.n[W_SLEPT]) {
-        char buf[640];
+        char buf[1024];
         int k = snprintf(buf, sizeof buf, "idle: why at %08X (%s):", pc_now(), g_ppc_mode ? "ppc" : "68k");
         for (int i = 0; i < W_N && k < (int)sizeof buf; i++)
             if (why.n[i])
                 k += snprintf(buf + k, sizeof buf - (size_t)k, " %s %llu", why_names[i], (unsigned long long)why.n[i]);
-        for (int i = 0; i < 8 && why.name[i] && k < (int)sizeof buf; i++)
+        for (int i = 0; i < WHY_NAMES && why.name[i] && k < (int)sizeof buf; i++)
             k += snprintf(buf + k, sizeof buf - (size_t)k, "%s%s %llu", i ? ", " : " (", why.name[i],
                           (unsigned long long)why.count[i]);
         if (why.name[0] && k < (int)sizeof buf)
             k += snprintf(buf + k, sizeof buf - (size_t)k, ")");
+        if (why.store && k < (int)sizeof buf)
+            k += snprintf(buf + k, sizeof buf - (size_t)k, " store at %08X", why.store);
+        if (why.overflow && k < (int)sizeof buf)
+            k += snprintf(buf + k, sizeof buf - (size_t)k, " stores to too many places");
         for (int i = 0; i < 36 && k < (int)sizeof buf; i++)
             if (why.reg[i] > why.n[W_REGS] / 2)
                 k += snprintf(buf + k, sizeof buf - (size_t)k, " %s%d",
@@ -303,6 +326,8 @@ static void why_count(int w)
     memset(why.name, 0, sizeof why.name);
     memset(why.count, 0, sizeof why.count);
     memset(why.reg, 0, sizeof why.reg);
+    why.store = 0;
+    why.overflow = false;
     why.since = now;
 }
 
@@ -356,20 +381,27 @@ static void store_seen(gaddr a, uint32_t len)
         return;
     if (a < st.sp && st.sp - a <= STACK_SCRATCH)
         return;
+    if (st.overflow)
+        return;
     if (len > 4)
         len = 4;
-    for (int i = 0; i < st.nstores; i++)
-        if (st.stores[i].a == a) {
-            if (len > st.stores[i].len)
-                st.stores[i].len = len;
+    BB_HOST static int last;
+    for (int i = last < st.nstores && st_store(last)->a == a ? last : 0; i < st.nstores; i++) {
+        store *s = st_store(i);
+        if (s->a == a) {
+            if (len > s->len)
+                s->len = len;
+            last = i + 1;
             return;
         }
-    if (st.nstores == MAX_STORES) {
+    }
+    if (st.nstores == MOST_STORES) {
         st.overflow = true;
         return;
     }
-    st.stores[st.nstores].a = a;
-    st.stores[st.nstores++].len = len;
+    st_store(st.nstores)->a = a;
+    st_store(st.nstores++)->len = len;
+    last = st.nstores;
 }
 
 /* A quiet call's answer written into the program's memory (a point
@@ -378,6 +410,8 @@ static void store_seen(gaddr a, uint32_t len)
  * another is work. */
 void idle_wrote(gaddr a, uint32_t len)
 {
+    if (!a)
+        return; /* no place given for the answer */
     if (len < RANGE_FROM) {
         for (uint32_t k = 0; k < len; k += 4)
             store_seen(a + k, len - k < 4 ? len - k : 4);
@@ -386,12 +420,34 @@ void idle_wrote(gaddr a, uint32_t len)
     if (!st.watching || in_interrupt())
         return;
     for (int i = 0; i < more.n; i++)
-        if (more.r[i].a == a && more.r[i].len == len)
+        if (!more.r[i].handle && more.r[i].a == a && more.r[i].len == len)
             return;
     if (more.n == MAX_RANGES || len > RANGE_MOST)
         more.overflow = true;
     else
-        more.r[more.n++] = (range){ a, len, 0 };
+        more.r[more.n++] = (range){ a, len, 0, false };
+}
+
+/* The kind of the program's call going on (call_kind). */
+BB_HOST static uint8_t call_now;
+
+/* A quiet call's answer written into a handle (CopyRgn, UnionRgn,
+ * GetPortVisibleRegion: a region): its block is compared at the
+ * iteration's end, wherever it then is, and the heaps' shape with it (the
+ * handle may have grown).  Only for the program's own call: the same
+ * routines inside a drawing call work on regions of their own. */
+void idle_wrote_handle(gaddr h)
+{
+    if (!h || !st.watching || in_interrupt() || call_now != QUIET)
+        return;
+    more.heap = true;
+    for (int i = 0; i < more.n; i++)
+        if (more.r[i].handle && more.r[i].a == h)
+            return;
+    if (more.n == MAX_RANGES)
+        more.overflow = true;
+    else
+        more.r[more.n++] = (range){ h, 0, 0, true };
 }
 
 /* Whether this iteration's stores left memory as the last one's did (a
@@ -403,22 +459,26 @@ static int stores_verdict(int site)
 {
     if (!st.watched)
         return UNKNOWN;
-    if (st.overflow)
+    if (st.overflow) {
+        why.overflow = true;
         return CHANGED;
+    }
     const int n = shots[site].n < 0 ? -1 : shots[site].nstores;
-    const store *prev = shots[site].stores;
     int verdict = n < 0 ? UNKNOWN : SAME;
     for (int i = 0; i < st.nstores; i++) {
-        store *s = &st.stores[i];
+        store *s = st_store(i);
         for (uint32_t k = 0; k < s->len; k++)
             s->v[k] = rd8(s->a + k);
         if (verdict != SAME)
             continue;
-        int j = 0;
-        while (j < n && (prev[j].a != s->a || prev[j].len != s->len))
+        /* In the same order as last time, as a rule. */
+        int j = i < n && shot_store(site, i)->a == s->a ? i : 0;
+        while (j < n && (shot_store(site, j)->a != s->a || shot_store(site, j)->len != s->len))
             j++;
-        if (j == n || memcmp(prev[j].v, s->v, s->len))
+        if (j == n || memcmp(shot_store(site, j)->v, s->v, s->len)) {
             verdict = CHANGED;
+            why.store = s->a;
+        }
     }
     return verdict;
 }
@@ -622,6 +682,17 @@ static int drawn_verdict(int site)
     return SAME;
 }
 
+static uint64_t hash_range(const range *r)
+{
+    const uint64_t h = 0x9E3779B97F4A7C15ull;
+    if (!r->handle)
+        return hash_guest(h, r->a, r->len);
+    if (!mm_handle_valid(r->a) || !rd32(r->a))
+        return h ^ 3; /* disposed of, or empty */
+    int32_t n = tb_GetHandleSize(r->a);
+    return n < 0 || n > RANGE_MOST ? h ^ 5 : hash_guest(h ^ (uint64_t)n, rd32(r->a), (uint32_t)n);
+}
+
 /* Whether the stretches calls wrote, and the heaps' shape if the
  * iteration made or disposed of blocks, are as the last one left them. */
 static int more_verdict(int site)
@@ -634,7 +705,7 @@ static int more_verdict(int site)
     if (more.heap && !more.fp)
         return CHANGED;
     for (int i = 0; i < more.n; i++)
-        more.r[i].hash = hash_guest(0x9E3779B97F4A7C15ull, more.r[i].a, more.r[i].len);
+        more.r[i].hash = hash_range(&more.r[i]);
     const int n = more_shots[site].n;
     if (n < 0)
         return UNKNOWN;
@@ -642,7 +713,8 @@ static int more_verdict(int site)
         return CHANGED;
     for (int i = 0; i < more.n; i++) {
         int j = 0;
-        while (j < n && (more_shots[site].r[j].a != more.r[i].a || more_shots[site].r[j].len != more.r[i].len))
+        while (j < n && (more_shots[site].r[j].a != more.r[i].a || more_shots[site].r[j].len != more.r[i].len ||
+                         more_shots[site].r[j].handle != more.r[i].handle))
             j++;
         if (j == n || more_shots[site].r[j].hash != more.r[i].hash)
             return CHANGED;
@@ -731,7 +803,8 @@ static bool iteration_end(int mode)
         watch_after = SAME_BEFORE_WATCH;
     watch(st.same >= watch_after);
     if (idle && st.watched) {
-        memcpy(shots[site].stores, st.stores, (size_t)st.nstores * sizeof *st.stores);
+        for (int i = 0; i < st.nstores; i++)
+            *shot_store(site, i) = *st_store(i);
         shots[site].nstores = st.nstores;
         memcpy(st.prev_drawn, st.drawn, (size_t)st.ndrawn * sizeof *st.drawn);
         st.nprev_drawn = st.ndrawn;
@@ -945,12 +1018,21 @@ static const char *quiet_names[] = {
  * to handle, not a null one; HideControl a control shown).  In order, for
  * bsearch. */
 static const char *const answer_names[] = {
-    "ActivateControl", "AddPt", "BlockMove", "BlockMoveData", "CheckItem", "DeactivateControl", "DialogSelect",
-    "DisableItem", "EnableItem", "FindWindow", "GetControlData", "GetDialogItem", "GetDialogItemAsControl",
-    "GetKeyboardFocus", "GlobalToLocal", "HideControl", "InsetRect", "LocalToGlobal", "MapPt", "MapRect",
-    "NumToString", "OffsetRect", "Pt2Rect", "PtToAngle", "ScalePt", "SectRect", "SetControlValue", "SetItemCmd",
-    "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "ShowControl", "SndChannelStatus", "StdFilterProc", "SubPt",
-    "TEIdle", "UnionRect",
+    "ActivateControl", "AddPt", "BlockMove", "BlockMoveData", "CheckItem", "CopyRgn", "DeactivateControl",
+    "DialogSelect", "DiffRgn", "DisableItem", "EnableItem", "FindControlUnderMouse", "FindWindow",
+    "GetControlBounds", "GetControlCommandID", "GetControlData", "GetControlProperty", "GetDialogItem",
+    "GetDialogItemAsControl", "GetKeyboardFocus", "GetListCellIndent", "GetListCellSize", "GetListClickLocation",
+    "GetListDataBounds", "GetListMouseLocation", "GetListViewBounds", "GetListVisibleCells", "GetPixBounds",
+    "GetPortBackColor", "GetPortBounds", "GetPortClipRegion", "GetPortForeColor", "GetPortHiliteColor",
+    "GetPortOpColor", "GetPortPenLocation", "GetPortPenSize", "GetPortVisibleRegion", "GetQDGlobalsArrow",
+    "GetQDGlobalsBlack", "GetQDGlobalsDarkGray", "GetQDGlobalsGray", "GetQDGlobalsLightGray",
+    "GetQDGlobalsScreenBits", "GetQDGlobalsWhite", "GetRegionBounds", "GetRootControl", "GetWindowBounds",
+    "GetWindowProperty", "GlobalToLocal", "HideControl", "InsTime", "InsXTime", "InsetRect", "InsetRgn",
+    "LocalToGlobal", "MapPt", "MapRect", "MapRgn", "NumToString", "OffsetRect", "OffsetRgn", "PrimeTime", "Pt2Rect",
+    "PtToAngle", "RectRgn", "RmvTime", "ScalePt", "SectRect", "SectRgn", "SetControlValue", "SetEmptyRgn",
+    "SetItemCmd", "SetItemMark", "SetItemStyle", "SetPt", "SetRect", "SetRectRgn", "ShowControl",
+    "SndChannelStatus", "StdFilterProc", "StringToNum", "SubPt", "TEIdle", "UnionRect", "UnionRgn", "UseResFile",
+    "XorRgn",
 };
 
 /* More calls with no lasting effect (beside quiet_names, whose size is
@@ -959,9 +1041,24 @@ static const char *const answer_names[] = {
  * watched as any; IdleControls's control definitions likewise, or ours,
  * whose drawing shows in the pixels).  In order, for bsearch. */
 static const char *const query_names[] = {
-    "CallOSTrapUniversalProc", "CallUniversalProc", "FindDialogItem", "FreeMem", "GetControlOwner", "GetEvQHdr",
-    "HMGetBalloons", "HMIsBalloon", "HPurge", "IUMagIDString", "IUMagString", "IdleControls", "InfoScrap",
-    "IsControlActive", "IsControlHilited", "IsControlVisible", "MaxBlock", "Mixed Mode return", "StackSpace",
+    "CallOSTrapUniversalProc", "CallUniversalProc", "CheckUpdate", "CurResFile", "FindDialogItem", "FreeMem",
+    "GetControl32BitMaximum", "GetControl32BitMinimum", "GetControl32BitValue", "GetControlAction",
+    "GetControlDataHandle", "GetControlHilite", "GetControlMaximum", "GetControlMinimum", "GetControlOwner",
+    "GetControlReference", "GetControlVariant", "GetDialogCancelItem", "GetDialogDefaultItem",
+    "GetDialogFromWindow", "GetDialogKeyboardFocusItem", "GetDialogPort", "GetDialogWindow", "GetEvQHdr",
+    "GetFrontWindowOfClass", "GetGrayRgn", "GetListActive", "GetListClickLoop", "GetListClickTime",
+    "GetListDataHandle", "GetListDefinition", "GetListFlags", "GetListHorizontalScrollBar", "GetListPort",
+    "GetListRefCon", "GetListSelectionFlags", "GetListUserHandle", "GetListVerticalScrollBar", "GetNextWindow",
+    "GetNextWindowOfClass", "GetPixDepth", "GetPortChExtra", "GetPortFracHPenLocation", "GetPortGrafProcs",
+    "GetPortPenMode", "GetPortPenVisibility", "GetPortSpExtra", "GetPortTextFace", "GetPortTextFont",
+    "GetPortTextMode", "GetPortTextSize", "GetQDGlobalsRandomSeed", "GetWindowFromPort", "GetWindowKind",
+    "GetWindowList", "GetWindowPic", "GetWindowStructurePort", "HMGetBalloons", "HMIsBalloon", "HPurge",
+    "IUMagIDString", "IUMagString", "IdleControls", "InfoScrap", "IsControlActive", "IsControlHilited",
+    "IsControlVisible", "IsMovieDone", "IsPortClipRegionEmpty", "IsPortColor", "IsPortOffscreen",
+    "IsPortPictureBeingDefined", "IsPortPolyBeingDefined", "IsPortRegionBeingDefined", "IsPortVisibleRegionEmpty",
+    "IsRegionRectangular", "IsValidPort", "IsWindowActive", "IsWindowHilited", "IsWindowUpdatePending",
+    "IsWindowVisible", "MaxBlock", "Mixed Mode return", "MoviesTask", "SetPortWindowPort", "SetThemeCursor",
+    "StackSpace", "YieldToAnyThread", "YieldToThread",
 };
 
 /* Calls that make or dispose of blocks, or move or resize them: what they
@@ -970,8 +1067,8 @@ static const char *const query_names[] = {
  * leaves it as it was); what they copy, HandToHand says.  In order, for
  * bsearch. */
 static const char *const heap_names[] = {
-    "DisposeHandle", "DisposePtr", "HandToHand", "MoveHHi", "NewHandle", "NewHandleClear", "NewPtr", "NewPtrClear",
-    "SetHandleSize", "SetPtrSize",
+    "DisposeHandle", "DisposePtr", "DisposeRgn", "HandToHand", "MoveHHi", "NewHandle", "NewHandleClear", "NewPtr",
+    "NewPtrClear", "NewRgn", "SetHandleSize", "SetPtrSize",
 };
 
 /* Drawing, and the port and colour settings it is done with: what they
@@ -1008,9 +1105,6 @@ static bool in_list(const char *name, const char **list, size_t n)
     }
     return name && bsearch(&name, list, n, sizeof *list, by_name) != NULL;
 }
-
-/* What a call is: */
-enum { UNSEEN, QUIET, DRAWS, SELECTOR, WORK, HEAP };
 
 static uint8_t kind_of(const char *name)
 {
@@ -1053,6 +1147,7 @@ static void drawing(void)
 
 static void call_kind(uint8_t kind, const char *name)
 {
+    call_now = kind;
     if (kind == WORK) {
         st.busy = true;
         why_work(name);
@@ -1072,6 +1167,7 @@ void idle_trap(uint16_t op, bool by_selector)
     if (in_interrupt())
         return;
     calls++;
+    call_now = UNSEEN;
     if (by_selector)
         return; /* a dispatcher of ours (SoundDispatch, Pack7 ...): idle_selector says */
     unsigned k = (op & 0x0800) ? 1024 + (op & 0x3FFu) : (op & 0xFFu);

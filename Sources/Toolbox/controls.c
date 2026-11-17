@@ -1205,6 +1205,7 @@ int16_t tb_GetRootControl(gaddr w, gaddr out)
     gaddr root = ctl_window_root(w);
     if (out)
         wr32(out, root);
+    idle_wrote(out, 4);
     return root ? noErr : errNoRootControl;
 }
 
@@ -1829,6 +1830,7 @@ gaddr tb_FindControlUnderMouse(uint32_t p, gaddr w, gaddr partp)
         best = ctl_window_root(w);
     if (best && partp)
         wr16(partp, (uint16_t)tb_TestControl(best, p));
+    idle_wrote(partp, 2);
     return best;
 }
 

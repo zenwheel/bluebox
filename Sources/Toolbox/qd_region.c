@@ -487,6 +487,7 @@ void tb_CopyRgn(gaddr s, gaddr d)
 {
     if (s == d || !d)
         return;
+    idle_wrote_handle(d);
     /* A region that isn't one (a disposed port's clipRgn, whose size is an
      * error, which as a length ran past guest memory: Internet Explorer 4's
      * GetClip in a rootless run) copies as an empty one. */
@@ -505,6 +506,7 @@ void tb_SetEmptyRgn(gaddr rh) { tb_SetRectRgn(rh, 0, 0, 0, 0); }
 
 void tb_SetRectRgn(gaddr rh, int16_t left, int16_t top, int16_t right, int16_t bottom)
 {
+    idle_wrote_handle(rh);
     hrgn r;
     hrgn_init(&r);
     hrgn_rect(&r, (qrect){ top, left, bottom, right });
@@ -527,6 +529,7 @@ void tb_OffsetRgn(gaddr rh, int16_t dh, int16_t dv)
      * draws, which wrote into the system heap. */
     if (!rh || !rd32(rh))
         return;
+    idle_wrote_handle(rh);
     gaddr p = rd32(rh);
     uint16_t size = rd16(p);
     qrect b = qrect_get(p + 2);
@@ -558,6 +561,7 @@ void tb_OffsetRgn(gaddr rh, int16_t dh, int16_t dv)
 
 void tb_InsetRgn(gaddr rh, int16_t dh, int16_t dv)
 {
+    idle_wrote_handle(rh);
     hrgn r;
     hrgn_init(&r);
     rgn_read(rh, &r);
@@ -568,6 +572,7 @@ void tb_InsetRgn(gaddr rh, int16_t dh, int16_t dv)
 
 static void rgn_op_trap(gaddr s1, gaddr s2, gaddr dest, int op)
 {
+    idle_wrote_handle(dest);
     hrgn a, b;
     hrgn_init(&a);
     hrgn_init(&b);

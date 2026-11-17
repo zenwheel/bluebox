@@ -144,6 +144,7 @@ static void qd_GetPortBounds(ppc_cpu *c)
 {
     if (R(0) && R(1))
         gmemcpy(R(1), R(0) + GrafPort_portRect_off, 8);
+    idle_wrote(R(1), 8);
     RETURN(R(1));
 }
 
@@ -187,6 +188,7 @@ static void qd_GetPortForeColor(ppc_cpu *c)
 {
     if (R(0) && R(1))
         ON_PORT(R(0), tb_GetForeColor(R(1)));
+    idle_wrote(R(1), 6);
     RETURN(R(1));
 }
 
@@ -194,6 +196,7 @@ static void qd_GetPortBackColor(ppc_cpu *c)
 {
     if (R(0) && R(1))
         ON_PORT(R(0), tb_GetBackColor(R(1)));
+    idle_wrote(R(1), 6);
     RETURN(R(1));
 }
 
@@ -205,6 +208,7 @@ static void qd_GetPortOpColor(ppc_cpu *c)
         for (int i = 0; i < 3; i++)
             wr16(R(1) + (uint32_t)i * 2, rgb[i]);
     }
+    idle_wrote(R(1), 6);
     RETURN(R(1));
 }
 
@@ -221,6 +225,7 @@ static void qd_GetPortHiliteColor(ppc_cpu *c)
     gaddr gv = R(0) ? graf_vars(R(0)) : 0;
     if (R(1))
         gmemcpy(R(1), gv ? gv + 6 : LM_HiliteRGB, 6);
+    idle_wrote(R(1), 6);
     RETURN(R(1));
 }
 
@@ -291,6 +296,7 @@ static void qd_GetPortPenLocation(ppc_cpu *c)
 {
     if (R(0) && R(1))
         wr32(R(1), rd32(R(0) + GrafPort_pnLoc_off));
+    idle_wrote(R(1), 4);
     RETURN(R(1));
 }
 
@@ -298,6 +304,7 @@ static void qd_GetPortPenSize(ppc_cpu *c)
 {
     if (R(0) && R(1))
         wr32(R(1), rd32(R(0) + GrafPort_pnSize_off));
+    idle_wrote(R(1), 4);
     RETURN(R(1));
 }
 
@@ -461,6 +468,7 @@ static void qd_GetPixBounds(ppc_cpu *c)
 {
     if (R(0) && rd32(R(0)) && R(1))
         gmemcpy(R(1), rd32(R(0)) + PixMap_bounds_off, 8);
+    idle_wrote(R(1), 8);
     RETURN(R(1));
 }
 
@@ -470,6 +478,7 @@ static void qd_GetRegionBounds(ppc_cpu *c)
 {
     if (R(0) && rd32(R(0)) && R(1))
         gmemcpy(R(1), rd32(R(0)) + 2, 8);
+    idle_wrote(R(1), 8);
     RETURN(R(1));
 }
 
@@ -647,6 +656,7 @@ static void copy_global(ppc_cpu *c, uint32_t off, uint32_t size)
     gaddr g = qd_globals();
     if (g && R(0))
         gmemcpy(R(0), g + off, size);
+    idle_wrote(R(0), size);
     RETURN(R(0));
 }
 

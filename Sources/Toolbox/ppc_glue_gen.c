@@ -7,6 +7,8 @@
 #include "ppc_bridge.h"
 #include "tb_protos_gen.h"
 
+void idle_wrote(gaddr a, uint32_t len); /* idle.c: a call's answer */
+
 static void ppcglue_ADBReInit(ppc_cpu *c)
 {
     tb_ADBReInit();
@@ -36432,7 +36434,10 @@ static void ppctrap_StringToNum(ppc_cpu *c)
     gaddr o_lp = c->gpr[4];
     ppc_trap_push(2, 0x1);
     ppc_trap((uint16_t)(0xA9EE));
-    if (o_lp) wr32(o_lp, ppc_trap_get(0));
+    if (o_lp) {
+        wr32(o_lp, ppc_trap_get(0));
+        idle_wrote(o_lp, 4);
+    }
     ppc_trap_end();
     c->pc = c->lr;
 }
@@ -37244,7 +37249,10 @@ static void ppctrap_Gestalt(ppc_cpu *c)
     ppc_trap_set(0, c->gpr[3]);
     gaddr o_responsep = c->gpr[4];
     ppc_trap((uint16_t)(0xA1AD));
-    if (o_responsep) wr32(o_responsep, ppc_trap_get(8));
+    if (o_responsep) {
+        wr32(o_responsep, ppc_trap_get(8));
+        idle_wrote(o_responsep, 4);
+    }
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -37258,7 +37266,10 @@ static void ppctrap_ReplaceGestalt(ppc_cpu *c)
     ppc_trap_set(8, c->gpr[4]);
     gaddr o_oldSelFuncp = c->gpr[5];
     ppc_trap((uint16_t)(0xA1AD));
-    if (o_oldSelFuncp) wr32(o_oldSelFuncp, ppc_trap_get(8));
+    if (o_oldSelFuncp) {
+        wr32(o_oldSelFuncp, ppc_trap_get(8));
+        idle_wrote(o_oldSelFuncp, 4);
+    }
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -37295,7 +37306,10 @@ static void ppctrap_MaxMem(ppc_cpu *c)
     ppc_trap_begin();
     gaddr o_growp = c->gpr[3];
     ppc_trap((uint16_t)(0xA11D));
-    if (o_growp) wr32(o_growp, ppc_trap_get(8));
+    if (o_growp) {
+        wr32(o_growp, ppc_trap_get(8));
+        idle_wrote(o_growp, 4);
+    }
     uint32_t r = ppc_trap_get(0);
     ppc_trap_end();
     c->gpr[3] = r;
@@ -37307,7 +37321,10 @@ static void ppctrap_MaxMemSys(ppc_cpu *c)
     ppc_trap_begin();
     gaddr o_growp = c->gpr[3];
     ppc_trap((uint16_t)(0xA11D | 0x400));
-    if (o_growp) wr32(o_growp, ppc_trap_get(8));
+    if (o_growp) {
+        wr32(o_growp, ppc_trap_get(8));
+        idle_wrote(o_growp, 4);
+    }
     uint32_t r = ppc_trap_get(0);
     ppc_trap_end();
     c->gpr[3] = r;
@@ -37320,8 +37337,14 @@ static void ppctrap_PurgeSpace(ppc_cpu *c)
     gaddr o_totalp = c->gpr[3];
     gaddr o_contigp = c->gpr[4];
     ppc_trap((uint16_t)(0xA162));
-    if (o_totalp) wr32(o_totalp, ppc_trap_get(0));
-    if (o_contigp) wr32(o_contigp, ppc_trap_get(8));
+    if (o_totalp) {
+        wr32(o_totalp, ppc_trap_get(0));
+        idle_wrote(o_totalp, 4);
+    }
+    if (o_contigp) {
+        wr32(o_contigp, ppc_trap_get(8));
+        idle_wrote(o_contigp, 4);
+    }
     ppc_trap_end();
     c->pc = c->lr;
 }
@@ -37332,8 +37355,14 @@ static void ppctrap_PurgeSpaceSys(ppc_cpu *c)
     gaddr o_totalp = c->gpr[3];
     gaddr o_contigp = c->gpr[4];
     ppc_trap((uint16_t)(0xA162 | 0x400));
-    if (o_totalp) wr32(o_totalp, ppc_trap_get(0));
-    if (o_contigp) wr32(o_contigp, ppc_trap_get(8));
+    if (o_totalp) {
+        wr32(o_totalp, ppc_trap_get(0));
+        idle_wrote(o_totalp, 4);
+    }
+    if (o_contigp) {
+        wr32(o_contigp, ppc_trap_get(8));
+        idle_wrote(o_contigp, 4);
+    }
     ppc_trap_end();
     c->pc = c->lr;
 }
@@ -37352,7 +37381,10 @@ static void ppctrap_HandToHand(ppc_cpu *c)
     gaddr o_h = c->gpr[3];
     ppc_trap_set(8, o_h ? rd32(o_h) : 0);
     ppc_trap((uint16_t)(0xA9E1));
-    if (o_h) wr32(o_h, ppc_trap_get(8));
+    if (o_h) {
+        wr32(o_h, ppc_trap_get(8));
+        idle_wrote(o_h, 4);
+    }
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -37366,7 +37398,10 @@ static void ppctrap_PtrToHand(ppc_cpu *c)
     gaddr o_h = c->gpr[4];
     ppc_trap_set(0, c->gpr[5]);
     ppc_trap((uint16_t)(0xA9E3));
-    if (o_h) wr32(o_h, ppc_trap_get(8));
+    if (o_h) {
+        wr32(o_h, ppc_trap_get(8));
+        idle_wrote(o_h, 4);
+    }
     uint32_t r = (uint32_t)((int32_t)(int16_t)(ppc_trap_get(0)));
     ppc_trap_end();
     c->gpr[3] = r;
@@ -37379,7 +37414,10 @@ static void ppctrap_DateToSeconds(ppc_cpu *c)
     ppc_trap_set(8, c->gpr[3]);
     gaddr o_s = c->gpr[4];
     ppc_trap((uint16_t)(0xA9C7));
-    if (o_s) wr32(o_s, ppc_trap_get(0));
+    if (o_s) {
+        wr32(o_s, ppc_trap_get(0));
+        idle_wrote(o_s, 4);
+    }
     ppc_trap_end();
     c->pc = c->lr;
 }
@@ -37390,7 +37428,10 @@ static void ppctrap_Delay(ppc_cpu *c)
     ppc_trap_set(8, c->gpr[3]);
     gaddr o_ftp = c->gpr[4];
     ppc_trap((uint16_t)(0xA03B));
-    if (o_ftp) wr32(o_ftp, ppc_trap_get(0));
+    if (o_ftp) {
+        wr32(o_ftp, ppc_trap_get(0));
+        idle_wrote(o_ftp, 4);
+    }
     ppc_trap_end();
     c->pc = c->lr;
 }
@@ -37401,7 +37442,10 @@ static void ppctrap_SwapMMUMode(ppc_cpu *c)
     gaddr o_bp = c->gpr[3];
     ppc_trap_set(0, o_bp ? rd32(o_bp) : 0);
     ppc_trap((uint16_t)(0xA05D));
-    if (o_bp) wr32(o_bp, ppc_trap_get(0));
+    if (o_bp) {
+        wr32(o_bp, ppc_trap_get(0));
+        idle_wrote(o_bp, 4);
+    }
     ppc_trap_end();
     c->pc = c->lr;
 }
@@ -39443,7 +39487,10 @@ static void ppctrap_GetScaledBatteryInfo(ppc_cpu *c)
     ppc_trap_set(0, (ppc_trap_get(0) & 0xFFFF) | (c->gpr[3] << 16));
     gaddr o_theInfo = c->gpr[4];
     ppc_trap((uint16_t)(0xA09E));
-    if (o_theInfo) wr32(o_theInfo, ppc_trap_get(0));
+    if (o_theInfo) {
+        wr32(o_theInfo, ppc_trap_get(0));
+        idle_wrote(o_theInfo, 4);
+    }
     ppc_trap_end();
     c->pc = c->lr;
 }

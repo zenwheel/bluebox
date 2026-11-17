@@ -67,8 +67,27 @@ static void ins_time(gaddr tm, bool extended)
         }
 }
 
-void tb_InsTime(gaddr taskp) { ins_time(taskp, false); }
-void tb_InsXTime(gaddr taskp) { ins_time(taskp, true); }
+/* What a call leaves in the task, for idle.c: a loop re-arming the same
+ * task the same way each time round is nothing new.  The time left that
+ * RmvTime gives back is a reading of the clock, as TickCount's is: what
+ * the program does with it shows. */
+static void tm_wrote(gaddr tm)
+{
+    if (tm)
+        idle_wrote(tm + TMTask_qType_off, 2);
+}
+
+void tb_InsTime(gaddr taskp)
+{
+    ins_time(taskp, false);
+    tm_wrote(taskp);
+}
+
+void tb_InsXTime(gaddr taskp)
+{
+    ins_time(taskp, true);
+    tm_wrote(taskp);
+}
 
 /* count > 0: milliseconds; count < 0: microseconds, negated. */
 static uint64_t count_ns(int32_t count)
@@ -88,6 +107,7 @@ void tb_PrimeTime(gaddr taskp, int32_t count)
     timers[i].due = base + count_ns(count);
     timers[i].active = true;
     wr16(taskp + TMTask_qType_off, rd16(taskp + TMTask_qType_off) | TM_ACTIVE);
+    tm_wrote(taskp);
 }
 
 void tb_RmvTime(gaddr taskp)
@@ -113,6 +133,7 @@ void tb_RmvTime(gaddr taskp)
     wr32(taskp + TMTask_tmCount_off, (uint32_t)left);
     wr16(taskp + TMTask_qType_off, rd16(taskp + TMTask_qType_off) & (uint16_t)~TM_ACTIVE);
     memset(&timers[i], 0, sizeof timers[i]);
+    tm_wrote(taskp);
 }
 
 /* The VBL queue in low memory (VBLQueue: qFlags, qHead, qTail), which
