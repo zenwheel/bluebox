@@ -48,7 +48,7 @@ final class BrowserFilePromise: NSFilePromiseProvider {
     static let shared = BrowserDrag()
     /// The paths of the items a browser drags (also on the pasteboard by
     /// Copy), so a drop in a browser moves the originals.
-    nonisolated static let pathsType = NSPasteboard.PasteboardType("com.bluebox.browser-paths")
+    nonisolated static let pathsType = NSPasteboard.PasteboardType(BrowserPaths.pasteboardType)
 
     private var dragging: [String] = []
     private let promiseQueue: OperationQueue = {

@@ -12,6 +12,7 @@
 #if canImport(AppKit)
 import AppKit
 import BlueBoxHost
+import Quartz
 import UniformTypeIdentifiers
 
 /// What a browser view tells its window.
@@ -28,6 +29,11 @@ import UniformTypeIdentifiers
     func browserChildren(of folder: String) -> [BrowserItem]
     func browserNavigate(to folder: String)
     func browserRename(_ item: BrowserItem)
+    /// A click on the name of the item alone selected: edited after the
+    /// double-click time, unless another click comes first.
+    func browserClickedName(_ item: BrowserItem)
+    func browserCancelRename()
+    func browserQuickLook()
 }
 
 /// A view of a folder's items: icons, a list or columns.
@@ -39,12 +45,16 @@ import UniformTypeIdentifiers
     func selectAll()
     func focus()
     func refreshIcons()
+    /// Where the item's name is drawn (scrolled into sight), for editing.
+    func nameSpot(for path: String) -> BrowserNameSpot?
+    /// The item's icon on the screen (Quick Look zooms from it).
+    func screenFrame(for path: String) -> NSRect?
 }
 
 enum BrowserMode: Int { case icons, list, columns }
 
 @MainActor final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate,
-    NSMenuItemValidation, NSSearchFieldDelegate, BrowserViewDelegate {
+    NSMenuItemValidation, NSSearchFieldDelegate, BrowserViewDelegate, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     static var windows: [BrowserWindowController] = []
     /// A window drawn for a test (BLUEBOX_BROWSER_SNAPSHOT): nothing of it
     /// is saved in the user's defaults, and BLUEBOX_BROWSER_MODE (icons,
@@ -71,6 +81,11 @@ enum BrowserMode: Int { case icons, list, columns }
     private let status = NSTextField(labelWithString: "")
     private var views: [BrowserMode: BrowserContentView] = [:]
     private var current: BrowserContentView { view(for: mode) }
+    /// The name being edited in place, and a click's edit to come.
+    private var editor: BrowserNameEditor?
+    private var pendingRename: DispatchWorkItem?
+    private var reloadAfterEdit = false
+    private var previewItems: [BrowserPreviewItem] = []
     private var modeControl: NSSegmentedControl?
     private var historyControl: NSSegmentedControl?
     private weak var searchField: NSSearchField?
@@ -109,7 +124,7 @@ enum BrowserMode: Int { case icons, list, columns }
         } else {
             mode = BrowserMode(rawValue: UserDefaults.standard.integer(forKey: "BrowserMode")) ?? .icons
         }
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 560),
+        let w = BrowserNSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 560),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
         w.tabbingIdentifier = "BlueBoxBrowser"
@@ -118,6 +133,13 @@ enum BrowserMode: Int { case icons, list, columns }
         super.init(window: w)
         _ = BrowserCore.ops // the catalog opened, before the first listing reads it
         w.delegate = self
+        w.keyFilter = { [weak self] event in
+            (self?.views[.columns] as? BrowserColumnView)?.handleKey(event) ?? false
+        }
+        w.clickFilter = { [weak self] event in
+            guard let self, self.mode == .columns else { return nil }
+            return (self.views[.columns] as? BrowserColumnView)?.handleClick(event)
+        }
         build()
         if !Self.ephemeral { w.setFrameAutosaveName("BlueBoxBrowser") }
         if BrowserWindowController.windows.contains(where: { $0.window?.isVisible == true }) {
@@ -234,6 +256,7 @@ enum BrowserMode: Int { case icons, list, columns }
     }
 
     private func attach(_ m: BrowserMode) {
+        editor?.end()
         let selected = Set(views[mode]?.selectedItems.map(\.path) ?? [])
         host.subviews.forEach { $0.removeFromSuperview() }
         mode = m
@@ -264,6 +287,7 @@ enum BrowserMode: Int { case icons, list, columns }
 
     /// Show a folder (remember: on the Back list).
     func go(to path: String, remember: Bool = true) {
+        editor?.end()
         let target = (path as NSString).standardizingPath
         if remember && target != location {
             back.append(location)
@@ -288,6 +312,7 @@ enum BrowserMode: Int { case icons, list, columns }
 
     func browserNavigate(to folder: String) {
         guard folder != location else { return }
+        editor?.end()
         // The column view's own path: no new listing in it.
         back.append(location)
         forward.removeAll()
@@ -304,6 +329,8 @@ enum BrowserMode: Int { case icons, list, columns }
 
     /// Read the folder again and show it, keeping the selection.
     func reload() {
+        // Not under a name being edited: after it.
+        if editor != nil { reloadAfterEdit = true; return }
         if !search.isEmpty { runSearch(); return }
         let selected = Set(current.selectedItems.map(\.path))
         items = sorted(BrowserListing.items(in: location, showHidden: showHidden))
@@ -402,7 +429,10 @@ enum BrowserMode: Int { case icons, list, columns }
 
     // MARK: The views' questions
 
-    func browserSelectionChanged() { updateStatus() }
+    func browserSelectionChanged() {
+        updateStatus()
+        if previewing { refreshPreview() }
+    }
 
     func browserIcon(_ item: BrowserItem, ready: @escaping (NSImage) -> Void) -> NSImage {
         BrowserCore.shared.icon(item, ready: ready)
@@ -430,13 +460,18 @@ enum BrowserMode: Int { case icons, list, columns }
             return menu
         }
         add("Open", #selector(openSelection(_:)), "o")
-        if items.count == 1, items[0].isAlias { add("Show Original", #selector(showOriginal(_:)), "r") }
+        if canShowOriginal(items) { add("Show Original", #selector(showOriginal(_:)), "r") }
+        add(items.count == 1 ? "Quick Look “\(items[0].name)”" : "Quick Look \(items.count) Items", #selector(quickLook(_:)), "y")
         menu.addItem(.separator())
         add("Get Info", #selector(getInfo(_:)), "i")
         if items.count == 1 { add("Rename", #selector(rename(_:))) }
         add("Duplicate", #selector(duplicate(_:)), "d")
         add("Make Alias", #selector(makeAlias(_:)), "a", [.command, .control])
-        add("Move to Trash", #selector(moveToTrash(_:)), "\u{8}")
+        if canPutBack(items) {
+            add("Put Back", #selector(putBack(_:)), "\u{8}")
+        } else {
+            add("Move to Trash", #selector(moveToTrash(_:)), "\u{8}")
+        }
         menu.addItem(.separator())
         add("Copy", #selector(copy(_:)), "c")
         if items.contains(where: { !$0.isFolder && $0.isClassic }) {
@@ -494,7 +529,7 @@ enum BrowserMode: Int { case icons, list, columns }
             var item = item
             if item.isAlias {
                 guard let target = BrowserCore.shared.ops.aliasTarget(item.path), let t = BrowserListing.item(target) else {
-                    alert("The original of “\(item.name)” can't be found.", info: "It may have been moved, renamed or deleted.")
+                    brokenAlias(item)
                     continue
                 }
                 item = t
@@ -555,11 +590,93 @@ enum BrowserMode: Int { case icons, list, columns }
 
     @objc func openSelection(_ sender: Any?) { browserOpen(selection) }
 
-    @objc func showOriginal(_ sender: Any?) {
-        guard let item = selection.first, let target = BrowserCore.shared.ops.aliasTarget(item.path) else { return }
-        go(to: (target as NSString).deletingLastPathComponent)
-        current.select([target])
+    /// An item's original: a classic alias's, a symbolic link's or a macOS
+    /// alias's; nil for an item that is none of them.  found is false when
+    /// the original isn't there.
+    static func original(of item: BrowserItem) -> (path: String, found: Bool)? {
+        if item.isAlias {
+            guard let target = BrowserCore.shared.ops.aliasTarget(item.path) else { return ("", false) }
+            return (target, BrowserCore.shared.ops.exists(target))
+        }
+        let values = try? item.url.resourceValues(forKeys: [.isSymbolicLinkKey, .isAliasFileKey])
+        guard values?.isSymbolicLink == true || values?.isAliasFile == true else { return nil }
+        if let url = try? URL(resolvingAliasFileAt: item.url, options: [.withoutUI, .withoutMounting]),
+           FileManager.default.fileExists(atPath: url.path) {
+            return (url.path, true)
+        }
+        return ("", false)
     }
+
+    func canShowOriginal(_ items: [BrowserItem]) -> Bool {
+        !items.isEmpty && items.allSatisfy { $0.isAlias || Self.original(of: $0) != nil }
+    }
+
+    /// Command-R, Show Original, as the Finder has it: each alias's
+    /// original selected in its folder (this window for the first folder,
+    /// a window each for others); an alias whose original is gone asks
+    /// what to do about it.
+    @objc func showOriginal(_ sender: Any?) {
+        var folders: [String: [String]] = [:], order: [String] = []
+        for item in selection {
+            guard let o = Self.original(of: item) else { continue }
+            guard o.found else { brokenAlias(item); return }
+            let folder = (o.path as NSString).deletingLastPathComponent
+            if folders[folder] == nil { order.append(folder) }
+            folders[folder, default: []].append(o.path)
+        }
+        for (i, folder) in order.enumerated() {
+            let originals = folders[folder] ?? []
+            if i == 0 {
+                go(to: folder)
+                current.select(Set(originals))
+            } else {
+                Self.open(at: folder, selecting: originals)
+            }
+        }
+    }
+
+    /// An alias whose original can't be found: the Finder's choices, to
+    /// delete it, fix it (choose another original) or leave it.
+    func brokenAlias(_ item: BrowserItem) {
+        let a = NSAlert()
+        a.messageText = "The alias “\(item.name)” can't be opened because the original item can't be found."
+        a.informativeText = "It may have been moved, renamed or deleted."
+        a.addButton(withTitle: "OK")
+        a.addButton(withTitle: "Delete Alias")
+        let fixable = item.isAlias
+        if fixable { a.addButton(withTitle: "Fix Alias\u{2026}") }
+        guard let w = window else { return }
+        a.beginSheetModal(for: w) { response in
+            MainActor.assumeIsolated {
+                switch response {
+                case .alertSecondButtonReturn:
+                    self.perform("move to the Trash", reload: [], select: false) { ops in
+                        [try ops.moveToTrash(item.path) { url in
+                            var out: NSURL?
+                            try FileManager.default.trashItem(at: url, resultingItemURL: &out)
+                            return (out as URL?) ?? url
+                        }]
+                    }
+                case .alertThirdButtonReturn where fixable:
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.prompt = "Choose"
+                    panel.message = "Choose a new original for the alias “\(item.name)”"
+                    panel.beginSheetModal(for: w) { r in
+                        guard r == .OK, let url = panel.url else { return }
+                        MainActor.assumeIsolated {
+                            self.perform("fix", reload: [], select: false) { ops in
+                                try ops.retargetAlias(item.path, to: url.path)
+                                return []
+                            }
+                        }
+                    }
+                default: break
+                }
+            }
+        }
+    }
+
 
     @objc func getInfo(_ sender: Any?) {
         let items = selection.isEmpty ? [BrowserListing.item(location)].compactMap { $0 } : selection
@@ -572,6 +689,48 @@ enum BrowserMode: Int { case icons, list, columns }
     }
 
     func browserRename(_ item: BrowserItem) {
+        cancelPendingRename()
+        guard editor == nil else { return }
+        guard let spot = current.nameSpot(for: item.path) else { return renameInSheet(item) }
+        let e = BrowserNameEditor(item: item, spot: spot) { [weak self] name in
+            guard let self else { return }
+            self.editor = nil
+            if self.window?.firstResponder == nil || self.window?.firstResponder === self.window { self.current.focus() }
+            if let name, name != item.name {
+                if let problem = BrowserNames.problem(name) {
+                    self.alert("The name “\(name)” can't be used.", info: problem)
+                } else {
+                    self.perform("rename", reload: [item.parent]) { ops in [try ops.rename(item.path, to: name)] }
+                }
+            }
+            if self.reloadAfterEdit {
+                self.reloadAfterEdit = false
+                self.reload()
+            }
+        }
+        editor = e
+        e.begin(in: current.view)
+    }
+
+    func browserClickedName(_ item: BrowserItem) {
+        cancelPendingRename()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.selection.map(\.path) == [item.path], NSEvent.pressedMouseButtons == 0 else { return }
+            self.browserRename(item)
+        }
+        pendingRename = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval + 0.05, execute: work)
+    }
+
+    func browserCancelRename() { cancelPendingRename() }
+
+    private func cancelPendingRename() {
+        pendingRename?.cancel()
+        pendingRename = nil
+    }
+
+    /// The rename asked for in a sheet, where the name isn't in sight.
+    private func renameInSheet(_ item: BrowserItem) {
         let a = NSAlert()
         a.messageText = "Rename “\(item.name)”"
         a.addButton(withTitle: "Rename")
@@ -616,6 +775,59 @@ enum BrowserMode: Int { case icons, list, columns }
                     return (out as URL?) ?? url
                 }
             }
+        }
+    }
+
+    /// Whether each item is in the Trash with a place to go back to.
+    func canPutBack(_ items: [BrowserItem]) -> Bool {
+        !items.isEmpty && items.allSatisfy { BrowserCore.shared.ops.putBackLocation($0.path) != nil }
+    }
+
+    /// File › Move to Trash, which is Put Back for items in the Trash, as
+    /// in the Finder (one key, Command-Delete).
+    @objc func moveToTrashOrPutBack(_ sender: Any?) {
+        if canPutBack(selection) { putBack(sender) } else { moveToTrash(sender) }
+    }
+
+    /// Put Back: the items go back where they were moved to the Trash
+    /// from; a name taken there asks, as a copy does.
+    @objc func putBack(_ sender: Any?) {
+        let ops = BrowserCore.shared.ops
+        var plan: [(src: String, name: String?, replace: String?)] = []
+        for item in selection {
+            guard let original = ops.putBackLocation(item.path) else { continue }
+            let name = (original as NSString).lastPathComponent, dir = (original as NSString).deletingLastPathComponent
+            if ops.exists(original) {
+                let a = NSAlert()
+                a.messageText = "An item named “\(name)” already exists in the location it came from. "
+                    + "Do you want to replace it with the one you're putting back?"
+                a.addButton(withTitle: "Keep Both")
+                a.addButton(withTitle: "Stop")
+                a.addButton(withTitle: "Replace")
+                switch a.runModal() {
+                case .alertFirstButtonReturn: plan.append((item.path, ops.freeName(name, in: dir, copy: false), nil))
+                case .alertThirdButtonReturn: plan.append((item.path, nil, original))
+                default: return
+                }
+            } else {
+                plan.append((item.path, nil, nil))
+            }
+        }
+        guard !plan.isEmpty else { return }
+        let steps = plan
+        perform("put back", reload: [], select: false) { ops in
+            var back: [String] = []
+            for step in steps {
+                if let old = step.replace {
+                    _ = try ops.moveToTrash(old) { url in
+                        var out: NSURL?
+                        try FileManager.default.trashItem(at: url, resultingItemURL: &out)
+                        return (out as URL?) ?? url
+                    }
+                }
+                back.append(try ops.putBack(step.src, name: step.name))
+            }
+            return back
         }
     }
 
@@ -780,8 +992,16 @@ enum BrowserMode: Int { case icons, list, columns }
             return !none
         case #selector(moveToTrash(_:)):
             return !none && location != BrowserPlaces.trash
+        case #selector(putBack(_:)): return canPutBack(selection)
+        case #selector(moveToTrashOrPutBack(_:)):
+            let back = canPutBack(selection)
+            item.title = back ? "Put Back" : "Move to Trash"
+            return back || (!none && location != BrowserPlaces.trash)
+        case #selector(quickLook(_:)):
+            item.title = selection.count == 1 ? "Quick Look “\(selection[0].name)”" : "Quick Look"
+            return !none
         case #selector(rename(_:)): return selection.count == 1
-        case #selector(showOriginal(_:)): return selection.count == 1 && selection[0].isAlias
+        case #selector(showOriginal(_:)): return canShowOriginal(selection)
         case #selector(saveMacBinary(_:)): return selection.contains { !$0.isFolder && $0.isClassic }
         case #selector(importIntoLibrary(_:)): return selection.contains(where: isImportable)
         case #selector(paste(_:)):
@@ -799,6 +1019,80 @@ enum BrowserMode: Int { case icons, list, columns }
         default: break
         }
         return true
+    }
+
+    // MARK: Quick Look
+
+    private var previewing = false
+
+    /// The space bar, File › Quick Look: the panel shows the selection, or
+    /// goes.
+    @objc func quickLook(_ sender: Any?) { browserQuickLook() }
+
+    func browserQuickLook() {
+        guard let panel = QLPreviewPanel.shared() else { return }
+        if previewing && panel.isVisible {
+            panel.orderOut(nil)
+        } else if !selection.isEmpty {
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+
+    // QuickLookUI's informal protocol, asked on the main thread.
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            previewing = true
+            panel.dataSource = self
+            panel.delegate = self
+            refreshPreview()
+        }
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            previewing = false
+            panel.dataSource = nil
+            panel.delegate = nil
+            previewItems = []
+            BrowserPreviews.shared.clear()
+        }
+    }
+
+    /// The panel shows the selection as it is now.
+    private func refreshPreview() {
+        let items = selection
+        previewItems = items.map { item in
+            BrowserPreviews.shared.item(for: item) { [weak self] ready in
+                guard let self, self.previewing, let panel = QLPreviewPanel.shared() else { return }
+                if self.previewItems.indices.contains(panel.currentPreviewItemIndex),
+                   self.previewItems[panel.currentPreviewItemIndex] === ready {
+                    panel.refreshCurrentPreviewItem()
+                }
+            }
+        }
+        QLPreviewPanel.shared()?.reloadData()
+    }
+
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { previewItems.count }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+        previewItems.indices.contains(index) ? previewItems[index] : nil
+    }
+
+    /// The arrow keys move the selection, as in the Finder, and the panel
+    /// follows it.
+    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+        guard let event, event.type == .keyDown, [123, 124, 125, 126].contains(event.keyCode),
+              let responder = window?.firstResponder else { return false }
+        responder.keyDown(with: event)
+        return true
+    }
+
+    func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: QLPreviewItem!) -> NSRect {
+        guard let item = item as? BrowserPreviewItem else { return .zero }
+        return current.screenFrame(for: item.path) ?? .zero
     }
 
     // MARK: Doing it, off the main thread
@@ -833,7 +1127,10 @@ enum BrowserMode: Int { case icons, list, columns }
 
     // MARK: Dragging
 
-    func browserDragBegan(_ items: [BrowserItem]) { BrowserDrag.shared.began(items) }
+    func browserDragBegan(_ items: [BrowserItem]) {
+        cancelPendingRename()
+        BrowserDrag.shared.began(items)
+    }
 
     func browserDragWriter(_ item: BrowserItem) -> NSPasteboardWriting? { BrowserDrag.shared.writer(for: item) }
 
@@ -892,6 +1189,8 @@ enum BrowserMode: Int { case icons, list, columns }
     // MARK: The window
 
     func windowWillClose(_ notification: Notification) {
+        editor?.end()
+        cancelPendingRename()
         watcher?.cancel()
         Self.windows.removeAll { $0 === self }
     }
@@ -976,6 +1275,47 @@ enum BrowserMode: Int { case icons, list, columns }
     /// Select an item by name (BLUEBOX_BROWSER_SELECT), for a snapshot.
     func selectForSnapshot(_ name: String) {
         current.select([location + "/" + name])
+    }
+
+    /// Keys sent to the window (BLUEBOX_BROWSER_KEYS, comma-separated:
+    /// down, up, left, right, return, esc, space, tab, text:LETTERS,
+    /// dump), a step a second apart, for tests of the keyboard; dump
+    /// writes what is selected and edited to standard error.
+    func runKeysForTest(_ steps: [String], then done: @escaping @MainActor () -> Void) {
+        guard let step = steps.first, let w = window else { return done() }
+        let codes: [String: (UInt16, String)] = ["down": (125, "\u{F701}"), "up": (126, "\u{F700}"),
+                                                 "left": (123, "\u{F702}"), "right": (124, "\u{F703}"),
+                                                 "return": (36, "\r"), "esc": (53, "\u{1B}"), "space": (49, " "),
+                                                 "tab": (48, "\t")]
+        func send(_ code: UInt16, _ chars: String) {
+            let arrow = (123...126).contains(code)
+            guard let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: arrow ? [.numericPad, .function] : [],
+                                           timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: w.windowNumber,
+                                           context: nil, characters: chars, charactersIgnoringModifiers: chars,
+                                           isARepeat: false, keyCode: code) else { return }
+            w.sendEvent(e)
+        }
+        if step == "dump" {
+            var chain: [String] = []
+            var r = w.firstResponder
+            while let x = r, chain.count < 6 { chain.append(String(describing: type(of: x))); r = x.nextResponder }
+            let names = BrowserListing.items(in: location, showHidden: false).map(\.name).sorted()
+            FileHandle.standardError.write(Data(("dump: responder \(chain.joined(separator: ">")) selected "
+                + "\(selection.map(\.name)) editing \(editor.map { "“" + $0.field.stringValue + "”" } ?? "no") "
+                + "location \((location as NSString).lastPathComponent) files \(names) "
+                + ((current as? BrowserColumnView)?.debugState ?? "") + "\n").utf8))
+        } else if step.hasPrefix("text:") {
+            if let editor, let text = editor.field.currentEditor() as? NSTextView {
+                text.insertText(String(step.dropFirst(5)), replacementRange: text.selectedRange())
+            } else {
+                for c in step.dropFirst(5) { send(0, String(c)) }
+            }
+        } else if let (code, chars) = codes[step] {
+            send(code, chars)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            MainActor.assumeIsolated { self.runKeysForTest(Array(steps.dropFirst()), then: done) }
+        }
     }
 
     /// The window drawn into a PNG, without showing it on the screen.

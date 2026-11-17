@@ -166,6 +166,59 @@ extension BlueBox {
             #expect(p.ops.info(gone).meta.label == 0)
         }
 
+        @Test func putBackReturnsItemsWhereTheyCameFrom() throws {
+            let p = try Place()
+            defer { p.cleanUp() }
+            let folder = p.disk + "/Letters"
+            try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+            let doc = folder + "/Note"
+            let meta = try Self.makeClassic(doc)
+            let other = try Self.makeClassic(p.library + "/Note")
+            let trashed = try p.ops.moveToTrash(doc, trash: p.trashItem)
+            let trashed2 = try p.ops.moveToTrash(p.library + "/Note", trash: p.trashItem)
+            #expect(trashed2 == p.trash + "/Note 2")
+            #expect(p.ops.putBackLocation(trashed) == doc && p.ops.putBackLocation(trashed2) == p.library + "/Note")
+            // Renamed in the Trash, it still knows.
+            let renamed = try p.ops.rename(trashed, to: "Old note")
+            #expect(p.ops.putBackLocation(renamed) == doc && p.ops.putBackLocation(trashed) == nil)
+            // Its folder gone, it is made again.
+            try FileManager.default.removeItem(atPath: folder)
+            let back = try p.ops.putBack(renamed)
+            #expect(back == doc && Self.sameClassicSide(ClassicMeta.read(back), meta))
+            #expect(!p.ops.exists(renamed) && p.ops.putBackLocation(back) == nil)
+            // Its name taken where it goes: it goes under another, if given one.
+            _ = try Self.makeClassic(p.library + "/Note")
+            #expect(throws: ClassicFileError.self) { try p.ops.putBack(trashed2) }
+            let back2 = try p.ops.putBack(trashed2, name: p.ops.freeName("Note", in: p.library, copy: false))
+            #expect(back2 == p.library + "/Note 2" && Self.sameClassicSide(ClassicMeta.read(back2), other))
+            // Something the Trash had already (not moved there here) has no way back.
+            try Data("x".utf8).write(to: URL(fileURLWithPath: p.trash + "/Stray"))
+            #expect(p.ops.putBackLocation(p.trash + "/Stray") == nil)
+            #expect(throws: ClassicFileError.self) { try p.ops.putBack(p.trash + "/Stray") }
+            // Emptying the Trash forgets.
+            let again = try p.ops.moveToTrash(back, trash: p.trashItem)
+            #expect(try p.ops.emptyTrash(p.trash) == 2)
+            #expect(p.ops.putBackLocation(again) == nil)
+        }
+
+        @Test func fixAliasPointsItElsewhere() throws {
+            let p = try Place()
+            defer { p.cleanUp() }
+            let first = p.disk + "/First", second = p.library + "/Second"
+            _ = try Self.makeClassic(first, type: "TEXT", creator: "ttxt")
+            _ = try Self.makeClassic(second, type: "APPL", creator: "WOW!")
+            let alias = try p.ops.makeAlias(first)
+            try p.ops.update(alias) { $0.label = 6 }
+            try FileManager.default.removeItem(atPath: first)
+            try FileManager.default.removeItem(atPath: p.disk + "/._First")
+            #expect(p.ops.aliasTarget(alias) == first) // broken: its original is gone
+            try p.ops.retargetAlias(alias, to: second)
+            #expect(p.ops.aliasTarget(alias) == second)
+            let meta = try #require(ClassicMeta.read(alias))
+            #expect(meta.isAlias && meta.label == 6 && meta.type == fourCC("adrp") && meta.creator == fourCC("WOW!"))
+            #expect(throws: ClassicFileError.self) { try p.ops.retargetAlias(second, to: alias) } // not an alias
+        }
+
         @Test func aliasesLeadToTheirOriginals() throws {
             let p = try Place()
             defer { p.cleanUp() }
@@ -354,6 +407,10 @@ extension BlueBox {
             #expect(page.pictures == 1 && page.attachments["pict0.png"] != nil)
             #expect(page.sounds == 1 && page.attachments["snd0.wav"].map { Array($0.data.prefix(4)) } == Array("RIFF".utf8))
             #expect(page.html.contains("cid:pict0.png") && page.html.contains("cid:snd0.wav"))
+            // For the browser's Quick Look panel: one file, its media inline.
+            let one = page.selfContainedHTML
+            #expect(!one.contains("cid:") && one.contains("src=\"data:image/png;base64,iVBOR"))
+            #expect(one.contains("src=\"data:audio/wav;base64,UklGR"))
         }
     }
 }
@@ -383,5 +440,55 @@ extension BlueBox {
         #expect(t.feed("\t", at: 20.2) == nil)
         t.reset()
         #expect(t.feed("q", at: 20.3) == "q")
+        #expect(t.isTyping(at: 20.8) && !t.isTyping(at: 21.5)) // a space now is Quick Look's
+        t.reset()
+        #expect(!t.isTyping(at: 20.4))
+    }
+}
+
+@Suite("Browser names and previews") struct BrowserSupportTests {
+    @Test func renameSelectsTheNameBeforeItsExtension() {
+        func selected(_ name: String, folder: Bool = false) -> String {
+            (name as NSString).substring(with: BrowserNames.editableRange(name, isFolder: folder))
+        }
+        #expect(selected("Picture.png") == "Picture")
+        #expect(selected("archive.tar.gz") == "archive.tar")
+        #expect(selected("Read Me") == "Read Me")
+        #expect(selected("Games.app", folder: true) == "Games.app")
+        #expect(selected(".profile") == ".profile")
+        #expect(selected("Version 1.0 notes") == "Version 1.0 notes") // "0 notes" is no extension
+        #expect(selected("Café.text") == "Café")
+        #expect(BrowserNames.problem("Letter") == nil && BrowserNames.problem("a:b") == nil)
+        #expect(BrowserNames.problem("") != nil && BrowserNames.problem("  ") != nil)
+        #expect(BrowserNames.problem("a/b") != nil && BrowserNames.problem("._x") != nil && BrowserNames.problem("..") != nil)
+    }
+
+    @Test func pastedAndDraggedPathsAreRead() {
+        #expect(BrowserPaths.parse(["/a/b", "/c\n/d\n\nrelative\n/a/b"]) == ["/a/b", "/c", "/d"])
+        #expect(BrowserPaths.parse([]) == [])
+    }
+
+    @Test func previewFactsAndWhenOurPreviewIsWanted() {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        let rows = ClassicItemFacts.rows(kind: "Classic text document", dataSize: 2000, resourceSize: 1000,
+                                         created: Date(timeIntervalSince1970: 0), modified: Date(timeIntervalSince1970: 86400),
+                                         type: fourCC("TEXT"), creator: fourCC("ttxt"), isClassic: true, dates: f)
+        #expect(rows.map(\.label) == ["Kind", "Size", "Created", "Modified", "Type", "Creator"])
+        #expect(rows[1].value.contains("data") && rows[1].value.contains("resource"))
+        #expect(rows[2].value == "1970-01-01" && rows[3].value == "1970-01-02")
+        #expect(rows[4].value == "‘TEXT’" && rows[5].value == "‘ttxt’")
+        let host = ClassicItemFacts.rows(kind: "PNG image", dataSize: 10, resourceSize: 0, created: Date(), modified: Date(),
+                                         type: 0, creator: 0, isClassic: false, dates: f)
+        #expect(host.count == 4 && !host[1].value.contains("resource"))
+
+        #expect(ClassicPreviewPage.wanted(name: "Read Me", isClassic: true, isFolder: false))
+        #expect(ClassicPreviewPage.wanted(name: "Game.sit", isClassic: true, isFolder: false))
+        #expect(!ClassicPreviewPage.wanted(name: "Photo.jpg", isClassic: true, isFolder: false))
+        #expect(!ClassicPreviewPage.wanted(name: "notes.txt", isClassic: true, isFolder: false))
+        #expect(!ClassicPreviewPage.wanted(name: "Read Me", isClassic: false, isFolder: false))
+        #expect(!ClassicPreviewPage.wanted(name: "Folder", isClassic: true, isFolder: true))
     }
 }
