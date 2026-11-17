@@ -296,6 +296,22 @@ bool sound_active(void);   /* a sound channel playing, or with commands waiting 
  * work is due (a Time Manager task, the next tick for VBL tasks, sound
  * playing), at least a millisecond. */
 uint64_t machine_work_due_in(uint64_t ns);
+/* Whether something must be served every few ms while the program waits:
+ * sound or speech playing, completions due, a network, serial or MIDI
+ * connection open, a VIA timer running (machine.c, from these). */
+bool machine_service_soon(void);
+bool time_io_pending(void);
+bool mactcp_in_flight(void);
+bool serial_in_flight(void);
+bool cm_in_flight(void);
+bool appletalk_in_flight(void);
+bool ppc_toolbox_in_flight(void);
+bool os9svc_in_flight(void);
+bool ot_tasks_in_flight(void);
+bool opentransport_in_flight(void);
+bool midi_in_flight(void);
+bool qt_callbacks_in_flight(void);
+bool hw_in_flight(void);
 void adb_install(void); /* the ADB Manager's ADBOp, at boot */
 void adb_pump(void);    /* the mouse to a program's service routine, at interrupt time */
 /* Let the application see and change a host file (and its neighbours) or,

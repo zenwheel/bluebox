@@ -767,6 +767,13 @@ static void via_interrupts(void)
     in_hw_interrupt = false;
 }
 
+/* Whether a VIA timer runs with its interrupt enabled: served every few
+ * ms (the VBL and one-second interrupts come with the ticks). */
+bool hw_in_flight(void)
+{
+    return nwindows && ((via.t1_on && (via.ier & ifT1)) || (via.t2_on && (via.ier & ifT2)));
+}
+
 void hw_pump(void)
 {
     if (!nwindows)

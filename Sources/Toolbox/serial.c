@@ -692,6 +692,15 @@ void serial_poll(void)
     polling = false;
 }
 
+/* Whether a port is open: its bytes are served every few ms. */
+bool serial_in_flight(void)
+{
+    for (int i = 0; i < NPORTS; i++)
+        if (ports[i].opened)
+            return true;
+    return false;
+}
+
 /* ---------------------------------------------------------------------- */
 /* The drivers */
 

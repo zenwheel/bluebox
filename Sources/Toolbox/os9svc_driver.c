@@ -624,6 +624,18 @@ void os9svc_pump(void)
     }
 }
 
+/* Whether a secondary handler is queued or a timer set: served every few
+ * ms. */
+bool os9svc_in_flight(void)
+{
+    if (nqueued)
+        return true;
+    for (int i = 0; i < MAX_TIMERS; i++)
+        if (timers[i].used)
+            return true;
+    return false;
+}
+
 /* ---- Interrupt sets ---- */
 
 #define MAX_SETS 16

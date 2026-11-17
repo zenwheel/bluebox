@@ -83,7 +83,7 @@ enum {
     STACK_SCRATCH = 0x10000, /* below the stack pointer: the iteration's own frames */
     PC_NEAR = 256,         /* a loop with no calls: how far apart its slices may end */
     NSITES = 8,            /* the polls a loop may make, each from its own place */
-    MAX_SLEEP_NS = 4000000, /* the longest sleep: async completions, sound, network polls */
+    MAX_SLEEP_NS = 4000000, /* the longest sleep while sound, I/O or a network needs serving */
     LOG_AFTER_NS = 100000000, /* --log idle: waits this long */
     BREAK_NS = 50000000,   /* busy this long between two waits: two of them */
 };
@@ -852,11 +852,14 @@ static void chain_break(void)
     forget_shots();
 }
 
-/* Sleep until the next tick, a Time Manager task's time or input: a few
- * milliseconds at most, or four times as long as the iteration took the
- * host if that is longer (one computing for a while between its polls,
- * MegaSeg's, woke after each iteration's 2 ms as often as one of a few
- * instructions). */
+/* Sleep until the next tick, a Time Manager task's time or input.  While
+ * interrupt-time work must be kept up with (sound playing, I/O completing,
+ * a network open: machine_service_soon), a few milliseconds at most, or
+ * four times as long as the iteration took the host if that is longer (one
+ * computing for a while between its polls, MegaSeg's, woke after each
+ * iteration's 2 ms as often as one of a few instructions); with none, a
+ * program waiting at its main screen (MediaPresenter) no longer wakes 250
+ * times a second for nothing. */
 static void idle_sleep(void)
 {
     uint64_t now = machine_time_ns();
@@ -864,9 +867,11 @@ static void idle_sleep(void)
     uint64_t until = tick, due = time_next_due();
     if (due && due < until)
         until = due;
-    uint64_t most = iteration_took > MAX_SLEEP_NS / 4 ? iteration_took * 4 : MAX_SLEEP_NS;
-    if (until > now + most)
-        until = now + most;
+    if (machine_service_soon()) {
+        uint64_t most = iteration_took > MAX_SLEEP_NS / 4 ? iteration_took * 4 : MAX_SLEEP_NS;
+        if (until > now + most)
+            until = now + most;
+    }
     if (until <= now)
         return;
     ev_idle_sleep(until - now);

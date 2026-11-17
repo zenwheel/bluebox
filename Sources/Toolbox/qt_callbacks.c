@@ -232,6 +232,15 @@ static void poll(bool interrupt_only)
 void qt_callbacks_poll(void) { poll(false); }
 void qt_callbacks_periodic(void) { poll(true); }
 
+/* Whether an interrupt-time callback is armed: looked at every few ms. */
+bool qt_callbacks_in_flight(void)
+{
+    for (int i = 0; i < MAX_CALLBACKS; i++)
+        if (cbs[i].token && cbs[i].armed && (cbs[i].type & (callBackAtInterrupt | callBackAtDeferredTask)))
+            return true;
+    return false;
+}
+
 /* A time base's time was set: those waiting for a jump go off; the rest
  * look from the new time on. */
 void qt_callbacks_jumped(gaddr tb)

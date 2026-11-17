@@ -1067,15 +1067,29 @@ bool machine_wall_clock(void) { return events_host_attached() || realtime; }
 void ev_idle_sleep(uint64_t ns);
 void ev_wake(void);
 
+/* What interrupt-time work must be done every few milliseconds while the
+ * program waits: sound refilled, speech spoken, completions and deferred
+ * tasks run, a network's, serial port's or MIDI port's traffic served, a
+ * VIA timer's interrupts.  With none of it, the machine's thread may sleep
+ * to the next tick or Time Manager task. */
+bool machine_service_soon(void)
+{
+    return sound_active() || speech_waiting() || time_io_pending() || hw_in_flight() || appletalk_in_flight() ||
+           opentransport_in_flight() || ot_tasks_in_flight() || mactcp_in_flight() || serial_in_flight() ||
+           cm_in_flight() || ppc_toolbox_in_flight() || os9svc_in_flight() || midi_in_flight() ||
+           qt_callbacks_in_flight();
+}
+
 /* What the machine's thread sleeping must wake for: a Time Manager task's
  * time, the next tick while VBL tasks are installed, every few ms while
- * sound plays or speech is spoken.  An open sound channel with nothing to
- * play, or a task far off, no longer wakes it every 5 ms. */
+ * there is interrupt-time work to keep up with (machine_service_soon).  An
+ * open sound channel with nothing to play, or a task far off, no longer
+ * wakes it every 5 ms. */
 uint64_t machine_work_due_in(uint64_t ns)
 {
     enum { SOON_NS = 4000000, LEAST_NS = 1000000 };
     uint64_t in = ns, now = machine_time_ns();
-    if (in > SOON_NS && (sound_active() || speech_waiting()))
+    if (in > SOON_NS && machine_service_soon())
         in = SOON_NS;
     uint64_t due = time_next_due();
     if (due && (due > now ? due - now : 0) < in)

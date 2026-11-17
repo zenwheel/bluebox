@@ -207,6 +207,16 @@ void opentransport_poll(void)
     netsprocket_poll(); /* NetSprocket's games, on endpoints of their own */
 }
 
+/* Whether an endpoint or other provider is open, or a NetSprocket game:
+ * its events are served every few ms. */
+bool opentransport_in_flight(void)
+{
+    for (int i = 0; i < MAX_PROVIDERS; i++)
+        if (providers[i].used)
+            return true;
+    return netsprocket_in_flight();
+}
+
 /* ---- Addresses ---- */
 
 /* InetAddress: fAddressType (2), fPort (2), fHost (4), 8 unused. */

@@ -920,6 +920,9 @@ void mactcp_poll(void)
     polling = false;
 }
 
+/* Whether a stream, call or answer is under way: served every few ms. */
+bool mactcp_in_flight(void) { return active || nanswers; }
+
 static void dnr_native(cpu68k *c, uint16_t tw);
 static gaddr stub; /* the resolver's entry */
 
