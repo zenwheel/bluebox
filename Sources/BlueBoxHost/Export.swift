@@ -369,7 +369,8 @@ public enum ExportSigning {
 
     /// The entitlements Blue Box runs with (scripts/BlueBox.entitlements,
     /// which Blue Box.app does not carry): the translators' JIT, libvlc
-    /// from another team, the microphone.
+    /// from another team, the microphone, and Apple events (the Blue Box
+    /// Browser's Empty Trash asking the Finder; the same program).
     public static let entitlements = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -380,6 +381,8 @@ public enum ExportSigning {
         	<key>com.apple.security.cs.disable-library-validation</key>
         	<true/>
         	<key>com.apple.security.device.audio-input</key>
+        	<true/>
+        	<key>com.apple.security.automation.apple-events</key>
         	<true/>
         </dict>
         </plist>

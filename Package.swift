@@ -15,6 +15,13 @@ let warnings: [CSetting] = [
     .define("_DEFAULT_SOURCE"),
 ]
 
+/// An app extension's program: only the API extensions may use, and
+/// started by NSExtensionMain (its main.swift calls it).
+let appExtension: (swift: [SwiftSetting], linker: [LinkerSetting]) = (
+    [.unsafeFlags(["-application-extension"], .when(platforms: [.macOS]))],
+    [.unsafeFlags(["-Xlinker", "-application_extension"], .when(platforms: [.macOS]))]
+)
+
 let package = Package(
     name: "bluebox",
     platforms: [.macOS(.v13)],
@@ -22,6 +29,10 @@ let package = Package(
         .executable(name: "bluebox", targets: ["bluebox"]),
         // The macOS screen saver's code (scripts/build-saver.sh makes the .saver).
         .library(name: "BlueBoxSaver", type: .dynamic, targets: ["BlueBoxSaver"]),
+        // Blue Box.app's Quick Look extensions' programs (scripts/make-app.sh
+        // makes each the .appex in Contents/PlugIns).
+        .executable(name: "BlueBoxThumbnails", targets: ["BlueBoxThumbnails"]),
+        .executable(name: "BlueBoxPreview", targets: ["BlueBoxPreview"]),
     ],
     dependencies: [
         // Software updates for Blue Box.app's shell (macOS only).
@@ -61,8 +72,11 @@ let package = Package(
                                  .linkedFramework("AudioToolbox", .when(platforms: [.macOS])),
                                  .linkedFramework("ImageIO", .when(platforms: [.macOS])),
                                  .linkedFramework("CoreGraphics", .when(platforms: [.macOS]))]),
+        // Classic files on the host, on ForkStore alone: Finder icons from bundles, Finder
+        // information, labels, aliases, MacBinary and native forks, Quick Look's pages.
+        .target(name: "ClassicFiles", dependencies: ["ForkStore", "CCore"]),
         // Host-side helpers: Finder icons and document types, keyboard layouts, printing to PDF.
-        .target(name: "BlueBoxHost", dependencies: ["Toolbox", "ForkStore", "CCore"]),
+        .target(name: "BlueBoxHost", dependencies: ["ClassicFiles", "Toolbox", "ForkStore", "CCore"]),
         // Command-line tool: run, import, install, apps, rsrc, inspect.
         // Sparkle is weakly linked: the program also runs on its own, outside
         // Blue Box.app (copied onto the PATH), where there is no framework;
@@ -79,12 +93,20 @@ let package = Package(
         .target(name: "BlueBoxSaver", dependencies: ["Toolbox", "ForkStore", "CCore", "BlueBoxHost"],
                 swiftSettings: [.swiftLanguageMode(.v5)],
                 linkerSettings: [.linkedFramework("ScreenSaver", .when(platforms: [.macOS]))]),
+        // The Quick Look extensions (macOS only; empty elsewhere): classic files'
+        // icons as thumbnails (ClassicFiles alone, so it stays small), and
+        // previews whose pictures and sounds Blue Box's own decoders read.
+        .executableTarget(name: "BlueBoxThumbnails", dependencies: ["ClassicFiles", "ForkStore", "CCore"],
+                          swiftSettings: appExtension.swift, linkerSettings: appExtension.linker),
+        .executableTarget(name: "BlueBoxPreview", dependencies: ["BlueBoxHost", "ClassicFiles", "Toolbox", "ForkStore", "CCore"],
+                          swiftSettings: appExtension.swift, linkerSettings: appExtension.linker),
         // Runner for the SingleStepTests CPU vectors (test-only).
         .target(name: "CPUTestSupport", dependencies: ["CPU68K", "CCore"], path: "Tests/CPUTestSupport",
                 cSettings: warnings),
         // Tests touch C globals (one guest arena per process) and run serialized.
         .testTarget(name: "ToolboxTests",
                     dependencies: ["Toolbox", "ForkStore", "CPU68K", "CPUPPC", "CCore", "CPUTestSupport", "BlueBoxHost", "MACE",
+                                   "ClassicFiles",
                                    "BlueBoxSaver"],
                     swiftSettings: [.swiftLanguageMode(.v5)]),
     ],

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Blue Box.app's Quick Look extensions (scripts/make-app.sh): app
+	     extensions run in the sandbox. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Quick Look opens the file previewed to them, but not the "._" sidecar
+	     beside it, which holds a classic file's resource fork and Finder
+	     information, nor Blue Box's library (Application Support/Blue Box),
+	     where a document's application and its icons are: read-only, the
+	     user's home and other volumes. -->
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
+	<array>
+		<string>/</string>
+	</array>
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-only</key>
+	<array>
+		<string>/Volumes/</string>
+	</array>
+</dict>
+</plist>

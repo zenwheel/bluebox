@@ -3,12 +3,16 @@
 // The Finder found an application's icon through its bundle: BNDL maps
 // local IDs to ICN# resource IDs, and the FREF for file type 'APPL' names
 // the local ID.  The same resource ID is used for the colour (icl8, icl4)
-// and small (ics#, ics8, ics4) variants.
+// and small (ics#, ics8, ics4) variants.  A document's icon is found
+// the same way, through the FREF for its file type in its creator's
+// bundle.
+//
+// This module needs only ForkStore, so Blue Box's Quick Look extensions
+// can draw classic icons without the rest of Blue Box.
 
 import CCore
 import Foundation
 import ForkStore
-import Toolbox
 
 /// A square RGBA image (premultiplication not needed: alpha is 0 or 255).
 public struct IconImage: Sendable {
@@ -53,14 +57,12 @@ public struct ResourceFork {
         }
     }
 
-    /// The System file's icon family with this ID (its generic icons).
-    public init(systemIcons id: Int16) {
-        for type in ["ICN#", "icl4", "icl8", "ics#", "ics4", "ics8"] {
-            var len: UInt32 = 0
-            if let p = machine_system_resource(fourcc(type), id, &len) {
-                table[fourcc(type), default: [:]][id] = Array(UnsafeBufferPointer(start: p, count: Int(len)))
-            }
-        }
+    /// An empty fork, filled with set(_:_:_:).
+    public init() {}
+
+    /// A resource put in (or replaced).
+    public mutating func set(_ type: String, _ id: Int16, _ bytes: [UInt8]) {
+        table[fourcc(type), default: [:]][id] = bytes
     }
 
     public subscript(type: String, id: Int16) -> [UInt8]? { table[fourcc(type)]?[id] }
@@ -69,7 +71,7 @@ public struct ResourceFork {
     private func fourcc(_ s: String) -> UInt32 { s.utf8.reduce(0) { ($0 << 8) | UInt32($1) } }
 }
 
-func fourCCText(_ code: UInt32) -> String {
+public func fourCCText(_ code: UInt32) -> String {
     String((0..<4).map { i -> Character in
         let b = UInt8((code >> UInt32(24 - i * 8)) & 0xFF)
         return b >= 0x20 && b < 0x7F ? Character(UnicodeScalar(b)) : "?"
@@ -81,15 +83,17 @@ private func be32(_ b: [UInt8], _ o: Int) -> UInt32 {
     o + 4 <= b.count ? UInt32(b[o]) << 24 | UInt32(b[o + 1]) << 16 | UInt32(b[o + 2]) << 8 | UInt32(b[o + 3]) : 0
 }
 
-/// Read the BNDL for the given creator (or the only one) and its icons.
-public func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
-    var result = FinderBundle()
+/// A bundle's maps: for each resource type, local IDs to resource IDs
+/// (BNDL for the given creator, or the only one), and its FREFs' file
+/// types with their icons' local IDs.
+private func bundleMaps(fork: ResourceFork, creator: UInt32) -> (maps: [String: [Int: Int16]],
+                                                                  frefs: [(type: UInt32, local: Int)])? {
     var bndl: [UInt8]?
     for id in fork.ids("BNDL") {
         guard let b = fork["BNDL", id] else { continue }
         if bndl == nil || be32(b, 0) == creator { bndl = b }
     }
-    guard let b = bndl else { return result }
+    guard let b = bndl else { return nil }
 
     // BNDL: owner(4) ownerID(2) ntypes-1(2), then type(4) n-1(2) (local, rsrc)...
     var maps: [String: [Int: Int16]] = [:]
@@ -105,15 +109,24 @@ public func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
             o += 4
         }
     }
-
-    var appLocal: Int?
-    for (_, frefID) in maps["FREF"] ?? [:] {
+    var frefs: [(type: UInt32, local: Int)] = []
+    for (_, frefID) in (maps["FREF"] ?? [:]).sorted(by: { $0.key < $1.key }) {
         guard let f = fork["FREF", frefID], f.count >= 6 else { continue }
-        let type = be32(f, 0)
-        if fourCCText(type) == "APPL" {
-            appLocal = be16(f, 4)
-        } else if !result.documentTypes.contains(type) {
-            result.documentTypes.append(type)
+        frefs.append((be32(f, 0), be16(f, 4)))
+    }
+    return (maps, frefs)
+}
+
+/// Read the BNDL for the given creator (or the only one) and its icons.
+public func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
+    var result = FinderBundle()
+    guard let (maps, frefs) = bundleMaps(fork: fork, creator: creator) else { return result }
+    var appLocal: Int?
+    for f in frefs {
+        if fourCCText(f.type) == "APPL" {
+            appLocal = f.local
+        } else if !result.documentTypes.contains(f.type) {
+            result.documentTypes.append(f.type)
         }
     }
     result.documentTypes.sort()
@@ -121,6 +134,14 @@ public func finderBundle(fork: ResourceFork, creator: UInt32) -> FinderBundle {
         result.appIcons = icons(fork: fork, id: iconID)
     }
     return result
+}
+
+/// The icons an application's bundle gives its documents of a file type
+/// (the Finder's FREF for that type), or none.
+public func documentIcons(fork: ResourceFork, creator: UInt32, type: UInt32) -> [IconImage] {
+    guard let (maps, frefs) = bundleMaps(fork: fork, creator: creator),
+          let fref = frefs.first(where: { $0.type == type }), let iconID = maps["ICN#"]?[fref.local] else { return [] }
+    return icons(fork: fork, id: iconID)
 }
 
 /// The 32 and 16 pixel icons with this ID, best colour depth available.
@@ -149,7 +170,7 @@ public func icons(fork: ResourceFork, id: Int16) -> [IconImage] {
     return out
 }
 
-func colorIcon(size: Int, depth: Int, pixels: [UInt8], mask: [UInt8]) -> IconImage {
+public func colorIcon(size: Int, depth: Int, pixels: [UInt8], mask: [UInt8]) -> IconImage {
     var img = IconImage(size: size, rgba: [UInt8](repeating: 0, count: size * size * 4))
     let maskRow = size / 8
     for y in 0..<size {
@@ -251,104 +272,3 @@ public func icon(_ icons: [IconImage], at size: Int) -> IconImage? {
     return resampled(large, to: size)
 }
 
-private enum CustomIcon {
-    static let id: Int16 = -16455 // kCustomIconResource
-    static let flag: UInt16 = 0x0400 // kHasCustomIcon
-}
-
-/// Desk accessories that draw their own picture from a bitmap in their
-/// code, by name: where it is in the DRVR (checked by the DRVR's size),
-/// its row bytes and rows, and the part of it to show.
-private let deskAccessoryPictures: [String: (drvrSize: Int, offset: Int, rowBytes: Int, rows: Int,
-                                              crop: (x: Int, y: Int, width: Int, height: Int))] = [
-    // The Moose in its box, mouth shut (1.21 and EDUCORP's New Talking Moose!).
-    "Talking Moose": (11656, 0x2756, 10, 58, (1, 6, 75, 46)),
-]
-
-/// A desk accessory's own picture, in a square, its box drawn round it.
-func deskAccessoryPicture(name: String, drvr: [UInt8]) -> IconImage? {
-    guard let p = deskAccessoryPictures[name], drvr.count == p.drvrSize,
-          p.offset + p.rowBytes * p.rows <= drvr.count else { return nil }
-    let c = p.crop
-    let side = max(c.width, c.height) + 2
-    var img = IconImage(size: side, rgba: [UInt8](repeating: 0, count: side * side * 4))
-    let left = (side - c.width) / 2, top = (side - c.height) / 2
-    for y in -1...c.height {
-        for x in -1...c.width {
-            var black = y == -1 || y == c.height || x == -1 || x == c.width
-            if !black {
-                let byte = drvr[p.offset + (c.y + y) * p.rowBytes + (c.x + x) / 8]
-                black = byte & (0x80 >> UInt8((c.x + x) % 8)) != 0
-            }
-            let d = ((top + y) * side + left + x) * 4
-            let v: UInt8 = black ? 0 : 255
-            img.rgba[d] = v
-            img.rgba[d + 1] = v
-            img.rgba[d + 2] = v
-            img.rgba[d + 3] = 255
-        }
-    }
-    return img
-}
-
-/// The icons of a file with no bundle of its own, as the Finder showed it:
-/// its custom icon, else a desk accessory's own (resources its DRVR owns,
-/// or the picture it draws), else the System's for its type: a desk
-/// accessory, or a suitcase of them (the Font/DA Mover's) or of fonts.
-public func fileIcons(fork: ResourceFork?, rsrc: UnsafePointer<UInt8>?, length: Int, type: UInt32,
-                      flags: UInt16) -> [IconImage] {
-    if let fork, flags & CustomIcon.flag != 0 {
-        let custom = icons(fork: fork, id: CustomIcon.id)
-        if !custom.isEmpty { return custom }
-    }
-    let das = deskAccessories(fork: rsrc, length: length)
-    if let fork {
-        for da in das {
-            // Owned resources: bits 15-14 set, the DRVR's ID in 13-5.
-            let first = Int16(truncatingIfNeeded: 0xC000 | (Int(da.id) & 0x3F) << 5)
-            for sub in 0..<32 {
-                let own = icons(fork: fork, id: first + Int16(sub))
-                if !own.isEmpty { return own }
-            }
-        }
-        for da in das {
-            if let drvr = fork["DRVR", da.id], let picture = deskAccessoryPicture(name: da.name, drvr: drvr) {
-                return [picture]
-            }
-        }
-    }
-    let text = fourCCText(type)
-    if text == "dfil" || (!das.isEmpty && text != "DFIL") {
-        return icons(fork: ResourceFork(systemIcons: -3991), id: -3991)
-    }
-    guard ["DFIL", "FFIL", "suit"].contains(text) else { return [] }
-    var suitcase = icons(fork: ResourceFork(systemIcons: -3970), id: -3970)
-    if text == "DFIL", let i = suitcase.firstIndex(where: { $0.size == 32 }),
-       let da = icons(fork: ResourceFork(systemIcons: -3991), id: -3991).first(where: { $0.size == 16 }) {
-        // Desk accessories': the desk accessory's mark on the suitcase.
-        for y in 0..<16 {
-            for x in 0..<16 where da.rgba[(y * 16 + x) * 4 + 3] != 0 {
-                let s = (y * 16 + x) * 4, d = ((y + 12) * 32 + x + 8) * 4
-                suitcase[i].rgba[d..<d + 4] = da.rgba[s..<s + 4]
-            }
-        }
-    }
-    return suitcase
-}
-
-/// The application's Finder bundle, read from its AppleDouble or MacBinary
-/// file; with no icon of its own there, a file's other icons.
-public func finderBundle(applicationAt path: String) -> FinderBundle {
-    var mf = mac_file()
-    var err = [CChar](repeating: 0, count: 256)
-    guard appledouble_read(path, &mf, &err, err.count) else { return FinderBundle() }
-    defer { mac_file_free(&mf) }
-    let fork = ResourceFork(fork: mf.rsrc, length: mf.rsrc_len)
-    var result = fork.map { finderBundle(fork: $0, creator: mac_file_creator(&mf)) } ?? FinderBundle()
-    if result.appIcons.isEmpty {
-        let flags = UInt16(mf.finder_info.8) << 8 | UInt16(mf.finder_info.9)
-        result.appIcons = fileIcons(fork: fork, rsrc: mf.rsrc, length: mf.rsrc_len, type: mac_file_type(&mf),
-                                    flags: flags)
-    }
-    return result
-}
