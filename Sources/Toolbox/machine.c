@@ -617,6 +617,7 @@ bool machine_boot(bool census)
     wm_rebuild_desk();
     display_reset();
     idle_reset();
+    pace_reset();
     speech_reset();
     macintalk_reset();
     drag_reset();
@@ -1107,6 +1108,9 @@ static uint64_t wall_wait(uint64_t ns, bool (*over)(void))
     }
     return now - start;
 }
+
+/* Frame pacing's wait for the next refresh (pace.c), as the throttle's. */
+uint64_t machine_pace_wait(uint64_t ns) { return wall_wait(ns, NULL); }
 
 /* A headless --realtime run waits on the wall clock where a window's run
  * would (WaitNextEvent's sleep, GetNextEvent's tick, a Toolbox loop's), so

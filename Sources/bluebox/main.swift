@@ -106,10 +106,13 @@ func usage() -> Never {
                      Manager's callbacks, timed), idle (a program waiting by spinning, found
                      and let the host sleep: with a host or --realtime; BLUEBOX_IDLE_SLEEP=0
                      turns that off, and BLUEBOX_IDLE_WHY=1 says each second why a busy
-                     program's loop wasn't taken for a wait); the debugger's entries are
-                     always logged.  A window's run unseen (minimized, hidden, covered) uses
-                     at most a tenth of the host, behind another application's windows half
-                     (BLUEBOX_THROTTLE=0 turns that off)
+                     program's loop wasn't taken for a wait; and every five seconds how many
+                     frames a program drew and how many the display showed); the debugger's
+                     entries are always logged.  A program drawing frames faster than the
+                     display's 60 a second waits for its next refresh, with a host or
+                     --realtime (BLUEBOX_PACE=0 turns that off).  A window's run unseen
+                     (minimized, hidden, covered) uses at most a tenth of the host, behind
+                     another application's windows half (BLUEBOX_THROTTLE=0 turns that off)
           --debugger D  what Debugger, DebugStr and SysBreak do, Blue Box being a Mac with
                      MacsBug installed: log (the default: log the message, where from and how
                      often, and go on, as "g" in MacsBug), halt (stop the run there) or quiet

@@ -316,6 +316,7 @@ static bool on(void)
 }
 
 static bool in_interrupt(void) { return interrupt_depth > 0 || time_in_interrupt(); }
+bool idle_in_interrupt(void) { return in_interrupt(); }
 
 /* The program's own instructions, the time a wait passed and interrupt-time
  * work's left out. */
@@ -1049,6 +1050,7 @@ static void call_kind(uint8_t kind, const char *name)
         st.busy = true;
         why_work(name);
     } else if (kind == DRAWS) {
+        pace_port(qd_port()); /* a frame, if on the screen */
         drawing();
     } else if (kind == HEAP) {
         more.heap = true;

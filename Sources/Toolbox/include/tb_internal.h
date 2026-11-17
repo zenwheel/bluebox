@@ -143,6 +143,21 @@ void idle_wrote(gaddr a, uint32_t len); /* a quiet call's answer, written into t
 uint64_t mm_heap_fingerprint(void);     /* the zones' shape, for idle.c (memmgr.c) */
 void idle_slice(void);
 void idle_interrupt_enter(void);
+bool idle_in_interrupt(void); /* interrupt-time work going on (a task, a callback) */
+/* Frame pacing (pace.c): a poll the program's loop may end a frame at
+ * (PACE_INPUT: GetKeys, Button, GetMouse ...; PACE_EVENT: the Event
+ * Manager's; PACE_PRESENT: a swap of buffers), where it waits for the next
+ * refresh once a second frame is done in this one; the screen drawn on
+ * (into a port, a destination's pixels at base, the program's own stores). */
+enum { PACE_INPUT = 1, PACE_EVENT = 2, PACE_PRESENT = 3 };
+void pace_poll(int rank);
+void pace_port(gaddr port);
+void pace_dest(gaddr base);
+void pace_drew(void);
+void pace_reset(void);
+void display_pace_watch(void);       /* the program's next store into the screen told to pace.c */
+uint64_t machine_pace_wait(uint64_t ns); /* the machine's thread waits up to ns of real time, or for input */
+uint32_t ev_press_serial(void);      /* keys and mouse buttons pressed or let go so far */
 void idle_interrupt_leave(void);
 void idle_reset(void);
 void walker_note_cursor(gaddr data); /* a cursor set: its image */
