@@ -146,6 +146,7 @@ static gaddr lrec(gaddr list) { return list && rd32(list) ? rd32(list) : 0; }
         gaddr l = lrec(R(0));                                                                                          \
         if (l && R(1))                                                                                                 \
             gmemcpy(R(1), l + (off), size);                                                                            \
+        idle_wrote(R(1), size);                                                                                        \
         RETURN(R(1));                                                                                                  \
     }
 

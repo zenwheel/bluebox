@@ -783,6 +783,8 @@ void tb_UseResFile(int16_t rn)
     }
     wr16(LM_CurMap, (uint16_t)rn);
     set_res_err(noErr);
+    idle_wrote(LM_CurMap, 2); /* the same file used again is nothing new */
+    idle_wrote(LM_ResErr, 2);
 }
 
 void tb_SetResLoad(int8_t load) { wr8(LM_ResLoad, load ? 1 : 0); }

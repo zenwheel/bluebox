@@ -2222,11 +2222,13 @@ int8_t tb_CheckUpdate(gaddr ev)
         }
         wr16(ev, 6); /* updateEvt */
         wr32(ev + 2, w);
+        idle_work(); /* an update to draw; none is a query answered */
         return 1;
     }
     if (desk_window && !tb_EmptyRgn(WindowRecord_updateRgn(desk_window))) { /* behind them all */
         wr16(ev, 6);
         wr32(ev + 2, desk_window);
+        idle_work();
         return 1;
     }
     return 0;
@@ -3383,10 +3385,14 @@ int16_t tb_GetWindowProperty(gaddr w, uint32_t creator, uint32_t tag, uint32_t b
     if (!p)
         return errWindowPropertyNotFound;
     uint32_t n = p->size < bufferSize ? p->size : bufferSize;
-    if (buffer && n)
+    if (buffer && n) {
         gput(buffer, p->data, n);
-    if (actualSize)
+        idle_wrote(buffer, n);
+    }
+    if (actualSize) {
         wr32(actualSize, n);
+        idle_wrote(actualSize, 4);
+    }
     return noErr;
 }
 

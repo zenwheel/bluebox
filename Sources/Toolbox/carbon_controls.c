@@ -226,6 +226,7 @@ gaddr tb_GetControlBounds(gaddr ch, gaddr bounds)
 {
     if (ch && bounds)
         gmemcpy(bounds, cp(ch) + ControlRecord_contrlRect_off, 8);
+    idle_wrote(bounds, 8);
     return bounds;
 }
 
@@ -340,6 +341,7 @@ int32_t tb_GetControlCommandID(gaddr ch, gaddr out)
         return errUnknownControl;
     if (out)
         wr32(out, carbon_ctl_command(ch));
+    idle_wrote(out, 4);
     return noErr;
 }
 
@@ -392,12 +394,16 @@ int32_t tb_GetControlProperty(gaddr ch, int32_t creator, int32_t tag, uint32_t s
     property *p = find_property(ch, creator, tag);
     if (!p)
         return controlPropertyNotFoundErr;
-    if (actual)
+    if (actual) {
         wr32(actual, p->size);
+        idle_wrote(actual, 4);
+    }
     if (size < p->size)
         return errDataSizeMismatch;
-    if (buffer)
+    if (buffer) {
         gput(buffer, p->data, p->size);
+        idle_wrote(buffer, p->size);
+    }
     return noErr;
 }
 

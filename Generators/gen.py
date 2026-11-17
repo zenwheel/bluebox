@@ -659,7 +659,8 @@ def gen_ppc_trapcall(name, fn, sig, variant):
     tw = f"0x{trap:04X}" + "".join(f" | {b}" for b in bits)
     lines.append(f"    ppc_trap((uint16_t)({tw}));\n")
     for r, o in outs:
-        lines.append(f"    if ({o}) wr32({o}, ppc_trap_get({r}));\n")
+        # Written by the glue: idle.c takes it as the call's answer.
+        lines.append(f"    if ({o}) {{\n        wr32({o}, ppc_trap_get({r}));\n        idle_wrote({o}, 4);\n    }}\n")
     ti = sig["rti"]
     if ti is not None:
         if sig["conv"] == "stack":
@@ -727,7 +728,8 @@ def gen_ppc_lowmem():
 
 def gen_ppc(impl, sigs):
     out = [HEADER, "#include <stdbool.h>\n#include <stdint.h>\n#include <string.h>\n\n",
-           '#include "ppc.h"\n#include "ppc_bridge.h"\n#include "tb_protos_gen.h"\n\n']
+           '#include "ppc.h"\n#include "ppc_bridge.h"\n#include "tb_protos_gen.h"\n\n',
+           "void idle_wrote(gaddr a, uint32_t len); /* idle.c: a call's answer */\n\n"]
     table = []
     for fn in functions:
         name = fn["name"]

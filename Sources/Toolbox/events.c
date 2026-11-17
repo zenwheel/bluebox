@@ -1546,7 +1546,8 @@ void tb_GetMouse(gaddr p)
     if (down && drain_released())
         g = make_pt(-32000, -32000);
     static uint32_t last;
-    if (g != last) { /* the mouse moved: what the program does with it is news */
+    bool moved = g != last;
+    if (moved) { /* the mouse moved: what the program does with it is news */
         last = g;
         idle_work();
     }
@@ -1559,6 +1560,11 @@ void tb_GetMouse(gaddr p)
     }
     wr16(p, (uint16_t)v);
     wr16(p + 2, (uint16_t)h);
+    /* Still where it was: a loop watching the mouse for a move (Interiors',
+     * between its picks) is a poll loop like one asking for the button. */
+    idle_wrote(p, 4);
+    if (!moved)
+        idle_poll();
 }
 
 /* ---------------------------------------------------------------------- */
