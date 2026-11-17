@@ -323,6 +323,12 @@ func usage() -> Never {
           Open the Blue Box shell: the library's applications to launch, with their
           settings and the defaults for every application; drop archives on its
           window (or its Dock icon) to import them.
+      bluebox browser [folder]
+          Open the Blue Box Browser on the folder (the library by default): a window like
+          the macOS Finder's for the library, Macintosh HD and your own files, which keeps
+          classic files' resource forks, Finder information, labels and comments as it
+          copies, moves, renames and trashes them, opens classic programs and documents
+          in Blue Box and host files with macOS, and drags files in and out.
       bluebox apps [--library dir]
           List the applications in the library and those installed on the classic
           Mac's disk (\(defaultDisk())).  run and install take
@@ -2207,6 +2213,11 @@ case "send": sendCommand(rest)
 case "apps": appsCommand(rest)
 #if canImport(AppKit)
 case "shell": shellCommand(rest)
+case "browser":
+    // bluebox browser [folder]: the shell's application with a Blue Box
+    // Browser window on the folder (the library by default).
+    guard rest.count <= 1, !(rest.first?.hasPrefix("-") ?? false) else { usage() }
+    shellCommand([], browser: rest.first.map { URL(fileURLWithPath: $0).standardizedFileURL.path } ?? defaultLibrary())
 #endif
 case "set": setCommand(rest)
 case "chooser": chooserCommand(rest)

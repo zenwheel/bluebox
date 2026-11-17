@@ -464,6 +464,30 @@ enum ShellItem: Hashable {
         }
     }
 
+    /// Open documents in a program (the browser's double-click): a run of
+    /// it given them; one running already takes them itself (registerRun
+    /// hands them to it).  A hibernated program asks which snapshot first;
+    /// resumed, it goes on as it was saved (the documents are for a fresh
+    /// start).
+    func openDocuments(_ documents: [String], application path: String) {
+        guard !documents.isEmpty else { return openProgram(path: path) }
+        if case .launch = states.open(path), hibernatedBundle(path) == nil, states.isHibernated(path) {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    switch pickSnapshot(program: RunningProgram.canonical(path), title: (path as NSString).lastPathComponent,
+                                        registry: self.registry, standIn: false) {
+                    case .resume(let snapshot): self.launch(path: path, extra: ["--resume", snapshot])
+                    case .startFresh: self.launch(path: path, extra: ["--fresh"] + documents)
+                    case .cancel: break
+                    }
+                    self.readRegistry()
+                }
+            }
+            return
+        }
+        launch(path: path, extra: documents)
+    }
+
     /// "Hibernated 2026-11-06 01:23" for a hibernated program (its newest
     /// snapshot, how many it has, and whether the newest resumes here), or
     /// nil.
@@ -883,6 +907,7 @@ struct ShellView: View {
                     Button("Show in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: app.path)])
                     }
+                    Button("Show in Blue Box Browser") { BrowserWindowController.reveal(app.path) }
                     Divider()
                     Button("Export as App\u{2026}") { model.exporting = app }
                 }
@@ -895,6 +920,8 @@ struct ShellView: View {
                     Button { model.chooseImport() } label: { Label("Import…", systemImage: "square.and.arrow.down") }
                         .help("Import archives, disk images or MacBinary files into the library")
                     Spacer()
+                    Button { BrowserWindowController.open() } label: { Image(systemName: "folder") }
+                        .help("Open the Blue Box Browser: the library, Macintosh HD and your files, like the Finder")
                     Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
                         .help("Look for changes in the library")
                 }
@@ -1408,11 +1435,34 @@ struct HighlightPicker: View {
 #endif
     }
 
+    /// `bluebox browser [folder]`: a browser window opens instead of the
+    /// shell's.
+    var initialBrowser: String?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
 #if canImport(Sparkle)
         updates?.startUpdater()
 #endif
-        showWindow()
+        BrowserWindowController.model = model
+        if let folder = initialBrowser {
+            let browser = BrowserWindowController.open(at: folder)
+            // For tests and documentation: the window drawn to a PNG (not
+            // shown on the screen), then quit.
+            if let out = ProcessInfo.processInfo.environment["BLUEBOX_BROWSER_SNAPSHOT"] {
+                if let sel = ProcessInfo.processInfo.environment["BLUEBOX_BROWSER_SELECT"] {
+                    browser.selectForSnapshot(sel)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    MainActor.assumeIsolated {
+                        browser.snapshot(to: out)
+                        NSApp.terminate(nil)
+                    }
+                }
+                return
+            }
+        } else {
+            showWindow()
+        }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Blue Box")
         let menu = NSMenu()
@@ -1464,6 +1514,9 @@ struct HighlightPicker: View {
         let open = NSMenuItem(title: "Open Blue Box", action: #selector(openWindow(_:)), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
+        let browse = NSMenuItem(title: "New Browser Window", action: #selector(newBrowserWindow(_:)), keyEquivalent: "")
+        browse.target = self
+        menu.addItem(browse)
         let snapshots = NSMenuItem(title: "Hibernated Snapshots…", action: #selector(showSnapshots(_:)), keyEquivalent: "")
         snapshots.target = self
         menu.addItem(snapshots)
@@ -1488,6 +1541,56 @@ struct HighlightPicker: View {
     }
 
     @objc func openWindow(_ sender: Any?) { showWindow() }
+    @objc func newBrowserWindow(_ sender: Any?) {
+        // Beside the folder the front browser shows, as the Finder's do.
+        let front = NSApp.keyWindow?.windowController as? BrowserWindowController
+        BrowserWindowController.open(at: front?.location)
+    }
+
+    /// The Dock icon's menu: a new browser window.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        let item = NSMenuItem(title: "New Browser Window", action: #selector(newBrowserWindow(_:)), keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+        let open = NSMenuItem(title: "Open Blue Box", action: #selector(openWindow(_:)), keyEquivalent: "")
+        open.target = self
+        menu.addItem(open)
+        return menu
+    }
+
+    /// The "Open in Blue Box" service (NSServices in Blue Box.app's
+    /// Info.plist), for files chosen in the macOS Finder: a classic
+    /// program, or a document whose program is in Blue Box, opens in a
+    /// run; a folder opens in a browser window; anything else is shown
+    /// in one, selected.
+    @objc func openInBlueBox(_ pboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        let urls = pboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        guard !urls.isEmpty else {
+            error.pointee = "No files were given to open in Blue Box." as NSString
+            return
+        }
+        BrowserWindowController.model = model
+        var reveal: [String] = []
+        for url in urls {
+            guard let item = BrowserListing.item(url.path) else { continue }
+            if item.isFolder {
+                BrowserWindowController.open(at: item.path)
+            } else if item.isApplication {
+                model.openProgram(path: item.path)
+            } else if item.isClassic, item.creator != 0,
+                      let app = BrowserCore.shared.applications.applications(creator: item.creator).first {
+                model.openDocuments([item.path], application: app)
+            } else {
+                reveal.append(item.path)
+            }
+        }
+        if let first = reveal.first {
+            BrowserWindowController.open(at: (first as NSString).deletingLastPathComponent,
+                                         selecting: reveal.filter { ($0 as NSString).deletingLastPathComponent
+                                             == (first as NSString).deletingLastPathComponent })
+        }
+    }
     @objc func showSnapshots(_ sender: Any?) {
         if let w = snapshotsWindow {
             w.makeKeyAndOrderFront(nil)
@@ -1693,13 +1796,16 @@ struct SnapshotsView: View {
     }
 }
 
-func shellCommand(_ args: [String]) -> Never {
+func shellCommand(_ args: [String], browser: String? = nil) -> Never {
     MainActor.assumeIsolated {
         let app = NSApplication.shared
-        app.setActivationPolicy(.regular)
+        let snapshot = ProcessInfo.processInfo.environment["BLUEBOX_BROWSER_SNAPSHOT"] != nil && browser != nil
+        app.setActivationPolicy(snapshot ? .prohibited : .regular)
         app.applicationIconImage = blueBoxIconImage()
         let delegate = ShellDelegate()
+        delegate.initialBrowser = browser
         app.delegate = delegate
+        app.servicesProvider = delegate
         app.mainMenu = shellMenu(updates: delegate.checksForUpdates)
         withExtendedLifetime(delegate) { app.run() }
     }
@@ -1729,6 +1835,28 @@ func shellCommand(_ args: [String]) -> Never {
     let fileItem = NSMenuItem()
     main.addItem(fileItem)
     let file = NSMenu(title: "File")
+    // The browser's items go up the responder chain to the front browser
+    // window, and are dimmed without one; where one shares its key with
+    // the shell's (Command-O, Command-R), the first enabled item takes it.
+    file.addItem(withTitle: "New Browser Window", action: #selector(ShellDelegate.newBrowserWindow(_:)), keyEquivalent: "n")
+    file.addItem(withTitle: "New Tab", action: #selector(NSResponder.newWindowForTab(_:)), keyEquivalent: "t")
+    file.addItem(withTitle: "New Folder", action: #selector(BrowserWindowController.newFolder(_:)), keyEquivalent: "n")
+        .keyEquivalentModifierMask = [.command, .shift]
+    file.addItem(withTitle: "Open", action: #selector(BrowserWindowController.openSelection(_:)), keyEquivalent: "o")
+    file.addItem(.separator())
+    file.addItem(withTitle: "Get Info", action: #selector(BrowserWindowController.getInfo(_:)), keyEquivalent: "i")
+    file.addItem(withTitle: "Rename", action: #selector(BrowserWindowController.rename(_:)), keyEquivalent: "")
+    file.addItem(withTitle: "Duplicate", action: #selector(BrowserWindowController.duplicate(_:)), keyEquivalent: "d")
+    file.addItem(withTitle: "Make Alias", action: #selector(BrowserWindowController.makeAlias(_:)), keyEquivalent: "a")
+        .keyEquivalentModifierMask = [.command, .control]
+    file.addItem(withTitle: "Show Original", action: #selector(BrowserWindowController.showOriginal(_:)), keyEquivalent: "r")
+    file.addItem(withTitle: "Move to Trash", action: #selector(BrowserWindowController.moveToTrash(_:)), keyEquivalent: "\u{8}")
+    file.addItem(withTitle: "Empty Trash…", action: #selector(BrowserWindowController.emptyTrash(_:)), keyEquivalent: "\u{8}")
+        .keyEquivalentModifierMask = [.command, .shift]
+    file.addItem(withTitle: "Save as MacBinary…", action: #selector(BrowserWindowController.saveMacBinary(_:)), keyEquivalent: "")
+    file.addItem(withTitle: "Import into Library", action: #selector(BrowserWindowController.importIntoLibrary(_:)),
+                 keyEquivalent: "")
+    file.addItem(.separator())
     // Sent up the responder chain to the application's delegate.
     file.addItem(withTitle: "Import…", action: #selector(ShellDelegate.importFiles(_:)), keyEquivalent: "o")
     file.addItem(withTitle: "Import Fonts from Disk Image…", action: #selector(ShellDelegate.importFonts(_:)),
@@ -1752,7 +1880,38 @@ func shellCommand(_ args: [String]) -> Never {
     edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
     edit.addItem(withTitle: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: "")
     edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Find", action: #selector(BrowserWindowController.focusSearch(_:)), keyEquivalent: "f")
     editItem.submenu = edit
+    // The browser's View and Go menus.
+    let viewItem = NSMenuItem()
+    main.addItem(viewItem)
+    let view = NSMenu(title: "View")
+    view.addItem(withTitle: "as Icons", action: #selector(BrowserWindowController.viewAsIcons(_:)), keyEquivalent: "1")
+    view.addItem(withTitle: "as List", action: #selector(BrowserWindowController.viewAsList(_:)), keyEquivalent: "2")
+    view.addItem(withTitle: "as Columns", action: #selector(BrowserWindowController.viewAsColumns(_:)), keyEquivalent: "3")
+    view.addItem(.separator())
+    view.addItem(withTitle: "Show Hidden Files", action: #selector(BrowserWindowController.toggleHidden(_:)), keyEquivalent: ".")
+        .keyEquivalentModifierMask = [.command, .shift]
+    view.addItem(withTitle: "Show Sidebar", action: #selector(NSSplitViewController.toggleSidebar(_:)), keyEquivalent: "s")
+        .keyEquivalentModifierMask = [.command, .control]
+    viewItem.submenu = view
+    let goItem = NSMenuItem()
+    main.addItem(goItem)
+    let go = NSMenu(title: "Go")
+    go.addItem(withTitle: "Back", action: #selector(BrowserWindowController.goBack(_:)), keyEquivalent: "[")
+    go.addItem(withTitle: "Forward", action: #selector(BrowserWindowController.goForward(_:)), keyEquivalent: "]")
+    go.addItem(withTitle: "Enclosing Folder", action: #selector(BrowserWindowController.goUp(_:)),
+               keyEquivalent: String(Character(UnicodeScalar(NSUpArrowFunctionKey)!)))
+    go.addItem(.separator())
+    go.addItem(withTitle: "Library", action: #selector(BrowserWindowController.goLibrary(_:)), keyEquivalent: "l")
+        .keyEquivalentModifierMask = [.command, .shift]
+    go.addItem(withTitle: "Macintosh HD", action: #selector(BrowserWindowController.goDisk(_:)), keyEquivalent: "c")
+        .keyEquivalentModifierMask = [.command, .shift]
+    go.addItem(withTitle: "Home", action: #selector(BrowserWindowController.goHome(_:)), keyEquivalent: "h")
+        .keyEquivalentModifierMask = [.command, .shift]
+    go.addItem(withTitle: "Trash", action: #selector(BrowserWindowController.goTrash(_:)), keyEquivalent: "")
+    goItem.submenu = go
     let windowItem = NSMenuItem()
     main.addItem(windowItem)
     let window = NSMenu(title: "Window")

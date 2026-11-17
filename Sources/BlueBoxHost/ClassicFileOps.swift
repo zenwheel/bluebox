@@ -41,7 +41,7 @@ public struct ClassicItemInfo: Sendable {
     public var locked: Bool
 }
 
-public struct ClassicFileOps {
+public struct ClassicFileOps: Sendable {
     /// Macintosh HD's folder, whose files' IDs the catalog keeps.
     public let disk: String
 
@@ -199,6 +199,13 @@ public struct ClassicFileOps {
         }
         // A copy is never locked, as the Finder's weren't.
         if hasData, info(dest).locked { try? setLocked(dest, false) }
+    }
+
+    /// What came in from the host (a file promise kept, an item put here
+    /// by something else): its own forks, and its folders' and files',
+    /// become sidecars and catalog entries.
+    public func adopt(_ path: String) {
+        if isFolder(path) { normalizeTree(path) } else { normalizeFile(path) }
     }
 
     /// A file with forks of its own given a sidecar instead.
