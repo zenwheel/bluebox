@@ -8,7 +8,7 @@
  * SWAP, EXG, ADD, ADDA, ADDI, ADDQ, SUB, SUBA, SUBI, SUBQ, CMP, CMPA,
  * CMPI, AND, ANDI, OR, ORI, EOR, EORI, MULU.W, MULS.W, LSL, LSR and ASR by
  * an immediate count, Scc, LINK, UNLK and NOP, in every addressing mode
- * but the 68020's memory-indirect and full-format indexed ones.  Other
+ * (the 68020's full-format index and memory-indirect ones too).  Other
  * instructions whose length the translator can tell (bit operations,
  * shifts and rotates by a register, ASL, ROXd, ADDX, SUBX, NEGX, CMPM,
  * MOVE to and from CCR and SR, MULL, DIVL, DIVU, DIVS, CHK, BCD, bit
@@ -432,18 +432,65 @@ typedef struct {
     uint32_t addr;
 } jea;
 
-/* Index from a brief extension word into w9 (added to w1). */
-static bool index_brief(tctx *t, uint16_t ext)
+/* The index register of an extension word into w9, scaled, added to w1. */
+static void add_index(tctx *t, uint16_t ext)
 {
-    if ((ext & 0x0100) && t->model != 68000)
-        return false; /* full format: the interpreter */
     int xr = (ext >> 12) & 7;
     getr(t, 9, (ext & 0x8000) ? 8 + xr : xr);
     if (!(ext & 0x0800))
         a64_sxth(&t->b, 9, 9);
     int scale = t->model == 68000 ? 0 : (ext >> 9) & 3;
     a64_addsub(&t->b, A64_ADD, false, 1, 1, 9, 0, scale);
-    add_imm(t, 1, 1, (int8_t)(ext & 0xFF));
+}
+
+/* An index extension word's address into w1 (which holds the base: An,
+ * or the PC-relative base).  The 68020's full format, as the
+ * interpreter's ea_index: base and index each suppressible, a base
+ * displacement, and memory indirection, the index added before or after
+ * the pointer is read, then an outer displacement.  The pointer's load
+ * leaves w0 as it was (an operand read before this address is computed). */
+static bool index_brief(tctx *t, uint16_t ext)
+{
+    if (!(ext & 0x0100) || t->model == 68000) {
+        add_index(t, ext);
+        add_imm(t, 1, 1, (int8_t)(ext & 0xFF));
+        return true;
+    }
+    a64_buf *b = &t->b;
+    bool xs = ext & 0x40;
+    int iis = ext & 7;
+    if (ext & 0x80)
+        a64_movz(b, false, 1, 0, 0);
+    uint32_t bd = 0;
+    switch ((ext >> 4) & 3) {
+    case 2: bd = (uint32_t)(int32_t)(int16_t)ext16(t); break;
+    case 3: bd = ext32(t); break;
+    default: break;
+    }
+    if (bd) {
+        a64_mov32(b, 9, bd);
+        a64_add(b, 1, 1, 9);
+    }
+    if (!xs && !(iis & 4))
+        add_index(t, ext); /* no indirection, or preindexed */
+    if (iis == 0)
+        return true;
+    uint32_t od = 0;
+    switch (iis & 3) {
+    case 2: od = (uint32_t)(int32_t)(int16_t)ext16(t); break;
+    case 3: od = ext32(t); break;
+    default: break;
+    }
+    a64_mov(b, false, 15, 0);
+    load(t, 4);
+    a64_mov(b, false, 1, 0);
+    a64_mov(b, false, 0, 15);
+    if (!xs && (iis & 4))
+        add_index(t, ext); /* postindexed */
+    if (od) {
+        a64_mov32(b, 9, od);
+        a64_add(b, 1, 1, 9);
+    }
     return true;
 }
 
@@ -1760,14 +1807,49 @@ static uint16_t brief(gen *g)
     return (uint16_t)((r & 0xF000) | ((r >> 4) & 0x0200) | (rnd(g->s) & 0xFF));
 }
 
+/* Where the self-test keeps pointers for memory-indirect operands (out of
+ * reach of its stores), and how many. */
+enum { POINTERS = 0x70000, NPOINTERS = 256 };
+
+/* A full-format extension word and its displacements: the base
+ * suppressed, a long base displacement into the scratch area (with an
+ * index .W, as brief's) or to one of its pointers, read pre- or
+ * postindexed (the index then suppressed or after the read), with a null,
+ * word or long outer displacement. */
+static void full_gen(gen *g)
+{
+    uint32_t r = rnd(g->s);
+    uint16_t x = (uint16_t)((brief(g) & 0xFE00) | 0x01B0);
+    int iis = (int)(r % 7);
+    if (iis == 0) {
+        put(g, x);
+        put32(g, g->scratch + 0x40000 + (rnd(g->s) % 0x1000));
+        return;
+    }
+    if (iis <= 3)
+        x |= 0x40; /* memory indirect, index suppressed */
+    else
+        iis++; /* postindexed: 5, 6, 7 */
+    put(g, (uint16_t)(x | iis));
+    put32(g, g->scratch + POINTERS + 4 * (rnd(g->s) % NPOINTERS));
+    if ((iis & 3) == 2)
+        put(g, (uint16_t)((rnd(g->s) % 0x200) - 0x100));
+    else if ((iis & 3) == 3)
+        put32(g, (rnd(g->s) % 0x200) - 0x100);
+}
+
 /* An EA's mode and register (extension words added): memory operands
  * near the address registers (all pointing into the scratch area), or
- * abs.L inside it.  Sources may also be immediate, PC-relative or abs.W
- * (reads only). */
+ * abs.L inside it, or through a full-format extension word (full_gen).
+ * Sources may also be immediate, PC-relative or abs.W (reads only). */
 static int ea_gen(gen *g, int sz, bool dest, bool allow_an)
 {
     for (;;) {
-        int m = (int)(rnd(g->s) % 12), r = (int)(rnd(g->s) % 8);
+        int m = (int)(rnd(g->s) % 13), r = (int)(rnd(g->s) % 8);
+        if (m == 12) {
+            full_gen(g);
+            return 6 << 3 | r;
+        }
         switch (m) {
         case 0: return 0 << 3 | r;
         case 1:
@@ -2095,6 +2177,11 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
         start.pc = code_at;
         for (uint32_t i = 0; i < AREA; i++)
             before[i] = (uint8_t)rnd(&s);
+        for (uint32_t i = 0; i < NPOINTERS; i++) {
+            uint32_t p = scratch + 0x40000 + (rnd(&s) % 0x2000) * 2;
+            for (int k = 0; k < 4; k++)
+                before[POINTERS + 4 * i + (uint32_t)k] = (uint8_t)(p >> (24 - 8 * k));
+        }
 
         gput(scratch, before, AREA);
         cpu68k ci = start;
