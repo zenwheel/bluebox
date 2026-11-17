@@ -45,7 +45,7 @@ while IFS='|' read -r cpu target rel; do
 	case $cpu in '' | '#'*) continue ;; esac
 	app="$dir/corpus/$rel"
 	total=$((total + 1))
-	r=$(run "$app" "--$cpu" "")
+	r=$(run "$app" "--$cpu" "--no-jit")
 	istop=${r% *} isecs=${r#* }
 	r=$(run "$app" "--$cpu" "--jit")
 	jstop=${r% *} jsecs=${r#* }

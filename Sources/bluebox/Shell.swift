@@ -1198,7 +1198,7 @@ struct SettingsForm: View {
                   + "this Mac's speed, still a 68000. Other processors have no cycle model yet: it changes "
                   + "nothing for them.")
             Picker("Translate code (JIT)", selection: $settings.jit) {
-                Text("\(inherit) (\(fallback.jit == true ? "on" : "off"))").tag(Bool?.none)
+                Text("\(inherit) (\((fallback.jit ?? jitByDefault) ? "on" : "off"))").tag(Bool?.none)
                 Text("On").tag(Bool?.some(true))
                 Text("Off").tag(Bool?.some(false))
             }
