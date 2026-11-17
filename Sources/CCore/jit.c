@@ -73,9 +73,14 @@ void jit_code_write_end(jit_code *j, void *p, size_t n)
  * translator's build identity, then records of
  *   magic "BLK1", pc, ninsn, guest_len, code_len, hash (8 bytes),
  *   a check of those fields and the code (8 bytes), code_len bytes of code.
- * A record cut short (a run that ended while writing) ends the file. */
+ * A record cut short (a run that ended while writing) ends the file.
+ *
+ * A file grows by what each run translates that the file didn't have
+ * (code a program loads at another address this time, say), so one past
+ * CACHE_MAX bytes is started again, and a run stops adding to it there. */
 
 enum { CACHE_FORMAT = 1, BUCKETS = 1 << 14 };
+#define CACHE_MAX (32L << 20)
 
 #define HDR_MAGIC 0x544A4242u /* "BBJT" */
 #define REC_MAGIC 0x314B4C42u /* "BLK1" */
@@ -88,6 +93,7 @@ typedef struct rec_node {
 
 struct jit_cache {
     FILE *f;
+    long size; /* of the file */
     uint8_t *data; /* the file as read */
     rec_node *buckets[BUCKETS];
 };
@@ -151,8 +157,8 @@ jit_cache *jit_cache_open(const char *dir, const char *name, uint64_t build)
         long size = ftell(in);
         fseek(in, 0, SEEK_SET);
         uint32_t hdr[4];
-        if (size >= (long)sizeof hdr && fread(hdr, sizeof hdr, 1, in) == 1 && hdr[0] == HDR_MAGIC &&
-            hdr[1] == CACHE_FORMAT && ((uint64_t)hdr[3] << 32 | hdr[2]) == build) {
+        if (size >= (long)sizeof hdr && size <= CACHE_MAX && fread(hdr, sizeof hdr, 1, in) == 1 &&
+            hdr[0] == HDR_MAGIC && hdr[1] == CACHE_FORMAT && ((uint64_t)hdr[3] << 32 | hdr[2]) == build) {
             size_t n = (size_t)size - sizeof hdr;
             c->data = bb_host_malloc(n ? n : 1);
             if (c->data && fread(c->data, 1, n, in) == n) {
@@ -172,6 +178,7 @@ jit_cache *jit_cache_open(const char *dir, const char *name, uint64_t build)
                     insert(c, &r, false);
                     at += 36 + f[4];
                 }
+                c->size = (long)(sizeof hdr + at);
                 /* Whatever followed the last whole record is dropped. */
                 if (at < n) {
                     fclose(in);
@@ -188,6 +195,7 @@ jit_cache *jit_cache_open(const char *dir, const char *name, uint64_t build)
     if (c->f && fresh) {
         uint32_t hdr[4] = { HDR_MAGIC, CACHE_FORMAT, (uint32_t)build, (uint32_t)(build >> 32) };
         fwrite(hdr, sizeof hdr, 1, c->f);
+        c->size = (long)sizeof hdr;
     }
     return c;
 }
@@ -203,8 +211,9 @@ const jit_cache_rec *jit_cache_find(jit_cache *c, uint32_t pc)
 void jit_cache_add(jit_cache *c, uint32_t pc, uint32_t ninsn, uint32_t guest_len, uint64_t hash, const void *code,
                    uint32_t code_len)
 {
-    if (!c->f)
+    if (!c->f || c->size + 36 + (long)code_len > CACHE_MAX)
         return;
+    c->size += 36 + (long)code_len;
     uint8_t *copy = bb_host_malloc(code_len ? code_len : 1);
     if (!copy)
         return;
