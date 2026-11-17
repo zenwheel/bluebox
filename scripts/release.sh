@@ -28,6 +28,15 @@
 #      the EdDSA key in the login keychain, creates .delta files from the
 #      previous zips still in releases/, and rewrites releases/appcast.xml.
 #
+# Beside the app, every run also builds, signs (and with a profile notarizes
+# and staples) and zips:
+#   - Blue Box After Dark.saver (scripts/build-saver.sh), the screen saver,
+#     as BlueBoxAfterDark-<version>.zip;
+#   - Talking Moose.app, `bluebox export --background` of the Moose
+#     (MOOSE_PROGRAM), made by the app just built, as TalkingMoose-<version>.zip.
+# With a profile these go to EXTRAS_DIR, outside releases/, so Sparkle's
+# appcast never takes them for updates of Blue Box; without one, to build/.
+#
 # Publish by copying everything in releases/ (zip, deltas, appcast.xml) to
 #   zenwheel-site/static/software/bluebox/
 # and running that site's deploy.sh. Keep old zips in releases/ so future
@@ -40,6 +49,10 @@
 #                    Developer ID Application; - signs ad hoc, build only)
 #   RELEASES_DIR     where the artifacts go            (default: releases/)
 #   DOWNLOAD_URL     where releases/ gets published    (default: https://www.zenwheel.com/software/bluebox/)
+#   EXTRAS_DIR       where the saver and Moose zips go  (default: releases-extras/)
+#   MOOSE_PROGRAM    the Talking Moose file to export   (default: Moose1.21 in
+#                    ~/VAM/handover/scratch/moose/m121; empty: no Moose)
+#   MOOSE_BUNDLE_ID  the exported Moose's identifier    (default: org.bluebox.talking-moose)
 
 set -eu
 
@@ -52,6 +65,11 @@ ZIP_BASENAME="BlueBox"
 TEAM_ID=${TEAM_ID:-W774XGX423}
 RELEASES_DIR=${RELEASES_DIR:-$ROOT/releases}
 DOWNLOAD_URL=${DOWNLOAD_URL:-https://www.zenwheel.com/software/bluebox/}
+EXTRAS_DIR=${EXTRAS_DIR:-$ROOT/releases-extras}
+MOOSE_PROGRAM=${MOOSE_PROGRAM-$HOME/VAM/handover/scratch/moose/m121/Moose1.21}
+MOOSE_BUNDLE_ID=${MOOSE_BUNDLE_ID:-org.bluebox.talking-moose}
+SAVER_NAME="Blue Box After Dark"
+MOOSE_NAME="Talking Moose"
 
 BUILD_DIR="$ROOT/build"
 APP_PATH="$BUILD_DIR/$APP_NAME.app"
@@ -100,6 +118,21 @@ else
 	# picks one up as a release.
 	ZIP_PATH="$BUILD_DIR/$ZIP_BASENAME-$VERSION.zip"
 fi
+if [ "$NOTARIZE" = 1 ]; then EXTRAS_OUT="$EXTRAS_DIR"; else EXTRAS_OUT="$BUILD_DIR"; fi
+SAVER_ZIP="$EXTRAS_OUT/BlueBoxAfterDark-$VERSION.zip"
+MOOSE_ZIP="$EXTRAS_OUT/TalkingMoose-$VERSION.zip"
+if [ "$NOTARIZE" = 1 ]; then
+	for z in "$SAVER_ZIP" "$MOOSE_ZIP"; do
+		if [ -e "$z" ]; then
+			echo "$z already exists; remove it or pick a new version" >&2
+			exit 1
+		fi
+	done
+fi
+if [ -n "$MOOSE_PROGRAM" ] && [ ! -e "$MOOSE_PROGRAM" ]; then
+	echo "no Talking Moose at $MOOSE_PROGRAM (set MOOSE_PROGRAM, or MOOSE_PROGRAM= for none)" >&2
+	exit 1
+fi
 
 step() { printf '\n==> %s\n' "$*"; }
 
@@ -141,11 +174,12 @@ if [ "$built_version" != "$VERSION" ] || [ "$built_build" != "$BUILD_NUMBER" ]; 
 fi
 
 # --- 2. Notarize + staple ----------------------------------------------------
-if [ "$NOTARIZE" = 1 ]; then
-	step "Submitting for notarization with profile '$NOTARY_PROFILE' (this takes a few minutes)"
+# notarize <bundle>: submit it, wait, and staple the ticket.
+notarize() {
+	step "Submitting $(basename "$1") for notarization with profile '$NOTARY_PROFILE' (this takes a few minutes)"
 	notarize_zip="$BUILD_DIR/notarize.zip"
 	rm -f "$notarize_zip"
-	/usr/bin/ditto -c -k --keepParent "$APP_PATH" "$notarize_zip"
+	/usr/bin/ditto -c -k --keepParent "$1" "$notarize_zip"
 	submit_log="$BUILD_DIR/notarize.log"
 	submitted=0
 	xcrun notarytool submit "$notarize_zip" --keychain-profile "$NOTARY_PROFILE" --wait >"$submit_log" 2>&1 \
@@ -159,9 +193,14 @@ if [ "$NOTARIZE" = 1 ]; then
 		fi
 		exit 1
 	fi
+	rm -f "$notarize_zip"
 
-	step "Stapling"
-	xcrun stapler staple "$APP_PATH"
+	step "Stapling $(basename "$1")"
+	xcrun stapler staple "$1"
+}
+
+if [ "$NOTARIZE" = 1 ]; then
+	notarize "$APP_PATH"
 	spctl --assess --type execute --verbose=2 "$APP_PATH"
 fi
 codesign --verify --deep --strict "$APP_PATH"
@@ -172,12 +211,58 @@ mkdir -p "$(dirname "$ZIP_PATH")"
 rm -f "$ZIP_PATH"
 /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
 
+# --- 3a. The After Dark screen saver -----------------------------------------
+# build-saver.sh makes it universal and signs it ad hoc; it is given the
+# release's version and signed again here like the app, with the hardened
+# runtime (a plug-in's code runs under the screen saver host's own).
+SAVER_PATH="$BUILD_DIR/$SAVER_NAME.saver"
+step "Building $SAVER_NAME.saver"
+sh "$ROOT/scripts/build-saver.sh" "$BUILD_DIR" >/dev/null
+plutil -replace CFBundleShortVersionString -string "$VERSION" "$SAVER_PATH/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$SAVER_PATH/Contents/Info.plist"
+xattr -cr "$SAVER_PATH"
+if [ "$SIGN_IDENTITY" = - ]; then
+	codesign --force --sign - --options runtime "$SAVER_PATH"
+else
+	codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp "$SAVER_PATH"
+fi
+if [ "$NOTARIZE" = 1 ]; then
+	notarize "$SAVER_PATH"
+fi
+codesign --verify --deep --strict "$SAVER_PATH"
+step "Zipping to $SAVER_ZIP"
+mkdir -p "$EXTRAS_OUT"
+rm -f "$SAVER_ZIP"
+/usr/bin/ditto -c -k --keepParent "$SAVER_PATH" "$SAVER_ZIP"
+
+# --- 3b. The Talking Moose ---------------------------------------------------
+# Exported by the app just built, so it carries this release's Blue Box;
+# bluebox export signs it from the inside out and notarizes and staples it.
+if [ -n "$MOOSE_PROGRAM" ]; then
+	MOOSE_PATH="$BUILD_DIR/$MOOSE_NAME.app"
+	step "Exporting $MOOSE_NAME.app from $MOOSE_PROGRAM"
+	set -- export "$MOOSE_PROGRAM" --to "$BUILD_DIR" --name "$MOOSE_NAME" --bundle-id "$MOOSE_BUNDLE_ID" \
+		--background --sign "$SIGN_IDENTITY" --force
+	if [ "$NOTARIZE" = 1 ]; then
+		set -- "$@" --notarize "$NOTARY_PROFILE"
+	fi
+	"$APP_PATH/Contents/MacOS/bluebox" "$@"
+	if [ "$NOTARIZE" = 1 ]; then
+		spctl --assess --type execute --verbose=2 "$MOOSE_PATH"
+	fi
+	codesign --verify --deep --strict "$MOOSE_PATH"
+	step "Zipping to $MOOSE_ZIP"
+	rm -f "$MOOSE_ZIP"
+	/usr/bin/ditto -c -k --keepParent "$MOOSE_PATH" "$MOOSE_ZIP"
+fi
+
 if [ "$NOTARIZE" = 0 ]; then
 	step "Done (build only)"
 	cat <<MSG
 
-$APP_NAME $VERSION (build $BUILD_NUMBER) is at $ZIP_PATH.
-It is signed but not notarized, and the appcast was not updated. To release:
+$APP_NAME $VERSION (build $BUILD_NUMBER) is at $ZIP_PATH,
+the screen saver at $SAVER_ZIP$([ -n "$MOOSE_PROGRAM" ] && printf ',\nthe Talking Moose at %s' "$MOOSE_ZIP").
+They are signed but not notarized, and the appcast was not updated. To release:
 
     NOTARY_PROFILE=zenwheel-notary $0 $VERSION
 MSG
@@ -196,12 +281,13 @@ step "Generating appcast and deltas in $RELEASES_DIR"
 	"$RELEASES_DIR"
 
 step "Done"
-ls -la "$RELEASES_DIR"
+ls -la "$RELEASES_DIR" "$EXTRAS_DIR"
 cat <<MSG
 
 $APP_NAME $VERSION (build $BUILD_NUMBER) is in $RELEASES_DIR.
 Tag the release (git tag v$VERSION), then publish with e.g.:
 
     rsync -av "$RELEASES_DIR/" ~/Developer/zenwheel-site/static/software/bluebox/
+    rsync -av "$EXTRAS_DIR/" ~/Developer/zenwheel-site/static/software/bluebox/
     (cd ~/Developer/zenwheel-site && ./deploy.sh)
 MSG

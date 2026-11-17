@@ -10,3 +10,4 @@ releases/
 .build-asan/
 .finf/
 .claude/
+releases-extras/
