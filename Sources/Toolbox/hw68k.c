@@ -21,8 +21,10 @@
  *   IWM      the floppy chip, with the machine's internal drive on it
  *            and no disk in the drive.
  *
- * The devices are interpreted: a JIT's loads and stores don't reach them,
- * so a machine chosen by name runs without the JIT.
+ * The 68k JIT's loads and stores reach them as the interpreter's do, but
+ * a machine chosen by name still runs interpreted: a device read inside a
+ * translated block sees the instruction count of the block's start, and
+ * the programs that want such a machine time themselves by the chips.
  */
 #include <stdio.h>
 #include <string.h>

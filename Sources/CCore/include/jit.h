@@ -111,6 +111,7 @@ typedef struct jit_ctx {
     void *exit;              /* the exit routine */
     uint8_t *mem;            /* g_mem */
     uint8_t *map;            /* g_code_map */
+    const uint8_t *hw;       /* g_hw_map (the 68k's device windows) */
     uint32_t watch_lo, watch_len;
     uint32_t *last_stub;     /* the exit stub that left last, or NULL */
     jit_fast *fast;          /* indirect-branch table */

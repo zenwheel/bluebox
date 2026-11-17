@@ -69,6 +69,36 @@ extension BlueBox {
             }
         }
 
+        /// Loads and stores in a device window (the VIA's interrupt enable
+        /// register) reach the device, as the interpreter's do, not the
+        /// memory under it; a load's neighbours keep their registers.
+        @Test func jitReachesTheDevices() {
+            guard cpu_jit_available() else { return }
+            bootMachine()
+            let at: UInt32 = 0x5000_0000
+            let ier: UInt32 = 0x50F0_1C00
+            // MOVE.B #$82,(ier).L; MOVE.B (ier).L,D1; MOVEA.L #ier,A0; MOVEQ #7,D3; ADD.B (A0),D3; BRA *
+            let code: [UInt16] = [0x13FC, 0x0082, 0x50F0, 0x1C00, 0x1239, 0x50F0, 0x1C00, 0x207C, 0x50F0, 0x1C00,
+                                  0x7607, 0xD610, 0x60FE]
+            let under = rd8(ier)
+            var seen: [UInt32] = []
+            for jit in [false, true] {
+                for (i, w) in code.enumerated() { wr16(at + UInt32(i * 2), w) }
+                g_hw_write!(ier, 1, 0x7F) // every enable bit clear
+                var c = cpu68k()
+                cpu_init(&c)
+                c.model = 68040
+                c.pc = at
+                cpu_jit_enabled = jit
+                _ = cpu_run(&c, 6)
+                cpu_jit_enabled = false
+                #expect(c.d.1 & 0x7F == 0x02 && c.d.3 == 7 + (c.d.1 & 0xFF) && c.icount == 6,
+                        "jit \(jit): d1 \(c.d.1), d3 \(c.d.3), \(c.icount) instructions")
+                seen.append(c.d.1)
+            }
+            #expect(seen[0] == seen[1] && rd8(ier) == under)
+        }
+
         @Test func jitMatchesInterpreterOnRandomBlocks() {
             guard cpu_jit_available() else { return }
             bootMachine()

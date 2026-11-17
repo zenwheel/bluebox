@@ -21,7 +21,10 @@
  * the translator numbers 0-15); the five a block names most are kept in
  * x24-x28 while it runs.  Memory goes through the arena with the address
  * mask the block was translated for, stores through the screen watch and
- * the code map as the interpreter's do (pushes, as cpu_push32, unwatched).
+ * the code map as the interpreter's do (pushes, as cpu_push32, unwatched),
+ * and loads and stores in a megabyte a device answers in (g_hw_map: the
+ * VIA, SCC, IWM and sound chip at $50Fxxxxx) through g_hw_read and
+ * g_hw_write as well.
  *
  * Condition codes are not computed where nothing reads them.  A pass
  * over the block finds, for each instruction, which of X N Z V C are read
@@ -77,9 +80,9 @@ int cpu_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scrat
 
 enum { HC = JR_CPU, HB = JR_BUDGET };
 enum { MAX_INSN = 64, MAX_BYTES = 512, CODE_SIZE = 64 << 20 };
-#define TRANSLATOR_VERSION 2
+#define TRANSLATOR_VERSION 3
 
-enum { H_ST8, H_ST16, H_ST32, H_PST8, H_PST16, H_PST32, H_EXEC };
+enum { H_ST8, H_ST16, H_ST32, H_PST8, H_PST16, H_PST32, H_EXEC, H_HWLOAD, H_HWREAD, H_HWWRITE };
 
 /* Flags, as in the CCR. */
 enum { FX = 0x10, FN = 8, FZ = 4, FV = 2, FC = 1, FNZVC = 0xF, FALL = 0x1F };
@@ -112,6 +115,9 @@ static void st32(uint32_t a, uint32_t v)
 static void pst8(uint32_t a, uint32_t v) { wr8(a, (uint8_t)v); }
 static void pst16(uint32_t a, uint32_t v) { wr16(a, (uint16_t)v); }
 static void pst32(uint32_t a, uint32_t v) { wr32(a, v); }
+/* A device window's access (hw68k.c), as the interpreter's mrN and mwN. */
+static uint32_t hw_read(uint32_t a, uint32_t size) { return g_hw_read(a, (int)size); }
+static void hw_write(uint32_t a, uint32_t v, uint32_t size) { g_hw_write(a, (int)size, v); }
 
 void cpu_jit_flush(void)
 {
@@ -240,17 +246,48 @@ static void mask_addr(tctx *t)
         a64_log(&t->b, A64_AND, 1, 1, 9);
     }
 }
-/* w0 = the sz bytes at w1 (zero-extended). */
+/* Branch (patched later) if w1 is in a megabyte a device answers in
+ * (g_hw_map: the VIA, SCC, IWM and sound chip of the machine presented,
+ * hw68k.c), which the interpreter's accesses reach through g_hw_read and
+ * g_hw_write.  Uses x16 and x17 only. */
+static uint32_t hw_check(tctx *t)
+{
+    a64_ldst(&t->b, A64_LDRX, 16, JR_CTX, JIT_CTX(hw));
+    a64_lsr(&t->b, 17, 1, 20);
+    a64_ldst_r(&t->b, A64_LDRB_R, 16, 16, 17);
+    uint32_t at = a64_here(&t->b);
+    a64_cbz(&t->b, true, 16, 0);
+    return at;
+}
+/* w0 = the sz bytes at w1 (zero-extended).  Only w0 and x16-x17 change
+ * (a device's goes through H_HWLOAD, which keeps the rest and the flags). */
 static void load(tctx *t, int sz)
 {
     mask_addr(t);
+    uint32_t to_hw = hw_check(t);
     jit_load(&t->b, sz, false, false);
+    uint32_t to_done = a64_here(&t->b);
+    a64_b(&t->b, 0);
+    a64_patch_here(&t->b, to_hw);
+    a64_movz(&t->b, false, 0, (uint16_t)sz, 0);
+    a64_ldst(&t->b, A64_LDRX, 30, JR_CTX, JIT_HELPER(H_HWLOAD));
+    a64_blr(&t->b, 30);
+    a64_patch_here(&t->b, to_done);
 }
 /* The sz bytes of w2 to w1 (flags and x0-x18 lost). */
 static void store(tctx *t, int sz, bool watched)
 {
     mask_addr(t);
+    uint32_t to_hw = hw_check(t);
     jit_store(&t->b, sz, watched, watched ? H_ST8 : H_PST8);
+    uint32_t to_done = a64_here(&t->b);
+    a64_b(&t->b, 0);
+    a64_patch_here(&t->b, to_hw);
+    a64_mov(&t->b, false, 0, 1);
+    a64_mov(&t->b, false, 1, 2);
+    a64_movz(&t->b, false, 2, (uint16_t)sz, 0);
+    jit_call(&t->b, H_HWWRITE);
+    a64_patch_here(&t->b, to_done);
     t->fk = FK_NONE;
     t->stored = true;
     t->clobber = true;
@@ -1557,6 +1594,37 @@ static bool setup(void)
     E.ctx.helper[H_PST16] = (void *)pst16;
     E.ctx.helper[H_PST32] = (void *)pst32;
     E.ctx.helper[H_EXEC] = (void *)cpu_execute_at;
+    E.ctx.helper[H_HWREAD] = (void *)hw_read;
+    E.ctx.helper[H_HWWRITE] = (void *)hw_write;
+    E.ctx.hw = g_hw_map;
+    /* A device load (w0 the size, w1 the address; the value in w0): a
+     * routine keeping x1-x17 and the flags, which the code around a load
+     * relies on, around the call to hw_read. */
+    uint32_t words[64];
+    a64_buf b = { words, 0, 64, false };
+    a64_stp_pre(&b, 29, 30, A64_SP, -160);
+    for (int r = 1; r < 17; r += 2)
+        a64_stp(&b, r, r + 1, A64_SP, 8 * (r + 1));
+    a64_emit(&b, 0xD53B4200u | 16); /* mrs x16, nzcv */
+    a64_stp(&b, 17, 16, A64_SP, 144);
+    a64_mov(&b, false, 2, 0);
+    a64_mov(&b, false, 0, 1);
+    a64_mov(&b, false, 1, 2);
+    jit_call(&b, H_HWREAD);
+    a64_ldp(&b, 17, 16, A64_SP, 144);
+    a64_emit(&b, 0xD51B4200u | 16); /* msr nzcv, x16 */
+    for (int r = 1; r < 17; r += 2)
+        a64_ldp(&b, r, r + 1, A64_SP, 8 * (r + 1));
+    a64_ldp_post(&b, 29, 30, A64_SP, 160);
+    a64_ret(&b);
+    uint32_t *at = jit_code_alloc(&E.code, b.n * 4);
+    if (!at)
+        return false;
+    jit_code_write_begin(&E.code);
+    memcpy(at, words, b.n * 4);
+    jit_code_write_end(&E.code, at, b.n * 4);
+    E.code_start = E.code.used;
+    E.ctx.helper[H_HWLOAD] = at;
     return true;
 }
 
