@@ -478,6 +478,43 @@ extension BlueBox {
             #expect(cpu.pointee.d.7 == 0)
             #expect(cpu.pointee.d.6 & 0xFF == 0x41)
         }
+
+        /// Every FP68K and Elems68K operation takes off the stack just the
+        /// operation word and the addresses the Apple Numerics Manual gives
+        /// it (FPEqu.a's FOxxx codes), and leaves A7 where it was before
+        /// the caller pushed them.
+        @Test func everyOperationPopsItsOperands() {
+            // FP68K: binary to decimal takes three, the arithmetic,
+            // comparisons, conversions, scalb, class, decimal to binary,
+            // copy-sign and next-after two, the rest one.
+            let fp: [(UInt16, Int)] = [
+                (0x00, 2), (0x02, 2), (0x04, 2), (0x06, 2), (0x08, 2), (0x0A, 2), (0x0C, 2),
+                (0x0E, 2), (0x10, 2), (0x12, 1), (0x14, 1), (0x16, 1), (0x18, 2), (0x1A, 1),
+                (0x1C, 2), (0x01, 1), (0x03, 1), (0x05, 1), (0x07, 1), (0x09, 2), (0x0B, 3),
+                (0x0D, 1), (0x0F, 1), (0x11, 2), (0x13, 2), (0x15, 1), (0x17, 1), (0x19, 1),
+                (0x1B, 1),
+            ]
+            // Elems68K: the operation word's top bits count the operands.
+            let elems: [(UInt16, Int)] = [
+                (0x0000, 1), (0x0002, 1), (0x0004, 1), (0x0006, 1), (0x0008, 1), (0x000A, 1),
+                (0x000C, 1), (0x000E, 1), (0x8010, 2), (0x8012, 2), (0xC014, 3), (0xC016, 3),
+                (0x0018, 1), (0x001A, 1), (0x001C, 1), (0x001E, 1), (0x0020, 1),
+            ]
+            for (op, n, trap) in fp.map({ ($0.0, $0.1, UInt16(0xA9EB)) }) + elems.map({ ($0.0, $0.1, UInt16(0xA9EC)) }) {
+                // Each operand a zeroed 32 bytes with an extended 1 at its
+                // start: a valid number, integer, environment or decimal.
+                var code: [UInt16] = [0x2E0F]                       // MOVE.L A7,D7
+                for _ in 0..<n {
+                    let p = tb_NewPtr(32, false, true)
+                    wr16(p, 0x3FFF); wr32(p + 2, 0x8000_0000)
+                    code += pea(p)
+                }
+                code += self.op(op, trap) + [0x9E8F, 0xA9F4]       // SUB.L A7,D7; ExitToShell
+                sane_reset()
+                #expect(run(code) == "ExitToShell", "\(String(trap, radix: 16)) \(String(op, radix: 16))")
+                #expect(cpu.pointee.d.7 == 0, "\(String(trap, radix: 16)) \(String(op, radix: 16)): A7 moved by \(Int32(bitPattern: cpu.pointee.d.7))")
+            }
+        }
     }
 }
 
