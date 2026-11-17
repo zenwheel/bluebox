@@ -155,7 +155,11 @@ final class BrowserFilePromise: NSFilePromiseProvider {
                     }
                 }
             } else {
-                browser.transfer(sources, into: folder, move: op == .move)
+                // After the drop: asking about names taken doesn't hold up the drag.
+                let move = op == .move
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { browser.transfer(sources, into: folder, move: move) }
+                }
             }
             return true
         }

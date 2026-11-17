@@ -41,6 +41,14 @@ struct BrowserItem: Hashable, @unchecked Sendable {
 }
 
 enum BrowserListing {
+    /// Whether the folder can be read at all (macOS keeps the Trash and
+    /// some folders private to apps without Full Disk Access).
+    static func readable(_ folder: String) -> Bool {
+        guard let d = opendir(folder) else { return false }
+        closedir(d)
+        return true
+    }
+
     /// A folder's items (not sorted).  hidden: dot files and the Finder's
     /// invisible ones too.
     static func items(in folder: String, showHidden: Bool) -> [BrowserItem] {
@@ -79,8 +87,7 @@ enum BrowserListing {
         let created = Date(timeIntervalSince1970: TimeInterval(dated.st_birthtimespec.tv_sec))
         let package = isDir && NSWorkspace.shared.isFilePackage(atPath: path)
         if isDir && !package {
-            var fi = [UInt8](repeating: 0, count: 16), fx = [UInt8](repeating: 0, count: 16)
-            let flags: UInt16 = catalog_get_dirinfo(path, &fi, &fx) ? UInt16(fi[8]) << 8 | UInt16(fi[9]) : 0
+            let flags = ClassicFileOps.folderFlags(path)
             return BrowserItem(path: path, name: name, isFolder: true, isClassic: false, type: 0, creator: 0, flags: flags,
                                size: -1, resourceSize: 0, modified: modified, created: created, kind: "Folder")
         }

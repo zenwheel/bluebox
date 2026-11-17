@@ -41,6 +41,38 @@ public struct ClassicItemInfo: Sendable {
     public var locked: Bool
 }
 
+/// The catalog's one connection, from one thread at a time: the host's
+/// SQLite is built for many threads but not for sharing a connection
+/// between them, and the browser reads folders on several.
+enum Catalog {
+    private static let lock = NSLock()
+
+    static func dirinfo(_ path: String) -> [UInt8]? {
+        lock.withLock {
+            var fi = [UInt8](repeating: 0, count: 16), fx = [UInt8](repeating: 0, count: 16)
+            return catalog_get_dirinfo(path, &fi, &fx) ? fi + fx : nil
+        }
+    }
+    @discardableResult
+    static func setDirinfo(_ path: String, _ info: [UInt8]) -> Bool {
+        lock.withLock { catalog_set_dirinfo(path, Array(info[0..<16]), Array(info[16..<32])) }
+    }
+    static func comment(_ path: String) -> [UInt8] {
+        lock.withLock {
+            var text = [UInt8](repeating: 0, count: 256)
+            let n = Int(catalog_get_comment(path, &text, 200))
+            return Array(text.prefix(max(0, n)))
+        }
+    }
+    @discardableResult
+    static func setComment(_ path: String, _ text: [UInt8]) -> Bool {
+        lock.withLock { catalog_set_comment(path, text, Int32(text.count)) }
+    }
+    static func moved(_ from: String, _ to: String?) { lock.withLock { catalog_moved(from, to) } }
+    static func nodesMoved(_ from: String, _ to: String?) { lock.withLock { catalog_nodes_moved(from, to) } }
+    static func setPath(_ path: String) { lock.withLock { catalog_set_path(path) } }
+}
+
 public struct ClassicFileOps: Sendable {
     /// Macintosh HD's folder, whose files' IDs the catalog keeps.
     public let disk: String
@@ -51,7 +83,7 @@ public struct ClassicFileOps: Sendable {
         self.disk = (disk as NSString).standardizingPath
         let path = catalog ?? ((self.disk as NSString).deletingLastPathComponent as NSString)
             .appendingPathComponent("Catalog.sqlite")
-        catalog_set_path(path)
+        Catalog.setPath(path)
     }
 
     private var fm: FileManager { .default }
@@ -70,6 +102,11 @@ public struct ClassicFileOps: Sendable {
 
     // MARK: Get Info
 
+    /// A folder's Finder flags (its label), from the catalog.
+    public static func folderFlags(_ path: String) -> UInt16 {
+        Catalog.dirinfo(path).map { UInt16($0[8]) << 8 | UInt16($0[9]) } ?? 0
+    }
+
     public func info(_ path: String) -> ClassicItemInfo {
         var st = stat()
         let there = stat(path, &st) == 0
@@ -81,14 +118,11 @@ public struct ClassicFileOps: Sendable {
         #endif
         if folder {
             var meta = ClassicMeta()
-            var fi = [UInt8](repeating: 0, count: 16), fx = [UInt8](repeating: 0, count: 16)
-            if catalog_get_dirinfo(path, &fi, &fx) {
-                meta.finderInfo = fi + fx
+            if let info = Catalog.dirinfo(path) {
+                meta.finderInfo = info
                 meta.hasFinderInfo = true
             }
-            var text = [UInt8](repeating: 0, count: 256)
-            let n = Int(catalog_get_comment(path, &text, 200))
-            meta.comment = Array(text.prefix(max(0, n)))
+            meta.comment = Catalog.comment(path)
             return ClassicItemInfo(isFolder: true, meta: meta, isClassic: false, hasSidecar: false, dataLength: 0,
                                    locked: locked)
         }
@@ -106,10 +140,11 @@ public struct ClassicFileOps: Sendable {
         change(&meta)
         guard meta != before else { return }
         if isFolder(path) {
-            let fi = Array(meta.finderInfo[0..<16]), fx = Array(meta.finderInfo[16..<32])
-            guard catalog_set_dirinfo(path, fi, fx) else { throw ClassicFileError(.failed, path, "the catalog can't be written") }
+            guard Catalog.setDirinfo(path, meta.finderInfo) else {
+                throw ClassicFileError(.failed, path, "the catalog can't be written")
+            }
             if meta.comment != before.comment {
-                guard catalog_set_comment(path, meta.comment, Int32(meta.comment.count)) else {
+                guard Catalog.setComment(path, meta.comment) else {
                     throw ClassicFileError(.failed, path, "the catalog can't be written")
                 }
             }
@@ -230,10 +265,7 @@ public struct ClassicFileOps: Sendable {
     private func normalizeFolder(_ path: String) {
         var fi = [UInt8](repeating: 0, count: 32)
         guard appledouble_native_finder_info(path, &fi), fi.contains(where: { $0 != 0 }) else { return }
-        var cfi = [UInt8](repeating: 0, count: 16), cfx = [UInt8](repeating: 0, count: 16)
-        if !catalog_get_dirinfo(path, &cfi, &cfx) {
-            catalog_set_dirinfo(path, Array(fi[0..<16]), Array(fi[16..<32]))
-        }
+        if Catalog.dirinfo(path) == nil { Catalog.setDirinfo(path, fi) }
         removeNativeForks(path)
     }
 
@@ -246,11 +278,9 @@ public struct ClassicFileOps: Sendable {
             }
         }
         for d in dirs {
-            var fi = [UInt8](repeating: 0, count: 16), fx = [UInt8](repeating: 0, count: 16)
-            if catalog_get_dirinfo(src + d, &fi, &fx) { catalog_set_dirinfo(dest + d, fi, fx) }
-            var text = [UInt8](repeating: 0, count: 256)
-            let n = catalog_get_comment(src + d, &text, 200)
-            if n > 0 { catalog_set_comment(dest + d, text, n) }
+            if let info = Catalog.dirinfo(src + d) { Catalog.setDirinfo(dest + d, info) }
+            let text = Catalog.comment(src + d)
+            if !text.isEmpty { Catalog.setComment(dest + d, text) }
         }
     }
 
@@ -271,10 +301,10 @@ public struct ClassicFileOps: Sendable {
         } catch {
             throw ClassicFileError(.failed, src, "\(name(src)) could not be moved: \(error.localizedDescription)")
         }
-        catalog_moved(src, dest)
+        Catalog.moved(src, dest)
         switch (rel(src), rel(dest)) {
-        case let (f?, t?): catalog_nodes_moved(f, t)
-        case let (f?, nil): catalog_nodes_moved(f, nil)
+        case let (f?, t?): Catalog.nodesMoved(f, t)
+        case let (f?, nil): Catalog.nodesMoved(f, nil)
         default: break
         }
         if isFolder(dest) { normalizeTree(dest) } else { normalizeFile(dest) }
@@ -359,12 +389,12 @@ public struct ClassicFileOps: Sendable {
         guard exists(src) else { throw ClassicFileError(.missing, src, "\(name(src)) is not there any more") }
         if info(src).locked { throw ClassicFileError(.locked, src, "\(name(src)) is locked") }
         let side = classicSidecarPath(src)
-        let hasSide = fm.fileExists(atPath: side)
         var trashed: String
         do {
             if fm.fileExists(atPath: src) || (try? fm.destinationOfSymbolicLink(atPath: src)) != nil {
                 trashed = try trash(URL(fileURLWithPath: src)).path
-                if hasSide {
+                // Still here, unless the Trash took it with its file.
+                if fm.fileExists(atPath: side) {
                     let sideTrashed = try trash(URL(fileURLWithPath: side)).path
                     let want = classicSidecarPath(trashed)
                     if sideTrashed != want, !fm.fileExists(atPath: want) { try? fm.moveItem(atPath: sideTrashed, toPath: want) }
@@ -378,8 +408,8 @@ public struct ClassicFileOps: Sendable {
         } catch {
             throw ClassicFileError(.failed, src, "\(name(src)) could not be moved to the Trash: \(error.localizedDescription)")
         }
-        catalog_moved(src, trashed)
-        if let r = rel(src) { catalog_nodes_moved(r, nil) }
+        Catalog.moved(src, trashed)
+        if let r = rel(src) { Catalog.nodesMoved(r, nil) }
         return trashed
     }
 
@@ -406,7 +436,7 @@ public struct ClassicFileOps: Sendable {
                 do { try fm.removeItem(atPath: path) } catch { continue }
             }
             removed += 1
-            catalog_moved(path, nil)
+            Catalog.moved(path, nil)
         }
         return removed
     }

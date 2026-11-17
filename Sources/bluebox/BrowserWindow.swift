@@ -116,6 +116,7 @@ enum BrowserMode: Int { case icons, list, columns }
         w.tabbingMode = .automatic
         w.isReleasedWhenClosed = false
         super.init(window: w)
+        _ = BrowserCore.ops // the catalog opened, before the first listing reads it
         w.delegate = self
         build()
         if !Self.ephemeral { w.setFrameAutosaveName("BlueBoxBrowser") }
@@ -347,6 +348,12 @@ enum BrowserMode: Int { case icons, list, columns }
         let selected = current.selectedItems.count
         var text = selected > 0 ? "\(selected) of \(n) selected" : "\(n) item\(n == 1 ? "" : "s")"
         if !search.isEmpty { text = "\(n) found" + (selected > 0 ? ", \(selected) selected" : "") }
+        if n == 0 && search.isEmpty && !BrowserListing.readable(location) {
+            status.stringValue = location == BrowserPlaces.trash
+                ? "macOS keeps the Trash private: give Blue Box Full Disk Access to see it (Empty Trash still works)"
+                : "Blue Box can't read this folder"
+            return
+        }
         if let v = try? URL(fileURLWithPath: location).resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
            let free = v.volumeAvailableCapacityForImportantUsage {
             text += ", " + ByteCountFormatter.string(fromByteCount: free, countStyle: .file) + " available"

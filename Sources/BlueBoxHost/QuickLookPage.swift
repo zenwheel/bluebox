@@ -77,7 +77,11 @@ public struct ClassicPreviewPage {
                 pictureData.append(("PICT \(r.id)" + (r.name.isEmpty ? "" : " “\(r.name)”"), r.data))
             }
             let soundData = resources.filter { $0.typeText == "snd " }.prefix(Self.maxSounds)
-            if !pictureData.isEmpty || !soundData.isEmpty { Self.bootMachine() }
+            // Without a machine (its memory refused), the page goes without them.
+            if (!pictureData.isEmpty || !soundData.isEmpty) && !Self.bootMachine() {
+                pictureData = []
+            }
+            let soundList = Self.booted ? Array(soundData) : []
             var shown = ""
             for (i, (title, data)) in pictureData.enumerated() {
                 guard let png = Self.picturePNG(data) else { continue }
@@ -89,7 +93,7 @@ public struct ClassicPreviewPage {
             }
             if !shown.isEmpty { body += "<h2>Pictures</h2>" + shown }
             var played = ""
-            for (i, r) in soundData.enumerated() {
+            for (i, r) in soundList.enumerated() {
                 guard let wav = Self.soundWAV(r.data) else { continue }
                 let name = "snd\(i).wav"
                 attachments[name] = Attachment(data: wav, contentType: "com.microsoft.waveform-audio")
@@ -146,11 +150,15 @@ public struct ClassicPreviewPage {
     // MARK: Decoding, in a machine of its own
 
     private static let machineLock = NSLock()
+    nonisolated(unsafe) private static var booted = false
 
-    static func bootMachine() {
+    /// A machine booted for the decoders (again for each page: a test or
+    /// run between may have booted another, which serves as well).
+    static func bootMachine() -> Bool {
         machineLock.lock()
         defer { machineLock.unlock() }
-        _ = machine_boot(false)
+        booted = machine_boot(false)
+        return booted
     }
 
     /// A picture through QuickDraw, as PNG.
