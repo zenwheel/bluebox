@@ -794,6 +794,34 @@ extension BlueBox {
             #expect(activate()?.0 == w)
         }
 
+        /// Hiding the front window deactivates it and activates the one
+        /// behind, as the ROM's HideWindow does; disposing of it before the
+        /// events are read leaves only the activate (CloseWindow takes the
+        /// deactivate back), so no event names a window that is gone.
+        @Test func hidingTheFrontWindowDeactivatesIt() {
+            launchTestApp()
+            machine_set_instruction_limit(0)
+            let r = tb_NewPtr(8, false, true)
+            for (i, v) in [40, 40, 240, 340].enumerated() { wr16(r + UInt32(i * 2), UInt16(v)) }
+            let back = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+            let e = tb_NewPtr(16, false, true)
+            func activate() -> (UInt32, Bool)? {
+                guard tb_GetNextEvent(0x0100, e) != 0, rd16(e) == 8 else { return nil } // activMask
+                return (rd32(e + 2), rd16(e + 14) & 1 != 0)
+            }
+            for dispose in [false, true] {
+                let front = tb_NewWindow(0, r, 0, 1, 0, 0xFFFF_FFFF, 0, 0)
+                while activate() != nil {}
+                tb_HideWindow(front)
+                if dispose { tb_DisposeWindow(front) }
+                var got = [activate(), activate(), activate()]
+                if !dispose { #expect(got.removeFirst().map { $0 == (front, false) } == true) }
+                #expect(got[0].map { $0 == (back, true) } == true, "dispose \(dispose)")
+                #expect(got[1] == nil)
+                if !dispose { tb_DisposeWindow(front) }
+            }
+        }
+
         @Test func stagesWithoutABoxReturnMinusOne() {
             launchTestApp(Self.alertResources(stages: 0x0000))
             install()
