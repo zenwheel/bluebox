@@ -2,8 +2,9 @@
 # Build Blue Box.app: the bluebox program, opened as an application, shows
 # the shell.  The bundle carries everything it needs: the program (whose
 # fonts are built in), The Unarchiver's unar for archives when it is
-# installed here (Homebrew), Sparkle for software updates, the icon and
-# the licences.  QuickTime movies still use VLC.app when it is installed.
+# installed here (Homebrew), Sparkle for software updates, the Quick Look
+# extensions for classic files (Contents/PlugIns), the icon and the
+# licences.  QuickTime movies still use VLC.app when it is installed.
 #
 # usage: sh scripts/make-app.sh [destination folder]   (default: build)
 #
@@ -25,7 +26,8 @@ if [ -n "${BLUEBOX_BUILD:-}" ]; then autocheck=true; else autocheck=false; fi
 
 echo "Building bluebox..."
 (cd "$root" && swift build -c release)
-bin=$(cd "$root" && swift build -c release --show-bin-path)/bluebox
+bindir=$(cd "$root" && swift build -c release --show-bin-path)
+bin=$bindir/bluebox
 
 echo "Making $app..."
 rm -rf "$app"
@@ -63,6 +65,76 @@ iconset=$(mktemp -d)/BlueBox.iconset
 iconutil -c icns -o "$app/Contents/Resources/BlueBox.icns" "$iconset"
 rm -rf "$(dirname "$iconset")"
 
+# The Quick Look extensions, which the macOS Finder uses for classic files
+# (a data fork with a "._" sidecar, or forks of its own, and MacBinary):
+# their real icons as thumbnails (BlueBoxThumbnails), and previews of their
+# Finder information, text, pictures, sounds and resources (BlueBoxPreview).
+# Classic files usually have no extension, so they are public.data to
+# Launch Services: the extensions take that and refuse what isn't classic,
+# and the Finder then draws its own.  They run sandboxed, reading the
+# sidecar beside a file and Blue Box's library for applications' icons by
+# the read-only exceptions in QuickLook.entitlements.
+plugins="$app/Contents/PlugIns"
+mkdir -p "$plugins"
+types='<string>public.data</string>
+				<string>com.apple.macbinary-archive</string>'
+appex() { # name, program, identifier suffix, extension point, principal class, more attributes
+	dir="$plugins/$1.appex"
+	mkdir -p "$dir/Contents/MacOS"
+	cp "$bindir/$2" "$dir/Contents/MacOS/$2"
+	cat > "$dir/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>$1</string>
+	<key>CFBundleExecutable</key>
+	<string>$2</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.bluebox-shell.$3</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$1</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$version</string>
+	<key>CFBundleVersion</key>
+	<string>$build</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				$types
+			</array>
+			$6
+		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>$4</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$5</string>
+	</dict>
+</dict>
+</plist>
+EOF
+}
+appex "Blue Box Thumbnails" BlueBoxThumbnails thumbnails com.apple.quicklook.thumbnail BBThumbnailProvider \
+	'<key>QLThumbnailMinimumDimension</key>
+			<integer>16</integer>'
+appex "Blue Box Preview" BlueBoxPreview preview com.apple.quicklook.preview BBPreviewProvider \
+	'<key>QLIsDataBasedPreview</key>
+			<true/>
+			<key>QLSupportsSearchableItems</key>
+			<false/>'
+
 # Info.plist: the shell, and the files it imports when they are dropped on it.
 cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -95,6 +167,28 @@ cat > "$app/Contents/Info.plist" <<EOF
 	<string>public.app-category.utilities</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Classic programs record sound through the microphone.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>The Blue Box Browser asks the Finder to empty the Trash when macOS keeps the Trash's contents from it.</string>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Open in Blue Box</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>openInBlueBox</string>
+			<key>NSPortName</key>
+			<string>Blue Box</string>
+			<key>NSRequiredContext</key>
+			<dict/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.item</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>
@@ -140,7 +234,8 @@ EOF
 # Sign from the inside out (codesign --deep would sign Sparkle's helpers
 # without their own options), each with the hardened runtime: Sparkle's
 # installer, downloader (keeping its entitlements), Autoupdate and
-# Updater.app, then the framework, unar, and the application with
+# Updater.app, then the framework, unar, the Quick Look extensions (in
+# their sandbox: QuickLook.entitlements), and the application with
 # BlueBox.entitlements.  Ad hoc unless SIGN_IDENTITY says otherwise.
 # No extended attributes inside the bundle (codesign refuses Finder
 # information): files copied in from a folder a classic program has
@@ -164,6 +259,9 @@ sign "$fw"
 if [ -f "$app/Contents/MacOS/unar" ]; then
 	sign "$app/Contents/MacOS/unar"
 fi
+for ext in "$plugins"/*.appex; do
+	sign --entitlements "$root/scripts/QuickLook.entitlements" "$ext"
+done
 sign --entitlements "$root/scripts/BlueBox.entitlements" "$app"
 
 echo "Done: $app"

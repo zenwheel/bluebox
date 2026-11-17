@@ -1617,8 +1617,38 @@ struct HighlightPicker: View {
 #endif
     }
 
+    /// The browser window in front, if one is.
+    private var frontBrowser: BrowserWindowController? {
+        (NSApp.keyWindow ?? NSApp.mainWindow)?.windowController as? BrowserWindowController
+    }
+
+    /// Command-O: the browser's Open, or the shell's Import….
+    @objc func openOrImport(_ sender: Any?) {
+        if let b = frontBrowser { b.openSelection(sender) } else { model.chooseImport() }
+    }
+
+    /// Command-R: the browser's Show Original, or Refresh Library.
+    @objc func originalOrRefresh(_ sender: Any?) {
+        if let b = frontBrowser { b.showOriginal(sender) } else { model.refresh() }
+    }
+
     /// Check for Updates… is dimmed while a check or an install is under way.
+    /// The items Command-O and Command-R stand for are named for the window
+    /// in front; their plain items (no key) show only beside a browser.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        let browser = frontBrowser
+        switch item.action {
+        case #selector(openOrImport(_:)):
+            item.title = browser != nil ? "Open" : "Import…"
+            return browser.map { !$0.selectedForMenu.isEmpty } ?? true
+        case #selector(originalOrRefresh(_:)):
+            item.title = browser != nil ? "Show Original" : "Refresh Library"
+            return browser.map { $0.selectedForMenu.count == 1 && $0.selectedForMenu[0].isAlias } ?? true
+        case #selector(importFiles(_:)), #selector(refreshLibrary(_:)):
+            item.isHidden = item.keyEquivalent.isEmpty && browser == nil && item.menu?.title == "File"
+            return true
+        default: break
+        }
 #if canImport(Sparkle)
         if item.action == #selector(checkForUpdates(_:)) { return updates?.updater.canCheckForUpdates ?? false }
 #endif
@@ -1836,20 +1866,23 @@ func shellCommand(_ args: [String], browser: String? = nil) -> Never {
     main.addItem(fileItem)
     let file = NSMenu(title: "File")
     // The browser's items go up the responder chain to the front browser
-    // window, and are dimmed without one; where one shares its key with
-    // the shell's (Command-O, Command-R), the first enabled item takes it.
+    // window, and are dimmed without one.  Command-O and Command-R are the
+    // browser's Open and Show Original with a browser in front, else the
+    // shell's Import… and Refresh Library (one item each, renamed as the
+    // front window changes: a menu gives a key to its first item that has
+    // it, enabled or not).
     file.addItem(withTitle: "New Browser Window", action: #selector(ShellDelegate.newBrowserWindow(_:)), keyEquivalent: "n")
     file.addItem(withTitle: "New Tab", action: #selector(NSResponder.newWindowForTab(_:)), keyEquivalent: "t")
     file.addItem(withTitle: "New Folder", action: #selector(BrowserWindowController.newFolder(_:)), keyEquivalent: "n")
         .keyEquivalentModifierMask = [.command, .shift]
-    file.addItem(withTitle: "Open", action: #selector(BrowserWindowController.openSelection(_:)), keyEquivalent: "o")
+    file.addItem(withTitle: "Open", action: #selector(ShellDelegate.openOrImport(_:)), keyEquivalent: "o")
     file.addItem(.separator())
     file.addItem(withTitle: "Get Info", action: #selector(BrowserWindowController.getInfo(_:)), keyEquivalent: "i")
     file.addItem(withTitle: "Rename", action: #selector(BrowserWindowController.rename(_:)), keyEquivalent: "")
     file.addItem(withTitle: "Duplicate", action: #selector(BrowserWindowController.duplicate(_:)), keyEquivalent: "d")
     file.addItem(withTitle: "Make Alias", action: #selector(BrowserWindowController.makeAlias(_:)), keyEquivalent: "a")
         .keyEquivalentModifierMask = [.command, .control]
-    file.addItem(withTitle: "Show Original", action: #selector(BrowserWindowController.showOriginal(_:)), keyEquivalent: "r")
+    file.addItem(withTitle: "Show Original", action: #selector(ShellDelegate.originalOrRefresh(_:)), keyEquivalent: "r")
     file.addItem(withTitle: "Move to Trash", action: #selector(BrowserWindowController.moveToTrash(_:)), keyEquivalent: "\u{8}")
     file.addItem(withTitle: "Empty Trash…", action: #selector(BrowserWindowController.emptyTrash(_:)), keyEquivalent: "\u{8}")
         .keyEquivalentModifierMask = [.command, .shift]
@@ -1858,10 +1891,10 @@ func shellCommand(_ args: [String], browser: String? = nil) -> Never {
                  keyEquivalent: "")
     file.addItem(.separator())
     // Sent up the responder chain to the application's delegate.
-    file.addItem(withTitle: "Import…", action: #selector(ShellDelegate.importFiles(_:)), keyEquivalent: "o")
+    file.addItem(withTitle: "Import…", action: #selector(ShellDelegate.importFiles(_:)), keyEquivalent: "")
     file.addItem(withTitle: "Import Fonts from Disk Image…", action: #selector(ShellDelegate.importFonts(_:)),
                  keyEquivalent: "")
-    file.addItem(withTitle: "Refresh Library", action: #selector(ShellDelegate.refreshLibrary(_:)), keyEquivalent: "r")
+    file.addItem(withTitle: "Refresh Library", action: #selector(ShellDelegate.refreshLibrary(_:)), keyEquivalent: "")
     file.addItem(.separator())
     file.addItem(withTitle: "Hibernated Snapshots…", action: #selector(ShellDelegate.showSnapshots(_:)), keyEquivalent: "")
     file.addItem(.separator())

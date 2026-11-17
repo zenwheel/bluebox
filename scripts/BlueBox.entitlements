@@ -13,5 +13,9 @@
 	<!-- The Sound Input Manager records from the microphone (BlueBoxHost/SoundInput.swift). -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
+	<!-- The Blue Box Browser's Empty Trash asks the Finder to empty it when
+	     macOS keeps the Trash's contents from Blue Box (BrowserWindow.swift). -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
 </dict>
 </plist>

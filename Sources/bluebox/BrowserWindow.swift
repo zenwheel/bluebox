@@ -428,7 +428,7 @@ enum BrowserMode: Int { case icons, list, columns }
         add("Get Info", #selector(getInfo(_:)), "i")
         if items.count == 1 { add("Rename", #selector(rename(_:))) }
         add("Duplicate", #selector(duplicate(_:)), "d")
-        add("Make Alias", #selector(makeAlias(_:)), "l", [.command, .control])
+        add("Make Alias", #selector(makeAlias(_:)), "a", [.command, .control])
         add("Move to Trash", #selector(moveToTrash(_:)), "\u{8}")
         menu.addItem(.separator())
         add("Copy", #selector(copy(_:)), "c")

@@ -19,10 +19,11 @@
 #   1. Builds build/Blue Box.app (scripts/make-app.sh) with <version> as
 #      CFBundleShortVersionString and a UTC timestamp build number as
 #      CFBundleVersion (what Sparkle compares), signed from the inside out:
-#      Sparkle's helpers, Sparkle.framework, unar, then the application with
-#      scripts/BlueBox.entitlements.
+#      Sparkle's helpers, Sparkle.framework, unar, the Quick Look extensions
+#      in Contents/PlugIns (sandboxed, scripts/QuickLook.entitlements), then
+#      the application with scripts/BlueBox.entitlements.
 #   2. Submits the app to Apple's notary service with that notarytool keychain
-#      profile, waits, and staples the ticket.
+#      profile (its extensions with it), waits, and staples the ticket.
 #   3. Zips it to releases/BlueBox-<version>.zip.
 #   4. Runs Sparkle's generate_appcast over releases/, which signs the zip with
 #      the EdDSA key in the login keychain, creates .delta files from the
@@ -204,6 +205,20 @@ if [ "$NOTARIZE" = 1 ]; then
 	spctl --assess --type execute --verbose=2 "$APP_PATH"
 fi
 codesign --verify --deep --strict "$APP_PATH"
+# The Quick Look extensions: there, each signed in its sandbox with the
+# hardened runtime and the release's version.
+for ext in Thumbnails Preview; do
+	appex="$APP_PATH/Contents/PlugIns/$APP_NAME $ext.appex"
+	codesign --verify --strict "$appex"
+	codesign -d --entitlements - "$appex" 2>/dev/null | grep -q com.apple.security.app-sandbox || {
+		echo "$appex is not sandboxed" >&2
+		exit 1
+	}
+	if [ "$(plutil -extract CFBundleVersion raw "$appex/Contents/Info.plist")" != "$BUILD_NUMBER" ]; then
+		echo "$appex does not carry build $BUILD_NUMBER" >&2
+		exit 1
+	fi
+done
 
 # --- 3. Zip ------------------------------------------------------------------
 step "Zipping to $ZIP_PATH"
