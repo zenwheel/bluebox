@@ -484,7 +484,7 @@ final class TransientView: NSView {
             installStatusItem()
             watchAway()
         } else {
-            NSApp.activate(ignoringOtherApps: true)
+            activateFromShell()
         }
         PickerStandIn.closeWhenAnotherShows()
         Suspender.shared.installHibernateKey()

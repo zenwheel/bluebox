@@ -5,7 +5,8 @@
  * its view and scroll, its icon's place, label and flags) and its comment
  * live here, by host path.  So does each volume's desktop database: the
  * applications and icons programs (the Finder's rebuild above all) add,
- * and whether the database has been built.  The file is Catalog.sqlite
+ * and whether the database has been built; and where an item moved to the
+ * Trash came from, for Put Back.  The file is Catalog.sqlite
  * beside the Macintosh HD folder; when it cannot be opened the File
  * Manager carries on without it, as before.
  */
@@ -52,6 +53,7 @@ static sqlite3 *open_db(void)
         "CREATE TABLE IF NOT EXISTS nodes(rel TEXT PRIMARY KEY, id INTEGER UNIQUE);"
         "CREATE TABLE IF NOT EXISTS dirinfo(path TEXT PRIMARY KEY, finfo BLOB, fxinfo BLOB);"
         "CREATE TABLE IF NOT EXISTS comments(path TEXT PRIMARY KEY, text BLOB);"
+        "CREATE TABLE IF NOT EXISTS putback(path TEXT PRIMARY KEY, original TEXT);"
         "CREATE TABLE IF NOT EXISTS dt_volumes(root TEXT PRIMARY KEY);"
         "CREATE TABLE IF NOT EXISTS dt_appls(root TEXT, creator INTEGER, path TEXT, tag INTEGER,"
         " PRIMARY KEY(root, creator, path));"
@@ -205,6 +207,38 @@ bool catalog_set_comment(const char *path, const uint8_t *text, int len)
     return run(st);
 }
 
+/* ---- Put Back ----
+ * Where an item in the Trash came from, by its path there; it moves with
+ * the item (catalog_moved) and goes when the item does. */
+
+bool catalog_set_putback(const char *path, const char *original)
+{
+    sqlite3_stmt *st = original ? prep("INSERT OR REPLACE INTO putback(path, original) VALUES(?, ?)")
+                                : prep("DELETE FROM putback WHERE path = ?");
+    if (!st)
+        return false;
+    sqlite3_bind_text(st, 1, path, -1, SQLITE_TRANSIENT);
+    if (original)
+        sqlite3_bind_text(st, 2, original, -1, SQLITE_TRANSIENT);
+    return run(st);
+}
+
+/* The original path into `out`, or false when there is none. */
+bool catalog_get_putback(const char *path, char *out, size_t size)
+{
+    sqlite3_stmt *st = prep("SELECT original FROM putback WHERE path = ?");
+    if (!st)
+        return false;
+    sqlite3_bind_text(st, 1, path, -1, SQLITE_TRANSIENT);
+    bool found = false;
+    if (sqlite3_step(st) == SQLITE_ROW && sqlite3_column_text(st, 0)) {
+        snprintf(out, size, "%s", (const char *)sqlite3_column_text(st, 0));
+        found = true;
+    }
+    sqlite3_finalize(st);
+    return found;
+}
+
 /* ---- Renames, moves and deletions ---- */
 
 /* What is kept by the path of `from` and of everything inside it, now at
@@ -213,7 +247,7 @@ void catalog_moved(const char *from, const char *to)
 {
     if (!open_db())
         return;
-    static const char *const tables[] = { "dirinfo", "comments" };
+    static const char *const tables[] = { "dirinfo", "comments", "putback" };
     for (size_t i = 0; i < sizeof tables / sizeof tables[0]; i++) {
         char sql[256];
         if (to)

@@ -28,6 +28,10 @@ public struct TypeSelect {
         return typed
     }
 
+    /// Whether a name is being typed at `time`: a space then is part of
+    /// it, not the space bar's own (Quick Look).
+    public func isTyping(at time: TimeInterval) -> Bool { !typed.isEmpty && time - last <= timeout }
+
     public mutating func reset() {
         typed = ""
         last = -.infinity

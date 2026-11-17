@@ -1452,10 +1452,13 @@ struct HighlightPicker: View {
                 if let sel = ProcessInfo.processInfo.environment["BLUEBOX_BROWSER_SELECT"] {
                     browser.selectForSnapshot(sel)
                 }
+                let keys = ProcessInfo.processInfo.environment["BLUEBOX_BROWSER_KEYS"] ?? ""
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     MainActor.assumeIsolated {
-                        browser.snapshot(to: out)
-                        NSApp.terminate(nil)
+                        browser.runKeysForTest(keys.split(separator: ",").map(String.init)) {
+                            browser.snapshot(to: out)
+                            NSApp.terminate(nil)
+                        }
                     }
                 }
                 return
@@ -1643,7 +1646,7 @@ struct HighlightPicker: View {
             return browser.map { !$0.selectedForMenu.isEmpty } ?? true
         case #selector(originalOrRefresh(_:)):
             item.title = browser != nil ? "Show Original" : "Refresh Library"
-            return browser.map { $0.selectedForMenu.count == 1 && $0.selectedForMenu[0].isAlias } ?? true
+            return browser.map { $0.canShowOriginal($0.selectedForMenu) } ?? true
         case #selector(importFiles(_:)), #selector(refreshLibrary(_:)):
             item.isHidden = item.keyEquivalent.isEmpty && browser == nil && item.menu?.title == "File"
             return true
@@ -1814,15 +1817,32 @@ struct SnapshotsView: View {
 /// A program the shell started may come to the front when its window is
 /// up, seconds later for a resumed one: macOS lets an app take the front
 /// only from the active one, so the shell, while it is active, hands it on
-/// once the child is an application.
-@MainActor func yieldActivation(toChild pid: Int32, tries: Int = 40) {
+/// once the child is an application (looked for often: the child asks to
+/// come forward as soon as it is one, and asks again while the shell is in
+/// front, activateFromShell).
+@MainActor func yieldActivation(toChild pid: Int32, tries: Int = 200) {
     guard #available(macOS 14, *), tries > 0, NSApp.isActive else { return }
     if let child = NSRunningApplication(processIdentifier: pid), child.activationPolicy != .prohibited {
         NSApp.yieldActivation(to: child)
         return
     }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
         MainActor.assumeIsolated { yieldActivation(toChild: pid, tries: tries - 1) }
+    }
+}
+
+/// A run comes to the front.  Started by the shell (its parent), it may
+/// ask before the shell has handed it the front (yieldActivation), and
+/// macOS then leaves the shell's window in front, the program behind it,
+/// held back (and its sound with it) as one not seen; so it asks again
+/// while the shell is still the front application, for a few seconds.
+/// It never takes the front from another application the user went to.
+@MainActor func activateFromShell(tries: Int = 30) {
+    NSApp.activate(ignoringOtherApps: true)
+    guard tries > 0, !NSApp.isActive,
+          NSWorkspace.shared.frontmostApplication?.processIdentifier == getppid() else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        MainActor.assumeIsolated { if !NSApp.isActive { activateFromShell(tries: tries - 1) } }
     }
 }
 
@@ -1876,6 +1896,7 @@ func shellCommand(_ args: [String], browser: String? = nil) -> Never {
     file.addItem(withTitle: "New Folder", action: #selector(BrowserWindowController.newFolder(_:)), keyEquivalent: "n")
         .keyEquivalentModifierMask = [.command, .shift]
     file.addItem(withTitle: "Open", action: #selector(ShellDelegate.openOrImport(_:)), keyEquivalent: "o")
+    file.addItem(withTitle: "Quick Look", action: #selector(BrowserWindowController.quickLook(_:)), keyEquivalent: "y")
     file.addItem(.separator())
     file.addItem(withTitle: "Get Info", action: #selector(BrowserWindowController.getInfo(_:)), keyEquivalent: "i")
     file.addItem(withTitle: "Rename", action: #selector(BrowserWindowController.rename(_:)), keyEquivalent: "")
@@ -1883,7 +1904,8 @@ func shellCommand(_ args: [String], browser: String? = nil) -> Never {
     file.addItem(withTitle: "Make Alias", action: #selector(BrowserWindowController.makeAlias(_:)), keyEquivalent: "a")
         .keyEquivalentModifierMask = [.command, .control]
     file.addItem(withTitle: "Show Original", action: #selector(ShellDelegate.originalOrRefresh(_:)), keyEquivalent: "r")
-    file.addItem(withTitle: "Move to Trash", action: #selector(BrowserWindowController.moveToTrash(_:)), keyEquivalent: "\u{8}")
+    file.addItem(withTitle: "Move to Trash", action: #selector(BrowserWindowController.moveToTrashOrPutBack(_:)),
+                 keyEquivalent: "\u{8}")
     file.addItem(withTitle: "Empty Trash…", action: #selector(BrowserWindowController.emptyTrash(_:)), keyEquivalent: "\u{8}")
         .keyEquivalentModifierMask = [.command, .shift]
     file.addItem(withTitle: "Save as MacBinary…", action: #selector(BrowserWindowController.saveMacBinary(_:)), keyEquivalent: "")

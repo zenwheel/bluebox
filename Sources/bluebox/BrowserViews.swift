@@ -2,7 +2,9 @@
 // (a collection view), a list (an outline view whose folders open in
 // place, sorted by any column) and columns (a browser).  Each shows its
 // items' icons as they are read, opens them on a double-click, has the
-// window's menu for them, drags them out and takes drops.
+// window's menu for them, drags them out and takes drops.  In each, Return
+// or a click on a selected item's name edits the name in place, and the
+// space bar shows the selection in Quick Look.
 
 #if canImport(AppKit)
 import AppKit
@@ -100,12 +102,27 @@ func sizeText(_ item: BrowserItem) -> String {
     /// An arrow key with nothing selected: true for the first item (Down,
     /// Right), false for the last (Up, Left), as the Finder picks one.
     var onArrowFromNothing: ((Bool) -> Void)?
+    /// A click on the name of the item that was alone selected: its name
+    /// to edit, unless a second click (or a drag) comes.
+    var onClickName: ((IndexPath) -> Void)?
+    var onMouseDown: (() -> Void)?
+    var onQuickLook: (() -> Void)?
     private var typeSelect = TypeSelect()
 
     override func mouseDown(with event: NSEvent) {
         typeSelect.reset()
+        onMouseDown?()
+        let at = convert(event.locationInWindow, from: nil)
+        var onName: IndexPath?
+        if event.clickCount == 1, window?.isKeyWindow == true,
+           event.modifierFlags.intersection([.command, .shift, .control, .option]).isEmpty,
+           let ip = indexPathForItem(at: at), selectionIndexPaths == [ip],
+           let label = item(at: ip)?.textField, label.bounds.contains(label.convert(event.locationInWindow, from: nil)) {
+            onName = ip
+        }
         super.mouseDown(with: event)
         if event.clickCount == 2 { onOpen?() }
+        if let onName, selectionIndexPaths == [onName] { onClickName?(onName) }
     }
 
     override func menu(for event: NSEvent) -> NSMenu? { onMenu?(event) }
@@ -113,6 +130,10 @@ func sizeText(_ item: BrowserItem) -> String {
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36 || event.keyCode == 76 { onRename?(); return } // Return: rename, as in the Finder
         if event.modifierFlags.contains(.command), event.keyCode == 125 { onOpen?(); return } // Command-Down
+        if isQuickLookKey(event, typeSelect) {
+            onQuickLook?()
+            return
+        }
         if let first = arrowFromNothing(event, selected: !selectionIndexPaths.isEmpty) {
             typeSelect.reset()
             onArrowFromNothing?(first)
@@ -167,6 +188,12 @@ func sizeText(_ item: BrowserItem) -> String {
             guard let self, self.selectedItems.count == 1 else { return }
             self.delegate?.browserRename(self.selectedItems[0])
         }
+        collection.onClickName = { [weak self] ip in
+            guard let self, self.items.indices.contains(ip.item) else { return }
+            self.delegate?.browserClickedName(self.items[ip.item])
+        }
+        collection.onMouseDown = { [weak self] in self?.delegate?.browserCancelRename() }
+        collection.onQuickLook = { [weak self] in self?.delegate?.browserQuickLook() }
         collection.onMenu = { [weak self] event in
             guard let self else { return nil }
             let at = self.collection.convert(event.locationInWindow, from: nil)
@@ -208,6 +235,26 @@ func sizeText(_ item: BrowserItem) -> String {
     func selectAll() { collection.selectAll(nil) }
     func focus() { collection.window?.makeFirstResponder(collection) }
     func refreshIcons() { collection.reloadData() }
+
+    func nameSpot(for path: String) -> BrowserNameSpot? {
+        guard let i = items.firstIndex(where: { $0.path == path }) else { return nil }
+        let ip = IndexPath(item: i, section: 0)
+        collection.scrollToItems(at: [ip], scrollPosition: .nearestHorizontalEdge)
+        collection.layoutSubtreeIfNeeded()
+        guard let cell = collection.item(at: ip), let label = cell.textField else { return nil }
+        // The width of the item, under its icon, from the label's top.
+        let frame = cell.view.convert(cell.view.bounds, to: scroll)
+        let top = label.convert(label.bounds, to: scroll)
+        let rect = NSRect(x: frame.minX - 6, y: min(top.minY, top.maxY), width: frame.width + 12, height: 34)
+        return BrowserNameSpot(rect: rect, font: label.font ?? .systemFont(ofSize: 12), centered: true, wraps: true)
+    }
+
+    func screenFrame(for path: String) -> NSRect? {
+        guard let i = items.firstIndex(where: { $0.path == path }),
+              let cell = collection.item(at: IndexPath(item: i, section: 0)), let icon = cell.imageView,
+              let w = icon.window else { return nil }
+        return w.convertToScreen(icon.convert(icon.bounds, to: nil))
+    }
 
     func collectionView(_ cv: NSCollectionView, numberOfItemsInSection section: Int) -> Int { items.count }
 
@@ -262,10 +309,44 @@ func sizeText(_ item: BrowserItem) -> String {
     var onMenu: ((NSEvent) -> NSMenu?)?
     var onRename: (() -> Void)?
     var onOpen: (() -> Void)?
+    var onClickName: ((Int) -> Void)?
+    var onMouseDown: (() -> Void)?
+    var onQuickLook: (() -> Void)?
+    /// The letters typed for the table's own type-select, to tell a space
+    /// in a name from Quick Look's.
+    private var typed = TypeSelect()
     override func menu(for event: NSEvent) -> NSMenu? { onMenu?(event) }
+
+    override func mouseDown(with event: NSEvent) {
+        typed.reset()
+        onMouseDown?()
+        let at = convert(event.locationInWindow, from: nil)
+        let row = self.row(at: at), column = self.column(at: at)
+        var onName = false
+        if event.clickCount == 1, row >= 0, column >= 0, window?.isKeyWindow == true,
+           event.modifierFlags.intersection([.command, .shift, .control, .option]).isEmpty,
+           selectedRowIndexes == [row], tableColumns[column] == outlineTableColumn,
+           let cell = view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView, let text = cell.textField {
+            let p = text.convert(event.locationInWindow, from: nil)
+            // On the name's text, not the space after it.
+            onName = p.x >= 0 && p.x <= min(text.bounds.width, text.intrinsicContentSize.width + 4)
+                && p.y >= text.bounds.minY - 2 && p.y <= text.bounds.maxY + 2
+        }
+        super.mouseDown(with: event)
+        if onName, selectedRowIndexes == [row] { onClickName?(row) }
+    }
+
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36 || event.keyCode == 76 { onRename?(); return }
         if event.modifierFlags.contains(.command), event.keyCode == 125 { onOpen?(); return }
+        if isQuickLookKey(event, typed) {
+            onQuickLook?()
+            return
+        }
+        if event.modifierFlags.intersection([.command, .control, .option]).isEmpty, let chars = event.characters,
+           typed.feed(chars, at: event.timestamp) == nil {
+            typed.reset()
+        }
         if let first = arrowFromNothing(event, selected: selectedRow >= 0), numberOfRows > 0 {
             let row = first ? 0 : numberOfRows - 1
             selectRowIndexes([row], byExtendingSelection: false)
@@ -274,6 +355,13 @@ func sizeText(_ item: BrowserItem) -> String {
         }
         super.keyDown(with: event)
     }
+}
+
+/// The space bar, for Quick Look, unless it is a space in a name being
+/// typed (type-select), as in the Finder.
+@MainActor func isQuickLookKey(_ event: NSEvent, _ typeSelect: TypeSelect) -> Bool {
+    event.keyCode == 49 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+        && !typeSelect.isTyping(at: event.timestamp)
 }
 
 /// An arrow key pressed with nothing selected: whether it picks the first
@@ -344,6 +432,12 @@ func sizeText(_ item: BrowserItem) -> String {
             guard let self, self.selectedItems.count == 1 else { return }
             self.delegate?.browserRename(self.selectedItems[0])
         }
+        outline.onClickName = { [weak self] row in
+            guard let self, let node = self.outline.item(atRow: row) as? BrowserNode else { return }
+            self.delegate?.browserClickedName(node.item)
+        }
+        outline.onMouseDown = { [weak self] in self?.delegate?.browserCancelRename() }
+        outline.onQuickLook = { [weak self] in self?.delegate?.browserQuickLook() }
         outline.onMenu = { [weak self] event in
             guard let self else { return nil }
             let row = self.outline.row(at: self.outline.convert(event.locationInWindow, from: nil))
@@ -413,6 +507,29 @@ func sizeText(_ item: BrowserItem) -> String {
     func selectAll() { outline.selectAll(nil) }
     func focus() { outline.window?.makeFirstResponder(outline) }
     func refreshIcons() { outline.reloadData() }
+
+    private func row(of path: String) -> Int? {
+        (0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? BrowserNode)?.item.path == path }
+    }
+
+    func nameSpot(for path: String) -> BrowserNameSpot? {
+        guard let row = row(of: path), let col = outline.outlineTableColumn,
+              case let column = outline.column(withIdentifier: col.identifier), column >= 0 else { return nil }
+        outline.scrollRowToVisible(row)
+        guard let cell = outline.view(atColumn: column, row: row, makeIfNecessary: true) as? NSTableCellView,
+              let text = cell.textField else { return nil }
+        let field = text.convert(text.bounds, to: scroll), whole = cell.convert(cell.bounds, to: scroll)
+        let rect = NSRect(x: field.minX - 3, y: whole.midY - 11, width: max(80, whole.maxX - field.minX), height: 22)
+        return BrowserNameSpot(rect: rect, font: text.font ?? .systemFont(ofSize: 13), centered: false, wraps: false)
+    }
+
+    func screenFrame(for path: String) -> NSRect? {
+        guard let row = row(of: path), let col = outline.outlineTableColumn,
+              case let column = outline.column(withIdentifier: col.identifier), column >= 0,
+              let cell = outline.view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView,
+              let icon = cell.imageView, let w = icon.window else { return nil }
+        return w.convertToScreen(icon.convert(icon.bounds, to: nil))
+    }
 
     func outlineView(_ o: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         guard let node = item as? BrowserNode else { return roots.count }
@@ -555,10 +672,80 @@ func sizeText(_ item: BrowserItem) -> String {
 @MainActor final class BrowserColumns: NSBrowser {
     var onMenu: ((NSEvent) -> NSMenu?)?
     var onRename: (() -> Void)?
+    var onQuickLook: (() -> Void)?
+    /// An arrow with nothing selected in a column: true for its first
+    /// item (Down, Right), false for its last (Up).
+    var onArrowFromNothing: ((Bool, Int) -> Void)?
+    var onClickName: ((Int, Int) -> Void)?
+    var onMouseDown: (() -> Void)?
+    /// The letters typed for the browser's own type-select.
+    private var typed = TypeSelect()
     override func menu(for event: NSEvent) -> NSMenu? { onMenu?(event) }
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 36 || event.keyCode == 76 { onRename?(); return }
-        super.keyDown(with: event)
+
+    /// The column whose list has the focus, or -1.
+    func focusedColumn() -> Int {
+        guard let v = window?.firstResponder as? NSView, v.isDescendant(of: self) else { return -1 }
+        let x = v.convert(v.bounds, to: self).minX + 1
+        return (0...max(0, lastColumn)).first { frame(ofColumn: $0).minX <= x && x < frame(ofColumn: $0).maxX } ?? -1
+    }
+
+    /// The keys the columns take before their lists do (the window asks,
+    /// BrowserNSWindow): Return, the space bar, an arrow in a column with
+    /// nothing selected in it.
+    func handleKey(_ event: NSEvent) -> Bool {
+        let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+        if plain, event.keyCode == 36 || event.keyCode == 76 { onRename?(); return true }
+        if isQuickLookKey(event, typed) {
+            onQuickLook?()
+            return true
+        }
+        if plain, [125, 126, 124].contains(event.keyCode) {
+            typed.reset()
+            var c = focusedColumn()
+            if c < 0 { c = max(0, lastColumn) }
+            guard selectedRowIndexes(inColumn: c)?.isEmpty ?? true else { return false }
+            onArrowFromNothing?(event.keyCode != 126, c)
+            return true
+        }
+        if plain, let chars = event.characters, typed.feed(chars, at: event.timestamp) == nil { typed.reset() }
+        return false
+    }
+
+    /// The row under a point in the browser, and its column.
+    private func hit(_ p: NSPoint) -> (row: Int, column: Int)? {
+        guard lastColumn >= 0, let c = (0...lastColumn).first(where: { frame(ofColumn: $0).contains(p) }) else { return nil }
+        let rows = (delegate as? BrowserColumnView)?.rowCount(inColumn: c) ?? 0
+        return (0..<rows).first { frame(ofRow: $0, inColumn: c).contains(p) }.map { ($0, c) }
+    }
+
+    /// A click (the window asks before its lists take it): what to do
+    /// after, when it was on the name of the item alone selected.
+    func handleClick(_ event: NSEvent) -> (() -> Void)? {
+        typed.reset()
+        onMouseDown?()
+        let p = convert(event.locationInWindow, from: nil)
+        guard event.clickCount == 1, window?.isKeyWindow == true,
+              event.modifierFlags.intersection([.command, .shift, .control, .option]).isEmpty,
+              let (row, c) = hit(p), selectedColumn == c, selectedRowIndexes(inColumn: c) == [row],
+              p.x > frame(ofRow: row, inColumn: c).minX + 24 else { return nil }
+        return { [weak self] in
+            guard let self, self.selectedColumn == c, self.selectedRowIndexes(inColumn: c) == [row] else { return }
+            self.onClickName?(row, c)
+        }
+    }
+}
+
+/// The browser's window, which lets the column view see keys and clicks
+/// before NSBrowser's own lists take them.
+final class BrowserNSWindow: NSWindow {
+    var keyFilter: (@MainActor (NSEvent) -> Bool)?
+    var clickFilter: (@MainActor (NSEvent) -> (() -> Void)?)?
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, keyFilter?(event) == true { return }
+        let after = event.type == .leftMouseDown ? clickFilter?(event) : nil
+        super.sendEvent(event)
+        after?()
     }
 }
 
@@ -568,6 +755,7 @@ func sizeText(_ item: BrowserItem) -> String {
     private var root = BrowserColumnNode(path: "/", item: nil)
     private var location = ""
     private var settingPath = false
+    private let preview = BrowserPreviewController()
     var view: NSView { browser }
 
     init(delegate: BrowserViewDelegate) {
@@ -593,6 +781,21 @@ func sizeText(_ item: BrowserItem) -> String {
         browser.onRename = { [weak self] in
             guard let self, self.selectedItems.count == 1 else { return }
             self.delegate?.browserRename(self.selectedItems[0])
+        }
+        browser.onQuickLook = { [weak self] in self?.delegate?.browserQuickLook() }
+        browser.onMouseDown = { [weak self] in self?.delegate?.browserCancelRename() }
+        browser.onClickName = { [weak self] row, column in
+            guard let self, let item = (self.browser.item(atRow: row, inColumn: column) as? BrowserColumnNode)?.item else { return }
+            self.delegate?.browserClickedName(item)
+        }
+        browser.onArrowFromNothing = { [weak self] first, c in
+            guard let self else { return }
+            let list = self.children(self.browser.parentForItems(inColumn: c) as? BrowserColumnNode ?? self.root)
+            guard !list.isEmpty else { return }
+            let row = first ? 0 : list.count - 1
+            self.browser.selectRow(row, inColumn: c)
+            self.browser.scrollRowToVisible(row, inColumn: c)
+            self.clicked(nil)
         }
         browser.onMenu = { [weak self] event in
             guard let self else { return nil }
@@ -633,6 +836,10 @@ func sizeText(_ item: BrowserItem) -> String {
             column += 1
         }
         select(selected)
+        // Shown afresh with the focus in the columns: in the folder shown.
+        if let v = browser.window?.firstResponder as? NSView, v === browser || v.isDescendant(of: browser), !(v is NSText) {
+            focus()
+        }
     }
 
     private func invalidate(_ node: BrowserColumnNode) {
@@ -662,10 +869,77 @@ func sizeText(_ item: BrowserItem) -> String {
     }
 
     func selectAll() { browser.selectAll(nil) }
-    func focus() { browser.window?.makeFirstResponder(browser) }
+    /// The focus in the folder shown (the last column's list), so the
+    /// keys go to its items, as in the other views.
+    func focus() {
+        let c = max(0, browser.lastColumn), frame = browser.frame(ofColumn: c)
+        func list(in v: NSView) -> NSView? {
+            if v is NSTableView, frame.contains(NSPoint(x: v.convert(v.bounds, to: browser).minX + 1, y: frame.midY)) { return v }
+            for sub in v.subviews { if let found = list(in: sub) { return found } }
+            return nil
+        }
+        browser.window?.makeFirstResponder(list(in: browser) ?? browser)
+    }
     func refreshIcons() { browser.loadColumnZero() }
 
-    @objc private func clicked(_ sender: Any?) {
+    func rowCount(inColumn c: Int) -> Int {
+        children(browser.parentForItems(inColumn: c) as? BrowserColumnNode ?? root).count
+    }
+
+    /// The keys and clicks the window shows the columns first.
+    var debugState: String { "columns \(browser.lastColumn) focus \(browser.focusedColumn()) selected \(browser.selectedColumn)" }
+
+    func handleKey(_ event: NSEvent) -> Bool {
+        // Not while a name is edited in the columns: its field's.
+        guard let v = browser.window?.firstResponder as? NSView, v.isDescendant(of: browser), !(v is NSText) else {
+            return false
+        }
+        return browser.handleKey(event)
+    }
+
+    func handleClick(_ event: NSEvent) -> (() -> Void)? {
+        guard browser.bounds.contains(browser.convert(event.locationInWindow, from: nil)) else { return nil }
+        return browser.handleClick(event)
+    }
+
+    /// Where an item's row is: its column (its folder's) and row.
+    private func place(of path: String) -> (row: Int, column: Int)? {
+        let parent = (path as NSString).deletingLastPathComponent
+        for c in stride(from: max(0, browser.lastColumn), through: 0, by: -1) {
+            let node = browser.parentForItems(inColumn: c) as? BrowserColumnNode ?? root
+            guard node.path == parent else { continue }
+            if let row = children(node).firstIndex(where: { $0.path == path }) { return (row, c) }
+        }
+        return nil
+    }
+
+    func nameSpot(for path: String) -> BrowserNameSpot? {
+        guard let (row, c) = place(of: path) else { return nil }
+        browser.scrollColumnToVisible(c)
+        browser.scrollRowToVisible(row, inColumn: c)
+        let frame = browser.frame(ofRow: row, inColumn: c)
+        guard !frame.isEmpty else { return nil }
+        // After the icon (16 points and the spaces before the name).
+        let rect = NSRect(x: frame.minX + 24, y: frame.midY - 11, width: max(80, frame.width - 26), height: 22)
+        return BrowserNameSpot(rect: rect, font: .systemFont(ofSize: 13), centered: false, wraps: false)
+    }
+
+    func screenFrame(for path: String) -> NSRect? {
+        guard let (row, c) = place(of: path), let w = browser.window else { return nil }
+        let frame = browser.frame(ofRow: row, inColumn: c)
+        guard !frame.isEmpty else { return nil }
+        let icon = NSRect(x: frame.minX + 2, y: frame.midY - 8, width: 16, height: 16)
+        return w.convertToScreen(browser.convert(icon, to: nil))
+    }
+
+    /// The preview column, after the columns, for a file selected alone.
+    func browser(_ b: NSBrowser, previewViewControllerForLeafItem item: Any) -> NSViewController? {
+        // One, which the browser gives each leaf in turn.
+        if preview.delegate == nil { preview.delegate = delegate }
+        return preview
+    }
+
+    @objc fileprivate func clicked(_ sender: Any?) {
         guard !settingPath else { return }
         let items = selectedItems
         // A folder chosen: it is the one shown (its column opens beside it).

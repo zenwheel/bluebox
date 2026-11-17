@@ -1,6 +1,7 @@
 /*
  * The catalog (catalog.c, SQLite): folders' Finder information and
- * comments, and the volumes' desktop databases, by host path.
+ * comments, the volumes' desktop databases and the Trash's Put Back
+ * locations, by host path.
  */
 #ifndef CATALOG_H
 #define CATALOG_H
@@ -22,6 +23,8 @@ bool catalog_set_dirinfo(const char *path, const uint8_t *finfo, const uint8_t *
 int catalog_get_comment(const char *path, uint8_t *text, int max);
 bool catalog_set_comment(const char *path, const uint8_t *text, int len);
 void catalog_moved(const char *from, const char *to);
+bool catalog_set_putback(const char *path, const char *original);
+bool catalog_get_putback(const char *path, char *out, size_t size);
 
 bool catalog_dt_open(const char *root);
 void catalog_dt_reset(const char *root, bool remove_all);

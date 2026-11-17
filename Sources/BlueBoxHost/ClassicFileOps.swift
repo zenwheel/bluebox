@@ -71,6 +71,17 @@ enum Catalog {
     static func moved(_ from: String, _ to: String?) { lock.withLock { catalog_moved(from, to) } }
     static func nodesMoved(_ from: String, _ to: String?) { lock.withLock { catalog_nodes_moved(from, to) } }
     static func setPath(_ path: String) { lock.withLock { catalog_set_path(path) } }
+    @discardableResult
+    static func setPutBack(_ path: String, _ original: String?) -> Bool {
+        lock.withLock { catalog_set_putback(path, original) }
+    }
+    static func putBack(_ path: String) -> String? {
+        lock.withLock {
+            var out = [CChar](repeating: 0, count: 4096)
+            guard catalog_get_putback(path, &out, out.count) else { return nil }
+            return String(decoding: out.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        }
+    }
 }
 
 public struct ClassicFileOps: Sendable {
@@ -313,9 +324,7 @@ public struct ClassicFileOps: Sendable {
 
     @discardableResult
     public func rename(_ src: String, to newName: String) throws -> String {
-        guard !newName.isEmpty, !newName.contains("/"), !newName.hasPrefix("._"), newName != ".", newName != ".." else {
-            throw ClassicFileError(.failed, src, "“\(newName)” can't be used as a name")
-        }
+        if let problem = BrowserNames.problem(newName) { throw ClassicFileError(.failed, src, problem) }
         return try move(src, into: (src as NSString).deletingLastPathComponent, name: newName)
     }
 
@@ -372,6 +381,26 @@ public struct ClassicFileOps: Sendable {
         return path
     }
 
+    /// Point an alias at another original (the Finder's Fix Alias), keeping
+    /// its own Finder flags, label and comment.
+    public func retargetAlias(_ path: String, to target: String) throws {
+        guard var meta = ClassicMeta.read(path), meta.isAlias else {
+            throw ClassicFileError(.notAFile, path, "\(name(path)) is not an alias")
+        }
+        guard exists(target) else { throw ClassicFileError(.missing, target, "\(name(target)) is not there any more") }
+        let isDir = isFolder(target)
+        let fresh = ClassicAlias.finderInfo(target: isDir ? nil : ClassicMeta.read(target), isFolder: isDir)
+        meta.type = fresh.type
+        meta.creator = fresh.creator
+        let rec = ClassicAlias.record(hostPath: (target as NSString).standardizingPath, macPath: macPath(target),
+                                      isFolder: isDir)
+        meta.resourceFork = ClassicAlias.resourceFork(record: rec)
+        if info(path).locked { throw ClassicFileError(.locked, path, "\(name(path)) is locked") }
+        do { try meta.write(sidecarOf: path) } catch {
+            throw ClassicFileError(.failed, path, "the alias could not be changed: \(error.localizedDescription)")
+        }
+    }
+
     /// Where a classic alias leads, if it is one.
     public func aliasTarget(_ path: String) -> String? {
         guard let meta = ClassicMeta.read(path), meta.isAlias, let rec = ClassicAlias.record(inFork: meta.resourceFork)
@@ -410,7 +439,35 @@ public struct ClassicFileOps: Sendable {
         }
         Catalog.moved(src, trashed)
         if let r = rel(src) { Catalog.nodesMoved(r, nil) }
+        // Where it came from, kept with it in the Trash for Put Back.
+        Catalog.setPutBack(trashed, (src as NSString).standardizingPath)
         return trashed
+    }
+
+    /// Where an item in the Trash came from (moved there by moveToTrash),
+    /// or nil.
+    public func putBackLocation(_ trashed: String) -> String? {
+        Catalog.putBack((trashed as NSString).standardizingPath)
+    }
+
+    /// Put an item in the Trash back where it came from (under name, or
+    /// the name it had), making its folder again if that has gone, as the
+    /// Finder does; returns its path.
+    @discardableResult
+    public func putBack(_ trashed: String, name newName: String? = nil) throws -> String {
+        let path = (trashed as NSString).standardizingPath
+        guard let original = putBackLocation(path) else {
+            throw ClassicFileError(.missing, path, "where \(name(path)) came from isn't known")
+        }
+        let dir = (original as NSString).deletingLastPathComponent
+        if !isFolder(dir) {
+            do { try fm.createDirectory(atPath: dir, withIntermediateDirectories: true) } catch {
+                throw ClassicFileError(.failed, dir, "\(name(dir)) could not be made again: \(error.localizedDescription)")
+            }
+        }
+        let back = try move(path, into: dir, name: newName ?? name(original))
+        Catalog.setPutBack(back, nil)
+        return back
     }
 
     /// Delete for good what the Trash folder holds (or the items given),
