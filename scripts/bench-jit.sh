@@ -69,7 +69,7 @@ printf '%s\n' "$apps" | while IFS='	' read -r arch rel; do
 	cache="$work/cache-$arch-$(printf '%s' "$name" | tr -c 'A-Za-z0-9' '_')"
 	rm -rf "$cache"
 	HOME="$home" "$bin" run "$app" --headless --max 1000 > /dev/null 2>&1 || true
-	ti=$(run "$arch" "$app" "$work/interp.txt")
+	ti=$(run "$arch" "$app" "$work/interp.txt" --no-jit)
 	tc=$(run "$arch" "$app" "$work/cold.txt" --jit --jit-cache "$cache")
 	tw=$(run "$arch" "$app" "$work/warm.txt" --jit --jit-cache "$cache")
 	n=$(sed -n 's/.*after \([0-9]*\) instructions.*/\1/p' "$work/interp.txt" | head -n 1)

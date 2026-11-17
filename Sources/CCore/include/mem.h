@@ -115,7 +115,8 @@ static inline void watch_store(gaddr a, uint32_t len)
  * one byte per megabyte of the address space says whether a device answers
  * in it.  The 68k interpreter's data accesses there go to g_hw_read and
  * g_hw_write (which fall back to plain memory outside the devices' own
- * windows); a JIT's don't, so a machine with devices runs interpreted. */
+ * windows), and so do the 68k JIT's; g_hw_jit_off keeps a machine chosen
+ * by name interpreted (hw68k.c). */
 extern uint8_t g_hw_map[4096];
 extern uint32_t (*g_hw_read)(gaddr a, int size);
 extern void (*g_hw_write)(gaddr a, int size, uint32_t v);

@@ -45,7 +45,7 @@ nonisolated(unsafe) var soundRecord: String?
 /// engines, rendered to nowhere (no output device).
 nonisolated(unsafe) var soundOffline = false
 
-/// Where --jit keeps translations: the user's caches folder.
+/// Where the JIT keeps translations: the user's caches folder.
 func defaultJITCache() -> String {
     let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
     if let e = currentExport { return ExportBundle.cacheFolder(home: home, bundleIdentifier: e.bundleIdentifier) + "/JIT" }
@@ -140,8 +140,10 @@ func usage() -> Never {
           --ppc      run a fat application's PowerPC code (the default; PowerPC-only ones
                      always run it)
           --68k      run a fat application's 68k code (as a cpu setting of 68020 or 68040 does)
-          --jit      translate 68k and PowerPC code to host code (experimental), keeping
-                     translations in ~/Library/Caches/Blue Box/JIT between runs
+          --jit      translate 68k and PowerPC code to host code (the default on arm64),
+                     keeping translations in ~/Library/Caches/Blue Box/JIT between runs;
+                     --no-jit: interpret it.  Without either, BLUEBOX_JIT=1 or 0, else
+                     the jit setting, else on
           --jit-cache D  keep them in folder D instead; --no-jit-cache: don't keep them
           --depth N  screen depth: 1, 2, 4, 8, 16 or 32 bits (default 32, or the app's setting; an
                      application can still switch depth itself with SetDepth).  Without --depth,
@@ -154,7 +156,7 @@ func usage() -> Never {
                      macii (a 68020 and 68881, 24-bit, 640x480 at 8 bits on a video card in slot 9, its
                      I/O at $F00000); quadra (a 68040, 32-bit) is the default.  --cpu, --fpu and
                      --addressing change the machine's own.  Programs that address the chips by number
-                     run on them (the 68k interpreter, without --jit)
+                     run on them (the 68k interpreter, without the JIT)
           --floppy F the raw floppy disk image F (a sector dump, or Disk Copy 4.2) as the disk in the Sony
                      driver's drive 1: a key disk whose sectors a program's copy protection reads
           --screensaver M  blank the screen with After Dark module M (a file of type ADgm,
@@ -689,7 +691,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var screenshot: String?
     var screenDepth: Int32?
     var preferPPC: Bool? /* nil: the application's setting */
-    var useJIT = false
+    var useJIT: Bool? /* nil: BLUEBOX_JIT, else the settings, else jitByDefault */
     var jitCache: String? /* nil: the default folder, "": none */
     var scaleOption: Double?
     var redrawCheck: String?
@@ -817,6 +819,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
             }
             scaleOption = v
         case "--jit": useJIT = true
+        case "--no-jit": useJIT = false
         case "--jit-cache":
             i += 1
             guard i < args.count else { usage() }
@@ -1150,10 +1153,13 @@ func runCommand(_ args: [String], resume: String? = nil) {
     machine_set_accurate_timing(timing == "accurate")
     machine_set_depth_alerts(depthRelaunch != nil)
     machine_set_prefer_ppc(preferPPC ?? (processor == nil || processor == Int32(powerPCSetting)))
-    if saved.jit == true { useJIT = true } /* the jit setting; --jit turns it on for a run */
-    if useJIT {
+    // The JIT: --jit or --no-jit for the run, else BLUEBOX_JIT (1 or 0),
+    // else the jit setting, else the default.
+    let envJIT = ProcessInfo.processInfo.environment["BLUEBOX_JIT"].map { $0 != "0" }
+    if useJIT ?? envJIT ?? saved.jit ?? jitByDefault {
         let dir = jitCache ?? defaultJITCache()
-        guard machine_set_jit(true, dir.isEmpty ? nil : dir) else { fail("--jit: no JIT on this host") }
+        // Asked for, it must be there; by default, a host without one interprets.
+        if !machine_set_jit(true, dir.isEmpty ? nil : dir) && useJIT == true { fail("--jit: no JIT on this host") }
     }
     #if canImport(AppKit)
     // The host's double-click and key-repeat times, in ticks (headless runs

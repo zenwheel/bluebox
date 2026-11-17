@@ -43,7 +43,7 @@ struct AppSettings: Codable {
     var userName: String? /* the Chooser's user name (the owner's, 'STR ' -16096); unset: the host account's full name */
     var appleShare: String? /* an AppleShare volume to mount (machine_mount_appleshare's spec; "": none) */
     var display: String? /* rootless, or screen (the whole Mac screen in one window); chosen by itself when unset */
-    var jit: Bool? /* translate the program's code to host code (--jit) */
+    var jit: Bool? /* translate the program's code to host code (--jit, --no-jit); unset: jitByDefault */
     var debugger: String? /* menu (the Debug menu), stop (and the program's Debugger calls open it), off; unset: the menu with the developer tools */
     var internet: InternetSettings? /* Internet Config's preferences */
     var keepSnapshots: Int? /* hibernated snapshots kept per program; unset: HibernatedSnapshots.defaultKeep */
@@ -71,7 +71,7 @@ struct AppSettings: Codable {
             + "user-name \(userName.map { "\"\($0)\"" } ?? "default (this account's full name)"), "
             + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)"), "
             + "display \(display ?? "default (rootless, the whole screen when the program wants it)"), "
-            + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (off)"), "
+            + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (\(jitByDefault ? "on" : "off"))"), "
             + "debugger \(debugger ?? "default (the Debug menu when the developer tools are installed)"), "
             + "keep-snapshots \(keepSnapshots.map(String.init) ?? "default (\(HibernatedSnapshots.defaultKeep))"), "
             + "keep-save-points \(keepSavePoints.map(String.init) ?? "default (\(HibernatedSnapshots.defaultKeepSavePoints))")"
@@ -94,6 +94,10 @@ struct AppSettings: Codable {
                            keepSavePoints: keepSavePoints ?? f.keepSavePoints)
     }
 }
+
+/// Whether programs' code is translated (the JIT) when neither the run
+/// (--jit, --no-jit, BLUEBOX_JIT) nor the settings say.
+let jitByDefault = true
 
 /// Internet Config's preferences, which every classic program that uses
 /// Internet Config reads: who you are, your servers, and the proxies.  A
