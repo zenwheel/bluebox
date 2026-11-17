@@ -498,6 +498,45 @@ extension BlueBox {
             #expect(try run(loop + [back(loop.count)]).sleeps == 0)
         }
 
+        /// An interpreter waiting goes round its script polling from the same
+        /// place in many states, more than one place's worth, the time it
+        /// read kept in a register (Frankenstein's Director projector): the
+        /// states seen again, nothing new.
+        @Test func aLoopGoingRoundInManyStatesLetsTheHostSleep() throws {
+            let loop = [0x5247, 0x0247, 0x000F] + tickCount + [0x2C00] + button + eventAvail // ADDQ.W #1,D7; ANDI.W #15,D7; ...; MOVE.L D0,D6
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(!r.halted)
+            #expect(r.sleeps > 8 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+        }
+
+        /// ... but two frames drawn in turn by a phase in a register are a
+        /// game's animation.
+        @Test func twoFramesInTurnByARegisterAreWork() throws {
+            // BCHG #0,D7; BNE.S erase; PaintRect; BRA.S on; erase: EraseRect; on: Button
+            let loop = [0x0847, 0] + [0x6608] + paintRect + [0x6006, 0x486D, 0xFF20, 0xA8A3] + button
+            #expect(try run(drawSetup + loop + [back(loop.count)]).sleeps == 0)
+        }
+
+        /// A script of queries running long between two polls (Frankenstein's
+        /// runs 33000 instructions and 156 calls): still a wait.
+        @Test func aLongStretchOfQueriesBetweenPollsLetsTheHostSleep() throws {
+            let queries = [0x323C, 5999,                       // MOVE.W #5999,D1
+                           0x42A7, 0xA924, 0x588F,             // CLR.L -(SP); _FrontWindow; ADDQ.L #4,SP
+                           0x51C9, 0xFFF8]                     // DBRA D1,*-6
+            let loop = queries + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(r.sleeps > 8 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+        }
+
+        /// A place the loop sets one way and puts back as it was before the
+        /// next poll, only some ways round: nothing new.
+        @Test func aPlacePutBackAsItWasLetsTheHostSleep() throws {
+            // TickCount; BTST #0,D0; BEQ.S on; MOVE.W #1,-8(A5); CLR.W -8(A5); on: Button
+            let loop = tickCount + [0x0800, 0, 0x670A, 0x3B7C, 1, 0xFFF8, 0x426D, 0xFFF8] + button
+            let r = try run(loop + [back(loop.count)], seconds: 0.5)
+            #expect(r.sleeps > 8 && r.slept > r.wall / 2, "slept \(r.sleeps) times, \(r.slept) s of \(r.wall)")
+        }
+
         /// With nothing at interrupt time to keep up with, the host sleeps
         /// to the next tick, not 4 ms at a time (MediaPresenter woke 250
         /// times a second at its main screen).
