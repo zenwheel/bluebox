@@ -638,9 +638,13 @@ void machine_overlay_rgba(int x, int y, int w, int h, uint8_t *out)
     pthread_mutex_unlock(&ov_lock);
 }
 
+static bool pace_store(void);
+
 /* A store the program made into the screen (mem.h's watch). */
 static void screen_written(gaddr a, uint32_t len)
 {
+    if (pace_store())
+        return;
     gaddr base = rd32(LM_ScrnBase);
     /* The compact Macs' two pages are watched together; only the one the
      * video circuitry shows counts. */
@@ -739,6 +743,36 @@ static void any_store(gaddr a, uint32_t len)
     all_stores(a, len);
 }
 
+/* The screen watched, once its mode is decided, only for frame pacing
+ * (display_pace_watch): the first store into it is a frame drawn, and the
+ * watch comes off again. */
+BB_HOST static bool pace_once;
+
+static void apply_watch(void);
+
+static bool pace_store(void)
+{
+    pace_drew();
+    if (!pace_once)
+        return false;
+    pace_once = false;
+    screen_watch_len = 0;
+    apply_watch();
+    return true;
+}
+
+static void screen_range(gaddr *lo, gaddr *len)
+{
+    int w, h;
+    machine_screen_size(&w, &h);
+    *lo = rd32(LM_ScrnBase);
+    *len = qd_screen_row_bytes() * (uint32_t)h;
+    if (hw_machine()->via_sound && *len) { /* and the alternate page below the main */
+        *lo -= 0x8000;
+        *len += 0x8000;
+    }
+}
+
 static void apply_watch(void)
 {
     if (all_stores) {
@@ -795,15 +829,22 @@ static void check_screen_mode(void)
             display_want_screen("it draws on the screen outside its windows");
     }
     direct_written = false;
-    int w, h;
-    machine_screen_size(&w, &h);
-    screen_watch_lo = rd32(LM_ScrnBase);
+    screen_range(&screen_watch_lo, &screen_watch_len);
     /* Decided, and the program seen storing into it itself: no more watching. */
-    screen_watch_len = screen_reason && program_stored ? 0 : qd_screen_row_bytes() * (uint32_t)h;
-    if (hw_machine()->via_sound && screen_watch_len) { /* and the alternate page below the main */
-        screen_watch_lo -= 0x8000;
-        screen_watch_len += 0x8000;
-    }
+    if (screen_reason && program_stored)
+        screen_watch_len = 0;
+    pace_once = false;
+    apply_watch();
+}
+
+/* Frame pacing (pace.c) is told of the program's next store into the
+ * screen: watched anyway, or watched until then. */
+void display_pace_watch(void)
+{
+    if (pace_once || screen_watch_len || debug_watch())
+        return;
+    screen_range(&screen_watch_lo, &screen_watch_len);
+    pace_once = screen_watch_len != 0;
     apply_watch();
 }
 
@@ -850,6 +891,7 @@ void display_reset(void)
     direct_written = false;
     program_stored = false;
     screen_watch_len = 0;
+    pace_once = false;
     all_stores = NULL;
     g_watch_len = 0;
     wins_dirty = menus_dirty = true;

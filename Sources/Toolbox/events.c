@@ -538,6 +538,9 @@ bool aem_next_event(uint32_t *cls, uint32_t *id, int32_t *modifiers, bool remove
  * pressed, click, and move of the mouse (a screen saver wakes on it). */
 static volatile uint32_t input_serial;
 uint32_t ev_input_serial(void) { return input_serial; }
+/* ... and one that moves only with a key or a mouse button, down or up. */
+BB_HOST static volatile uint32_t press_serial;
+uint32_t ev_press_serial(void) { return press_serial; }
 uint32_t ev_queue_polls(void) { return queue_polls; }
 
 void machine_post_mouse(int x, int y, int button)
@@ -545,6 +548,8 @@ void machine_post_mouse(int x, int y, int button)
     pthread_mutex_lock(&lock);
     if (x != mouse_h || y != mouse_v || (button >= 0 && (button != 0) != button_down))
         input_serial++;
+    if (button >= 0 && (button != 0) != button_down)
+        press_serial++;
     motion_h += x - mouse_h;
     motion_v += y - mouse_v;
     total_h += x - mouse_h;
@@ -665,6 +670,8 @@ void machine_post_key(int charcode, int keycode, unsigned modifiers, int down, i
         key_presses++;
     if (down)
         input_serial++;
+    if (!repeat)
+        press_serial++;
     if (down) {
         key_last = (uint16_t)((keycode & 0xFF) << 8 | (charcode & 0xFF));
         key_new = true;
@@ -1176,6 +1183,7 @@ static bool gne_take(int16_t em, gaddr evt)
 
 int8_t tb_GetNextEvent(int16_t em, gaddr evt)
 {
+    pace_poll(PACE_EVENT);
     sound_pump();
     speech_pump();
     time_pump();
@@ -1232,6 +1240,7 @@ static bool polled(bool got)
 
 int8_t tb_EventAvail(int16_t em, gaddr evt)
 {
+    pace_poll(PACE_EVENT);
     display_sync();
     return polled(next_event(em, evt, false, false));
 }
@@ -1271,6 +1280,7 @@ static bool wne_event(int16_t mask, gaddr evp, bool *idled)
 
 int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
 {
+    pace_poll(PACE_EVENT);
     sleep = carbon_event_loop_turn(sleep); /* Carbon timers, posted events, MP tasks */
     machine_advance_ticks();
     sound_pump();
@@ -1388,8 +1398,16 @@ bool ev_take_user_cancel(void)
     return cancel >= 0;
 }
 
-bool tb_GetOSEvent(int16_t evmask, gaddr eventp) { return polled(next_event(evmask, eventp, true, true)); }
-bool tb_OSEventAvail(int16_t evmask, gaddr eventp) { return polled(next_event(evmask, eventp, false, true)); }
+bool tb_GetOSEvent(int16_t evmask, gaddr eventp)
+{
+    pace_poll(PACE_EVENT);
+    return polled(next_event(evmask, eventp, true, true));
+}
+bool tb_OSEventAvail(int16_t evmask, gaddr eventp)
+{
+    pace_poll(PACE_EVENT);
+    return polled(next_event(evmask, eventp, false, true));
+}
 
 void tb_FlushEvents(int16_t evmask, int16_t stopmask)
 {
@@ -1446,6 +1464,7 @@ void tb_SetEventMask(int16_t evmask) { wr16(LM_SysEvtMask, (uint16_t)evmask); }
 
 int8_t tb_Button(void)
 {
+    pace_poll(PACE_INPUT);
     /* Polling a released button is waiting for input, like a null event.
      * The button as it is, mouse events waiting or not (a program polling
      * Button never takes them from the queue). */
@@ -1486,12 +1505,14 @@ int8_t tb_Button(void)
 }
 int8_t tb_StillDown(void)
 {
+    pace_poll(PACE_INPUT);
     /* True if the button is down and no new mouse event is waiting. */
     return ev_still_down();
 }
 
 int8_t tb_WaitMouseUp(void)
 {
+    pace_poll(PACE_INPUT);
     bool d = ev_still_down();
     if (!d) {
         pthread_mutex_lock(&lock);
@@ -1510,6 +1531,7 @@ int8_t tb_WaitMouseUp(void)
 
 void tb_GetMouse(gaddr p)
 {
+    pace_poll(PACE_INPUT);
     /* While a wheel's click is handled the mouse is where it clicked: a
      * program tracking the arrow itself (Internet Explorer: GetMouse and
      * TestControl until StillDown is false) sees it there, as it would a
@@ -1601,6 +1623,7 @@ void events_start_stall_log(void)
 
 void tb_GetKeys(gaddr keys)
 {
+    pace_poll(PACE_INPUT);
     note_poll();
     keys_polled = true;
     button_holds = 0;

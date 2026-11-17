@@ -391,6 +391,8 @@ static void copy_rect(gaddr from, gaddr to, qrect q)
 static void dsp_SwapBuffers(ppc_cpu *c)
 {
     if (is_context(R(0))) {
+        pace_drew(); /* a frame shown: it may wait for the refresh */
+        pace_poll(PACE_PRESENT);
         if (!single_buffered())
             swap();
         gaddr back = single_buffered() ? rd32(ctx + CTX_WINDOW) : rd32(ctx + CTX_GWORLD);

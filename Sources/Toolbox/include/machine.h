@@ -918,6 +918,13 @@ bool machine_accurate_timing(void);
  * off.  The sleeps so far, and the time they took (ns). */
 void machine_set_idle_sleep(bool allowed);
 uint64_t machine_idle_sleeps(uint64_t *ns);
+/* With the wall clock, a program drawing frames faster than the display
+ * shows them waits for the next refresh (60 Hz) once it has finished a
+ * frame in this one (pace.c); on by default, BLUEBOX_PACE=0 too turns it
+ * off.  The waits so far; the frames drawn, the refreshes that showed a
+ * new one, and the time waited (ns). */
+void machine_set_frame_pacing(bool on);
+uint64_t machine_frames_paced(uint64_t *drawn, uint64_t *refreshes, uint64_t *ns);
 /* The system and application heaps checked after every nth Toolbox call
  * (0: never; BLUEBOX_HEAPCHECK=n sets it too): a call that damages one
  * halts the run with its name. */
