@@ -1769,8 +1769,13 @@ void tb_HideWindow(gaddr w)
     hrgn s;
     hrgn_init(&s);
     rgn_read(WindowRecord_strucRgn(w), &s);
+    /* The front window hidden gets its deactivate event, unless one is
+     * waiting already, as in the ROM; DisposeWindow takes it back. */
+    bool was_front = same_window(front_active(), w);
     WindowRecord_set_visible(w, 0);
     set_hilite(w, false);
+    if (was_front && !rd32(LM_CurDeactive))
+        wr32(LM_CurDeactive, w);
     update_active();
     repaint(&s);
     hrgn_free(&s);
