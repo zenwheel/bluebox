@@ -707,7 +707,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
         if !hostFullScreen { window.center() }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(view)
-        NSApp.activate(ignoringOtherApps: true)
+        activateFromShell()
         PickerStandIn.closeWhenAnotherShows()
         DragOut.shared.refresh = { [weak view] in view?.refreshIfChanged() }
         if !hostFullScreen {
