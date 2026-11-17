@@ -26,7 +26,8 @@ bool machine_launch(const char *app_path, char *err, size_t errlen);
 bool machine_is_finder(void);
 /* Run a fat application's PowerPC code rather than its 68k code. */
 void machine_set_prefer_ppc(bool on);
-/* The JIT (off by default): translate the program's 68k and PowerPC code
+/* The JIT (off until a run turns it on, as `bluebox run` does unless told
+ * not to): translate the program's 68k and PowerPC code
  * to host code; false if this host has no JIT (arm64 only for now).
  * cache_dir, if not NULL, keeps translations between runs (files per
  * application there). */

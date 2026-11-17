@@ -97,7 +97,7 @@ struct AppSettings: Codable {
 
 /// Whether programs' code is translated (the JIT) when neither the run
 /// (--jit, --no-jit, BLUEBOX_JIT) nor the settings say.
-let jitByDefault = false
+let jitByDefault = true
 
 /// Internet Config's preferences, which every classic program that uses
 /// Internet Config reads: who you are, your servers, and the proxies.  A

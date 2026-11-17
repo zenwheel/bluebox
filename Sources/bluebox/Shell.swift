@@ -1202,8 +1202,8 @@ struct SettingsForm: View {
                 Text("On").tag(Bool?.some(true))
                 Text("Off").tag(Bool?.some(false))
             }
-            .help("Translate the program's 68k or PowerPC code to this Mac's own as it runs, three to ten times "
-                  + "faster than interpreting it (experimental). The translations are kept between runs.")
+            .help("Translate the program's 68k or PowerPC code to this Mac's own as it runs, up to ten times "
+                  + "faster than interpreting it. On unless turned off here. The translations are kept between runs.")
             Picker("Hibernated snapshots kept", selection: $settings.keepSnapshots) {
                 Text("\(inherit) (\(fallback.keepSnapshots ?? HibernatedSnapshots.defaultKeep))").tag(Int?.none)
                 ForEach([1, 3, 5, 10, 20], id: \.self) { n in Text("\(n)").tag(Int?.some(n)) }
