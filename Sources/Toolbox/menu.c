@@ -937,11 +937,12 @@ static int16_t system_font_width(const uint8_t *s, int n)
 }
 
 static bool apple_title(gaddr mh);
+enum { BOX_W = 16, BOX_H = 15 }; /* the Apple menu's icon */
 
 static int title_width(gaddr mh)
 {
-    if (themed() && apple_title(mh))
-        return 16; /* the icon */
+    if (apple_title(mh))
+        return BOX_W; /* the icon */
     gaddr t = title_of(mh);
     uint8_t buf[256];
     int n = rd8(t);
@@ -1078,9 +1079,10 @@ static void draw_text_colored(int x, int y, gaddr pstr, int color)
     qd_set_fg_override(NULL);
 }
 
-/* The Apple menu's title under the Appearance Manager is an icon, not
- * the font's apple: the theme's ('sapl' in its 'tic#', GlassWorks' grey
- * one), or else the System's six-coloured apple, drawn here. */
+/* The Apple menu's title is an icon, not the font's apple: Blue Box's
+ * own, a box in deep blue taped shut (the app's icon, AppIcon.swift),
+ * drawn here a pixel at a time in its colours; in black and white its
+ * sides and edges are black and its top white. */
 static bool apple_title(gaddr mh)
 {
     gaddr t = title_of(mh);
@@ -1089,38 +1091,41 @@ static bool apple_title(gaddr mh)
 
 static void draw_apple_icon(qrect r)
 {
-    static const char *const shape[14] = {
-        "........##...", ".......##....", "..###..#.###.", ".###########.", "############.",
-        "###########..", "##########...", "##########...", "###########..", "############.",
-        ".############", ".###########.", "..#########..", "...###.###...",
+    static const char *const shape[BOX_H] = {
+        "......kkkk......", "....kkFFFFkk....", "..kkTTFFFFFFkk..", "kkNNNTTFFFFFFFkk", "kkkNNNTTTFFFFkkk",
+        "kLLkkNNNTTTkkRRk", "kLLLLkkNNTkkRRRk", "kLLLLLLkkkkRRRRk", "kLLLLLLLkRTTRRRk", "kLLLLLLLkRTTRRRk",
+        "kLLLLLLLkRRRRRRk", "kLLLLLLLkRRRRRRk", ".kkLLLLLkRRRRkk.", "...kkLLLkRRkk...", ".....kkkkkk.....",
     };
-    static const uint16_t bands[6][3] = {
-        { 0x5E5E, 0xBDBD, 0x3E3E }, { 0xFFFF, 0xB9B9, 0x0000 }, { 0xF7F7, 0x8282, 0x0000 },
-        { 0xE2E2, 0x3838, 0x3838 }, { 0x9797, 0x3939, 0x9999 }, { 0x0000, 0x9C9C, 0xDFDF },
+    static const char keys[] = "kLRFNT";
+    static const uint16_t colors[6][3] = {
+        { 0x0505, 0x1F1F, 0x6666 }, /* the edges */
+        { 0x1212, 0x5454, 0xDBDB }, /* the left side */
+        { 0x0808, 0x3636, 0xA3A3 }, /* the right side */
+        { 0x4040, 0x8787, 0xFFFF }, /* the top's far flap */
+        { 0x3030, 0x7575, 0xF5F5 }, /* the near flap */
+        { 0xB3B3, 0xD9D9, 0xFFFF }, /* the tape */
     };
-    int x0 = r.left + (r.right - r.left - 13) / 2, y0 = r.top + (r.bottom - r.top - 14) / 2;
-    int16_t id;
-    if (thme_icon_id(fourcc("sapl"), &id)) {
-        gaddr ref = tb_NewPtr(4, false, true), rr = tb_NewPtr(8, false, false);
-        if (tb_GetIconRef(-32768, (int32_t)fourcc("macs"), (int32_t)fourcc("sapl"), ref) == noErr) {
-            int16_t x = (int16_t)(r.left + (r.right - r.left - 16) / 2), y = (int16_t)(r.top + (r.bottom - r.top - 16) / 2);
-            qrect_put(rr, (qrect){ y, x, (int16_t)(y + 16), (int16_t)(x + 16) });
-            int16_t err = tb_PlotIconRef(rr, 0, 0, 0, rd32(ref));
-            tb_ReleaseIconRef(rd32(ref));
-            tb_DisposePtr(ref);
-            tb_DisposePtr(rr);
-            if (err == noErr)
-                return;
-        } else {
-            tb_DisposePtr(ref);
-            tb_DisposePtr(rr);
+    int x0 = r.left + (r.right - r.left - BOX_W) / 2, y0 = r.top + (r.bottom - r.top - BOX_H) / 2;
+    for (int y = 0; y < BOX_H; y++)
+        for (int x = 0; x < BOX_W;) { /* a run of one colour at a time */
+            const char *k = strchr(keys, shape[y][x]);
+            int e = x + 1;
+            while (e < BOX_W && shape[y][e] == shape[y][x])
+                e++;
+            if (k && *k)
+                ap_fill((qrect){ (int16_t)(y0 + y), (int16_t)(x0 + x), (int16_t)(y0 + y + 1), (int16_t)(x0 + e) },
+                        colors[k - keys]);
+            x = e;
         }
-    }
-    for (int y = 0; y < 14; y++)
-        for (int x = 0; x < 13; x++)
-            if (shape[y][x] == '#')
-                ap_fill((qrect){ (int16_t)(y0 + y), (int16_t)(x0 + x), (int16_t)(y0 + y + 1), (int16_t)(x0 + x + 1) },
-                        bands[y < 4 ? 0 : y < 6 ? 1 : y < 8 ? 2 : y < 10 ? 3 : y < 12 ? 4 : 5]);
+}
+
+/* The Apple menu's title outside a theme: the bar's white, or black when
+ * it's selected, under the icon (inverting would turn its colours). */
+static void plain_apple_title(qrect r, bool selected)
+{
+    static const uint16_t white[3] = { 0xFFFF, 0xFFFF, 0xFFFF }, black[3] = { 0, 0, 0 };
+    ap_fill(r, selected ? black : white);
+    draw_apple_icon(r);
 }
 
 /* A title in the bar in the theme: its background, selected or not, and
@@ -1147,6 +1152,10 @@ static bool scheme_title(int i, bool selected)
     if (themed() || !theme_menu_text(selected ? 1 : 0, (MenuInfo_enableFlags(menu_ptr(mh)) & 1) != 0, c) ||
         !theme_menu_title(r, selected))
         return false;
+    if (apple_title(mh)) {
+        draw_apple_icon(r);
+        return true;
+    }
     qd_set_fg_override(c);
     draw_text_at(r.left + 7, title_baseline(), title_of(mh));
     qd_set_fg_override(NULL);
@@ -1225,7 +1234,10 @@ void tb_DrawMenuBar(void)
     for (int i = 0; i < n; i++) {
         gaddr mh = menu_at(i);
         qrect r = title_rect(i);
-        draw_text_at(r.left + 7, title_baseline(), title_of(mh));
+        if (apple_title(mh))
+            plain_apple_title(r, false);
+        else
+            draw_text_at(r.left + 7, title_baseline(), title_of(mh));
         if (!(MenuInfo_enableFlags(menu_ptr(mh)) & 1))
             dim_rect(r);
     }
@@ -1233,7 +1245,9 @@ void tb_DrawMenuBar(void)
     int16_t hil = (int16_t)rd16(LM_TheMenu);
     if (hil) {
         for (int i = 0; i < n; i++)
-            if (MenuInfo_menuID(menu_ptr(menu_at(i))) == hil) {
+            if (MenuInfo_menuID(menu_ptr(menu_at(i))) == hil && apple_title(menu_at(i)))
+                plain_apple_title(title_rect(i), true);
+            else if (MenuInfo_menuID(menu_ptr(menu_at(i))) == hil) {
                 hrgn t;
                 hrgn_init(&t);
                 hrgn_rect(&t, title_rect(i));
@@ -1260,6 +1274,11 @@ static void invert_title(int16_t mid)
             continue;
         }
         if (scheme_title(i, (int16_t)rd16(LM_TheMenu) != mid)) {
+            tb_SetPort(saved);
+            continue;
+        }
+        if (apple_title(menu_at(i))) {
+            plain_apple_title(title_rect(i), (int16_t)rd16(LM_TheMenu) != mid);
             tb_SetPort(saved);
             continue;
         }
