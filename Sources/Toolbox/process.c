@@ -366,6 +366,18 @@ int16_t tb_GetActiveTaskInfo(gaddr info, int16_t slots)
     return 1;
 }
 
+/* The Application menu's extra item data (its icons) for the standard
+ * MDEF.  There is no Process Manager's Application menu here, so no menu
+ * has any: the record is cleared and the MDEF told so. */
+int16_t tb_GetAuxMenuItem(gaddr menu, gaddr item, gaddr rec, int32_t size)
+{
+    (void)menu;
+    (void)item;
+    if (rec && size > 0)
+        gmemset(rec, 0, (uint32_t)(size < 256 ? size : 256));
+    return paramErr;
+}
+
 void tb_CancelSwitch(void) {}
 int16_t tb_BeginSystemMode(void) { return 0; }
 int16_t tb_EndSystemMode(void) { return 0; }

@@ -189,5 +189,34 @@ extension BlueBox {
             run([0x598F] + push(first) + [0x1F3C, 0, 0x3F3C, 0x002B, 0xA88F, 0x2E1F])
             #expect(g_cpu!.pointee.d.7 == made) // the one made before, and then the list ends
         }
+
+        /// QuickTime's $2E2, which QuickTime 3's installer asks before
+        /// CheckQuickTimeRegistration: a Boolean, no arguments; registered.
+        @Test func quickTime2E2SaysRegistered() {
+            launchTestApp()
+            _ = initToolbox()
+            #expect(run68k([0x2C0F, 0x558F, 0x303C, 0x02E2, 0xAAAA, 0x1E1F, 0x2A0F, 0xA9F4]) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.5 == g_cpu!.pointee.d.6)
+            #expect(g_cpu!.pointee.d.7 & 0xFF != 0)
+        }
+
+        /// OSDispatch $3E, GetAuxMenuItem: an MDEF copied from System 7's
+        /// asks for an item's Application-menu icon (Eradicator, Isotope,
+        /// Wings, 4D First's installer).  No menu has one here: the record is
+        /// cleared, the result an error, the four arguments taken off.
+        @Test func getAuxMenuItemHasNothingForAMenu() {
+            launchTestApp()
+            _ = initToolbox()
+            func push(_ v: UInt32) -> [UInt16] { [0x2F3C, hiWord(v), loWord(v)] }
+            let menu = tb_NewMenu(150, svcPStr("File"))
+            tb_AppendMenu(menu, svcPStr("Open"))
+            let rec = tb_NewPtr(14, false, true)
+            for i in 0..<14 { wr8(rec + UInt32(i), 0xAA) }
+            #expect(run68k([0x2C0F, 0x554F] + push(menu) + push(rd32(menu) + 20) + push(rec) + push(14)
+                           + [0x3F3C, 0x003E, 0xA88F, 0x3E1F, 0x2A0F, 0xA9F4]) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.5 == g_cpu!.pointee.d.6)
+            #expect(Int16(truncatingIfNeeded: g_cpu!.pointee.d.7) == -50) // paramErr
+            #expect((0..<14).allSatisfy { rd8(rec + UInt32($0)) == 0 })
+        }
     }
 }

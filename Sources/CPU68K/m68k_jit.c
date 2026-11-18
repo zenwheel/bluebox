@@ -1691,6 +1691,7 @@ static void check_mode(cpu68k *c)
             jit_flush(&E);
         cur_mask = c->addr_mask;
         cur_model = c->model;
+        E.addr_mask = cur_mask;
     }
 }
 

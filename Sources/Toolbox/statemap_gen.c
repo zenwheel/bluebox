@@ -2734,6 +2734,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/menu.c", "mbdf_rect", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/menu.c", "mbdf_saved", 192, 124, 0x726469f2fae0b79b },
     { "Toolbox/menu.c", "menu_kind", 4, 0, 0xb34e18f570e7c710 },
+    { "Toolbox/menu.c", "menu_sizing", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/menu.c", "mextras", 6144, 125, 0x1b47020e6c7a5c60 },
     { "Toolbox/menu.c", "nhier", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/menu.c", "nmbdf_saved", 4, 0, 0xb34e18f570e7c710 },
@@ -3590,7 +3591,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1708;
+const unsigned hb_nstatics = 1709;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

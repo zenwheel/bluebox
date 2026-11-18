@@ -1394,6 +1394,18 @@ int16_t tb_SetDefaultOutputVolume(int32_t level)
     out.volume = (uint32_t)level;
     return noErr;
 }
+
+/* UnsignedFixedMulDiv: value times multiplier over divisor, all unsigned
+ * 16.16 (the Sound Manager's rate arithmetic: a sample rate scaled by a
+ * ratio).  Past the largest, or over zero, the largest. */
+uint32_t tb_UnsignedFixedMulDiv(uint32_t value, uint32_t multiplier, uint32_t divisor)
+{
+    if (!divisor)
+        return 0xFFFFFFFFu;
+    uint64_t r = (uint64_t)value * multiplier / divisor;
+    return r > 0xFFFFFFFFu ? 0xFFFFFFFFu : (uint32_t)r;
+}
+
 int16_t tb_GetSoundHeaderOffset(gaddr sndh, gaddr offset)
 {
     gaddr p = rd32(sndh);

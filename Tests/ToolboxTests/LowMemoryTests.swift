@@ -280,6 +280,31 @@ extension BlueBox {
             #expect(c.pointee.d.0 & 0xFF == 0x41)
         }
 
+        /// The translation routine branches over a word of its own at 2,
+        /// which APL.run sets and clears as it swaps keyboards (on the ROM's
+        /// stub it was the native's number); the keyboard's ADB data area
+        /// holds the 'KCHR' it translates with at 20, where the APL
+        /// runtimes put theirs.
+        @Test func keyTransRoutineAndKeyboardDataArea() {
+            setStack()
+            let c = g_cpu!
+            let routine = rd32(UInt32(LM_Key1Trans))
+            #expect(rd16(routine) == 0x6002)
+            wr8(routine + 2, 0xFF)
+            c.pointee.d.1 = 0
+            c.pointee.d.2 = 0 // the A key
+            guest_call_regs(routine)
+            #expect(c.pointee.d.0 & 0xFF == 0x61)
+            wr8(routine + 2, 0)
+            let info = tb_NewPtr(10, false, true)
+            #expect(tb_GetADBInfo(info, 2) == 0)
+            #expect(rd8(info) == 2) // the extended keyboard
+            let data = rd32(info + 6)
+            #expect(data != 0 && data >= 0x100)
+            #expect(rd32(data + 20) == UInt32(bitPattern: tb_GetScriptManagerVariable(38))) // smKCHRCache
+            #expect(tb_GetADBInfo(info, 2) == 0 && rd32(info + 6) == data) // the same one
+        }
+
         /// ErrorSound sets the alert sound procedure; InitDialogs keeps ResumeProc.
         @Test func dialogGlobals() {
             #expect(rd32(UInt32(LM_DABeeper)) != 0) // the standard one

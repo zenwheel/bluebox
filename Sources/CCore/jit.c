@@ -312,6 +312,8 @@ static void kill(jit_engine *e, jit_block *b)
 /* mem.h: a store of [lo, hi) touched regions holding translated code.
  * The blocks it overlaps go; a region with none left is unmarked, so
  * stores to data sharing it stop coming here. */
+static uint32_t on_bus(const jit_engine *e, uint32_t a) { return e->addr_mask ? a & e->addr_mask : a; }
+
 static void code_written(jit_engine *e, gaddr lo, gaddr hi)
 {
     uint64_t wlo = lo, whi = hi > lo ? hi : (uint64_t)lo + 1;
@@ -324,9 +326,12 @@ static void code_written(jit_engine *e, gaddr lo, gaddr hi)
                 continue;
             }
             jit_block *b = l->b;
-            bool hit = (uint64_t)b->pc < whi && (uint64_t)b->pc + b->len > wlo;
-            for (int d = 0; d < b->ndeps && !hit; d++)
-                hit = (uint64_t)b->deps[d].lo < whi && (uint64_t)b->deps[d].lo + b->deps[d].len > wlo;
+            uint64_t at = on_bus(e, b->pc);
+            bool hit = at < whi && at + b->len > wlo;
+            for (int d = 0; d < b->ndeps && !hit; d++) {
+                uint64_t dep = on_bus(e, b->deps[d].lo);
+                hit = dep < whi && dep + b->deps[d].len > wlo;
+            }
             if (b->live && hit)
                 kill(e, b);
             if (!b->live) {
@@ -350,7 +355,7 @@ void jit_flush(jit_engine *e)
     for (size_t i = 0; i < e->npool; i++) {
         jit_block *b = e->pool[i];
         if (b->live)
-            mem_code_unmark(b->pc, b->pc + b->len, e->map_bit);
+            mem_code_unmark(on_bus(e, b->pc), on_bus(e, b->pc) + b->len, e->map_bit);
         bb_host_free(b);
     }
     e->npool = 0;
@@ -399,11 +404,11 @@ static jit_block *new_block(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t
     e->pool[e->npool++] = b;
     b->next = e->pcs[pc_bucket(e, pc)];
     e->pcs[pc_bucket(e, pc)] = b;
-    link_regions(e, b, pc, len);
+    link_regions(e, b, on_bus(e, pc), len);
     for (int d = 0; d < ndeps && d < JIT_MAX_DEPS; d++)
         if (deps[d].len) {
             b->deps[b->ndeps++] = deps[d];
-            link_regions(e, b, deps[d].lo, deps[d].len);
+            link_regions(e, b, on_bus(e, deps[d].lo), deps[d].len);
         }
     return b;
 }
@@ -472,7 +477,7 @@ jit_block *jit_from_cache(jit_engine *e, uint32_t pc, uint64_t seed)
     const jit_cache_rec *r = jit_cache_find(c, pc);
     if (!r || !r->ninsn || r->code_len < 12 || !r->guest_len)
         return NULL;
-    if (jit_hash(g_mem + pc, r->guest_len, seed ^ pc) != r->hash)
+    if (jit_hash(g_mem + on_bus(e, pc), r->guest_len, seed ^ pc) != r->hash)
         return NULL;
     const uint32_t *w = (const uint32_t *)(const void *)r->code;
     uint32_t total = r->code_len / 4, ndeps = w[total - 1];
@@ -484,7 +489,7 @@ jit_block *jit_from_cache(jit_engine *e, uint32_t pc, uint64_t seed)
     for (uint32_t d = 0; d < ndeps; d++) {
         deps[d] = (jit_dep){ t[4 * d], t[4 * d + 1] };
         uint64_t h = (uint64_t)t[4 * d + 3] << 32 | t[4 * d + 2];
-        if (jit_hash(g_mem + deps[d].lo, deps[d].len, seed ^ deps[d].lo) != h)
+        if (jit_hash(g_mem + on_bus(e, deps[d].lo), deps[d].len, seed ^ deps[d].lo) != h)
             return NULL;
     }
     return jit_install(e, pc, r->ninsn, r->guest_len, w, nwords, t[4 * ndeps], deps, (int)ndeps);
@@ -503,7 +508,7 @@ void jit_remember(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, uint
     memcpy(copy, code, 4 * nwords);
     uint32_t *t = copy + nwords;
     for (int d = 0; d < ndeps; d++) {
-        uint64_t h = jit_hash(g_mem + deps[d].lo, deps[d].len, seed ^ deps[d].lo);
+        uint64_t h = jit_hash(g_mem + on_bus(e, deps[d].lo), deps[d].len, seed ^ deps[d].lo);
         t[4 * d] = deps[d].lo;
         t[4 * d + 1] = deps[d].len;
         t[4 * d + 2] = (uint32_t)h;
@@ -511,7 +516,7 @@ void jit_remember(jit_engine *e, uint32_t pc, uint32_t ninsn, uint32_t len, uint
     }
     t[4 * ndeps] = dead_at;
     t[4 * ndeps + 1] = (uint32_t)ndeps;
-    jit_cache_add(c, pc, ninsn, len, jit_hash(g_mem + pc, len, seed ^ pc), copy, 4 * total);
+    jit_cache_add(c, pc, ninsn, len, jit_hash(g_mem + on_bus(e, pc), len, seed ^ pc), copy, 4 * total);
     bb_host_free(copy);
 }
 

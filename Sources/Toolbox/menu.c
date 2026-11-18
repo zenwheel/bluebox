@@ -334,6 +334,12 @@ static int item_top(gaddr mh, int i, const item_layout *L)
     return top;
 }
 
+/* The menu whose own MDEF is answering mSizeMsg.  An MDEF that changes
+ * its items while it measures (Remember? sets an item's text) would
+ * otherwise be asked again, and again, until the host's stack ran out;
+ * the size it is working out is the one it ends with anyway. */
+static gaddr menu_sizing;
+
 /* The size comes from the menu's definition (mSizeMsg); ours measures the
  * items. */
 void tb_CalcMenuSize(gaddr mh)
@@ -343,12 +349,17 @@ void tb_CalcMenuSize(gaddr mh)
     gaddr proc = menu_proc(mh);
     if (proc && rd32(proc) && !standard_mdef(mh)) {
         display_menus_changed();
+        if (mh == menu_sizing)
+            return;
         /* It measures in the Window Manager's port, in the system font. */
         gaddr saved = qd_port();
         if (rd32(LM_WMgrPort))
             with_wmgr_port(&saved);
         gaddr which = tb_NewPtr(2, false, true);
+        gaddr outer = menu_sizing;
+        menu_sizing = mh;
         call_mdef(mh, mSizeMsg, (qrect){ 0, 0, 0, 0 }, 0, which);
+        menu_sizing = outer;
         tb_DisposePtr(which);
         if (saved)
             tb_SetPort(saved);

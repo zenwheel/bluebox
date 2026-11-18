@@ -706,10 +706,43 @@ static int adb_index(int addr)
     return -1;
 }
 
+/* The keyboard driver's data area, as the Mac's ADB keyboard driver kept
+ * it: the 'KMAP' it maps raw codes with (0), the keys down (4, 16 bytes),
+ * the 'KCHR' it translates with (20), the dead-key state (24) and the
+ * keyboard's type (28).  Programs with keyboards of their own put their
+ * 'KCHR' at 20 (APL.run and the APL runtimes do, through GetADBInfo's
+ * dbDataAreaAddr; with none there they wrote it into the vectors).  Made
+ * when first asked for, in the system heap. */
+enum { KBD_KMAP = 0, KBD_KEYS = 4, KBD_KCHR = 20, KBD_DEAD = 24, KBD_TYPE = 28, KBD_SIZE = 32 };
+
+static gaddr adb_keyboard_data(void)
+{
+    gaddr d = mm_new_ptr_in(rd32(LM_SysZone), KBD_SIZE, true);
+    if (!d)
+        return 0;
+    int16_t saved = tb_CurResFile(), err = (int16_t)rd16(LM_ResErr);
+    tb_UseResFile((int16_t)rd16(LM_SysMap));
+    gaddr kmap = tb_Get1Resource((int32_t)fourcc("KMAP"), (int16_t)rd8(LM_KbdType));
+    if (!kmap)
+        kmap = tb_Get1Resource((int32_t)fourcc("KMAP"), 0);
+    tb_UseResFile(saved);
+    wr16(LM_ResErr, (uint16_t)err);
+    if (kmap && rd32(kmap)) {
+        tb_HNoPurge(kmap);
+        tb_HLock(kmap);
+        wr32(d + KBD_KMAP, rd32(kmap));
+    }
+    wr32(d + KBD_KCHR, (uint32_t)tb_GetScriptManagerVariable(38)); /* smKCHRCache */
+    wr8(d + KBD_TYPE, rd8(LM_KbdType));
+    return d;
+}
+
 static void adb_fill(gaddr adbp, int k)
 {
     if (!adbp)
         return;
+    if (adb_devices[k].type == 2 && !adb_data[k] && adb_service[k] == adb_own_service)
+        adb_data[k] = adb_keyboard_data();
     wr8(adbp, (uint8_t)adb_devices[k].type);
     wr8(adbp + 1, (uint8_t)adb_devices[k].addr);
     wr32(adbp + 2, adb_service[k]);

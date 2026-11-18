@@ -635,6 +635,36 @@ extension BlueBox {
             #expect(rd16(rd32(plain) + 2) >= 40 && rd16(rd32(plain) + 4) == 16)
         }
 
+        /// An MDEF that changes an item while it measures (Remember? sets an
+        /// item's text on mSizeMsg) is not asked to measure again from inside:
+        /// that went on until the host's stack ran out.
+        @Test func mdefSettingItemTextWhileSizingIsNotAskedAgain() {
+            let custom = cat(be16(144), be16(0), be16(0), be16(130), be16(0), be32(0xFFFF_FFFF),
+                             [4], Array("Note".utf8), [3], Array("Old".utf8), [0, 0, 0, 0], [0])
+            // cmpi.w #2,20(sp); bne.s done; move.l 16(sp),-(sp); move.w #1,-(sp);
+            // pea str(pc); _SetMenuItemText (A947); movea.l 16(sp),a0; movea.l (a0),a0;
+            // move.w #77,2(a0); move.w #33,4(a0);
+            // done: movea.l (sp)+,a0; lea 18(sp),sp; jmp (a0); str: "\pHello"
+            let mdef: [UInt8] = [0x0C, 0x6F, 0x00, 0x02, 0x00, 0x14, 0x66, 0x20,
+                                 0x2F, 0x2F, 0x00, 0x10, 0x3F, 0x3C, 0x00, 0x01, 0x48, 0x7A, 0x00, 0x1E,
+                                 0xA9, 0x47, 0x20, 0x6F, 0x00, 0x10, 0x20, 0x50,
+                                 0x31, 0x7C, 0x00, 0x4D, 0x00, 0x02, 0x31, 0x7C, 0x00, 0x21, 0x00, 0x04,
+                                 0x20, 0x5F, 0x4F, 0xEF, 0x00, 0x12, 0x4E, 0xD0,
+                                 0x05] + Array("Hello".utf8)
+            launchTestApp([TestResource(type: "MENU", id: 144, data: custom),
+                           TestResource(type: "MDEF", id: 130, data: mdef)])
+            _ = initToolbox()
+            let m = tb_GetMenu(144)
+            #expect(m != 0 && rd16(rd32(m) + 2) == 77 && rd16(rd32(m) + 4) == 33)
+            let text = tb_NewPtr(256, false, true)
+            tb_GetMenuItemText(m, 1, text)
+            #expect(rd8(text) == 5 && rd8(text + 1) == 0x48)
+            // Set from outside, the item still has the MDEF measure the menu.
+            wr16(rd32(m) + 2, 0)
+            tb_SetMenuItemText(m, 1, pstr("Other"))
+            #expect(rd16(rd32(m) + 2) == 77)
+        }
+
         @Test func xmnuResourcesApply() {
             // MENU 131: two items; 'xmnu' 131: the second with command 'quit', Command-Option.
             let menu = cat(be16(131), be16(0), be16(0), be32(0), be32(0xFFFF_FFFF),

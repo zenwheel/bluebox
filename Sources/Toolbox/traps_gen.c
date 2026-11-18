@@ -9222,6 +9222,21 @@ static void glue_FindFolderRouting(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_FindFolderWithNames(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_folderNames = (gaddr)cpu_pop32(c);
+    gaddr a_foundDirID = (gaddr)cpu_pop32(c);
+    gaddr a_foundVRefNum = (gaddr)cpu_pop32(c);
+    int8_t a_createFolder = (int8_t)(cpu_pop16(c) >> 8);
+    int32_t a_folderType = (int32_t)cpu_pop32(c);
+    int16_t a_vRefNum = (int16_t)cpu_pop16(c);
+    int16_t r = tb_FindFolderWithNames(a_vRefNum, a_folderType, a_createFolder, a_foundVRefNum, a_foundDirID, a_folderNames);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_FindRecordByIndexInDictionary(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -9582,6 +9597,20 @@ static void glue_FolderManagerUnregisterNotificationProc(cpu68k *c, uint16_t tra
     gaddr a_refCon = (gaddr)cpu_pop32(c);
     gaddr a_notificationProc = (gaddr)cpu_pop32(c);
     int16_t r = tb_FolderManagerUnregisterNotificationProc(a_notificationProc, a_refCon);
+    wr16(c->a[7], (uint16_t)r);
+    cpu_push32(c, ret);
+}
+
+static void glue_FollowFinderAlias(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    gaddr a_wasChanged = (gaddr)cpu_pop32(c);
+    gaddr a_target = (gaddr)cpu_pop32(c);
+    int8_t a_logon = (int8_t)(cpu_pop16(c) >> 8);
+    gaddr a_alias = (gaddr)cpu_pop32(c);
+    gaddr a_fromFile = (gaddr)cpu_pop32(c);
+    int16_t r = tb_FollowFinderAlias(a_fromFile, a_alias, a_logon, a_target, a_wasChanged);
     wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
@@ -10577,6 +10606,19 @@ static void glue_GetAppParms(cpu68k *c, uint16_t trapword)
     gaddr a_rnp = (gaddr)cpu_pop32(c);
     gaddr a_namep = (gaddr)cpu_pop32(c);
     tb_GetAppParms(a_namep, a_rnp, a_aphandp);
+    cpu_push32(c, ret);
+}
+
+static void glue_GetAuxMenuItem(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int32_t a_recSize = (int32_t)cpu_pop32(c);
+    gaddr a_auxRec = (gaddr)cpu_pop32(c);
+    gaddr a_itemData = (gaddr)cpu_pop32(c);
+    gaddr a_theMenu = (gaddr)cpu_pop32(c);
+    int16_t r = tb_GetAuxMenuItem(a_theMenu, a_itemData, a_auxRec, a_recSize);
+    wr16(c->a[7], (uint16_t)r);
     cpu_push32(c, ret);
 }
 
@@ -24423,6 +24465,15 @@ static void glue_QuadToQuadMatrix(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_QuickTime2E2(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    int8_t r = tb_QuickTime2E2();
+    wr16(c->a[7], (uint16_t)((uint8_t)r << 8));
+    cpu_push32(c, ret);
+}
+
 static void glue_RGB2CMY(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -33242,6 +33293,18 @@ static void glue_UnsignedFixMulDiv(cpu68k *c, uint16_t trapword)
     cpu_push32(c, ret);
 }
 
+static void glue_UnsignedFixedMulDiv(cpu68k *c, uint16_t trapword)
+{
+    (void)trapword;
+    uint32_t ret = cpu_pop32(c);
+    uint32_t a_divisor = (uint32_t)cpu_pop32(c);
+    uint32_t a_multiplier = (uint32_t)cpu_pop32(c);
+    uint32_t a_value = (uint32_t)cpu_pop32(c);
+    uint32_t r = tb_UnsignedFixedMulDiv(a_value, a_multiplier, a_divisor);
+    wr32(c->a[7], (uint32_t)r);
+    cpu_push32(c, ret);
+}
+
 static void glue_UpdateAlias(cpu68k *c, uint16_t trapword)
 {
     (void)trapword;
@@ -34437,9 +34500,11 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA823, (int32_t)0x7u, "GetAliasInfo", CONV_STACK, 10, 2, glue_GetAliasInfo},
     {0xA823, (int32_t)0x8u, "NewAliasMinimal", CONV_STACK, 8, 2, glue_NewAliasMinimal},
     {0xA823, (int32_t)0x9u, "NewAliasMinimalFromFullPath", CONV_STACK, 18, 2, glue_NewAliasMinimalFromFullPath},
+    {0xA823, (int32_t)0xAu, "FindFolderWithNames", CONV_STACK, 20, 2, glue_FindFolderWithNames},
     {0xA823, (int32_t)0xBu, "ReleaseFolder", CONV_STACK, 6, 2, glue_ReleaseFolder},
     {0xA823, (int32_t)0xCu, "ResolveAliasFile", CONV_STACK, 14, 2, glue_ResolveAliasFile},
     {0xA823, (int32_t)0xEu, "GetFolderName", CONV_STACK, 14, 2, glue_GetFolderName},
+    {0xA823, (int32_t)0xFu, "FollowFinderAlias", CONV_STACK, 18, 2, glue_FollowFinderAlias},
     {0xA823, (int32_t)0x20u, "AddFolderDescriptor", CONV_STACK, 30, 2, glue_AddFolderDescriptor},
     {0xA823, (int32_t)0x21u, "RemoveFolderDescriptor", CONV_STACK, 4, 2, glue_RemoveFolderDescriptor},
     {0xA823, (int32_t)0x23u, "GetFolderDescriptor", CONV_STACK, 12, 2, glue_GetFolderDescriptor},
@@ -35841,6 +35906,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA88F, (int32_t)0x3Bu, "SetFrontProcess", CONV_STACK, 4, 2, glue_SetFrontProcess},
     {0xA88F, (int32_t)0x3Cu, "WakeUpProcess", CONV_STACK, 4, 2, glue_WakeUpProcess},
     {0xA88F, (int32_t)0x3Du, "SameProcess", CONV_STACK, 12, 2, glue_SameProcess},
+    {0xA88F, (int32_t)0x3Eu, "GetAuxMenuItem", CONV_STACK, 16, 2, glue_GetAuxMenuItem},
     {0xA88F, (int32_t)0x40u, "BeginSystemMode", CONV_STACK, 0, 2, glue_BeginSystemMode},
     {0xA88F, (int32_t)0x41u, "EndSystemMode", CONV_STACK, 0, 2, glue_EndSystemMode},
     {0xA88F, (int32_t)0x42u, "RequestVolumeNotification", CONV_STACK, 8, 2, glue_RequestVolumeNotification},
@@ -36607,6 +36673,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xAAAA, (int32_t)0x2D9u, "SetSpriteWorldGraphicsMode", CONV_STACK, 12, 2, glue_SetSpriteWorldGraphicsMode},
     {0xAAAA, (int32_t)0x2DAu, "CheckQuickTimeRegistration", CONV_STACK, 8, 0, glue_CheckQuickTimeRegistration},
     {0xAAAA, (int32_t)0x2DBu, "QTTextToNativeText", CONV_STACK, 12, 2, glue_QTTextToNativeText},
+    {0xAAAA, (int32_t)0x2E2u, "QuickTime2E2", CONV_STACK, 0, 2, glue_QuickTime2E2},
     {0xAAAA, (int32_t)0x2E8u, "AddMediaSampleReferences64", CONV_STACK, 20, 2, glue_AddMediaSampleReferences64},
     {0xAAAA, (int32_t)0x2E9u, "GetMediaSampleReferences64", CONV_STACK, 32, 2, glue_GetMediaSampleReferences64},
     {0xAAAA, (int32_t)0x2EAu, "PutMovieIntoDataFork64", CONV_STACK, 16, 2, glue_PutMovieIntoDataFork64},
@@ -36860,7 +36927,7 @@ const dispatch_sig dispatch_sigs[] = {
     {0xA800, (int32_t)0x5140014u, "SPBGetIndexedDevice", CONV_STACK, 10, 2, glue_SPBGetIndexedDevice},
     {0xA800, (int32_t)0x5180014u, "SPBOpenDevice", CONV_STACK, 10, 2, glue_SPBOpenDevice},
     {0xA800, (int32_t)0x604000Cu, "MakeVoiceSpec", CONV_STACK, 12, 2, glue_MakeVoiceSpec},
-    {0xA800, (int32_t)0x60C0018u, "UnsignedFixedMulDiv", CONV_STACK, 12, 4, 0},
+    {0xA800, (int32_t)0x60C0018u, "UnsignedFixedMulDiv", CONV_STACK, 12, 4, glue_UnsignedFixedMulDiv},
     {0xA800, (int32_t)0x610000Cu, "GetVoiceDescription", CONV_STACK, 12, 2, glue_GetVoiceDescription},
     {0xA800, (int32_t)0x614000Cu, "GetVoiceInfo", CONV_STACK, 12, 2, glue_GetVoiceInfo},
     {0xA800, (int32_t)0x6140018u, "OpenMixerSoundComponent", CONV_STACK, 12, 2, glue_OpenMixerSoundComponent},
@@ -37726,9 +37793,11 @@ const char *const dispatch_sig_args[] = {
     "P|e2|alias=h4,index=i2,theString=s4",
     "P|e2|target=p4,alias=p4",
     "P|e2|fullpathLength=i2,fullpath=p4,zoneName=s4,serverName=s4,alias=p4",
+    "P|e2|vRefNum=i2,folderType=t4,createFolder=b1,foundVRefNum=p4,foundDirID=p4,folderNames=h4",
     "P|e2|vRefNum=i2,folderType=u4",
     "P|e2|theSpec=p4,resolveAliasChains=b1,targetIsFolder=p4,wasAliased=p4",
     "P|e2|vRefNum=i2,foldType=t4,foundVRefNum=p4,name=s4",
+    "P|e2|fromFile=p4,alias=h4,logon=b1,target=p4,wasChanged=p4",
     "P|e2|foldType=t4,flags=u4,foldClass=t4,foldLocation=t4,badgeSignature=t4,badgeType=t4,name=s4,replaceFlag=b1",
     "P|e2|foldType=t4",
     "P|e2|foldType=t4,descSize=i4,foldDesc=p4",
@@ -39130,6 +39199,7 @@ const char *const dispatch_sig_args[] = {
     "P|e2|serial_number=p4",
     "P|e2|serial_number=p4",
     "P|e2|serial_number0=p4,serial_number1=p4,same_out=p4",
+    "P|e2|theMenu=h4,itemData=p4,auxRec=p4,recSize=i4",
     "P|e2|",
     "P|e2|",
     "P|e2|notifyProc=p4,refCon=i4",
@@ -39896,6 +39966,7 @@ const char *const dispatch_sig_args[] = {
     "P|e2|theSpriteWorld=i4,mode=i4,opColor=p4",
     "P||registrationKey=p4,flags=i4",
     "P|e2|theText=i4,encoding=i4,flags=i4",
+    "P|b1|",
     "P|e2|theMedia=i4,sampleDescriptionH=i4,numberOfSamples=i4,sampleRefs=i4,sampleTime=p4",
     "P|e2|theMedia=i4,time=i4,sampleTime=p4,sampleDescriptionH=i4,sampleDescriptionIndex=p4,maxNumberOfEntries=i4,actualNumberofEntries=p4,sampleRefs=i4",
     "P|e2|theMovie=i4,fRefNum=i4,offset=p4,maxSize=i4",

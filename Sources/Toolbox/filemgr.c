@@ -3612,6 +3612,54 @@ int16_t tb_FindFolder(int16_t vRefNum, int32_t folderType, int8_t createFolder, 
     return noErr;
 }
 
+/* The name an 'fld#' resource gives a folder type: its entries are the
+ * type, a version word, the name's length (a word) and the name, padded to
+ * a word. */
+static bool fld_name(gaddr names, uint32_t type, char *out, size_t outsize)
+{
+    if (!names || !rd32(names))
+        return false;
+    gaddr p = rd32(names);
+    uint32_t size = (uint32_t)tb_GetHandleSize(names), at = 0;
+    while (at + 8 <= size) {
+        uint32_t t = rd32(p + at);
+        uint32_t len = rd16(p + at + 6);
+        if (at + 8 + len > size)
+            break;
+        if (t == type && len > 0 && len < outsize && len < 32) {
+            for (uint32_t i = 0; i < len; i++) {
+                char ch = (char)rd8(p + at + 8 + i);
+                out[i] = ch == '/' ? ':' : ch; /* a Mac name's slash, as the host keeps it */
+            }
+            out[len] = 0;
+            return true;
+        }
+        at += 8 + ((len + 1) & ~1u);
+    }
+    return false;
+}
+
+/* FindFolder, a type no Folder Manager here knows found (or made) in the
+ * System Folder under the name the program's 'fld#' gives it. */
+int16_t tb_FindFolderWithNames(int16_t vRefNum, int32_t folderType, int8_t createFolder, gaddr foundVRefNum,
+                               gaddr foundDirID, gaddr folderNames)
+{
+    int16_t err = tb_FindFolder(vRefNum, folderType, createFolder, foundVRefNum, foundDirID);
+    char name[64], path[PATH_MAX], full[PATH_MAX];
+    if (err != fnfErrF || !fld_name(folderNames, (uint32_t)folderType, name, sizeof name))
+        return err;
+    snprintf(path, sizeof path, "%s/%s", system_folder_path(), name);
+    if (!is_dir(path) && (!createFolder || mkdir(path, 0755) != 0))
+        return fnfErrF;
+    if (!realpath(path, full))
+        return fnfErrF;
+    if (foundVRefNum)
+        wr16(foundVRefNum, (uint16_t)vref_of_path(full));
+    if (foundDirID)
+        wr32(foundDirID, (uint32_t)out_id(dir_id_for(rel_of(full))));
+    return noErr;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Volume parameters: an HFS volume with no optional features. */
 

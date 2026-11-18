@@ -372,6 +372,15 @@ int16_t tb_ResolveAlias(gaddr fromFile, gaddr alias, gaddr target, gaddr wasChan
     return stat(host, &st) == 0 ? noErr : fnfErrA;
 }
 
+/* FollowFinderAlias: what the Finder does to open an alias file, the
+ * alias resolved; volumes here need no logging on to, so logon changes
+ * nothing. */
+int16_t tb_FollowFinderAlias(gaddr fromFile, gaddr alias, int8_t logon, gaddr target, gaddr wasChanged)
+{
+    (void)logon;
+    return tb_ResolveAlias(fromFile, alias, target, wasChanged);
+}
+
 int16_t tb_MatchAlias(gaddr fromFile, int32_t rulesMask, gaddr alias, gaddr aliasCount, gaddr aliasList,
                       gaddr needsUpdate, gaddr aliasFilter, gaddr yourDataPtr)
 {

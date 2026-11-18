@@ -18,6 +18,18 @@
     dispatcher: QuickTime
     selector: 0x2DA
 
+# QuickTime 3's selector $2E2, which no interface names: a Boolean, no
+# arguments.  QuickTime 3's own installer asks it when QuickTime 3 or later
+# is there and calls CheckQuickTimeRegistration only when it answers false:
+# whether this QuickTime is registered (Pro).  QuickTime here has every
+# Pro feature, so it is.
+- function:
+    name: QuickTime2E2
+    return: Boolean
+    dispatcher: QuickTime
+    ppc: false
+    selector: 0x2E2
+
 - function:
     name: GetMoviesError
     return: OSErr

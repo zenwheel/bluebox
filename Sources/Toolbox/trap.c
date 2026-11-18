@@ -23,6 +23,7 @@ void trap_set_current_word(uint16_t w) { last_trapword = w; }
 #define STUB_BASE (GA_ROM + 0x1000u)
 /* 68000 routines the ROM provides, below the stubs. */
 #define METHOD_DISPATCH_CODE (GA_ROM + 0x800u)
+#define KEY_TRANS_CODE (GA_ROM + 0xF00u)
 /* Beyond the stubs (see trap_init): 8 MB up in 32-bit mode; half the
  * ROM up in 24-bit mode, where the ROM is smaller. */
 #define EXCEPTION_JMP (GA_ROM + (g_mem_24bit ? GA_ROM_SIZE / 2 : 0x800000u))
@@ -1311,9 +1312,19 @@ void trap_init(void)
     adb_install();
     if (rd32(TB_TRAP_TABLE + 0x303u * 4) == unimpl_stub)
         wr32(TB_TRAP_TABLE + 0x303u * 4, native_register(noop_native, "QD32Present", 0xAB03));
-    uint32_t keytrans = native_register(key_trans_native, "KeyTrans", 0);
-    wr32(LM_Key1Trans, keytrans);
-    wr32(LM_Key2Trans, keytrans);
+    /* The keyboard's translation routine, which Key1Trans and Key2Trans
+     * point to, in the ROM with its first instruction a branch over a
+     * word: APL.run and the APL runtimes keep a flag in the byte at 2 of
+     * it, clearing and restoring it as they swap keyboards.  On the
+     * native's own stub that byte was the high byte of the native's
+     * number, and with more than 255 natives the routine became another
+     * (the exception handler). */
+    wr16(KEY_TRANS_CODE, 0x6002);     /* BRA.S *+4 */
+    wr16(KEY_TRANS_CODE + 2, 0);
+    wr16(KEY_TRANS_CODE + 4, 0x4EF9); /* JMP */
+    wr32(KEY_TRANS_CODE + 6, native_register(key_trans_native, "KeyTrans", 0));
+    wr32(LM_Key1Trans, KEY_TRANS_CODE);
+    wr32(LM_Key2Trans, KEY_TRANS_CODE);
     /* DTInstall's entry for JDTInstall; the cursor and ADB tasks have
      * nothing to do. */
     uint32_t dt = rd32(OS_TRAP_TABLE + 0x82u * 4);

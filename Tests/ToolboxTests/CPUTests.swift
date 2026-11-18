@@ -69,6 +69,34 @@ extension BlueBox {
             }
         }
 
+        /// In 24-bit mode code run from a pc with flags in its top byte (a
+        /// master pointer's, jumped through: Compare 0.9's segments) is
+        /// translated again when the memory under it changes: a block is
+        /// found by the pc, but it is the code where the bus puts it.
+        @Test func jitSeesCodeChangedUnderA24BitPC() {
+            guard cpu_jit_available() else { return }
+            bootMachine()
+            let at: UInt32 = 0x00C0_0000
+            for jit in [false, true] {
+                var c = cpu68k()
+                cpu_init(&c)
+                c.model = 68020
+                c.addr_mask = 0x00FF_FFFF
+                cpu_jit_enabled = jit
+                var seen: [UInt32] = []
+                for value: UInt16 in [1, 2] {
+                    wr16(at, 0x7200 | value) // MOVEQ #value,D1
+                    wr16(at + 2, 0x60FE)     // BRA *
+                    c.pc = 0xE000_0000 | at
+                    c.halted = false
+                    _ = cpu_run(&c, 2)
+                    seen.append(c.d.1)
+                }
+                cpu_jit_enabled = false
+                #expect(seen == [1, 2], "jit \(jit): \(seen)")
+            }
+        }
+
         /// Loads and stores in a device window (the VIA's interrupt enable
         /// register) reach the device, as the interpreter's do, not the
         /// memory under it; a load's neighbours keep their registers.

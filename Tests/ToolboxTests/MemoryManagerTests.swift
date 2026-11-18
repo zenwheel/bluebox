@@ -54,6 +54,59 @@ extension BlueBox {
             #expect(mm_check_zone(appZone))
         }
 
+        /// A request purging could not make room for grows the zone without
+        /// purging: Graphing Calculator fills in its purgeable 'CDEF' stubs
+        /// once, and a GWorld bigger than all its purgeable blocks emptied
+        /// them.  One purging can make room for still purges.
+        @Test func purgingThatCannotMakeTheRoomPurgesNothing() {
+            let zone = appZone
+            let stub = tb_NewHandle(64, false, false)
+            wr32(rd32(stub), 0x4EF9_1234)
+            tb_HPurge(stub)
+            let room = UInt32(tb_FreeMem(false)) // all the zone could give, growing included
+            let free = UInt32(Zone_zcbFree(zone))
+            let big = tb_NewHandle(Int32(free + (4 << 20)), false, false)
+            #expect(big != 0 && UInt32(free + (4 << 20)) < room)
+            #expect(rd32(stub) != 0 && rd32(rd32(stub)) == 0x4EF9_1234) // still there
+            #expect(mm_check_zone(zone))
+            tb_DisposeHandle(big)
+            tb_DisposeHandle(stub)
+        }
+
+        /// BLUEBOX_HEAPCHECK: unset or "0" checks nothing (walk-corpus.sh's
+        /// HEAPCHECK=0), n every nth call, anything else every call.
+        @Test func heapCheckSettingReadsZeroAsNone() {
+            #expect(heap_check_setting(nil) == 0)
+            #expect(heap_check_setting("0") == 0)
+            #expect(heap_check_setting("10") == 10)
+            #expect(heap_check_setting("1") == 1)
+            #expect(heap_check_setting("") == 1)
+            #expect(heap_check_setting("yes") == 1)
+        }
+
+        /// ReserveMem makes room as low as it can and the next handle goes
+        /// there, not at the rover high in the heap (Trilogy's FileMaker
+        /// runtime reserves, makes a handle, locks it and grows it).
+        @Test func reserveMemPutsTheNextHandleLow() {
+            let zone = appZone
+            var fill: [UInt32] = []
+            for _ in 0..<64 { fill.append(tb_NewHandle(4096, false, false)) }
+            let low = fill[4]
+            let lowAt = rd32(low)
+            tb_DisposeHandle(low) // a hole low down
+            fill.remove(at: 4)
+            let high = tb_NewHandle(64, false, false) // the rover moves on, past the hole
+            for h in fill.suffix(8) { tb_HLock(h) }
+            tb_ReserveMem(64, false)
+            #expect(memErr() == 0)
+            let h = tb_NewHandle(64, false, false)
+            #expect(h != 0 && rd32(h) <= lowAt && rd32(h) < rd32(fill.last!))
+            #expect(mm_check_zone(zone))
+            tb_DisposeHandle(h)
+            tb_DisposeHandle(high)
+            for h in fill { tb_HUnlock(h); tb_DisposeHandle(h) }
+        }
+
         @Test func handlesAllocateResizeAndKeepContents() {
             let h = tb_NewHandle(100, false, false)
             #expect(h != 0)

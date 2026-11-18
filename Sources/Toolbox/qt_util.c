@@ -707,6 +707,9 @@ int16_t tb_SetQuickTimePreference(int32_t preferenceType, int32_t preferenceAtom
 /* QuickTime Pro's registration: nothing to check. */
 void tb_CheckQuickTimeRegistration(gaddr registrationKey, int32_t flags) { (void)registrationKey, (void)flags; }
 
+/* QuickTime 3's $2E2 (unnamed): whether QuickTime is registered.  It is. */
+int8_t tb_QuickTime2E2(void) { return 1; }
+
 /* ---- Restrictions (QuickTime 6): movies here carry none ---- */
 
 int16_t tb_QTGetMovieRestrictions(int32_t theMovie, gaddr outRestrictionSet, gaddr outSeed)

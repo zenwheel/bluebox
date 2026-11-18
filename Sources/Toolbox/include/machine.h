@@ -930,6 +930,8 @@ uint64_t machine_frames_paced(uint64_t *drawn, uint64_t *refreshes, uint64_t *ns
  * (0: never; BLUEBOX_HEAPCHECK=n sets it too): a call that damages one
  * halts the run with its name. */
 void machine_set_heap_check(int n);
+/* BLUEBOX_HEAPCHECK's value read: n, 0 when unset or "0", else 1. */
+int heap_check_setting(const char *e);
 /* The program's loaded PowerPC code sections compared with a copy after
  * every nth Toolbox call (0: never; BLUEBOX_CODECHECK=n sets it too): a
  * call that changes them halts the run with its name. */

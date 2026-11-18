@@ -57,6 +57,73 @@
     dispatcher: OSDispatch
     selector: 0x0041
 
+# OSDispatch selector $3E: the Process Manager's GetAuxMenuItem, which the
+# standard MDEF asks for the extra things an item of the Application menu
+# shows (its process's icon), given the menu, the item's text in the menu
+# and a record and its size.  MDEFs copied from System 7's (Mercutio's
+# kin: Eradicator, Isotope, Wings, 4D First's installer) ask too, after
+# checking the trap is there, and draw the item themselves on an error.
+- function:
+    name: GetAuxMenuItem
+    return: OSErr
+    args:
+      - name: theMenu
+        type: MenuHandle
+      - name: itemData
+        type: Ptr
+      - name: auxRec
+        type: Ptr
+      - name: recSize
+        type: LONGINT
+    dispatcher: OSDispatch
+    ppc: false
+    selector: 0x003E
+
+# AliasDispatch selector $0A, which no interface names: FindFolder with a
+# handle to an 'fld#' resource (each entry a folder type, a version word, a
+# length word and the name, padded to a word) naming the folders it may
+# make.  System 7.6's Installer passes its own 'fld#' for the folder types
+# a System's Folder Manager might not know.  The name is ours.
+- function:
+    name: FindFolderWithNames
+    return: OSErr
+    args:
+      - name: vRefNum
+        type: INTEGER
+      - name: folderType
+        type: OSType
+      - name: createFolder
+        type: Boolean
+      - name: foundVRefNum
+        type: INTEGER*
+      - name: foundDirID
+        type: LONGINT*
+      - name: folderNames
+        type: Handle
+    dispatcher: AliasDispatch
+    ppc: false
+    selector: 0x000A
+
+# FollowFinderAlias (Aliases.h: AliasDispatch $0F) for 68k programs;
+# PowerPC programs reach it in InterfaceLib (ppc_libs.c).
+- function:
+    name: FollowFinderAlias
+    return: OSErr
+    args:
+      - name: fromFile
+        type: FSSpec*
+      - name: alias
+        type: AliasHandle
+      - name: logon
+        type: Boolean
+      - name: target
+        type: FSSpec*
+      - name: wasChanged
+        type: Boolean*
+    dispatcher: AliasDispatch
+    ppc: false
+    selector: 0x000F
+
 # The PPC Toolbox's trap: the routine selector in D0, the parameter
 # block in A0, the result in D0.
 - function:

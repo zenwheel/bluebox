@@ -16053,6 +16053,15 @@ static void ppcglue_GetSoundHeaderOffset(ppc_cpu *c)
     c->pc = c->lr;
 }
 
+static void ppcglue_UnsignedFixedMulDiv(ppc_cpu *c)
+{
+    uint32_t a_value = (uint32_t)c->gpr[3];
+    uint32_t a_multiplier = (uint32_t)c->gpr[4];
+    uint32_t a_divisor = (uint32_t)c->gpr[5];
+    c->gpr[3] = (uint32_t)tb_UnsignedFixedMulDiv(a_value, a_multiplier, a_divisor);
+    c->pc = c->lr;
+}
+
 static void ppcglue_SndGetInfo(ppc_cpu *c)
 {
     gaddr a_chan = (gaddr)c->gpr[3];
@@ -38031,21 +38040,6 @@ static void ppctrap_UnloadSeg(ppc_cpu *c)
     c->pc = c->lr;
 }
 
-static void ppctrap_UnsignedFixedMulDiv(ppc_cpu *c)
-{
-    ppc_trap_begin();
-    ppc_trap_push(4, 0);
-    ppc_trap_set(0, 0x60C0018u);
-    ppc_trap_push(4, c->gpr[3]);
-    ppc_trap_push(4, c->gpr[4]);
-    ppc_trap_push(4, c->gpr[5]);
-    ppc_trap((uint16_t)(0xA800));
-    uint32_t r = ppc_trap_result(4);
-    ppc_trap_end();
-    c->gpr[3] = r;
-    c->pc = c->lr;
-}
-
 static void ppctrap_GetCompressionInfo(ppc_cpu *c)
 {
     ppc_trap_begin();
@@ -44088,7 +44082,7 @@ const ppc_export ppc_exports[] = {
     {"UnregisterAppearanceClient", ppcglue_UnregisterAppearanceClient},
     {"UnregisterIconRef", ppcglue_UnregisterIconRef},
     {"UnsignedFixMulDiv", ppcglue_UnsignedFixMulDiv},
-    {"UnsignedFixedMulDiv", ppctrap_UnsignedFixedMulDiv},
+    {"UnsignedFixedMulDiv", ppcglue_UnsignedFixedMulDiv},
     {"UpdateAlias", ppcglue_UpdateAlias},
     {"UpdateControls", ppcglue_UpdateControls},
     {"UpdateDataBrowserItems", ppcglue_UpdateDataBrowserItems},

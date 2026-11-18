@@ -89,6 +89,24 @@ extension BlueBox {
             _ = tb_SndDisposeChannel(chan, 1)
         }
 
+        /// UnsignedFixedMulDiv (SoundDispatch $060C0018): value times
+        /// multiplier over divisor in unsigned 16.16; 3-D Cannon scales its
+        /// sample rates with it.  Over zero, or past the largest, the largest.
+        @Test func unsignedFixedMulDiv() {
+            launchTestApp()
+            #expect(tb_UnsignedFixedMulDiv(0x5622_0000, 0x0002_0000, 0x0001_0000) == 0xAC44_0000) // 22050 x 2
+            #expect(tb_UnsignedFixedMulDiv(0xAC44_0000, 0x0001_0000, 0x0002_0000) == 0x5622_0000)
+            #expect(tb_UnsignedFixedMulDiv(0x0001_0000, 0x0001_0000, 0) == 0xFFFF_FFFF)
+            #expect(tb_UnsignedFixedMulDiv(0xFFFF_0000, 0x0010_0000, 0x0001_0000) == 0xFFFF_FFFF)
+            // CLR.L -(SP); three longs; MOVE.L #$060C0018,D0; _SoundDispatch; MOVE.L (SP)+,D7; _ExitToShell
+            func push(_ v: UInt32) -> [UInt16] { [0x2F3C, UInt16(v >> 16), UInt16(v & 0xFFFF)] }
+            let words: [UInt16] = [0x2C0F, 0x42A7] + push(0x5622_0000) + push(0x0003_0000) + push(0x0002_0000)
+                + [0x203C, 0x060C, 0x0018, 0xA800, 0x2E1F, 0x2A0F, 0xA9F4]
+            #expect(run68k(words) == "ExitToShell")
+            #expect(g_cpu!.pointee.d.7 == 0x8133_0000) // 22050 x 3 / 2 = 33075
+            #expect(g_cpu!.pointee.d.5 == g_cpu!.pointee.d.6)
+        }
+
         nonisolated(unsafe) static var firstSamples: [Int16] = []
 
         /// A compressed sound header in IMA 4:1 decodes to 64 samples a packet.

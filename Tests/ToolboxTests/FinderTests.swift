@@ -316,6 +316,47 @@ extension BlueBox {
             for bit in [6, 7, 12, 13, 14, 15] { #expect(attrib & (1 << UInt32(bit)) != 0) }
         }
 
+        /// AliasDispatch $0A: FindFolder with an 'fld#' naming the folders it
+        /// may make (System 7.6's Installer).  A type the Folder Manager
+        /// knows is found as ever; one it doesn't, made in the System Folder
+        /// under the 'fld#''s name, or not found when not to be made.
+        @Test func findFolderWithAnFldResource() {
+            launchTestApp()
+            _ = initToolbox()
+            func entry(_ type: String, _ name: String) -> [UInt8] {
+                var e = Array(type.utf8) + [0, 0, 0, UInt8(name.utf8.count)] + Array(name.utf8)
+                if e.count % 2 == 1 { e.append(0) }
+                return e
+            }
+            let table = entry("prnt", "PrintMonitor Documents") + entry("zqzq", "Installer Things")
+            let names = tb_NewHandle(Int32(table.count), false, true)
+            for (i, b) in table.enumerated() { wr8(rd32(names) + UInt32(i), b) }
+            let vref = tb_NewPtr(2, false, true), dir = tb_NewPtr(4, false, true)
+            func push(_ v: UInt32) -> [UInt16] { [0x2F3C, hiWord(v), loWord(v)] }
+            func call(_ type: String, create: Bool) -> Int16 {
+                #expect(run68k([0x4267, 0x3F3C, 0x8000] + push(fourCC(type)) + [0x1F3C, create ? 1 : 0]
+                               + push(vref) + push(dir) + push(names) + [0x700A, 0xA823, 0x3E1F, 0xA9F4]) == "ExitToShell")
+                return Int16(truncatingIfNeeded: g_cpu!.pointee.d.7)
+            }
+            let sys = tb_NewPtr(4, false, true)
+            #expect(tb_FindFolder(-32768, Int32(bitPattern: fourCC("macs")), 1, vref, sys) == 0)
+            #expect(call("zqzr", create: true) == -43) // in no table
+            #expect(call("zqzq", create: false) == -43)
+            #expect(call("zqzq", create: true) == 0)
+            let pb = tb_NewPtr(Int32(CInfoPBRec_SIZEOF), false, true)
+            let name = tb_NewPtr(256, false, true)
+            wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+            wr16(pb + UInt32(IOParam_ioVRefNum_off), rd16(vref))
+            wr16(pb + UInt32(FileParam_ioFDirIndex_off), UInt16(bitPattern: -1))
+            wr32(pb + UInt32(HFileInfo_ioDirID_off), rd32(dir))
+            #expect(tb_PBGetCatInfo(pb, false) == 0 && pstring(at: name) == "Installer Things")
+            #expect(rd32(pb + UInt32(DirInfo_ioDrParID_off)) == rd32(sys))
+            #expect(call("zqzq", create: false) == 0) // there now
+            #expect(call("prnt", create: true) == 0)
+            wr32(pb + UInt32(HFileInfo_ioDirID_off), rd32(dir))
+            #expect(tb_PBGetCatInfo(pb, false) == 0 && pstring(at: name) == "PrintMonitor Documents")
+        }
+
         /// PBHCopyFile, PBHMoveRename and PBExchangeFiles.
         @Test func copyMoveAndExchange() {
             let folder = launchTestApp()

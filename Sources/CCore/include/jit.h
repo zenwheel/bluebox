@@ -161,6 +161,10 @@ typedef struct jit_engine {
     bool cache_tried;
     uint64_t build;          /* the translator's identity, for the cache */
     uint64_t invalidated, flushes, chained;
+    /* The address bus's mask (a 68k's 24-bit mode; 0: all 32 bits).
+     * Blocks are found by the processor's pc, flags and all, but the code
+     * they hold is where the bus puts it, and stores there kill them. */
+    uint32_t addr_mask;
 } jit_engine;
 
 /* Set up an engine (once; false if there is no executable memory). */

@@ -587,6 +587,27 @@ static void purge(gaddr z)
     }
 }
 
+/* Whether compacting and purging could leave a free block of psize bytes
+ * (physical) in the zone as it is, without growing it. */
+static bool purge_makes_room(gaddr z, uint32_t psize)
+{
+    uint32_t run = 0;
+    gaddr lim = z_lim(z);
+    for (gaddr b = z_first(z); b < lim; b = b_next(b)) {
+        unsigned use = b_use(b);
+        uint8_t st = blk_state(z, b);
+        if (use == USE_FREE || (use == USE_REL && !(st & ST_LOCK))) {
+            if (use == USE_FREE || (st & ST_PURGE))
+                run += b_psize(b);
+            if (run >= psize)
+                return true;
+        } else {
+            run = 0;
+        }
+    }
+    return false;
+}
+
 /* The zone's grow-zone function, FUNCTION (cbNeeded: Size): LONGINT,
  * called when compacting and purging leave too little room, for as long as
  * it says it freed something (System 7.1's Finder unloads code segments
@@ -622,6 +643,16 @@ static gaddr make_room_for(gaddr z, uint32_t psize, bool low)
     compact(z);
     if ((b = find(z, psize)))
         return b;
+    /* Purging that could not make the room would only throw away what the
+     * program has loaded: the zone grows first then.  (Graphing Calculator
+     * fills in its purgeable 'CDEF' stubs once, after loading them; making
+     * a GWorld bigger than all its purgeable blocks emptied them, and its
+     * next control's definition was a JMP to nil.) */
+    if (!purge_makes_room(z, psize) && grow_zone(z, psize)) {
+        compact(z);
+        if ((b = find(z, psize)))
+            return b;
+    }
     purge(z);
     compact(z);
     if ((b = find(z, psize)))
@@ -1391,11 +1422,20 @@ void tb_PurgeSpace(uint32_t *totalp, uint32_t *contigp, bool sys_p)
     set_mem_err(noErr);
 }
 
+/* ReserveMem makes room as low in the zone as it can, and the next
+ * allocation goes there: programs reserve before a handle they will lock
+ * for good, so it doesn't stand in the middle of the heap.  (Trilogy's
+ * FileMaker runtime reserves, makes a handle, locks it and grows it by a
+ * cursor at a time; made at the rover, high up between other locked
+ * handles, it couldn't grow, and the runtime wrote past its end.) */
 void tb_ReserveMem(int32_t needed, bool sys_p)
 {
     gaddr z = pick_zone(sys_p);
     uint32_t ps = phys_for(needed < 0 ? 0 : (uint32_t)needed);
-    set_mem_err(ps && make_room(z, ps) ? noErr : memFullErr);
+    gaddr b = ps ? make_room_for(z, ps, true) : 0;
+    if (b)
+        set_rover(z, b);
+    set_mem_err(b ? noErr : memFullErr);
 }
 
 int32_t tb_StackSpace(void)
@@ -1585,7 +1625,8 @@ bool mm_check_zone(gaddr z)
 }
 
 /* BLUEBOX_HEAPCHECK=N: the system and application zones checked after
- * every Nth Toolbox call (1, or nothing, for every one), so a call that
+ * every Nth Toolbox call (1, or nothing, for every one; 0 for none, as
+ * walk-corpus.sh's HEAPCHECK=0 asks), so a call that
  * damages a heap is named rather than whatever trips over it later (an
  * "accepted" Boolean written through a stray pointer broke a menu icon's
  * master pointer, and the crash came two redraws on).  False, with the
@@ -1595,11 +1636,21 @@ static const char *checked_after; /* the call the last check followed */
 
 void machine_set_heap_check(int n) { every = n > 0 ? n : 0; }
 
+/* What BLUEBOX_HEAPCHECK's value asks for: every nth call; none when
+ * unset or "0"; every call for anything else. */
+int heap_check_setting(const char *e)
+{
+    if (!e)
+        return 0;
+    int n = atoi(e);
+    return n > 0 ? n : strcmp(e, "0") ? 1 : 0;
+}
+
 static int heap_check_every(void)
 {
     if (every < 0) {
         const char *e = getenv("BLUEBOX_HEAPCHECK");
-        every = e ? (atoi(e) > 0 ? atoi(e) : 1) : 0;
+        every = heap_check_setting(e);
     }
     return every;
 }
