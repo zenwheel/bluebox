@@ -96,6 +96,9 @@ static inline gaddr mem_strip(gaddr a) { return g_mem_24bit ? a & 0x00FFFFFFu : 
 void mem_reset(void);
 /* Tell the host a guest range is no longer needed (contents become zero). */
 void mem_discard(gaddr addr, uint32_t len);
+/* Called before any of the arena's pages are mapped again (mem_discard,
+ * mem_reset, mem_set_layout): the host range [lo, lo + len). */
+extern void (*g_mem_remap_fn)(void *lo, size_t len);
 
 static inline uint8_t *gptr(gaddr a) { return g_mem + a; }
 

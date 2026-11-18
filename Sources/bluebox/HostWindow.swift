@@ -9,7 +9,7 @@ import AppKit
 import BlueBoxHost
 import Toolbox
 
-/// Host points per Mac pixel: 1, 1.5 or 2 (--scale, or the app's setting).
+/// Host points per Mac pixel: 1, 1.5, 2 or 3 (--scale, or the app's setting).
 nonisolated(unsafe) var displayScale: CGFloat = 1
 
 /// An image of RGBA pixels that owns a copy of them.  A bitmap context's
@@ -27,6 +27,14 @@ func rgbaImage(_ rgba: [UInt32], width: Int, height: Int) -> CGImage? {
 final class ScreenView: NSView, MacScreenView {
     private var timer: Timer?
     private var rgba = [UInt32]()
+    /// The GPU presenter's surface (the view's layer a CAMetalLayer), or
+    /// nil: the CPU path, the converted image in imageLayer.
+    private var surface: PresenterSurface?
+    private let imageLayer = CALayer()
+
+    override func makeBackingLayer() -> CALayer { presenterOn ? CAMetalLayer() : CALayer() }
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() {}
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -119,6 +127,16 @@ final class ScreenView: NSView, MacScreenView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         registerForDraggedTypes(FileDrops.types)
+        wantsLayer = true
+        layerContentsRedrawPolicy = .never
+        if let metal = layer as? CAMetalLayer {
+            surface = PresenterSurface(layer: metal)
+        } else {
+            imageLayer.magnificationFilter = .nearest
+            imageLayer.minificationFilter = .linear
+            imageLayer.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
+            layer?.addSublayer(imageLayer)
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 if Suspender.shared.suspended { // the machine still: nothing to show, the mouse let go
@@ -126,7 +144,10 @@ final class ScreenView: NSView, MacScreenView {
                     return
                 }
                 // Unseen, nothing to show: the machine is throttled too.
-                if noteHostVisibility() < 2 { self?.refreshIfChanged() }
+                let seen = noteHostVisibility() < 2
+                self?.surface?.visible(seen)
+                if seen { self?.refreshIfChanged() }
+                present_stats_tick()
                 self?.updateCapture()
                 self?.followMouse()
                 CursorSync.shared.tick()
@@ -159,58 +180,61 @@ final class ScreenView: NSView, MacScreenView {
             shownSize = (w, h)
             if !first { sizeChanged?() }
         }
-        // Converted only when it changed, or the desktop's showing through
-        // changes (the mask then follows).
-        let clear = !NSApp.isActive && !hostFullScreen && !machine_is_finder()
-        let size = machine_screen_shadow_size(0, 0, w, h)
-        if shownCopy.count != size { shownCopy = [UInt8](repeating: 0, count: size) }
-        let changed = shownCopy.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, w, h, $0.baseAddress!, size) }
-        if !changed && clear == clearing { return }
-        if rgba.count != Int(w) * Int(h) { rgba = [UInt32](repeating: 0, count: Int(w) * Int(h)) }
-        rgba.withUnsafeMutableBytes { raw in
-            machine_screen_rgba(0, 0, w, h, raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
-        }
         // In the background, a program's desktop is left out (Maelstrom,
         // sent there, hides its play area and leaves only a small window):
         // the host's desktop shows through the window instead.  Not the
         // Finder's: the desktop is what it shows.
-        if clear {
-            if deskMask.count != rgba.count { deskMask = [UInt8](repeating: 1, count: rgba.count) }
-            if machine_desktop_mask(0, 0, w, h, &deskMask) {
-                for k in 0..<rgba.count where deskMask[k] == 0 { rgba[k] = 0 }
-            }
-        }
-        if clear != clearing {
+        let clear = !NSApp.isActive && !hostFullScreen && !machine_is_finder()
+        let toggled = clear != clearing
+        if toggled {
             clearing = clear
             window?.isOpaque = !clear
             window?.backgroundColor = clear ? .clear : .windowBackgroundColor
+            layer?.isOpaque = !clear
         }
-        needsDisplay = true
+        timedPresent {
+            if let surface {
+                // The GPU draws it at the next refresh, if it changed.
+                let r = shownRect(w, h)
+                surface.set(x: r.minX, y: r.minY, width: r.width, height: r.height, points: bounds.size,
+                            scale: window?.backingScaleFactor ?? 2)
+                surface.desktop(clear)
+                return
+            }
+            // Converted only where it changed (or all, when the desktop's
+            // showing through changes); Core Animation scales it.
+            let changed = convertChangedRows(x: 0, y: 0, width: Int(w), height: Int(h), shadow: &shownCopy, rgba: &rgba,
+                                             shape: nil, desktop: clear, force: toggled)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            if changed { imageLayer.contents = rgbaImage(rgba, width: Int(w), height: Int(h)) }
+            placeImage(w, h)
+            CATransaction.commit()
+        }
     }
 
-    private var deskMask = [UInt8]()
-    private var clearing = false
+    /// The part of the Mac screen the view shows: all of it stretched over
+    /// a full screen, else the view's size at the display scale from the pan.
+    private func shownRect(_ w: Int32, _ h: Int32) -> CGRect {
+        if hostFullScreen { return CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)) }
+        let s = displayScale
+        return CGRect(x: pan.x, y: pan.y, width: bounds.width / s, height: bounds.height / s)
+    }
 
-    override func draw(_ dirtyRect: NSRect) {
-        var w: Int32 = 0, h: Int32 = 0
-        machine_screen_size(&w, &h)
-        let width = Int(w), height = Int(h)
-        guard rgba.count == width * height else { return }
-        guard let image = rgbaImage(rgba, width: width, height: height),
-              let gc = NSGraphicsContext.current?.cgContext else { return }
-        gc.interpolationQuality = .none
-        gc.saveGState()
-        gc.translateBy(x: 0, y: bounds.height)
-        gc.scaleBy(x: 1, y: -1)
+    /// The CPU path's image, at the display scale from the pan.
+    private func placeImage(_ w: Int32, _ h: Int32) {
+        let frame: CGRect
         if hostFullScreen {
-            gc.draw(image, in: CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height))
-        } else { // at the display scale, from the pan
+            frame = bounds
+        } else {
             let s = displayScale
-            gc.draw(image, in: CGRect(x: -pan.x * s, y: bounds.height + pan.y * s - CGFloat(height) * s,
-                                      width: CGFloat(width) * s, height: CGFloat(height) * s))
+            frame = CGRect(x: -pan.x * s, y: bounds.height + pan.y * s - CGFloat(h) * s,
+                           width: CGFloat(w) * s, height: CGFloat(h) * s)
         }
-        gc.restoreGState()
+        if imageLayer.frame != frame { imageLayer.frame = frame }
     }
+
+    private var clearing = false
 
     // MARK: Mouse
     //
@@ -715,6 +739,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
         if !hostFullScreen { window.center() }
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(view)
+        Vsync.shared.follow(view) // the GPU presenter's refreshes, from the window's display
         activateFromShell()
         PickerStandIn.closeWhenAnotherShows()
         DragOut.shared.refresh = { [weak view] in view?.refreshIfChanged() }
@@ -802,10 +827,16 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
         MainActor.assumeIsolated { requestScreenForWindow() }
     }
 
+    /// On another display: its refreshes.
+    func windowDidChangeScreen(_ notification: Notification) {
+        MainActor.assumeIsolated { Vsync.shared.follow(window?.contentView) }
+    }
+
     /// The display changed (another resolution, a monitor connected or
     /// gone): the window kept on it, and the screen following the window.
     @MainActor func displayChanged() {
         guard let window else { return }
+        Vsync.shared.follow(window.contentView)
         let frame = window.contentRect(forFrameRect: window.frame)
         let size = fitted(frame.size, on: window.screen)
         if size != frame.size {
@@ -841,7 +872,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     let bar = NSWindow.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: style).height - 100
     var w = Int32((vf.width / displayScale).rounded(.down)), h = Int32(((vf.height - bar) / displayScale).rounded(.down))
     machine_fit_screen(&w, &h)
-    return (w, h)
+    // The smallest Mac screen at least (at 3x on a laptop): the view pans.
+    return (max(w, 512), max(h, 342))
 }
 
 /// Show the classic screen in a window until the app quits.  Never returns.

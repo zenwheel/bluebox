@@ -1133,7 +1133,7 @@ struct SettingsForm: View {
         Section("Display") {
             Picker("Scale", selection: $settings.scale) {
                 Text("\(inherit) (\(scaleName(fallback.scale ?? 1)))").tag(Double?.none)
-                ForEach([1.0, 1.5, 2.0], id: \.self) { v in Text(scaleName(v)).tag(Double?.some(v)) }
+                ForEach([1.0, 1.5, 2.0, 3.0], id: \.self) { v in Text(scaleName(v)).tag(Double?.some(v)) }
             }
             Picker("Screen depth", selection: $settings.depth) {
                 Text("\(inherit) (\(depthName(fallback.depth ?? 32).lowercased())\(depthNote.map { ", " + $0 } ?? ""))")

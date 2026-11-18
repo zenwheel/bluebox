@@ -30,7 +30,13 @@
  * input ends it at once.  A key or a click that came while the frame was
  * drawn skips it, and so does a frame drawn the same again and again that
  * idle.c found the program waiting through and slept for.  The instruction clock (headless runs, the corpus walk)
- * never waits, so those runs stay the same.  BLUEBOX_PACE=0 turns it off;
+ * never waits, so those runs stay the same.  While a window is shown and
+ * the display's refreshes come (present.h's present_live), they are the
+ * ticks instead of the wall clock's: a frame waiting goes on once the
+ * refresh has read the screen (the GPU's read of it done), so the read
+ * sees a whole frame; with the refreshes stopped (the window hidden, the
+ * display asleep) a wait ends within two of the wall clock's ticks and
+ * pacing goes back to it.  BLUEBOX_PACE=0 turns it off;
  * the frames are still counted (--log idle says every five seconds how
  * many were drawn and how many refreshes showed a new one).
  */
@@ -39,6 +45,7 @@
 #include "lowmem_gen.h"
 #include "m68k.h"
 #include "machine.h"
+#include "present.h"
 #include "ppc.h"
 #include "qd_internal.h"
 #include "structs_gen.h"
@@ -57,6 +64,7 @@ BB_HOST static uint64_t site_tick; /* ... and the tick it was last polled in */
 BB_HOST static uint64_t frame_tick; /* the tick the last frame ended in, plus one (0: none) */
 BB_HOST static uint32_t presses;  /* keys and clicks at the last frame's end */
 BB_HOST static uint64_t frames, shown, waits, waited_ns;
+BB_HOST static bool on_vsync;      /* the ticks are the display's refreshes */
 BB_HOST static struct {
     uint64_t at, frames, shown, waits, ns;
 } logged;
@@ -142,6 +150,16 @@ void pace_poll(int rank)
     uint32_t at = g_ppc_mode && !mm_level_68k() ? g_ppc.lr : g_cpu->op_pc;
     uint64_t now = machine_time_ns(), tick = now * 60 / 1000000000u;
     log_now(now);
+    /* A window shown and the display refreshing: its refreshes are the
+     * ticks (present.h), and a frame waiting goes on once the refresh has
+     * read it. */
+    bool vsync = present_live();
+    if (vsync != on_vsync) {
+        on_vsync = vsync;
+        frame_tick = 0;
+    }
+    if (vsync)
+        tick = present_vsync_seq();
     if (at != site) {
         /* Another poll within the frame: the frame goes on. */
         if (rank <= site_rank && tick - site_tick <= FORGET_TICKS)
@@ -165,6 +183,15 @@ void pace_poll(int rank)
         return;
     }
     /* A second frame in this refresh: the next one comes after it. */
+    if (vsync) {
+        uint64_t slept = machine_pace_wait_vsync(tick + 1);
+        present_note_hold(slept);
+        waits++;
+        waited_ns += slept;
+        frame_tick = present_vsync_seq() + 1;
+        shown++;
+        return;
+    }
     uint64_t next = (tick + 1) * 1000000000u / 60 + 1;
     uint64_t slept = machine_pace_wait(next - now);
     if (!events_host_attached())

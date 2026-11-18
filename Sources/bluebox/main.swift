@@ -193,7 +193,7 @@ func usage() -> Never {
                      TCP), modem:PORT (one that also answers calls to PORT),
                      tcp:HOST:PORT, listen:PORT, pty, a device such as
                      /dev/cu.usbserial, or none (the printer port's default)
-          --scale S  host points per Mac pixel: 1, 1.5 or 2 (default 1, or the app's or the
+          --scale S  host points per Mac pixel: 1, 1.5, 2 or 3 (default 1, or the app's or the
                      default setting), so classic interfaces are bigger on modern displays
           --screenshot P  write the screen to PNG file P when the run ends
           --redraw-check P  when the run ends waiting, repaint everything, let the program
@@ -298,7 +298,7 @@ func usage() -> Never {
     \(exportUsage())
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default]
                 [cpu 68000|68020|68030|68040|ppc|default] [fpu none|68881|68882|68040|default]
-                [addressing 24|32|default] [timing fast|accurate|default] [scale 1|1.5|2|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
+                [addressing 24|32|default] [timing fast|accurate|default] [scale 1|1.5|2|3|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
                 [printer panel|pdf|host:NAME|laserwriter:NAME@ZONE|driver:FILE|default] [user-name NAME|default]
                 [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
@@ -814,8 +814,8 @@ func runCommand(_ args: [String], resume: String? = nil) {
             redrawCheck = args[i]
         case "--scale":
             i += 1
-            guard i < args.count, let v = Double(args[i]), [1, 1.5, 2].contains(v) else {
-                fail("--scale expects 1, 1.5 or 2")
+            guard i < args.count, let v = Double(args[i]), [1, 1.5, 2, 3].contains(v) else {
+                fail("--scale expects 1, 1.5, 2 or 3")
             }
             scaleOption = v
         case "--jit": useJIT = true

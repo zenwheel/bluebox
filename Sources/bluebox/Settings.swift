@@ -378,7 +378,7 @@ func settings(for app: String) -> AppSettings? {
 }
 
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
-///     [timing fast|accurate|default] [scale 1|1.5|2|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
+///     [timing fast|accurate|default] [scale 1|1.5|2|3|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
 ///     [print-folder <folder>|panel|default] [printer <spec>|default] [user-name <name>|default]
 ///     [appleshare <spec>|none|default] [display rootless|screen|default]
@@ -451,10 +451,10 @@ func setCommand(_ args: [String]) {
         case "scale":
             if value == "default" {
                 s.scale = nil
-            } else if let v = Double(value), [1, 1.5, 2].contains(v) {
+            } else if let v = Double(value), [1, 1.5, 2, 3].contains(v) {
                 s.scale = v
             } else {
-                fail("scale expects 1, 1.5, 2 or default")
+                fail("scale expects 1, 1.5, 2, 3 or default")
             }
         case "appearance":
             s.appearance = value == "default" ? nil : value

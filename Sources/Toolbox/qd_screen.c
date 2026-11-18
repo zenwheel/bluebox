@@ -10,6 +10,7 @@
 #include <zlib.h>
 
 #include "machine.h"
+#include "present.h"
 #include "qd_internal.h"
 #include "tb_internal.h"
 
@@ -438,6 +439,7 @@ void qd_screen_set_display_base(gaddr base)
 {
     if (base == display_base)
         return;
+    present_memory_changing(NULL, 0); /* the GPU's view of the old page goes */
     display_base = base;
     if (g_watch_fn && g_watch_len) {
         g_watch_fn(base, 1);
@@ -551,14 +553,51 @@ size_t machine_screen_shadow_size(int x, int y, int w, int h)
     return sizeof(shadow_head) + rows;
 }
 
+/* A band of rows [y0, y1) added to a list of them, at most max: one
+ * touching the last grows it, and past max the last grows over the gap
+ * (the rows between done again, unchanged). */
+static void add_band(int32_t *bands, int *n, int max, int y0, int y1)
+{
+    if (*n > 0 && (bands[*n * 2 - 1] == y0 || *n == max)) {
+        bands[*n * 2 - 1] = y1;
+        return;
+    }
+    bands[*n * 2] = y0;
+    bands[*n * 2 + 1] = y1;
+    (*n)++;
+}
+
+/* The rows [y0, y1) of the shown page whose bytes [b0, b1) differ from the
+ * copy at o (n = b1 - b0 bytes a row, rows one after another), the copy
+ * brought up to date, as bands. */
+static int scan_rows(uint8_t *o, size_t stride, int y0, int y1, uint32_t b0, uint32_t n, int32_t *bands, int max)
+{
+    int nb = 0, run = -1;
+    for (int r = y0; r < y1; r++, o += stride) {
+        const uint8_t *p = gptr(display_base + (uint32_t)r * screen_row_bytes + b0);
+        if (memcmp(o, p, n)) {
+            memcpy(o, p, n);
+            if (run < 0)
+                run = r;
+        } else if (run >= 0) {
+            add_band(bands, &nb, max, run, r);
+            run = -1;
+        }
+    }
+    if (run >= 0)
+        add_band(bands, &nb, max, run, y1);
+    return nb;
+}
+
 /* Whether it changed since the copy was taken, the copy brought up to
  * date: memory compared is several times faster than the pixels
  * converted and hashed, and a screen as large as the host's display
  * unchanged costs a fraction of a millisecond a frame. */
-bool machine_screen_changed(int x, int y, int w, int h, uint8_t *shadow, size_t len)
+int machine_screen_changed_rows(int x, int y, int w, int h, uint8_t *shadow, size_t len, int32_t *bands, int max)
 {
-    if (len != machine_screen_shadow_size(x, y, w, h))
-        return true;
+    if (max < 1)
+        return 0;
+    bool all = len != machine_screen_shadow_size(x, y, w, h);
     shadow_head head;
     memset(&head, 0, sizeof head); /* padding too: it is compared */
     head.x = x, head.y = y, head.w = w, head.h = h;
@@ -569,23 +608,88 @@ bool machine_screen_changed(int x, int y, int w, int h, uint8_t *shadow, size_t 
     const uint8_t (*lut)[256] = video_output_lut();
     if (lut)
         memcpy(head.lut, lut, sizeof head.lut);
-    bool changed = memcmp(shadow, &head, sizeof head) != 0;
-    if (changed)
+    if (!all && memcmp(shadow, &head, sizeof head) != 0) {
         memcpy(shadow, &head, sizeof head);
+        all = true;
+    }
     int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
     uint32_t b0, b1;
-    if (!clip_rect(&x0, &y0, &x1, &y1, &b0, &b1))
-        return changed;
-    uint8_t *o = shadow + sizeof head;
-    size_t n = b1 - b0;
-    for (int r = y0; r < y1; r++, o += n) {
-        const uint8_t *p = gptr(display_base + (uint32_t)r * screen_row_bytes + b0);
-        if (memcmp(o, p, n)) {
-            memcpy(o, p, n);
-            changed = true;
+    int n = 0;
+    if (!all && clip_rect(&x0, &y0, &x1, &y1, &b0, &b1))
+        n = scan_rows(shadow + sizeof head, b1 - b0, y0, y1, b0, b1 - b0, bands, max);
+    else if (all && len == machine_screen_shadow_size(x, y, w, h) && clip_rect(&x0, &y0, &x1, &y1, &b0, &b1))
+        scan_rows(shadow + sizeof head, b1 - b0, y0, y1, b0, b1 - b0, bands, max); /* the copy taken */
+    if (all) { /* everything, the parts off the screen too */
+        bands[0] = y;
+        bands[1] = y + h;
+        return 1;
+    }
+    return n;
+}
+
+bool machine_screen_changed(int x, int y, int w, int h, uint8_t *shadow, size_t len)
+{
+    int32_t bands[2];
+    return machine_screen_changed_rows(x, y, w, h, shadow, len, bands, 1) > 0;
+}
+
+/* The rect's rows in bands converted (out is the whole rect's, w*h*4),
+ * clear outside the shape (w*h bytes, 0 outside; NULL for none) and, with
+ * desktop, where the desktop shows (machine_desktop_mask). */
+void machine_screen_rgba_bands(int x, int y, int w, int h, const int32_t *bands, int n, const uint8_t *shape,
+                               bool desktop, uint8_t *out)
+{
+    BB_HOST static uint8_t *desk;
+    BB_HOST static size_t desk_cap;
+    for (int i = 0; i < n; i++) {
+        int r0 = bands[i * 2] > y ? bands[i * 2] : y, r1 = bands[i * 2 + 1] < y + h ? bands[i * 2 + 1] : y + h;
+        if (r1 <= r0)
+            continue;
+        size_t first = (size_t)(r0 - y) * (size_t)w, count = (size_t)(r1 - r0) * (size_t)w;
+        uint32_t *px = (uint32_t *)(void *)(out + first * 4);
+        machine_screen_rgba(x, r0, w, r1 - r0, (uint8_t *)px);
+        if (shape)
+            for (size_t k = 0; k < count; k++)
+                if (!shape[first + k])
+                    px[k] = 0;
+        if (desktop) {
+            if (desk_cap < count) {
+                bb_host_free(desk);
+                desk = bb_host_malloc(count);
+                desk_cap = desk ? count : 0;
+            }
+            if (desk && machine_desktop_mask(x, r0, w, r1 - r0, desk))
+                for (size_t k = 0; k < count; k++)
+                    if (!desk[k])
+                        px[k] = 0;
         }
     }
-    return changed;
+}
+
+/* The screen as a presenter shows it (present.h). */
+void present_screen_state(present_state *s)
+{
+    memset(s, 0, sizeof *s);
+    s->width = g_screen_width;
+    s->height = g_screen_height;
+    s->depth = screen_depth;
+    s->brightness = brightness;
+    s->row_bytes = screen_row_bytes;
+    s->base = display_base;
+    memcpy(s->clut, clut, sizeof clut);
+    const uint8_t (*lut)[256] = video_output_lut();
+    s->lut_on = lut != NULL;
+    if (lut)
+        memcpy(s->lut, lut, sizeof s->lut);
+}
+
+/* The shown page's rows [0, height) compared with the copy at rows
+ * (row_bytes a row) and brought up to date, as bands. */
+int present_scan_rows(const present_state *s, uint8_t *rows, int32_t *bands, int max)
+{
+    if (s->base != display_base || s->row_bytes != screen_row_bytes || s->height > g_screen_height || max < 1)
+        return -1;
+    return scan_rows(rows, s->row_bytes, 0, s->height, 0, s->row_bytes, bands, max);
 }
 
 bool machine_screenshot(const char *path)

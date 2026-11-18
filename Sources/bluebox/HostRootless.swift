@@ -64,7 +64,10 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
     var w = Int32((vf.width / displayScale).rounded(.down))
     var h = Int32((vf.height / displayScale).rounded(.down) + classicMenuBarHeight)
     machine_fit_screen(&w, &h)
-    return (w, h)
+    // Never smaller than the smallest Mac screen (512 by 342): at 3x a
+    // laptop's display is narrower than that, and the screen goes a little
+    // past its edges rather than not being made at all.
+    return (max(w, 512), max(h, 342))
 }
 
 /// The host x of the Mac screen's left edge: the Mac screen centred in the
@@ -182,14 +185,18 @@ final class MacWindow: NSWindow {
 
 final class MacWindowView: NSView, MacScreenView {
     var macBounds = (top: Int16(0), left: Int16(0), bottom: Int16(0), right: Int16(0))
-    var mask = [UInt8]()
+    var mask = [UInt8]() { didSet { maskChanged = true } }
+    private var maskChanged = true
+    /// The GPU presenter's surface (the layer a CAMetalLayer), or nil: the
+    /// CPU path, an image as the layer's contents.
+    private var surface: PresenterSurface?
+    override func makeBackingLayer() -> CALayer { presenterOn ? CAMetalLayer() : CALayer() }
     /// The whole screen of a program in the background: its desktop left
     /// out, so only its windows and its own drawing show over the host's.
     var clearDesktop = false
     private var shownCopy = [UInt8]() // the screen as last shown
     private var lastClear = false
     private var rgba = [UInt32]()
-    private var deskMask = [UInt8]()
 
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -221,39 +228,49 @@ final class MacWindowView: NSView, MacScreenView {
         super.init(frame: frame)
         registerForDraggedTypes(FileDrops.types)
         wantsLayer = true
+        layerContentsRedrawPolicy = .never
         layer?.magnificationFilter = .nearest
         layer?.contentsGravity = .resize
+        if let metal = layer as? CAMetalLayer {
+            metal.isOpaque = false
+            surface = PresenterSurface(layer: metal)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// Shown on the display (an occluded window isn't drawn).
+    func setSeen(_ on: Bool) { surface?.visible(on) }
 
     /// Rebuild the image from the screen if this window's pixels changed.
     func refresh(force: Bool) {
         let left = Int(macBounds.left), top = Int(macBounds.top)
         let w = Int(macBounds.right) - left, h = Int(macBounds.bottom) - top
         guard w > 0, h > 0, mask.count == w * h else { return }
-        // Converted only when it changed: every frame, a screen the size of
-        // the host's display cost the main thread most of a core.
-        let size = machine_screen_shadow_size(Int32(left), Int32(top), Int32(w), Int32(h))
-        if shownCopy.count != size { shownCopy = [UInt8](repeating: 0, count: size) }
-        let changed = shownCopy.withUnsafeMutableBufferPointer {
-            machine_screen_changed(Int32(left), Int32(top), Int32(w), Int32(h), $0.baseAddress!, size)
-        }
-        if !force && !changed && clearDesktop == lastClear { return }
-        lastClear = clearDesktop
-        if rgba.count != w * h { rgba = [UInt32](repeating: 0, count: w * h) }
-        rgba.withUnsafeMutableBytes { raw in
-            machine_screen_rgba(Int32(left), Int32(top), Int32(w), Int32(h), raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
-        }
-        // Transparent outside the window's shape.
-        for k in 0..<(w * h) where mask[k] == 0 { rgba[k] = 0 }
-        if clearDesktop {
-            if deskMask.count != w * h { deskMask = [UInt8](repeating: 1, count: w * h) }
-            if machine_desktop_mask(Int32(left), Int32(top), Int32(w), Int32(h), &deskMask) {
-                for k in 0..<(w * h) where deskMask[k] == 0 { rgba[k] = 0 }
+        timedPresent {
+            if let surface {
+                // Drawn by the GPU at the next refresh if its pixels changed;
+                // at once when the window just moved or changed size.
+                surface.set(x: CGFloat(left), y: CGFloat(top), width: CGFloat(w), height: CGFloat(h), points: bounds.size,
+                            scale: window?.backingScaleFactor ?? 2)
+                if maskChanged {
+                    maskChanged = false
+                    surface.shape(mask, width: w, height: h)
+                }
+                surface.desktop(clearDesktop)
+                if force { surface.drawNow() }
+                return
             }
+            // Converted only where it changed: every frame, a screen the size
+            // of the host's display cost the main thread most of a core.  Clear
+            // outside the window's shape, and where the desktop shows.
+            let changed = convertChangedRows(x: left, y: top, width: w, height: h, shadow: &shownCopy, rgba: &rgba,
+                                             shape: mask, desktop: clearDesktop,
+                                             force: force || clearDesktop != lastClear || maskChanged)
+            lastClear = clearDesktop
+            maskChanged = false
+            if changed { layer?.contents = rgbaImage(rgba, width: w, height: h) }
         }
-        layer?.contents = rgbaImage(rgba, width: w, height: h)
     }
 
     private func post(_ event: NSEvent, button: Int32) { postHostMouse(button: button) }
@@ -275,7 +292,11 @@ final class MacWindowView: NSView, MacScreenView {
 /// shapes) and taking every click, so the menu sees its clicks and a click
 /// elsewhere reaches it to cancel.
 final class TransientView: NSView {
-    let menuLayer = CALayer()
+    let menuLayer: CALayer = presenterOn ? CAMetalLayer() : CALayer()
+    private var surface: PresenterSurface?
+    private var rgba = [UInt32]()
+    private var shownCopy = [UInt8]()
+    private var shown = [Int16]()
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -283,6 +304,8 @@ final class TransientView: NSView {
         super.init(frame: frame)
         wantsLayer = true
         menuLayer.magnificationFilter = .nearest
+        menuLayer.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
+        if let metal = menuLayer as? CAMetalLayer { surface = PresenterSurface(layer: metal) }
         layer?.addSublayer(menuLayer)
     }
 
@@ -292,19 +315,29 @@ final class TransientView: NSView {
     @MainActor func show(_ r: [Int16]) {
         let top = Int(r[0]), left = Int(r[1]), w = Int(r[3]) - left, h = Int(r[2]) - top
         guard w > 0, h > 0 else { return }
-        var rgba = [UInt32](repeating: 0, count: w * h)
-        rgba.withUnsafeMutableBytes { raw in
-            machine_screen_rgba(Int32(left), Int32(top), Int32(w), Int32(h), raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
-        }
-        let image = rgbaImage(rgba, width: w, height: h)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
+        let moved = r != shown
+        shown = r
         let s = displayScale
         let inset = rootlessMacLeft() - rootlessScreenFrame().minX /* the Mac screen is centred */
-        menuLayer.frame = CGRect(x: inset + CGFloat(left) * s, y: (CGFloat(top) - classicMenuBarHeight) * s,
-                                 width: CGFloat(w) * s, height: CGFloat(h) * s)
-        menuLayer.contents = image
-        CATransaction.commit()
+        let frame = CGRect(x: inset + CGFloat(left) * s, y: (CGFloat(top) - classicMenuBarHeight) * s,
+                           width: CGFloat(w) * s, height: CGFloat(h) * s)
+        timedPresent {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            if menuLayer.frame != frame { menuLayer.frame = frame }
+            if let surface {
+                // Redrawn by the GPU as the menu highlights.
+                let scale = window?.backingScaleFactor ?? 2
+                menuLayer.contentsScale = scale
+                surface.set(x: CGFloat(left), y: CGFloat(top), width: CGFloat(w), height: CGFloat(h), points: frame.size,
+                            scale: scale)
+                if moved { surface.drawNow() }
+            } else if convertChangedRows(x: left, y: top, width: w, height: h, shadow: &shownCopy, rgba: &rgba, shape: nil,
+                                         desktop: false, force: moved) {
+                menuLayer.contents = rgbaImage(rgba, width: w, height: h)
+            }
+            CATransaction.commit()
+        }
     }
 
     private func post(_ button: Int32) { postHostMouse(button: button) }
@@ -506,6 +539,7 @@ final class TransientView: NSView {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        Vsync.shared.follow(nil) // the GPU presenter's refreshes, from the main display
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { (NSApp.delegate as? RootlessHost)?.displayChanged() }
@@ -521,6 +555,7 @@ final class TransientView: NSView {
     /// resumed program's (machine_request_screen_size; the program gets it
     /// at its next event call), and the windows are placed again.
     func displayChanged() {
+        Vsync.shared.follow(nil)
         guard remapRootlessScreen() else { return }
         if hidingChrome, let backdrop, let screen = NSScreen.main ?? NSScreen.screens.first {
             backdrop.setFrame(screen.frame, display: false)
@@ -586,11 +621,14 @@ final class TransientView: NSView {
         // A window unseen is drawn when it shows again (the machine is
         // throttled meanwhile when none is seen).
         noteHostVisibility(frontIsSeen: true)
-        for w in windows.values where w.occlusionState.contains(.visible) {
-            (w.contentView as? MacWindowView)?.refresh(force: false)
+        for w in windows.values {
+            let seen = w.occlusionState.contains(.visible)
+            (w.contentView as? MacWindowView)?.setSeen(seen)
+            if seen { (w.contentView as? MacWindowView)?.refresh(force: false) }
         }
-        if let view = screenWindow?.contentView as? MacWindowView {
+        if let w = screenWindow, let view = w.contentView as? MacWindowView {
             view.clearDesktop = !NSApp.isActive
+            view.setSeen(w.occlusionState.contains(.visible))
             view.refresh(force: false)
         }
         syncTransient()
@@ -599,6 +637,7 @@ final class TransientView: NSView {
         if background { noteActivityElsewhere() }
         CursorSync.shared.tick()
         DragOut.shared.tick()
+        present_stats_tick()
     }
 
     // MARK: Pop-up menus

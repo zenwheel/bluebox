@@ -3502,6 +3502,8 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     for (uint64_t i = 0; i < h.nregions; i++)
         if (region_base[i] != region_old[i]) {
             bb_region_add(region_name[i], region_base[i], region_size[i], region_ext[i]);
+            if (g_mem_remap_fn) /* a GPU reading the screen in place lets go first */
+                g_mem_remap_fn(region_old[i], region_size[i]);
             munmap(region_old[i], region_size[i]);
         }
     carry_apply(&cp, &old);

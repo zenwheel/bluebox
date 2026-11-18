@@ -159,6 +159,7 @@ void pace_drew(void);
 void pace_reset(void);
 void display_pace_watch(void);       /* the program's next store into the screen told to pace.c */
 uint64_t machine_pace_wait(uint64_t ns); /* the machine's thread waits up to ns of real time, or for input */
+uint64_t machine_pace_wait_vsync(uint64_t seq); /* ... or until the display's refresh seq has read the screen */
 uint32_t ev_press_serial(void);      /* keys and mouse buttons pressed or let go so far */
 void idle_interrupt_leave(void);
 void idle_reset(void);
@@ -911,6 +912,7 @@ void display_sync(void); /* the host's snapshots, at a safe point */
 void drag_host_pump(void); /* drags from the host, at the program's event calls */
 uint32_t qd_screen_row_bytes(void);
 void qd_screen_set_brightness(int level); /* 0-255, the screen as shown */
+void qd_screen_set_display_base(gaddr base); /* the page the video shows (a compact Mac's alternate) */
 /* The video hardware's colour table, as the screen is shown (qd_screen.c). */
 void qd_screen_set_hw_entry(int index, const uint16_t rgb[3]);
 void qd_screen_get_hw_entry(int index, uint16_t rgb[3]);

@@ -12,6 +12,9 @@ gaddr g_screen_size = 0u - GA_SCREEN_32, g_low_top = 0x01000000u;
 gaddr g_mem_top = GA_ROM_32, g_sysheap_end = 0x00400000u, g_appheap = 0x00400000u, g_stack_24 = 0x00100000u;
 int g_mem_layout = MEM_LAYOUT_32;
 gaddr g_watch_lo, g_watch_len;
+/* Told before pages of the arena are mapped again (a GPU reading the
+ * screen in place lets go of them first). */
+BB_HOST void (*g_mem_remap_fn)(void *lo, size_t len);
 void (*g_watch_fn)(gaddr a, uint32_t len);
 
 uint8_t g_hw_map[4096];
@@ -173,6 +176,8 @@ static bool map_space(void)
         close(fd);
         return false;
     }
+    if (g_mem_remap_fn)
+        g_mem_remap_fn(g_mem, ARENA_SIZE + ARENA_SLACK);
     for (size_t off = 0; off < ARENA_SIZE + ARENA_SLACK; off += SPACE_24) {
         size_t n = ARENA_SIZE + ARENA_SLACK - off < SPACE_24 ? ARENA_SIZE + ARENA_SLACK - off : SPACE_24;
         if (mmap(g_mem + off, n, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) == MAP_FAILED) {
@@ -189,6 +194,8 @@ static bool map_space(void)
 
 static bool map_flat(void)
 {
+    if (g_mem_remap_fn)
+        g_mem_remap_fn(g_mem, ARENA_SIZE + ARENA_SLACK);
     void *p = mmap(g_mem, ARENA_SIZE + ARENA_SLACK, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_NORESERVE, -1, 0);
     if (p == MAP_FAILED) {
@@ -281,6 +288,8 @@ void mem_discard(gaddr addr, uint32_t len)
     memset((void *)start, 0, pstart - start);
     memset((void *)pend, 0, end - pend);
     /* MAP_FIXED over the range: fresh zero pages, old ones released. */
+    if (g_mem_remap_fn)
+        g_mem_remap_fn((void *)pstart, pend - pstart);
     void *p = mmap((void *)pstart, pend - pstart, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_NORESERVE, -1, 0);
     if (p == MAP_FAILED)

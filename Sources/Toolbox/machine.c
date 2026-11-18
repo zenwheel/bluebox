@@ -28,6 +28,8 @@
 #include "jit.h"
 #include "m68k.h"
 #include "ppc.h"
+#include "present.h"
+#include "present_backend.h"
 
 cpu68k *g_cpu;
 char g_app_dir[1024];
@@ -1125,6 +1127,34 @@ static uint64_t wall_wait(uint64_t ns, bool (*over)(void))
 
 /* Frame pacing's wait for the next refresh (pace.c), as the throttle's. */
 uint64_t machine_pace_wait(uint64_t ns) { return wall_wait(ns, NULL); }
+
+/* ... or, while the display's refreshes drive it (present_live), until
+ * refresh seq has read the screen.  Never longer than two of the wall
+ * clock's refreshes, and over at once if the refreshes stop (the window
+ * hidden, the display asleep): pacing then goes by the wall clock. */
+BB_HOST static uint64_t vsync_wanted;
+static bool vsync_over(void) { return present_read_done(vsync_wanted) || !present_live(); }
+uint64_t machine_pace_wait_vsync(uint64_t seq)
+{
+    vsync_wanted = seq;
+    uint64_t start = now_ns(), limit = 2000000000u / 60;
+    uint64_t now = start;
+    while (now - start < limit && !cpu.halted && !vsync_over()) {
+        uint64_t left = machine_work_due_in(limit - (now - start));
+        if (left > 1000000)
+            left = 1000000; /* a wake-up missed costs no more */
+        uint32_t input = ev_input_serial();
+        ev_idle_sleep(left);
+        machine_advance_ticks();
+        time_pump();
+        now = now_ns();
+        if (ev_input_serial() != input)
+            break;
+    }
+    return now - start;
+}
+
+uint64_t present_machine_progress(void) { return cpu.icount + g_ppc.icount; }
 
 /* A headless --realtime run waits on the wall clock where a window's run
  * would (WaitNextEvent's sleep, GetNextEvent's tick, a Toolbox loop's), so

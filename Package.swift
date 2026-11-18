@@ -64,6 +64,8 @@ let package = Package(
                                  .linkedFramework("OpenGL", .when(platforms: [.macOS])),
                                  // QuickDraw 3D and RAVE, drawn with Metal (r3d_metal.m)
                                  .linkedFramework("Metal", .when(platforms: [.macOS])),
+                                 // The screen shown by the GPU (present_metal.m)
+                                 .linkedFramework("QuartzCore", .when(platforms: [.macOS])),
                                  .linkedFramework("Foundation", .when(platforms: [.macOS])),
                                  // QuickTime's codecs Blue Box has none of its own for (hostvideo_apple.m)
                                  .linkedFramework("VideoToolbox", .when(platforms: [.macOS])),

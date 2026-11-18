@@ -220,6 +220,16 @@ void machine_screen_rgba(int x, int y, int w, int h, uint8_t *out);
  * windows every frame converts the pixels only when they changed. */
 size_t machine_screen_shadow_size(int x, int y, int w, int h);
 bool machine_screen_changed(int x, int y, int w, int h, uint8_t *shadow, size_t len);
+/* ... and which of its rows changed: bands [y0, y1) of screen rows in
+ * bands (pairs, at most max; past that the last widens over the rows
+ * between).  The number of bands, 0 if nothing changed; one band of the
+ * whole rect when everything did (its colours, depth, place). */
+int machine_screen_changed_rows(int x, int y, int w, int h, uint8_t *shadow, size_t len, int32_t *bands, int max);
+/* The rect's rows in bands as RGBA into out (the whole rect's, w*h*4),
+ * clear outside shape (w*h bytes, 0 outside; NULL for none) and, with
+ * desktop, where the desktop shows (machine_desktop_mask). */
+void machine_screen_rgba_bands(int x, int y, int w, int h, const int32_t *bands, int n, const uint8_t *shape,
+                               bool desktop, uint8_t *out);
 /* Window, control and menu appearance; the colour ones use an 8-bit screen.
  * Call before boot. */
 enum { MACHINE_APPEARANCE_BW, MACHINE_APPEARANCE_THEME, MACHINE_APPEARANCE_NATIVE };
