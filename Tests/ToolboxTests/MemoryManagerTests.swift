@@ -739,5 +739,65 @@ extension BlueBox {
             #expect(Int16(bitPattern: rd16(rd32(entry) + 24)) == refnum) // dCtlRefNum
             #expect(mm_check_zone(sysZone))
         }
+
+        /// The lowest free block of at least size bytes, walking the zone.
+        func lowestFree(_ z: UInt32, _ size: UInt32) -> UInt32? {
+            var b: UInt32 = 0
+            var blk = mm_block()
+            while mm_zone_block(z, &b, &blk) {
+                if blk.use == 0 && blk.psize >= size { return blk.addr }
+            }
+            return nil
+        }
+
+        /// NewPtr takes the lowest free block that holds it, however the
+        /// blocks below came and went: its search starts above the ones it
+        /// knows are taken (Grand-Ma told me's thousands of pointers took
+        /// minutes each), and must not skip one freed, merged or moved.
+        @Test func newPtrTakesTheLowestFreeBlock() {
+            var rng = SystemRandomNumberGenerator()
+            var ptrs: [UInt32] = [], handles: [UInt32] = []
+            for i in 0..<3000 {
+                let r = Int.random(in: 0..<10, using: &rng)
+                if r < 5 || ptrs.isEmpty {
+                    let size = Int32(i % 7 == 0 ? 2000 : 100 + Int.random(in: 0..<900, using: &rng))
+                    let p = tb_NewPtr(size, false, false)
+                    #expect(p != 0)
+                    let need = (UInt32(size) + 12 + 15) & ~15
+                    if let w = lowestFree(appZone, need) { #expect(w > p - 12, "pointer \(i) above a free block") }
+                    ptrs.append(p)
+                } else if r < 7 {
+                    tb_DisposePtr(ptrs.remove(at: Int.random(in: 0..<ptrs.count, using: &rng)))
+                } else if r < 9 {
+                    handles.append(tb_NewHandle(Int32(50 + Int.random(in: 0..<3000, using: &rng)), false, false))
+                } else if !handles.isEmpty {
+                    let h = handles[Int.random(in: 0..<handles.count, using: &rng)]
+                    tb_SetHandleSize(h, Int32(50 + Int.random(in: 0..<6000, using: &rng)))
+                    if Int.random(in: 0..<4, using: &rng) == 0 { tb_MoveHHi(h) }
+                }
+            }
+            #expect(mm_check_zone(appZone))
+            ptrs.forEach { tb_DisposePtr($0) }
+            handles.forEach { tb_DisposeHandle($0) }
+        }
+
+        /// A PowerPC program's main stack shares the partition with the
+        /// heap: raising ApplLimit takes as much from StackSpace (Abalone
+        /// gives its heap all but 64K of its stack, a K at a time, and
+        /// raised the limit for ever while StackSpace stayed the same).
+        @Test func raisingApplLimitShrinksThePowerPCStack() {
+            launchTestApp()
+            #expect(cfm_ppc_cpu())
+            let was = g_ppc_mode
+            g_ppc_mode = true
+            defer { g_ppc_mode = was }
+            let space = tb_StackSpace()
+            #expect(space > 0x10000)
+            let limit = rd32(UInt32(LM_ApplLimit))
+            tb_SetApplLimit(limit + 0x8000)
+            #expect(tb_StackSpace() == space - 0x8000)
+            tb_SetApplLimit(limit)
+            #expect(tb_StackSpace() == space)
+        }
     }
 }

@@ -114,8 +114,13 @@ static inline void h_set_state(gaddr h, gaddr b, uint8_t state)
         wr8(b + 1, (uint8_t)((rd8(b + 1) & ~FLAGS) | (state & FLAGS)));
 }
 
+/* Counts the changes to blocks' headers (find_lowest's note of where to
+ * start holds while it is the same). */
+static uint32_t heap_gen;
+
 static void b_set(gaddr b, unsigned use, uint8_t state, uint8_t sizec, uint32_t psize, uint32_t loc)
 {
+    heap_gen++;
     if (g_mem_24bit) {
         wr32(b, (uint32_t)use << 30 | (uint32_t)(sizec & 0x0F) << 24 | (psize & 0x00FFFFFFu));
         wr32(b + 4, loc);
@@ -131,6 +136,7 @@ static void b_set(gaddr b, unsigned use, uint8_t state, uint8_t sizec, uint32_t 
 
 static inline void b_set_psize(gaddr b, uint32_t psize)
 {
+    heap_gen++;
     if (g_mem_24bit)
         wr32(b, (rd32(b) & 0xFF000000u) | (psize & 0x00FFFFFFu));
     else
@@ -499,21 +505,66 @@ static bool grow_zone(gaddr z, uint32_t need) { return grow_zone_by(z, need, fal
  * pointers don't end up after the relocatable blocks and keep them from
  * growing (SpaceCURVS loads its Forth dictionary, frees a pointer below
  * it, takes small pointers and then grows the dictionary, locked). */
+/* What the last search of a zone found, while no header has changed
+ * since (heap_gen): no block below at is free, and none below big_at of
+ * big bytes or more, so the next search starts at one of them.  The block
+ * NewPtr takes from the one found leaves that so (mm_new_ptr_in).
+ * Grand-Ma told me counts its free memory by taking 1000-byte pointers
+ * until there are none, and the application zone grows: each NewPtr
+ * walked every pointer before it. */
+enum { NLOW = 4 };
+static struct {
+    gaddr z, at, big_at;
+    uint32_t big, gen;
+} low_hint[NLOW];
+static unsigned low_next;
+
 static gaddr find_lowest(gaddr z, uint32_t psize)
 {
-    gaddr lim = z_lim(z);
-    for (gaddr b = z_first(z); b < lim; b = b_next(b)) {
+    gaddr lim = z_lim(z), first = z_first(z), start = first, none_below = first;
+    int k = -1;
+    for (int i = 0; i < NLOW; i++)
+        if (low_hint[i].z == z)
+            k = i;
+    if (k < 0)
+        k = (int)(low_next++ % NLOW);
+    else if (low_hint[k].gen == heap_gen && low_hint[k].at > first && low_hint[k].at <= lim) {
+        start = none_below = low_hint[k].at;
+        if (psize >= low_hint[k].big && low_hint[k].big_at > start && low_hint[k].big_at <= lim)
+            start = low_hint[k].big_at;
+    }
+    low_hint[k].z = 0;
+    gaddr lowest = 0, found = 0;
+    for (gaddr b = start; b < lim; b = b_next(b)) {
         if (b_psize(b) < HDR) {
             LOGF(LOG_MEM, "mm: zone %08X damaged at block %08X\n", z, b);
             return 0;
         }
         if (b_use(b) != USE_FREE)
             continue;
+        if (!lowest)
+            lowest = b;
         coalesce(z, b);
-        if (b_psize(b) >= psize)
-            return b;
+        if (b_psize(b) >= psize) {
+            found = b;
+            break;
+        }
     }
-    return 0;
+    low_hint[k].z = z;
+    low_hint[k].at = start != none_below ? none_below : lowest ? lowest : lim;
+    low_hint[k].big = psize;
+    low_hint[k].big_at = found ? found : lim;
+    low_hint[k].gen = heap_gen;
+    return found;
+}
+
+/* After a block is carved from what find_lowest found: still none free
+ * below where it noted. */
+static void low_hint_carved(gaddr z, uint32_t gen)
+{
+    for (int i = 0; i < NLOW; i++)
+        if (low_hint[i].z == z && low_hint[i].gen == gen)
+            low_hint[i].gen = heap_gen;
 }
 
 static gaddr find_free(gaddr z, uint32_t psize)
@@ -549,6 +600,7 @@ static gaddr find_free(gaddr z, uint32_t psize)
 static uint32_t compact(gaddr z)
 {
     set_rover(z, 0); /* blocks move */
+    heap_gen++;
     gaddr lim = z_lim(z);
     gaddr dst = 0; /* start of the free run being filled, or 0 */
     uint32_t largest = 0;
@@ -749,7 +801,9 @@ gaddr mm_new_ptr_in(gaddr z, uint32_t size, bool clear)
         set_mem_err(memFullErr);
         return 0;
     }
+    uint32_t gen = heap_gen;
     carve(z, b, ps, USE_NREL, 0, size, z);
+    low_hint_carved(z, gen);
     if (clear)
         gmemset(b_data(b), 0, size);
     set_mem_err(noErr);
@@ -1226,6 +1280,7 @@ int16_t mm_move_handle(gaddr h, bool high)
     }
     memcpy(blk, g_mem + b, ps);
     set_rover(z, 0); /* blocks move */
+    heap_gen++;
     gaddr nb;
     if (high) {
         gaddr dst = b;

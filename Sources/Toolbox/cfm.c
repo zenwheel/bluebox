@@ -38,6 +38,7 @@
 
 ppc_cpu g_ppc;
 gaddr cfm_ppc_stack_lo;
+gaddr cfm_ppc_appl_limit; /* ApplLimit when the stack was made */
 bool g_ppc_mode;
 
 /* ---------------------------------------------------------------------- */
@@ -1866,6 +1867,7 @@ void cfm_reset(void)
     carbon_cf_reset();
     ppc_cpu_ready = false;
     cfm_ppc_stack_lo = 0;
+    cfm_ppc_appl_limit = 0;
     code_check_reset(); /* the last program's code */
 }
 
@@ -1882,6 +1884,7 @@ bool cfm_ppc_cpu(void)
     if (!stack)
         return false;
     cfm_ppc_stack_lo = stack;
+    cfm_ppc_appl_limit = rd32(LM_ApplLimit);
     ppc_init(&g_ppc);
     g_ppc.native = dispatch_native;
     g_ppc.illegal = name_nil_call;

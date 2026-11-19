@@ -51,6 +51,18 @@ extension BlueBox {
             #expect(tb_SetCurLayer(w) != 0 && tb_GetCurLayer() == app) // a window isn't a layer
         }
 
+        /// The program's layer's refCon is its Process Manager entry, the
+        /// serial number 0x24 bytes in (Font-o-rama! looks for its own
+        /// layer so, and walked past the list's end for ever).
+        @Test func appLayerNamesItsProcess() {
+            bootMachine()
+            let entry = rd32(tb_GetAppLayer() + UInt32(WindowRecord_refCon_off))
+            #expect(entry != 0)
+            let psn = tb_NewPtr(8, false, true), same = tb_NewPtr(1, false, true)
+            #expect(tb_GetCurrentProcess(psn) == 0)
+            #expect(tb_SameProcess(entry + 0x24, psn, same) == 0 && rd8(same) != 0)
+        }
+
         /// Open Transport's timer and deferred tasks run their procedure,
         /// with its argument, from the Time Manager's pump once due.
         @Test func openTransportTasks() {

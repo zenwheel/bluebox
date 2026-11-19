@@ -218,5 +218,62 @@ extension BlueBox {
             tb_SetFractEnable(0)
             tb_SetOutlinePreferred(0)
         }
+
+        // ---- Scaled bitmap strikes ----
+
+        /// A family with one strike, 10 points: "A" a solid block 6 wide
+        /// and 8 high (ascent 7), and the missing glyph 2 wide.
+        func launchWithStrike() {
+            var font = cat(be16(0x9000), be16(65), be16(65), be16(6), be16(0), be16(0), be16(6), be16(8))
+            font += cat(be16(16), be16(7), be16(1), be16(1), be16(1))   // owTLoc, ascent, descent, leading, rowWords
+            for _ in 0..<8 { font += [0xFC, 0x00] }                      // the image: A in columns 0-5
+            font += cat(be16(0), be16(6), be16(8))                       // the locations
+            font += cat(be16(6), be16(2), be16(0xFFFF))                  // offsets and widths
+            let fond = cat([UInt8](repeating: 0, count: Int(FamRec_SIZEOF)), be16(0), be16(10), be16(0), be16(310))
+            launchTestApp([TestResource(type: "FOND", id: 310, name: "Strike Test", data: fond),
+                           TestResource(type: "NFNT", id: 310, data: font)])
+            _ = initToolbox()
+            tb_TextFont(310)
+        }
+
+        /// The Font Manager scales the nearest strike to a size the family
+        /// lacks: widths and metrics with it, and the glyphs as drawn
+        /// (FastClock shrank its text until it fit, which it never did when
+        /// every smaller size measured as the 10-point strike).
+        @Test func aMissingSizeScalesTheStrike() {
+            launchWithStrike()
+            let a = string("A"), info = tb_NewPtr(8, false, true)
+            tb_TextSize(10)
+            #expect(tb_StringWidth(a) == 6)
+            tb_TextSize(20)
+            #expect(tb_StringWidth(a) == 12)
+            tb_GetFontInfo(info)
+            #expect([rd16(info), rd16(info + 2), rd16(info + 4), rd16(info + 6)] == [14, 2, 12, 2])
+            tb_TextSize(5)
+            #expect(tb_StringWidth(a) == 3)
+            // With scaling off the strike is drawn as it is, spaced as the size.
+            tb_SetFScaleDisable(1)
+            tb_TextSize(20)
+            #expect(tb_StringWidth(a) == 12)
+            tb_GetFontInfo(info)
+            #expect(rd16(info) == 7)
+            tb_SetFScaleDisable(0)
+        }
+
+        @Test func aScaledStrikeIsDrawnScaled() {
+            offscreen()
+            launchWithStrike()
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_NewGWorld(gw, 32, rect(0, 0, 40, 80), 0, 0, 0) == 0)
+            tb_SetGWorld(rd32(gw), 0)
+            tb_TextFont(310)
+            tb_TextSize(20)
+            tb_MoveTo(10, 20)
+            tb_DrawString(string("A"))
+            #expect(penH() == 22)
+            let on = inked()
+            #expect(on.count == 12 * 16)
+            #expect(on.contains(6 * 80 + 10) && on.contains(21 * 80 + 21)) // 14 above the baseline to 2 below
+        }
     }
 }

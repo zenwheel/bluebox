@@ -519,7 +519,7 @@ extension BlueBox {
             guestPString("Untitled", at: name)
             tb_CustomPutFile(0, name, reply, 300, 0xFFFF_FFFF, hook, 0, 0, 0, 0)
             #expect(Self.offeredItems == [13])
-            #expect(Self.hookItems == [-1, 13, 13, -2])      // first call, two clicks, last call
+            #expect(Self.hookItems == [-1, 13, 13, 2, -2])   // first call, two clicks, Cancel, last call
             #expect(rd8(reply) == 0)
         }
 
@@ -560,7 +560,7 @@ extension BlueBox {
             let reply = tb_NewPtr(Int32(StandardFileReply_SIZEOF), false, true)
             tb_CustomGetFile(0, -1, 0, reply, 301, 0xFFFF_FFFF, hook, filter, 0, 0, 0)
             #expect(Self.filterEvents == [0])                 // a null event
-            #expect(Self.hookItems == [-1, 10, -2])           // first call, the filter's item, last call
+            #expect(Self.hookItems == [-1, 10, 2, -2])        // first call, the filter's item, Cancel, last call
         }
 
         nonisolated(unsafe) static var listProc: UInt32 = 0

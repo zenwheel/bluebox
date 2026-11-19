@@ -150,6 +150,18 @@ extension BlueBox {
 
         func guestImage(_ at: UInt32, _ size: Int) -> [UInt8] { (0..<size).map { rd8(at + UInt32($0)) } }
 
+        /// The startup volume's Finder information starts with its blessed
+        /// folder, the System Folder FindFolder finds.
+        @Test func theStartupVolumeNamesItsSystemFolder() {
+            launchTestApp()
+            let v = vinfo(-1)
+            #expect(v.err == 0)
+            let vref = tb_NewPtr(2, false, true), dir = tb_NewPtr(4, false, true)
+            #expect(tb_FindFolder(-1, Int32(bitPattern: fourCC("macs")), 0, vref, dir) == 0)
+            #expect(rd32(v.pb + UInt32(HVolumeParam_ioVFndrInfo_off)) == rd32(dir))
+            #expect(rd32(dir) > 2)
+        }
+
         @Test func aDiskIsMountedThroughItsDriverAndItsFilesRead() throws {
             launchTestApp()
             let image = try #require(buildHFS(name: "Test Disk", size: 800 * 1024, files: files))

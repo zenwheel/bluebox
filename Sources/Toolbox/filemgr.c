@@ -2702,6 +2702,14 @@ static int16_t get_vinfo(gaddr pb, bool hfs)
         wr32(pb + HVolumeParam_ioVFilCnt_off, files);
         wr32(pb + HVolumeParam_ioVDirCnt_off, dirs);
         gmemset(pb + HVolumeParam_ioVFndrInfo_off, 0, 32);
+        /* The startup volume's Finder information names its blessed folder,
+         * the System Folder, first: programs from before FindFolder find
+         * it there. */
+        if (!m) {
+            char full[PATH_MAX];
+            if (realpath(system_folder_path(), full))
+                wr32(pb + HVolumeParam_ioVFndrInfo_off, (uint32_t)out_id(dir_id_for(rel_of(full))));
+        }
     }
     return noErr;
 }
@@ -2809,9 +2817,33 @@ int16_t tb_PBCloseWD(gaddr pb, bool async)
     return noErr;
 }
 
+/* The volume (its refnum) a volume or working directory refnum is on. */
+static int16_t volume_of(int16_t v)
+{
+    int32_t d = base_dir(v, 0, false);
+    char dpath[PATH_MAX];
+    mount *dm = d && host_of_dir(d, dpath, sizeof dpath) ? mount_of_path(dpath) : NULL;
+    return d ? (dm ? dm->vref : VREF) : 0;
+}
+
 int16_t tb_PBGetWDInfo(gaddr pb, bool async)
 {
     int16_t v = (int16_t)rd16(pb + IOParam_ioVRefNum_off);
+    /* An index counts through the working directories (those on the
+     * volume ioVRefNum names, if it names one), and says each one's
+     * refnum; past the last, nsvErr.  (FuturePaint counts them so, and
+     * went on for ever when every index answered.) */
+    int16_t index = (int16_t)rd16(pb + WDPBRec_ioWDIndex_off);
+    if (index > 0) {
+        int16_t vol = v ? volume_of(v) : 0, n = 0, wd = 0;
+        for (int i = 0; i < MAX_WDS && !wd; i++)
+            if (wds[i].used && (!vol || volume_of((int16_t)(-32000 - i)) == vol) && ++n == index)
+                wd = (int16_t)(-32000 - i);
+        if (!wd)
+            return nsvErr;
+        v = wd;
+        wr16(pb + IOParam_ioVRefNum_off, (uint16_t)wd);
+    }
     int32_t d = base_dir(v, 0, false);
     if (!d)
         return nsvErr;
@@ -3140,9 +3172,15 @@ int16_t tb_FSMakeFSSpec(int16_t vRefNum, int32_t dir_id, gaddr file_name, gaddr 
      * volume's name names something there.  Programs find their way up
      * to the root by this error (XContact's FSMakeFSSpec of each parent
      * in turn, which here went on for ever and ran its stack into its
-     * code). */
-    if (dir_id == 1 && (!file_name || !rd8(file_name)))
+     * code), or by the empty name the spec is left with, as given (HTML
+     * Web Weaver's walk up, which went on for ever with the root's name
+     * left there). */
+    if (dir_id == 1 && (!file_name || !rd8(file_name))) {
+        wr16(spec + FSSpec_vRefNum_off, (uint16_t)vRefNum);
+        wr32(spec + FSSpec_parID_off, 1);
+        wr8(spec + FSSpec_name_off, 0);
         return dirNFErr;
+    }
     char path[PATH_MAX];
     int16_t err = resolve(vRefNum, dir_id, file_name, true, path, sizeof path);
     if (err)

@@ -26,6 +26,29 @@ extension BlueBox {
             return w
         }
 
+        /// SelectWindow of the window that is already active does nothing:
+        /// no activate event, its highlighting as the program left it
+        /// (Monitor unhighlights its window and selects it again on each
+        /// activate event, which here made the next one for ever).
+        @Test func selectingTheActiveWindowDoesNothing() {
+            launchTestApp()
+            _ = initToolbox()
+            let back = tb_NewWindow(0, rect(60, 60, 160, 260), tb_NewPtr(2, false, true), 1, 0, 0xFFFF_FFFF, 0, 0)
+            let front = tb_NewWindow(0, rect(80, 80, 180, 280), tb_NewPtr(2, false, true), 1, 0, 0xFFFF_FFFF, 0, 0)
+            #expect(tb_FrontWindow() == front && rd8(front + UInt32(WindowRecord_hilited_off)) != 0)
+            wr32(UInt32(LM_CurActivate), 0)
+            tb_HiliteWindow(front, 0)
+            tb_SelectWindow(front)
+            #expect(rd32(UInt32(LM_CurActivate)) == 0)
+            #expect(rd8(front + UInt32(WindowRecord_hilited_off)) == 0)
+            // Another window comes to the front, active, and says so.
+            tb_SelectWindow(back)
+            #expect(tb_FrontWindow() == back && rd8(back + UInt32(WindowRecord_hilited_off)) != 0)
+            #expect(rd32(UInt32(LM_CurActivate)) == back)
+            tb_DisposeWindow(front)
+            tb_DisposeWindow(back)
+        }
+
         /// The rounded-corner windows' WDEF 1 is a resource programs can get
         /// and call (DeskMates); NewWindow's procID 16 draws with it.
         @Test func roundedWindowDefinitionIsAResource() {

@@ -59,7 +59,14 @@ static void layers_init(void)
     if (nlayers)
         return;
     gaddr root = new_layer(0, true, 0);
-    gaddr app = new_layer(root, true, 0);
+    /* An application's layer's refCon is its Process Manager entry, the
+     * process's serial number 0x24 bytes in: Font-o-rama! walks the
+     * layers from the current one for its own, by that number, without
+     * looking for the list's end. */
+    gaddr entry = mm_new_ptr_in(rd32(LM_SysZone), 0x40, true);
+    if (entry)
+        tb_GetCurrentProcess(entry + 0x24);
+    gaddr app = new_layer(root, true, (int32_t)entry);
     cur_layer = app;
 }
 

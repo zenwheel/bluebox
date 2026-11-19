@@ -419,6 +419,16 @@ bool machine_file_filtered(const char *path)
     return hide;
 }
 
+/* The user's Cancel, which the hook sees as the button's hit before the
+ * dialog goes, as ModalDialog gave it: item 2 in System 7's dialogs and
+ * the old Put dialog, 3 in the old Get dialog.  (HDT Extn Config quits
+ * from its hook there; without it, it asked for a file again for ever.) */
+static void session_cancelled(bool save)
+{
+    if (session.dialog)
+        call_hook(session.old_hook && !save ? 3 : 2);
+}
+
 static void end_session(void)
 {
     if (!session.dialog)
@@ -536,6 +546,8 @@ void tb_CustomGetFile(gaddr filefilter, int16_t numtypes, gaddr typelist, gaddr 
     begin_session(dlgid, dlghook, yourdatap, false, false, filterproc);
     set_filter(filefilter, yourdatap, true);
     tb_StandardGetFile(filefilter, numtypes, typelist, replyp);
+    if (!rd8(replyp + StandardFileReply_sfGood_off))
+        session_cancelled(false);
     end_session();
 }
 
@@ -544,6 +556,8 @@ void tb_CustomPutFile(gaddr prompt, gaddr defaultName, gaddr replyp, int16_t dlg
 {
     begin_session(dlgid, dlghook, yourdatap, true, false, filterproc);
     tb_StandardPutFile(prompt, defaultName, replyp);
+    if (!rd8(replyp + StandardFileReply_sfGood_off))
+        session_cancelled(true);
     end_session();
 }
 
@@ -566,6 +580,8 @@ void tb_SFPGetFile(uint32_t p, gaddr prompt, gaddr filef, int16_t numt, gaddr tl
 {
     begin_session(dig, dh, 0, false, true, 0);
     tb_SFGetFile(p, prompt, filef, numt, tl, dh, rep);
+    if (!rd8(rep + SFReply_good_off))
+        session_cancelled(false);
     end_session();
 }
 
@@ -603,5 +619,7 @@ void tb_SFPPutFile(uint32_t p, gaddr prompt, gaddr name, gaddr dh, gaddr rep, in
 {
     begin_session(dig, dh, 0, true, true, 0);
     tb_SFPutFile(p, prompt, name, dh, rep);
+    if (!rd8(rep + SFReply_good_off))
+        session_cancelled(true);
     end_session();
 }

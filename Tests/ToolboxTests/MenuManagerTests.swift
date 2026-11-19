@@ -117,6 +117,12 @@ extension BlueBox {
             let m = tb_NewPtr(2, false, true), r = tb_NewPtr(2, false, true)
             wr16(m, 130)
             #expect(tb_HMGetMenuResID(m, r) == 0 && rd16(r) == 1300)
+            // Show Balloons is off: no balloon is shown, and the Help
+            // Manager says so (Amy's Recipes tried again while told the
+            // balloon was aborted).
+            #expect(tb_HMGetBalloons() == 0)
+            #expect(tb_HMShowBalloon(msg, 0x0064_0064, 0, 0, 0, 0, 0) == -850)       // hmHelpDisabled
+            #expect(tb_HMShowMenuBalloon(1, 130, 0, 0, 0x0064_0064, 0, 0, 0, 0) == -850)
         }
 
         @Test func insertDeleteAndStyle() {

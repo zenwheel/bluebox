@@ -102,5 +102,28 @@ extension BlueBox {
             #expect(tb_RetrievePictInfo(Int32(bitPattern: rd32(id)), info, 0) == -11001)  // pictInfoIDErr
             tb_DisposeGWorld(rd32(gw))
         }
+
+        /// A 32-bit DirectBitsRect of packType 2 holds three bytes a pixel
+        /// (the alpha left out), not four: reading four a pixel lost the
+        /// opcodes after it (BarWare's About picture, then read for ever
+        /// through its getPicProc as clip regions).
+        @Test func packType2PixelsAreThreeBytes() {
+            launchTestApp()
+            _ = initToolbox()
+            let header = cat(be16(0), be16(0), be16(0), be16(20), be16(20), be16(0x0011), be16(0x02FF),
+                             be16(0x0C00), be16(-1 & 0xFFFF), be16(0xFFFF), [UInt8](repeating: 0, count: 20))
+            let bits = cat(be16(0x009A), be32(0xFF), be16(0x8008), be16(0), be16(0), be16(2), be16(2),
+                           be16(0), be16(2), be32(0), be32(72 << 16), be32(72 << 16),
+                           be16(16), be16(32), be16(3), be16(8), be32(0), be32(0), be32(0),
+                           be16(0), be16(0), be16(2), be16(2), be16(0), be16(0), be16(2), be16(2), be16(0),
+                           [0xFF, 0, 0, 0, 0xFF, 0], [0, 0, 0xFF, 0xFF, 0, 0])
+            let tail = cat(be16(0x0031), be16(4), be16(4), be16(8), be16(8), be16(0x00FF))
+            let pic = handle(cat(header, bits, tail))
+            let info = tb_NewPtr(Int32(PictInfo_SIZEOF), false, true)
+            #expect(tb_GetPictInfo(pic, info, Self.returnColorTable, 4, 1, 0) == 0)
+            #expect(rd16(info + PictInfo_depth_off) == 32 && long(info, PictInfo_pixMapCount_off) == 1)
+            #expect(long(info, PictInfo_rectCount_off) == 1) // the paintRect after the pixels, read as one
+            #expect(long(info, PictInfo_uniqueColors_off) == 3)
+        }
     }
 }

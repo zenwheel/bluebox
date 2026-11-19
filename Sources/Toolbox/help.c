@@ -2,20 +2,23 @@
  * to add to. */
 #include "tb_internal.h"
 
-enum { hmHelpManagerNotInited = -855, hmBalloonAborted = -853 };
+enum { hmHelpDisabled = -850, hmHelpManagerNotInited = -855, hmBalloonAborted = -853 };
 
 int8_t tb_HMGetBalloons(void) { return 0; }
 int16_t tb_HMSetBalloons(int8_t flag) { return noErr; }
 int8_t tb_HMIsBalloon(void) { return 0; }
+/* With Show Balloons off, the Help Manager shows none: hmHelpDisabled,
+ * which programs that put up their own balloons stop on (Amy's Recipes
+ * tried again for ever while it was told the balloon was aborted). */
 int16_t tb_HMShowBalloon(gaddr msgp, uint32_t tip, gaddr alternaterectp, gaddr tipprocptr, int16_t proc, int16_t variant,
                          int16_t method)
 {
-    return hmBalloonAborted;
+    return tb_HMGetBalloons() ? hmBalloonAborted : hmHelpDisabled;
 }
 int16_t tb_HMShowMenuBalloon(int16_t item, int16_t menuid, int32_t flags, int32_t itemreserved, uint32_t tip,
                              gaddr alternaterectp, gaddr tipproc, int16_t proc, int16_t variant)
 {
-    return hmBalloonAborted;
+    return tb_HMGetBalloons() ? hmBalloonAborted : hmHelpDisabled;
 }
 int16_t tb_HMRemoveBalloon(void) { return noErr; }
 /* The system's Help menu (kHMHelpMenuID), to which programs append their

@@ -391,6 +391,35 @@ extension BlueBox {
             GrafPort_set_grafProcs(rd32(port), 0)
         }
 
+        /// A getPicProc that hands the reading back to StdGetPic (after
+        /// checking memory, as HomePublisher's does) gets the picture's own
+        /// bytes, on from where the last read left off; StdGetPic gave
+        /// zeros, and the picture was read for ever.
+        @Test func stdGetPicReadsOnThroughThePicture() {
+            _ = offscreen()
+            tb_EraseRect(rect(0, 0, 40, 40))
+            let port = tb_NewPtr(4, false, true)
+            tb_GetPort(port)
+            let data: [UInt8] = [0, 22, 0, 0, 0, 0, 0, 20, 0, 20, 0x11, 0x01, 0x31, 0, 2, 0, 2, 0, 10, 0, 10, 0xFF]
+            let pic = tb_NewHandle(Int32(data.count), false, true)
+            for (i, b) in data.enumerated() { wr8(rd32(pic) + UInt32(i), b) }
+            let code = tb_NewPtr(2, false, false)
+            wr16(code, 0xACEE) // StdGetPic, popping the call's return address
+            let procs = tb_NewPtr(Int32(CQDProcs_SIZEOF), false, true)
+            tb_SetStdCProcs(procs)
+            wr32(procs + UInt32(QDProcs_getPicProc_off), code)
+            GrafPort_set_grafProcs(rd32(port), procs)
+            tb_DrawPicture(pic, rect(0, 0, 20, 20))
+            #expect(black(5, 5))
+            #expect(!black(15, 15))
+            GrafPort_set_grafProcs(rd32(port), 0)
+            // Outside DrawPicture it has nothing to read.
+            let buf = tb_NewPtr(4, false, false)
+            wr32(buf, 0xFFFF_FFFF)
+            tb_StdGetPic(buf, 4)
+            #expect(rd32(buf) == 0)
+        }
+
         /// A comment with data, in a handle of its own.
         func commentData(_ bytes: [UInt8]) -> UInt32 {
             let h = tb_NewHandle(Int32(bytes.count), false, true)

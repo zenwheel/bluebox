@@ -13,15 +13,31 @@
 
 enum { bold = 1, italic = 2, underline = 4, outline = 8, shadow = 16, condense = 32, extend = 64 };
 
+/* A strike as drawn at the port's size: when the family has no strike of
+ * that size, the Font Manager scales the nearest one (num/den, the size
+ * asked for over the strike's), widths and metrics with it; the glyphs too
+ * unless FScaleDisable is set, when the strike's glyphs are drawn as they
+ * are at the scaled widths (gnum/gden 1). The metrics here are scaled;
+ * rows is the strike's own height, for reading its image. */
 typedef struct {
     gaddr rec;          /* FontRec in guest memory (locked while used) */
     gaddr handle;
     int first, last;
     int kern, ascent, descent, leading, widmax;
-    int height, row_words;
+    int height, rows, row_words;
     gaddr image, loc, ow;
     int face;
+    int num, den, gnum, gden;
 } strike;
+
+/* v scaled by num/den, rounded to the nearest pixel (halves away from 0). */
+static int scale_by(int v, int num, int den)
+{
+    if (num == den)
+        return v;
+    int64_t t = (int64_t)v * num;
+    return (int)(t >= 0 ? (t + den / 2) / den : -((-t + den / 2) / den));
+}
 
 static int16_t rd16s(gaddr a) { return (int16_t)rd16(a); }
 
@@ -57,14 +73,14 @@ int qd_classic_family(const char *name)
 }
 
 /* The font resource ID for a family and size, through its FOND if any. */
-static gaddr font_resource_of(int family, int size);
+static gaddr font_resource_of(int family, int size, int *got);
 
-static gaddr font_resource_lookup(int family, int size)
+static gaddr font_resource_lookup(int family, int size, int *got)
 {
-    gaddr h = font_resource_of(family, size);
+    gaddr h = font_resource_of(family, size, got);
     int k;
     if (!h && (k = classic_index(family)) >= 0 && classic_fonts[k].drawn_as != family)
-        h = font_resource_of(classic_fonts[k].drawn_as, size);
+        h = font_resource_of(classic_fonts[k].drawn_as, size, got);
     return h;
 }
 
@@ -73,7 +89,7 @@ static gaddr font_resource_lookup(int family, int size)
  * its caret measured the line again for every character inserted, and
  * Sirtet's Keys text took minutes).  An answer holds while the resource
  * files in use are the same and its handle still holds the same data. */
-static gaddr font_resource(int family, int size)
+static gaddr font_resource(int family, int size, int *got)
 {
     enum { NFONTS = 16 };
     static struct {
@@ -83,15 +99,20 @@ static gaddr font_resource(int family, int size)
         gaddr h, data;
     } fonts[NFONTS];
     static int next;
+    static int sizes[NFONTS]; /* each one's strike's own size */
     uint32_t top = rd32(LM_TopMapHndl);
     uint16_t cur = rd16(LM_CurMap);
     for (int i = 0; i < NFONTS; i++)
         if (fonts[i].h && fonts[i].family == family && fonts[i].size == size && fonts[i].top == top &&
-            fonts[i].cur == cur && rd32(fonts[i].h) == fonts[i].data)
+            fonts[i].cur == cur && rd32(fonts[i].h) == fonts[i].data) {
+            *got = sizes[i] > 0 ? sizes[i] : size;
             return fonts[i].h;
-    gaddr h = font_resource_lookup(family, size);
+        }
+    *got = size;
+    gaddr h = font_resource_lookup(family, size, got);
     if (h && rd32(h)) {
         int i = next++ % NFONTS;
+        sizes[i] = *got;
         fonts[i].family = family;
         fonts[i].size = size;
         fonts[i].top = top;
@@ -102,14 +123,15 @@ static gaddr font_resource(int family, int size)
     return h;
 }
 
-static gaddr font_resource_of(int family, int size)
+/* The family's strike nearest the size, and that strike's size in *got. */
+static gaddr font_resource_of(int family, int size, int *got)
 {
     gaddr fond = tb_GetResource((int32_t)fourcc("FOND"), (int16_t)family);
     if (fond && rd32(fond)) {
         gaddr f = rd32(fond);
         gaddr assoc = f + FamRec_SIZEOF;
         int n = (int)rd16(assoc) + 1;
-        int best_id = -1, best_d = 1 << 30;
+        int best_id = -1, best_d = 1 << 30, best_size = size;
         for (int i = 0; i < n; i++) {
             gaddr e = assoc + 2 + (uint32_t)i * 6;
             int fsize = rd16s(e), fstyle = rd16s(e + 2), fid = rd16s(e + 4);
@@ -119,17 +141,21 @@ static gaddr font_resource_of(int family, int size)
             if (d < best_d) {
                 best_d = d;
                 best_id = fid;
+                best_size = fsize;
             }
         }
         if (best_id >= 0) {
             gaddr h = tb_GetResource((int32_t)fourcc("NFNT"), (int16_t)best_id);
             if (!h)
                 h = tb_GetResource((int32_t)fourcc("FONT"), (int16_t)best_id);
-            if (h && rd32(h))
+            if (h && rd32(h)) {
+                *got = best_size;
                 return h;
+            }
         }
     }
     gaddr h = tb_GetResource((int32_t)fourcc("FONT"), (int16_t)(family * 128 + size));
+    *got = size;
     return h && rd32(h) ? h : 0;
 }
 
@@ -155,9 +181,10 @@ static bool load_strike(gaddr port, strike *s)
     port_font(port, &family, &size, &face);
     uint8_t saved = rd8(LM_ResLoad);
     wr8(LM_ResLoad, 1);
-    gaddr h = font_resource(family, size);
-    if (!h && family != rd16s(LM_SysFontFam))
-        h = font_resource(rd16s(LM_SysFontFam), 12); /* fall back to the system font */
+    int got = size;
+    gaddr h = font_resource(family, size, &got);
+    if (!h && family != rd16s(LM_SysFontFam)) /* fall back to the system font */
+        h = font_resource(rd16s(LM_SysFontFam), size, &got);
     wr8(LM_ResLoad, saved);
     memset(s, 0, sizeof *s);
     s->face = face;
@@ -166,21 +193,31 @@ static bool load_strike(gaddr port, strike *s)
     gaddr f = rd32(h);
     s->handle = h;
     s->rec = f;
+    s->num = s->den = s->gnum = s->gden = 1;
+    if (got > 0 && got != size) {
+        s->num = size;
+        s->den = got;
+        if (!rd8(LM_FScaleDisable)) {
+            s->gnum = size;
+            s->gden = got;
+        }
+    }
     s->first = rd16s(f + 2);
     s->last = rd16s(f + 4);
-    s->widmax = rd16s(f + 6);
     s->kern = rd16s(f + 8);
     int ndescent = rd16s(f + 10);
-    s->height = rd16s(f + 14);
+    s->rows = rd16s(f + 14);
     uint32_t owtloc = rd16(f + 16);
     if (ndescent > 0) /* NFNT: high word of owTLoc */
         owtloc |= (uint32_t)ndescent << 16;
-    s->ascent = rd16s(f + 18);
-    s->descent = rd16s(f + 20);
-    s->leading = rd16s(f + 22);
+    s->widmax = scale_by(rd16s(f + 6), s->num, s->den);
+    s->height = scale_by(s->rows, s->gnum, s->gden);
+    s->ascent = scale_by(rd16s(f + 18), s->gnum, s->gden);
+    s->descent = scale_by(rd16s(f + 20), s->gnum, s->gden);
+    s->leading = scale_by(rd16s(f + 22), s->gnum, s->gden);
     s->row_words = rd16s(f + 24);
     s->image = f + 26;
-    s->loc = s->image + (uint32_t)s->row_words * 2u * (uint32_t)s->height;
+    s->loc = s->image + (uint32_t)s->row_words * 2u * (uint32_t)s->rows;
     s->ow = f + 16 + owtloc * 2;
     return true;
 }
@@ -222,7 +259,7 @@ static int char_advance(const strike *s, uint8_t c, gaddr port)
         return 7;
     int off, w;
     glyph_index(s, c, &off, &w);
-    int adv = w + style_extra(s->face);
+    int adv = scale_by(w, s->num, s->den) + style_extra(s->face);
     if (c == ' ') {
         int32_t sp = (int32_t)GrafPort_spExtra(port);
         adv += (sp + 0x8000) >> 16;
@@ -276,16 +313,24 @@ static void draw_glyph(const strike *s, int idx, int x, int top, const pixdst *d
         return;
     gaddr row_base = s->image;
     uint32_t row_bytes = (uint32_t)s->row_words * 2;
+    /* A scaled strike: each pixel drawn from the one of the strike's it
+     * falls in. */
+    int dw = scale_by(gw, s->gnum, s->gden);
     for (int r = 0; r < s->height; r++) {
         int y = top + r;
         int n;
         const int16_t *xs = hrgn_row(clip, y, &n);
         if (!xs)
             continue;
+        int sr = (int)((int64_t)r * s->gden / s->gnum);
+        if (sr >= s->rows)
+            sr = s->rows - 1;
         int italic_shift = (s->face & italic) ? (s->ascent - r) / 2 : 0;
-        for (int k = 0; k < gw; k++) {
-            int col = c0 + k;
-            int bit = (rd8(row_base + (uint32_t)r * row_bytes + (uint32_t)(col >> 3)) >> (7 - (col & 7))) & 1;
+        for (int k = 0; k < dw; k++) {
+            int col = c0 + (int)((int64_t)k * s->gden / s->gnum);
+            if (col >= c1)
+                col = c1 - 1;
+            int bit = (rd8(row_base + (uint32_t)sr * row_bytes + (uint32_t)(col >> 3)) >> (7 - (col & 7))) & 1;
             int xx = x + k + italic_shift;
             bool in = false;
             for (int j = 0; j < n; j += 2)
@@ -360,6 +405,7 @@ void qd_draw_text(gaddr port, const uint8_t *text, int len)
         for (int i = 0; i < len; i++) {
             int off, w;
             int idx = glyph_index(&s, text[i], &off, &w);
+            off = scale_by(off, s.gnum, s.gden);
             at += char_step(&s, text[i], port, extra);
             int adv = start + pen_offset(at) - x;
             if ((mode & 3) == 0 && adv > 0)
@@ -670,8 +716,10 @@ gaddr tb_FMSwapFont(gaddr fmip)
     } else {
         wr16(fmoutput + FMOutput_errNum_off, (uint16_t)-1);
     }
-    wr32(fmoutput + FMOutput_numer_off, 0x00010001);
-    wr32(fmoutput + FMOutput_denom_off, 0x00010001);
+    /* The stretch QuickDraw gives the strike's glyphs (v, h). */
+    int gn = ok ? s.gnum : 1, gd = ok ? s.gden : 1;
+    wr32(fmoutput + FMOutput_numer_off, (uint32_t)gn << 16 | (uint16_t)gn);
+    wr32(fmoutput + FMOutput_denom_off, (uint32_t)gd << 16 | (uint16_t)gd);
     return fmoutput;
 }
 

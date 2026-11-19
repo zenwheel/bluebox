@@ -1825,6 +1825,12 @@ void tb_SelectWindow(gaddr w)
 {
     if (!w)
         return;
+    /* The active window already: nothing happens, its highlighting left
+     * as it is and no activate event made.  (Monitor unhighlights its
+     * window and selects it again on every activate event; each made
+     * another, for ever.) */
+    if (active_window && same_window(w, active_window) && same_window(w, front_active()))
+        return;
     bring_to_front(w);
     update_active();
 }

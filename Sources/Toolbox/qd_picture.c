@@ -314,6 +314,18 @@ static void decode_pixels(reader *r, const pixinfo *pi, bool packed, image *img)
                     continue;
                 }
             }
+            if (pi->pack_type == 2 && rb >= 8) {
+                /* The alpha left out: three bytes a pixel, not run-length
+                 * coded (the row's bytes, three quarters of them). */
+                read_row(r, row, rb / 4 * 3, 1, false);
+                for (int x = 0; x < img->w && x * 3 + 2 < rb / 4 * 3; x++) {
+                    px[x * 4] = row[x * 3];
+                    px[x * 4 + 1] = row[x * 3 + 1];
+                    px[x * 4 + 2] = row[x * 3 + 2];
+                    px[x * 4 + 3] = 255;
+                }
+                continue;
+            }
             read_row(r, row, rb, 1, false);
             for (int x = 0; x < img->w && x * 4 + 3 < rb; x++) {
                 px[x * 4] = row[x * 4 + 1];
@@ -923,6 +935,12 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
 /* ---------------------------------------------------------------------- */
 /* Traps */
 
+/* The picture DrawPicture is reading through the program's getPicProc,
+ * and how far: StdGetPic, which such a proc may call to do the reading
+ * (HomePublisher's checks memory first), reads on from there. */
+static gaddr get_pic;
+static uint32_t get_pic_at;
+
 void tb_DrawPicture(gaddr pic, gaddr dst)
 {
     gaddr port = qd_port();
@@ -955,6 +973,12 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
         }
         if (spool)
             r = (reader){ spool, spool, false, get, spool, spool + (uint32_t)cap };
+    }
+    gaddr outer_pic = get_pic;
+    uint32_t outer_at = get_pic_at;
+    if (spool) {
+        get_pic = pic;
+        get_pic_at = 10;
     }
     /* Version: 0x11 0x01 (v1) or 0x0011 0x02FF (v2). */
     need(&r, 2);
@@ -1013,6 +1037,8 @@ void tb_DrawPicture(gaddr pic, gaddr dst)
     GrafPort_set_clipRgn(port, clip);
     if (spool)
         tb_DisposePtr(spool);
+    get_pic = outer_pic;
+    get_pic_at = outer_at;
     tb_HSetState(pic, state);
 }
 
@@ -1047,8 +1073,22 @@ void tb_StdComment(int16_t kind, int16_t size, gaddr data)
         qd_rec_comment(port, kind, size, data);
 }
 
-/* Pictures are read and written whole here, so these only move bytes. */
-void tb_StdGetPic(gaddr dp, int16_t bc) { gmemset(dp, 0, (uint32_t)(bc > 0 ? bc : 0)); }
+/* StdGetPic reads on through the picture being drawn (zeros past its end
+ * or with none); pictures are recorded whole here, so StdPutPic does
+ * nothing. */
+void tb_StdGetPic(gaddr dp, int16_t bc)
+{
+    uint32_t n = bc > 0 ? (uint32_t)bc : 0, have = 0;
+    if (get_pic && rd32(get_pic)) {
+        uint32_t size = (uint32_t)tb_GetHandleSize(get_pic);
+        have = get_pic_at < size ? size - get_pic_at : 0;
+        if (have > n)
+            have = n;
+        gmemcpy(dp, rd32(get_pic) + get_pic_at, have);
+        get_pic_at += n;
+    }
+    gmemset(dp + have, 0, n - have);
+}
 void tb_StdPutPic(gaddr sp, int16_t bc) {}
 
 /* ---------------------------------------------------------------------- */

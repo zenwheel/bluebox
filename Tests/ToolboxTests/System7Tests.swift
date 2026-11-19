@@ -933,6 +933,44 @@ extension BlueBox {
             #expect(pstring(at: reply + UInt32(SFReply_fName_off)) == "old style.txt")
         }
 
+        /// A dialog hook (68k) that notes each item it is called with,
+        /// in turn, at *cursor, and answers it unchanged.
+        func noteHook(_ old: Bool, _ cursor: UInt32) -> UInt32 {
+            var words: [UInt16] = [0x205F]                      // return address
+            if !old { words += [0x588F] }                       // yourDataPtr
+            words += [0x225F, 0x301F, 0x3E80,                   // dialog, item; the answer
+                      0x2279, UInt16(cursor >> 16), UInt16(cursor & 0xFFFF), 0x32C0,
+                      0x23C9, UInt16(cursor >> 16), UInt16(cursor & 0xFFFF), 0x4ED0]
+            let code = tb_NewPtr(Int32(words.count * 2), false, false)
+            for (i, w) in words.enumerated() { wr16(code + UInt32(i * 2), w) }
+            return code
+        }
+
+        /// Cancelled, the dialog's hook sees the Cancel button's item before
+        /// its last call, as ModalDialog would have given it: 3 in the old
+        /// Get dialog, 2 in the others (HDT Extn Config quits from its hook
+        /// there, and asked again for ever without it).
+        @Test func theHookSeesCancel() {
+            launchTestApp()
+            _ = initToolbox()
+            machine_set_file_handler(nil, nil)
+            let log = tb_NewPtr(64, true, true), cursor = tb_NewPtr(4, false, true)
+            func items() -> [Int16] {
+                (0..<Int((rd32(cursor) - log) / 2)).map { Int16(bitPattern: rd16(log + UInt32($0 * 2))) }
+            }
+            wr32(cursor, log)
+            let old = tb_NewPtr(Int32(SFReply_SIZEOF), false, true)
+            tb_SFPGetFile(0x0050_0050, 0, 0, -1, 0, noteHook(true, cursor), old, -4000, 0)
+            #expect(items() == [-1, 3, -2])
+            wr32(cursor, log)
+            tb_SFPPutFile(0x0050_0050, 0, guestString("x"), noteHook(true, cursor), old, -3999, 0)
+            #expect(items() == [-1, 2, -2])
+            wr32(cursor, log)
+            let reply = tb_NewPtr(Int32(StandardFileReply_SIZEOF), false, true)
+            tb_CustomGetFile(0, -1, 0, reply, 0, 0xFFFF_FFFF, noteHook(false, cursor), 0, 0, 0, 0)
+            #expect(items() == [-1, 2, -2])
+        }
+
         @Test func cancelAndNoHostLeaveGoodFalse() {
             launchTestApp()
             let reply = tb_NewPtr(Int32(StandardFileReply_SIZEOF), false, true)
@@ -944,6 +982,45 @@ extension BlueBox {
             Self.path = ""
             tb_StandardGetFile(0, -1, 0, reply)
             #expect(rd8(reply) == 0)
+        }
+    }
+
+    @Suite struct WorkingDirectories {
+        /// PBGetWDInfo with an index counts through the working directories
+        /// open, each one's refnum said, and answers nsvErr past the last
+        /// (FuturePaint counted them so, for ever).
+        @Test func getWDInfoIndexesTheOpenOnes() {
+            let dir = launchTestApp()
+            for name in ["one", "two"] {
+                try? FileManager.default.createDirectory(at: dir.appendingPathComponent(name), withIntermediateDirectories: true)
+            }
+            let pb = tb_NewPtr(Int32(WDPBRec_SIZEOF), true, true), name = tb_NewPtr(256, true, true)
+            var opened: [Int16] = []
+            for path in ["one", "two"] {
+                let spec = tb_NewPtr(Int32(FSSpec_SIZEOF), false, true)
+                fm_spec_for_path(dir.appendingPathComponent(path).path, spec)
+                gmemset(pb, 0, UInt32(WDPBRec_SIZEOF))
+                wr16(pb + UInt32(IOParam_ioVRefNum_off), rd16(spec))
+                wr32(pb + UInt32(WDPBRec_ioWDDirID_off), rd32(spec + 2))
+                wr32(pb + UInt32(IOParam_ioNamePtr_off), spec + 6)
+                #expect(tb_PBOpenWD(pb, false) == 0)
+                opened.append(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioVRefNum_off))))
+            }
+            var seen: [Int16] = []
+            for i in 1...64 {
+                gmemset(pb, 0, UInt32(WDPBRec_SIZEOF))
+                wr32(pb + UInt32(IOParam_ioNamePtr_off), name)
+                wr16(pb + UInt32(WDPBRec_ioWDIndex_off), UInt16(i))
+                let err = tb_PBGetWDInfo(pb, false)
+                if err != 0 {
+                    #expect(err == -35) // nsvErr
+                    break
+                }
+                seen.append(Int16(bitPattern: rd16(pb + UInt32(IOParam_ioVRefNum_off))))
+                #expect(rd32(pb + UInt32(WDPBRec_ioWDDirID_off)) > 2)
+            }
+            #expect(opened.allSatisfy { seen.contains($0) })
+            #expect(seen.count < 64)
         }
     }
 

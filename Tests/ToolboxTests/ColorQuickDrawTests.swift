@@ -186,6 +186,27 @@ extension BlueBox {
             #expect(mm_check_zone(zone))
         }
 
+        /// InitCPort leaves alone a port that is not a colour one: BeeBop
+        /// 2000 passes NIL, and the port written at 0 put white over the
+        /// A-line vector, so its next trap jumped to FFFFFFFF.
+        @Test func initCPortLeavesAnOldPortAlone() {
+            launchTestApp()
+            _ = initToolbox()
+            let vectors = (0..<0x40).map { rd8(UInt32($0)) }
+            tb_InitCPort(0)
+            #expect((0..<0x40).map { rd8(UInt32($0)) } == vectors)
+            let port = tb_NewPtr(108, true, true)
+            tb_InitCPort(port)
+            #expect(rd32(port + 2) == 0 && rd16(port + 6) == 0) // nothing written
+            let saved = tb_NewPtr(4, false, true)
+            tb_GetPort(saved)
+            tb_OpenCPort(port)
+            #expect(rd16(port + 6) == 0xC000)
+            #expect(rd16(port + 36) == 0 && rd16(port + 42) == 0xFFFF) // black on white
+            tb_SetPort(rd32(saved))
+            tb_CloseCPort(port)
+        }
+
         /// The world's pixels can need the heap purged and compacted, which
         /// moves the pixmap NewGWorld has just made: it is described where it
         /// is afterwards, and the heap stays whole (PixelToy's full-screen

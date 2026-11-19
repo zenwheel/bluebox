@@ -675,7 +675,15 @@ static uint32_t stack_space(int i)
     if (g_ppc_mode) {
         uint32_t sp = cur ? g_ppc.gpr[1] : threads[i].ctx ? threads[i].ctx->ppc.gpr[1] : 0;
         gaddr base = threads[i].stack ? threads[i].stack : cfm_ppc_stack_lo;
-        return sp > base ? sp - base : 0;
+        uint32_t space = sp > base ? sp - base : 0;
+        /* The main stack shared the partition with the heap: ApplLimit
+         * raised above where it was takes as much from the stack (Abalone
+         * gives the heap all but 64K of its stack, a K at a time, until
+         * StackSpace says so, and went on for ever while it didn't). */
+        gaddr limit = rd32(LM_ApplLimit);
+        if (!threads[i].stack && cfm_ppc_appl_limit && limit > cfm_ppc_appl_limit)
+            space = space > limit - cfm_ppc_appl_limit ? space - (limit - cfm_ppc_appl_limit) : 0;
+        return space;
     }
     uint32_t sp = cur ? g_cpu->a[7] : threads[i].ctx ? threads[i].ctx->cpu.a[7] : 0;
     if (!threads[i].stack) {
