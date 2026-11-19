@@ -7,6 +7,7 @@
 void legacy_reset(void)
 {
     startmgr_reset();
+    sleep_reset();
     scsi_reset();
     dbaccess_reset();
     xpp_reset();

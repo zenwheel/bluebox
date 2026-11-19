@@ -468,6 +468,7 @@ void raw_MemoryDispatch(cpu68k *c, uint16_t tw);
  * *a0_out is A0 after. */
 int16_t memory_dispatch(uint16_t sel, uint32_t a0, uint32_t a1, uint32_t *a0_out);
 void raw_IdleUpdate(cpu68k *c, uint16_t tw);
+void raw_Sleep(cpu68k *c, uint16_t tw); /* power.c: _Sleep and the sleep queue, $A08A */
 void raw_ComponentDispatch(cpu68k *c, uint16_t tw);
 void raw_CodeFragmentDispatch(cpu68k *c, uint16_t tw); /* cfm.c: the CFM for 68k code on a Power Mac */
 void cfm_install_68k_trap(void); /* _CodeFragmentDispatch there, as on a Power Mac */

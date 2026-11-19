@@ -168,7 +168,11 @@ void gestalt_init(void)
     gestalt_set(fourcc("help"), 0x1);         /* Help Manager present */
     gestalt_set(fourcc("alis"), 0x1);         /* Alias Manager present */
     gestalt_set(fourcc("fold"), 0x1);         /* Folder Manager (FindFolder) present */
-    gestalt_set(fourcc("fs  "), 0x2);         /* FSSpec calls */
+    /* gestaltFSAttr: the FSSpec calls, and every _HFSDispatch selector
+     * (gestaltFullExtFSDispatching), PBHGetVolParms among them.  Installer
+     * VISE asks PBHGetVolParms for PBCatSearch only with that bit, and its
+     * searching without CatSearch is a segment its installers leave out. */
+    gestalt_set(fourcc("fs  "), 0x3);
     gestalt_set(fourcc("stdf"), 0x1);         /* Standard File 5.8 calls */
     /* The Icon Utilities, with Icon Services' 48-pixel icons, 32-bit
      * colour and 8-bit masks, and Icon Services itself (IconServicesLib). */

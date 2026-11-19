@@ -383,6 +383,31 @@ extension BlueBox {
             tb_CloseResFile(rn)
         }
 
+        /// OpenResFile (fsCurPerm) of a file already open opens a read-only
+        /// map of its own on top of the chain and makes it current
+        /// (Technote 1120's "complete success"): Nisus Compact reopens a
+        /// module, keeps it as its current file and loads segments from a
+        /// module opened after the first.
+        @Test func reopeningWithOpenResFileAddsAMapOnTop() {
+            launchTestApp()
+            let a = pname("Module A"), b = pname("Module B")
+            tb_CreateResFile(a)
+            tb_CreateResFile(b)
+            let ra = tb_OpenResFile(a)
+            let rb = tb_OpenResFile(b)
+            #expect(ra > 0 && rb > 0)
+            tb_AddResource(handle([7]), type, 11, 0)       // in B, above A
+            tb_UpdateResFile(rb)
+            let again = tb_OpenResFile(a)
+            #expect(again > 0 && again != ra && tb_ResError() == 0)
+            #expect(tb_CurResFile() == again)
+            #expect(tb_GetResource(type, 11) != 0)         // B is below the new map
+            tb_CloseResFile(again)
+            #expect(tb_CurResFile() == rb)
+            tb_CloseResFile(rb)
+            tb_CloseResFile(ra)
+        }
+
         /// A file kept as its AppleDouble sidecar alone (an empty data fork,
         /// as archives give "Icon\r") resolves as an alias file to itself:
         /// ShatterBat walks its folder that way and stopped at its icon file.
@@ -454,6 +479,10 @@ extension BlueBox {
             defer { tb_SetTrapAddress(original, 0xA0FC, true, false) }
             let h = tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128)
             #expect(h != 0 && rd8(rd32(h)) == 11 && rd8(rd32(h) + 1) == 20)
+            // Loaded already, it goes through the stub again, as the ROM's
+            // CheckLoad does: AutoDoubler's patch expands a CODE 1 that was
+            // preloaded before it was installed.
+            #expect(tb_GetResource(Int32(bitPattern: fourCC("TEST")), 128) == h && rd8(rd32(h)) == 12)
         }
     }
 

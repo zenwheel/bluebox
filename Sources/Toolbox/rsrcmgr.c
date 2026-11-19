@@ -423,11 +423,11 @@ static gaddr load_ref(gaddr maph, uint32_t r, uint32_t type)
     gaddr stub = rd32(OS_TRAP_TABLE + 0xFC * 4);
     if (!c || native_index_for(stub) >= 0)
         return load_ref_direct(maph, r, type);
-    gaddr h = rd32(mp_of(maph) + r + 8);
-    if (h && rd32(h)) { /* already loaded: the stub isn't consulted */
-        set_res_err(noErr);
-        return h;
-    }
+    /* Consulted for a resource already loaded too, as the ROM's CheckLoad
+     * is (it tests the master pointer itself): a self-expanding program's
+     * patch expands the CODE 1 that was preloaded, still packed, before it
+     * was installed (AutoDoubler's, in Norton Utilities 3 and Symantec's
+     * updaters). */
     uint32_t d[8], a[8];
     memcpy(d, c->d, sizeof d);
     memcpy(a, c->a, sizeof a);
@@ -998,16 +998,26 @@ void tb_CloseResFile(int16_t rn)
 }
 
 
-/* Open a file's resource fork.  Already open: the Resource Manager returns
- * the existing refnum and makes that map the current one (Technote 1120's
- * "partial success"; ChordLab opens its preferences again and reads them
- * with Get1Resource), except for a read-only open (fsRdPerm), which gets
- * an access path and map of its own (Squark opens itself read-only and
- * closes that again: the application's own map must stay). */
+/* Open a file's resource fork.  Already open, Technote 1120's table (which
+ * corrects Inside Macintosh): asked for writing (fsWrPerm, fsRdWrPerm), the
+ * Resource Manager returns the existing refnum and makes that map the
+ * current one ("partial success"; ChordLab opens its preferences again
+ * with fsRdWrPerm and reads them with Get1Resource); asked with fsCurPerm
+ * (OpenResFile) or fsRdPerm, it opens a read-only access path with a map
+ * of its own on top of the chain, made current ("complete success").
+ * Squark opens itself read-only and closes that copy, so the application's
+ * own map must stay; Nisus Compact opens its modules again with
+ * OpenResFile, keeps that map as its current file and loads segments from
+ * the modules opened after it. */
 static int16_t open_path_perm(const char *path, int perm)
 {
-    for (int i = 0; i < MAX_RESFILES && perm != 1; i++)
+    bool open_already = false;
+    for (int i = 0; i < MAX_RESFILES; i++)
         if (files[i].used && files[i].path && !strcmp(files[i].path, path)) {
+            if (perm == 0 || perm == 1) {
+                open_already = true;
+                break;
+            }
             wr16(LM_CurMap, (uint16_t)files[i].refnum);
             set_res_err(noErr);
             return files[i].refnum;
@@ -1033,7 +1043,7 @@ static int16_t open_path_perm(const char *path, int perm)
     int16_t rn = rm_open_host_file(path, mf.rsrc, (uint32_t)mf.rsrc_len, false);
     mac_file_free(&mf);
     if (rn >= 0)
-        file_for(rn)->rd_perm = perm == 1;
+        file_for(rn)->rd_perm = perm == 1 || open_already;
     if (rn < 0 && !rd16(LM_ResErr))
         set_res_err(-39); /* eofErr: no resource fork */
     return rn;

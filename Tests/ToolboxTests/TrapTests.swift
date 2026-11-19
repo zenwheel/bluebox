@@ -127,6 +127,56 @@ extension BlueBox {
             #expect(tb_Gestalt(Int32(bitPattern: otan), &answer) == 0 && answer & 1 != 0)
         }
 
+        /// Gestalt 'fs  ' says every _HFSDispatch call is there
+        /// (gestaltFullExtFSDispatching) as well as the FSSpec calls: Installer
+        /// VISE asks PBHGetVolParms for PBCatSearch only then, and its
+        /// installers leave out the search used without CatSearch.
+        @Test func fileSystemAttributesHaveFullDispatching() {
+            var answer: UInt32 = 0
+            #expect(tb_Gestalt(Int32(bitPattern: fourCC("fs  ")), &answer) == 0)
+            #expect(answer & 0x3 == 0x3)
+        }
+
+        /// _SleepQInstall ($A28A) queues a procedure and _Sleep ($A08A) asks
+        /// and tells it as a portable's Power Manager does; this machine
+        /// wakes at once (EZVision installs one, Nisus Writer's Sleep item
+        /// calls _Sleep).  _SleepQRemove ($A48A) takes it out again.
+        @Test func sleepQueueIsAskedAndTold() {
+            let rec = tb_NewPtr(12, false, true)
+            let log = tb_NewPtr(16, false, true)
+            let proc = tb_NewPtr(32, false, false)
+            // The procedure: the messages in turn at log, then D0 = 0.
+            let words: [UInt16] = [
+                0x43F9, hi(log), lo(log),       // LEA log,A1
+                0xD2D1,                         // ADDA.W (A1),A1
+                0x5489,                         // ADDQ.L #2,A1
+                0x3280,                         // MOVE.W D0,(A1)
+                0x43F9, hi(log), lo(log),       // LEA log,A1
+                0x5451,                         // ADDQ.W #2,(A1)
+                0x7000,                         // MOVEQ #0,D0
+                0x4E75,                         // RTS
+            ]
+            for (i, w) in words.enumerated() { wr16(proc + UInt32(i * 2), w) }
+            wr16(rec + 4, 16)                   // sleepQType
+            wr32(rec + 6, proc)
+            let reason = run([
+                0x207C, hi(rec), lo(rec),       // MOVEA.L #rec,A0
+                0xA28A,                         // _SleepQInstall
+                0x7001,                         // MOVEQ #sleepRequest,D0
+                0xA08A,                         // _Sleep
+                0x2E00,                         // MOVE.L D0,D7
+                0x207C, hi(rec), lo(rec),
+                0xA48A,                         // _SleepQRemove
+                0x7002,                         // MOVEQ #sleepDemand,D0
+                0xA08A,                         // _Sleep: no one to tell
+                0xA9F4,
+            ])
+            #expect(reason == "ExitToShell")
+            #expect(cpu.pointee.d.7 == 0)
+            #expect(rd16(log) == 6)             // request, demand, wake-up
+            #expect(rd16(log + 2) == 1 && rd16(log + 4) == 2 && rd16(log + 6) == 3)
+        }
+
         @Test func osTrapPreservesRegistersAndReturnsInA0() {
             let reason = run([
                 0x227C, 0x1234, 0x5678,         // MOVEA.L #$12345678,A1

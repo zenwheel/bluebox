@@ -17,6 +17,10 @@ void legacy_reset(void);
 /* power.c: the Start Manager's parameter RAM */
 void startmgr_reset(void);
 void startmgr_get_video(gaddr pb);
+/* power.c: the sleep queue, empty again */
+void sleep_reset(void);
+void tb_SleepQInstall(gaddr q);
+void tb_SleepQRemove(gaddr q);
 
 /* scsi.c */
 void scsi_reset(void);

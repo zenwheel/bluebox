@@ -1458,8 +1458,18 @@ static void g_IPCListPortsAsync(ppc_cpu *c)
     RETURN((int32_t)r);
 }
 
-/* SleepQInstall / SleepQRemove(SleepQRecPtr): the machine never sleeps,
- * so the sleep queue's procedures are never called. */
+/* SleepQInstall / SleepQRemove(SleepQRecPtr): the sleep queue 68k code's
+ * _Sleep tells (power.c). */
+static void g_SleepQInstall(ppc_cpu *c)
+{
+    tb_SleepQInstall(R(0));
+    c->pc = c->lr;
+}
+static void g_SleepQRemove(ppc_cpu *c)
+{
+    tb_SleepQRemove(R(0));
+    c->pc = c->lr;
+}
 
 /* Anti-aliased text (Appearance's font smoothing): the setting is kept;
  * QuickDraw here draws the fonts' bitmaps either way. */
@@ -1579,7 +1589,7 @@ const ppc_export lib_exports[] = {
     { "DrvrInstall", g_DrvrInstall }, { "BuildBDS", g_BuildBDS }, { "WriteLocation", g_WriteLocation },
     { "LwrText", g_LowerText }, { "IPCListPortsAsync", g_IPCListPortsAsync },
     { "DebuggerLockMemory", g_noErr }, { "DebuggerUnlockMemory", g_noErr },
-    { "SleepQInstall", g_nothing }, { "SleepQRemove", g_nothing },
+    { "SleepQInstall", g_SleepQInstall }, { "SleepQRemove", g_SleepQRemove },
     { "SetAntiAliasedTextEnabled", g_SetAntiAliasedTextEnabled },
     { "IsAntiAliasedTextEnabled", g_IsAntiAliasedTextEnabled }, { "IsCmdChar", g_IsCmdChar },
     { "getfnum", cs_getfnum }, { "getfontname", cs_getfontname },

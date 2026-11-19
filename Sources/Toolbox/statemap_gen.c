@@ -3070,6 +3070,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/power.c", "def_startup", 4, 0, 0xd5b69b2ef423c61e },
     { "Toolbox/power.c", "def_video", 2, 0, 0x91c57a453530b3da },
     { "Toolbox/power.c", "scsi_timeout", 2, 0, 0x7579d81a04189ef3 },
+    { "Toolbox/power.c", "sleep_queue", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/ppc_glue.c", "done_index", 2, 0, 0x6fce0cd82d5f48e1 },
     { "Toolbox/ppc_glue.c", "pb_scratch.pb", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/ppc_glue.c", "saved", 2176, 0, 0xb66eb0b5ac4c7f6c },
@@ -3591,7 +3592,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1709;
+const unsigned hb_nstatics = 1710;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
