@@ -1205,9 +1205,6 @@ static void g_SerSetBrk(ppc_cpu *c) { ser_call(c, ser_pb(c, 12), false, 0, 0); }
 static void g_SerClrBrk(ppc_cpu *c) { ser_call(c, ser_pb(c, 11), false, 0, 0); }
 static void g_SerGetBuf(ppc_cpu *c) { ser_call(c, ser_pb(c, 2), true, R(1), 4); }
 static void g_SerStatus(ppc_cpu *c) { ser_call(c, ser_pb(c, 8), true, R(1), 6); }
-/* The AppleTalk calls: AppleTalk isn't there. */
-static void g_noAppleTalk(ppc_cpu *c) { RETURN((uint32_t)(int32_t)-98); }
-
 /* AppleTalk's preferred calls: (pb, async) as a Control call on .MPP or
  * .ATP.  Without the trap layer, an answer given at once is written to
  * ioResult and an asynchronous call's completion routine queued here. */
@@ -1235,6 +1232,14 @@ MPP_CALL(PSetSelfSend, 256) MPP_CALL(PGetAppleTalkInfo, 258) MPP_CALL(PATalkClos
 ATP_CALL(POpenATPSkt, 254) ATP_CALL(PCloseATPSkt, 250) ATP_CALL(PSendRequest, 255) ATP_CALL(PNSendRequest, 248)
 ATP_CALL(PGetRequest, 253) ATP_CALL(PSendResponse, 252) ATP_CALL(PAddResponse, 251) ATP_CALL(PRelTCB, 256)
 ATP_CALL(PRelRspCB, 249) ATP_CALL(PKillSendReq, 258) ATP_CALL(PKillGetReq, 257)
+
+/* GetMyZone(xppPB, async): ZIP's xCall on .XPP, subcode zipGetMyZone. */
+static void g_GetMyZone(ppc_cpu *c)
+{
+    if (R(0))
+        wr16(R(0) + 28, 7); /* xppSubCode */
+    at_call(c, -41, 246);
+}
 
 /* A Str32 packed after another (NBP's entity names). */
 static uint32_t put_str32(gaddr dst, gaddr s)
@@ -1346,7 +1351,7 @@ static void g_GetNodeAddress(ppc_cpu *c)
     if (R(0))
         wr16(R(0), at_node());
     if (R(1))
-        wr16(R(1), 0);
+        wr16(R(1), at_network());
     RETURN(0);
 }
 static void g_IsMPPOpen(ppc_cpu *c) { RETURN(at_opened() ? 1 : 0); }
@@ -1645,7 +1650,7 @@ const ppc_export lib_exports[] = {
     { "SerReset", g_SerReset }, { "SerHShake", g_SerHShake }, { "SerSetBuf", g_SerSetBuf }, { "SerSetBrk", g_SerSetBrk },
     { "SerClrBrk", g_SerClrBrk }, { "SerGetBuf", g_SerGetBuf }, { "SerStatus", g_SerStatus },
     /* AppleTalk and the PPC Toolbox's network side */
-    { "GetMyZone", g_noAppleTalk },
+    { "GetMyZone", g_GetMyZone },
     { "NBPSetNTE", g_NBPSetNTE }, { "NBPSetEntity", g_NBPSetEntity }, { "NBPExtract", g_NBPExtract },
     { "BuildDDPwds", g_BuildDDPwds }, { "BuildBDSBuffer", g_BuildBDSBuffer }, { "GetNodeAddress", g_GetNodeAddress },
     { "IsMPPOpen", g_IsMPPOpen }, { "IsATPOpen", g_IsMPPOpen }, { "MPPOpen", g_MPPOpen },

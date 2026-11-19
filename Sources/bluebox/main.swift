@@ -187,7 +187,18 @@ func usage() -> Never {
                      emulators and routers that speak LToUDP), lan:IF (the local
                      network through interface IF, e.g. lan:en0), bridge:IF (EtherTalk
                      on wired interface IF, with real Macs, file servers and routers;
-                     asks for an administrator password when AppleTalk opens) or off
+                     asks for an administrator password when AppleTalk opens),
+                     router:HOST[:PORT] (LToUDP by unicast to a router's hub, port
+                     1955 by default, where multicast doesn't pass: a Tailscale
+                     tailnet, the internet; HOST a name or an IPv4 or IPv6 address)
+                     or off.
+                     With a router on the network (TashRouter, jrouter ...) its zones
+                     and the networks beyond it are reached
+          --appletalk-zone Z  the zone to be in on EtherTalk when the router has
+                     several (the AppleTalk control panel's choice; default: the router's)
+          --ltoudp G:P  LToUDP's multicast group and port (default 239.192.76.84:1954),
+                     for a second LocalTalk network on one interface, such as a router's
+                     other port
           --modem-port S, --printer-port S  what a serial port connects to: modem (a
                      Hayes modem, the modem port's default: ATDT host:port dials over
                      TCP), modem:PORT (one that also answers calls to PORT),
@@ -279,6 +290,13 @@ func usage() -> Never {
           the AppleShare servers, LaserWriters and host printers to choose from,
           Save as PDF and its folder, the user name and AppleTalk on or off, kept
           as the default settings (printer, print-folder, user-name, appletalk).
+      bluebox appletalk [--appletalk A] [--ltoudp G:P] [--appletalk-zone Z] [info] [zones]
+                [lookup OBJECT:TYPE[@ZONE]]... [register OBJECT:TYPE] [--for SECONDS]
+          AppleTalk on its own, no program running: this node's network and node,
+          the router and this zone (info), the router's zones (zones), who answers
+          an NBP lookup (= for any object or type), and a name of this node's for
+          others to look up, answered for SECONDS (30).  Without actions, info and
+          zones.  For checking a network and its router before running programs.
       bluebox send [--to PID|SIGNATURE] [--no-wait] odoc|pdoc FILE... | oapp | quit | dosc TEXT | CLASSID [TEXT]
           Send an Apple Event to a running classic application (the only one, or the
           one --to names by process ID or creator): open or print documents, open,
@@ -298,7 +316,8 @@ func usage() -> Never {
     \(exportUsage())
       bluebox set <app>|--default [depth 1|2|4|8|16|32|default]
                 [cpu 68000|68020|68030|68040|ppc|default] [fpu none|68881|68882|68040|default]
-                [addressing 24|32|default] [timing fast|accurate|default] [scale 1|1.5|2|3|default] [appletalk local|lan|lan:IF|bridge:IF|off|default]
+                [addressing 24|32|default] [timing fast|accurate|default] [scale 1|1.5|2|3|default] [appletalk local|lan|lan:IF|bridge:IF|router:HOST[:PORT]|off|default]
+                [appletalk-zone Z|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
                 [printer panel|pdf|host:NAME|laserwriter:NAME@ZONE|driver:FILE|default] [user-name NAME|default]
                 [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
@@ -687,6 +706,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var screenSize: (Int32, Int32)? // --screen's
     var appearanceSet = false // by --appearance or the settings
     var appletalkGiven = false
+    var appletalkZoneGiven = false
     var portsGiven = Set<Int32>()
     var screenshot: String?
     var screenDepth: Int32?
@@ -884,8 +904,16 @@ func runCommand(_ args: [String], resume: String? = nil) {
             if i < args.count, args[i].hasPrefix("bridge:"), isWireless(String(args[i].dropFirst(7))) {
                 fail("--appletalk: \(args[i].dropFirst(7)) is Wi-Fi, which drops EtherTalk; bridge onto a wired interface")
             }
-            guard i < args.count, machine_set_appletalk(args[i]) else { fail("--appletalk expects local, lan, lan:IF (e.g. lan:en0), bridge:IF or off") }
+            guard i < args.count, machine_set_appletalk(args[i]) else { fail("--appletalk expects local, lan, lan:IF (e.g. lan:en0), bridge:IF, router:HOST[:PORT] or off") }
             appletalkGiven = true
+        case "--appletalk-zone":
+            i += 1
+            guard i < args.count else { fail("--appletalk-zone expects a zone's name") }
+            machine_set_appletalk_zone(args[i])
+            appletalkZoneGiven = true
+        case "--ltoudp":
+            i += 1
+            guard i < args.count, machine_set_ltoudp(args[i]) else { fail("--ltoudp expects GROUP:PORT, GROUP or :PORT (an IPv4 multicast group)") }
         case "--modem-port", "--printer-port":
             let port: Int32 = args[i] == "--modem-port" ? 0 : 1
             i += 1
@@ -1097,7 +1125,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
     if !appletalkGiven, let a = saved.appletalk, a.hasPrefix("bridge:"), isWireless(String(a.dropFirst(7))) {
         eprint("bluebox: appletalk \"\(a)\" (from the settings) is Wi-Fi, which drops EtherTalk; AppleTalk is on this Mac only\n")
     } else if !appletalkGiven, let a = saved.appletalk, !machine_set_appletalk(a) {
-        eprint("bluebox: appletalk \"\(a)\" (from the settings) is not local, lan, lan:IF, bridge:IF or off\n")
+        eprint("bluebox: appletalk \"\(a)\" (from the settings) is not local, lan, lan:IF, bridge:IF, router:HOST[:PORT] or off\n")
+    }
+    if !appletalkZoneGiven, let z = saved.appletalkZone {
+        machine_set_appletalk_zone(z)
     }
     for (port, spec) in [(Int32(0), saved.modemPort), (Int32(1), saved.printerPort)] where !portsGiven.contains(port) {
         if let spec, !machine_set_serial(port, spec) {
@@ -2230,6 +2261,7 @@ case "browser":
 #endif
 case "set": setCommand(rest)
 case "chooser": chooserCommand(rest)
+case "appletalk": appletalkCommand(rest)
 case "rsrc": rsrcCommand(rest)
 case "inspect": inspectCommand(rest)
 case "exports": exportsCommand(rest)

@@ -2771,17 +2771,33 @@ static void nsp_DoModalJoinDialog(ppc_cpu *c)
     uint8_t type[32];
     get_str31(type, R(0));
     if (type[0] && appletalk_enabled() && at_open() == noErr) { /* the games on AppleTalk */
-        uint8_t packed[40];
-        uint8_t any[2] = { 1, '=' };
-        int n = pack_entity(packed, any, type);
-        int h = at_nbp_start(packed, n, 3, 250, nbp_found, &f);
+        /* This zone, and with a router every zone it knows (the first
+         * few), looked in at once, as NetSprocket's dialog had a zone list. */
+        static char zones[8][33];
+        int nz = at_zone_list(zones, 7);
+        if (!nz)
+            strcpy(zones[nz++], "*");
+        int h[8] = { 0 };
+        for (int z = 0; z < nz; z++) {
+            uint8_t packed[80];
+            uint8_t any[2] = { 1, '=' };
+            int n = pack_entity(packed, any, type);
+            size_t zl = strlen(zones[z]);
+            packed[n - 2] = (uint8_t)zl; /* the zone in place of "*" */
+            memcpy(packed + n - 1, zones[z], zl);
+            h[z] = at_nbp_start(packed, n - 1 + (int)zl, 3, 250, nbp_found, &f);
+        }
         uint64_t until = mono_ms() + 1000;
-        while (h && at_nbp_busy(h) && mono_ms() < until) {
+        for (bool busy = true; busy && mono_ms() < until;) {
             struct timespec ts = { 0, 2000000 };
             nanosleep(&ts, NULL);
             appletalk_poll();
+            busy = false;
+            for (int z = 0; z < nz; z++)
+                busy |= h[z] && at_nbp_busy(h[z]);
         }
-        at_nbp_stop(h);
+        for (int z = 0; z < nz; z++)
+            at_nbp_stop(h[z]);
     }
     char msg[1024], where[256], label[256] = "";
     if (R(1)) {

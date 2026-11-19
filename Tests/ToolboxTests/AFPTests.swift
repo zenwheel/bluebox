@@ -321,7 +321,7 @@ final class ASPStub {
         setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &one, socklen_t(4))
         var sa = sockaddr_in()
         sa.sin_family = sa_family_t(AF_INET)
-        sa.sin_port = in_port_t(1954).bigEndian
+        sa.sin_port = in_port_t(testLToUDPPort).bigEndian
         withUnsafePointer(to: &sa) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { _ = bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
         var mr = ip_mreq()
         mr.imr_multiaddr.s_addr = inet_addr("239.192.76.84")
@@ -348,7 +348,7 @@ final class ASPStub {
         let f = be32(sender) + [dst, node, 1, UInt8(len >> 8), UInt8(len & 0xFF), dskt, sskt, type] + data
         var to = sockaddr_in()
         to.sin_family = sa_family_t(AF_INET)
-        to.sin_port = in_port_t(1954).bigEndian
+        to.sin_port = in_port_t(testLToUDPPort).bigEndian
         to.sin_addr.s_addr = inet_addr("239.192.76.84")
         _ = f.withUnsafeBytes { p in
             withUnsafePointer(to: &to) {
@@ -475,7 +475,7 @@ final class ASPStub {
         let f = be32(sender) + llap
         var to = sockaddr_in()
         to.sin_family = sa_family_t(AF_INET)
-        to.sin_port = in_port_t(1954).bigEndian
+        to.sin_port = in_port_t(testLToUDPPort).bigEndian
         to.sin_addr.s_addr = inet_addr("239.192.76.84")
         _ = f.withUnsafeBytes { p in
             withUnsafePointer(to: &to) {

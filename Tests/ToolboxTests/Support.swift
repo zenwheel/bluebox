@@ -81,7 +81,13 @@ let testSystemFolder = tempDir().appendingPathComponent("System Folder").path
 let testDisk = tempDir().appendingPathComponent("Macintosh HD").path
 nonisolated(unsafe) var testDiskPath = testDisk
 
+/// LToUDP on a port of this test process's own, so that other copies of
+/// Blue Box and AppleTalk routers on this host (the standard port, 1954)
+/// don't take part in the tests' networks.
+let testLToUDPPort = UInt16(20000 + Int(getpid()) % 20000)
+
 func bootMachine() {
+    #expect(machine_set_ltoudp(":\(testLToUDPPort)"))
     machine_set_disk(testDiskPath)
     machine_set_system_folder(testSystemFolder)
     #expect(machine_boot(false))

@@ -991,15 +991,22 @@ extern const native_driver print_driver; /* .Print: the Printing Manager's low-l
 extern const native_driver mpp_driver, atp_driver, xpp_driver, dsp_driver;
 void adsp_poll(void);
 void adsp_reset(void);
-/* For ATP (appletalk_atp.c): DDP on the node appletalk.c runs. */
-typedef void (*at_handler)(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len);
+/* For ATP (appletalk_atp.c): DDP on the node appletalk.c runs.  A node
+ * anywhere on the internet is its network << 8 | its node (at_peer);
+ * network 0 is this one, whatever its number. */
+typedef uint32_t at_peer;
+#define AT_PEER(net, node) ((at_peer)(uint16_t)(net) << 8 | (uint8_t)(node))
+#define AT_PEER_NET(p) ((uint16_t)((p) >> 8))
+#define AT_PEER_NODE(p) ((uint8_t)(p))
+bool at_same_peer(at_peer a, at_peer b); /* network 0 is this network */
+typedef void (*at_handler)(uint8_t skt, at_peer from, uint8_t sskt, uint8_t type, const uint8_t *data, int len);
 int16_t at_open(void); /* .MPP's open: the link and a node */
 void at_use(void);     /* a driver called: .MPP opened if it is not yet, as the system had it */
 bool at_opened(void);
 uint8_t at_node(void);
 int at_open_socket(int want, at_handler h);
 void at_close_socket(int s);
-void at_send_ddp(uint8_t dnode, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n);
+void at_send_ddp(at_peer to, uint8_t dskt, uint8_t sskt, uint8_t type, const uint8_t *data, int n);
 void at_complete(gaddr pb, int16_t r);
 /* A driver's synchronous wait for its call (ATP's, ADSP's): what the
  * poll finishes it with; at the program's own level it gives up for a
@@ -1037,30 +1044,35 @@ typedef struct {
     int len[8];
     uint32_t user[8];
 } atp_reply;
-typedef void (*atp_request_fn)(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+typedef void (*atp_request_fn)(void *ctx, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user,
                                const uint8_t *data, int len);
 int atp_host_open(atp_request_fn fn, void *ctx); /* a dynamic socket, or 0 */
 void atp_host_close(int skt);
-int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+int16_t atp_host_request(int skt, at_peer node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
                          int nresp, int timeout_ms, int retries, atp_reply *out);
 /* The same without waiting: out->result stays ioInProgress until it ends. */
-int16_t atp_host_start(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+int16_t atp_host_start(int skt, at_peer node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
                        int nresp, int timeout_ms, int retries, atp_reply *out);
-bool atp_host_xo(int skt, uint8_t node, uint8_t rskt, uint16_t tid); /* a request heard was exactly-once */
+bool atp_host_xo(int skt, at_peer node, uint8_t rskt, uint16_t tid); /* a request heard was exactly-once */
 void atp_host_cancel(atp_reply *out);
-void atp_host_respond(int skt, uint8_t node, uint8_t rskt, uint16_t tid, int count, const uint8_t (*data)[578],
+void atp_host_respond(int skt, at_peer node, uint8_t rskt, uint16_t tid, int count, const uint8_t (*data)[578],
                       const int *lens, const uint32_t *users);
-void atp_host_send_once(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len);
+void atp_host_send_once(int skt, at_peer node, uint8_t dskt, uint32_t user, const uint8_t *data, int len);
 /* EtherTalk (ethertalk.c), for --appletalk bridge:IF. */
 bool et_open(const char *ifname);
 int et_fd(void);
 int et_heard(void); /* AppleTalk frames heard from other machines */
 const char *at_bridge_interface(void);
 void et_close(void);
-void et_send(const uint8_t *llap, int len);
+void et_send(const uint8_t *llap, int len, uint16_t hop_net); /* llap[0]: the next hop's node */
 int et_receive(uint8_t *llap, int cap);
 void et_acquire(uint32_t seed, uint16_t *net, uint8_t *node);
+bool et_range(uint16_t *lo, uint16_t *hi);         /* the cable range a router gave, if one did */
+void et_set_range(uint16_t lo, uint16_t hi);       /* the range GetNetInfo's reply gave */
+void et_set_zone_multicast(const uint8_t mc[6]);   /* this zone's address (NULL: broadcasts only) */
 void et_use_fake(int fd, const uint8_t hw[6]);
+void at_use_fake(int fd); /* tests: LToUDP's datagrams on a socket pair */
+void at_set_keepalive_ms(int ms); /* tests: the router hub's keepalive interval */
 bool et_interface_mac(const char *ifname, uint8_t out[6]);
 bool host_interface_mac(const char *ifname, uint8_t out[6]); /* hostmac.c: IOKit's */
 void atp_reset(void);
@@ -1074,8 +1086,15 @@ bool appletalk_in_use(void); /* sockets of the program's open */
 /* ZIP: the zones a router knows (0 with none), and this node's zone ("*"
  * without a router). */
 int at_zone_list(char (*names)[33], int max);
+int at_local_zones(char (*names)[33], int max); /* this network's zones (extended networks: several) */
 void at_my_zone(char out[33]);
 bool at_router(uint16_t *net, uint8_t *node); /* the router RTMP heard, if any */
+void at_router_wait(void);                    /* none heard: asked for (RTMP request), a moment waited */
+bool at_known_zone(char out[33]);             /* this node's zone, when GetNetInfo or GetMyZone told it */
+void at_set_known_zone(const char *zone);
+void at_cable_range(uint16_t *lo, uint16_t *hi); /* this network's range (LocalTalk: its one number) */
+void at_zone_multicast(const uint8_t *zone, int len, uint8_t out[6]); /* EtherTalk's address for a zone */
+const char *appletalk_wanted_zone(void); /* machine_set_appletalk_zone's */
 /* The Serial Driver (serial.c): .AIn, .AOut, .BIn and .BOut. */
 extern const native_driver serial_drivers[4];
 void serial_poll(void);

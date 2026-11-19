@@ -169,6 +169,8 @@ cat > "$app/Contents/Info.plist" <<EOF
 	<string>Classic programs record sound through the microphone.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>The Blue Box Browser asks the Finder to empty the Trash when macOS keeps the Trash's contents from it.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Classic programs use AppleTalk and file sharing to find and reach other Macs, printers, file servers and AppleTalk routers on the local network.</string>
 	<key>NSServices</key>
 	<array>
 		<dict>

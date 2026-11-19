@@ -15,8 +15,8 @@
  * the end that closes and the other both see T_ORDREL.
  *
  * NBP names are "name:type@zone" strings (a backslash escapes ':', '@'
- * and itself); an NBPEntity is the three as Pascal strings, packed.  The
- * network has no router (zone "*"), as for the drivers.
+ * and itself); an NBPEntity is the three as Pascal strings, packed.  Zones
+ * come from the router (appletalk_atp.c's ZIP), "*" when there is none.
  */
 #include <ctype.h>
 #include <stdio.h>
@@ -55,7 +55,8 @@ enum { errOpenDenied = -1273, errOpening = -1277 };
 
 /* A datagram waiting for OTRcvUData. */
 typedef struct {
-    uint8_t node, skt, type;
+    uint8_t skt, type;
+    at_peer node; /* the sender's network and node */
     int len;
     uint8_t data[DDP_MAX];
 } dgram;
@@ -64,7 +65,8 @@ typedef struct {
 typedef struct {
     bool used, taken;
     uint32_t seq;
-    uint8_t node, rskt;
+    at_peer node;
+    uint8_t rskt;
     uint16_t tid;
     bool xo;
     uint32_t user;
@@ -202,6 +204,12 @@ static void netbuf_ddp(gaddr nb, uint16_t net, uint8_t node, uint8_t skt, uint8_
         return;
     put_ddp(rd32(nb + 8), net, node, skt, type);
     wr32(nb + 4, DDP_ADDR);
+}
+
+/* A node's address (network 0: this network's number) in a TNetbuf. */
+static void netbuf_peer(gaddr nb, at_peer node, uint8_t skt, uint8_t type)
+{
+    netbuf_ddp(nb, AT_PEER_NET(node) ? AT_PEER_NET(node) : at_network(), AT_PEER_NODE(node), skt, type);
 }
 
 /* "name:type@zone" to a packed entity; false if a part was cut short. */
@@ -465,7 +473,7 @@ static provider *ddp_owner(uint8_t skt)
     return NULL;
 }
 
-static void ddp_in(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len)
+static void ddp_in(uint8_t skt, at_peer snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len)
 {
     provider *p = ddp_owner(skt);
     if (!p || (p->at->ddptype && p->at->ddptype != type) || p->at->nq >= MAX_DGRAMS)
@@ -478,7 +486,7 @@ static void ddp_in(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const
     memcpy(d->data, data, (size_t)d->len);
 }
 
-static void atp_heard(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+static void atp_heard(void *ctx, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user,
                       const uint8_t *data, int len)
 {
     provider *p = ctx;
@@ -658,18 +666,18 @@ static void unbind(provider *p)
 }
 
 /* For ot_session.c */
-bool ota_address(provider *p, gaddr buf, uint32_t len, uint8_t *node, uint8_t *skt)
+bool ota_address(provider *p, gaddr buf, uint32_t len, at_peer *peer, uint8_t *skt)
 {
     at_addr a;
     uint16_t net;
-    if (!get_addr(buf, len, &a) || !resolve(p, &a, &net, node, skt))
+    uint8_t node;
+    if (!get_addr(buf, len, &a) || !resolve(p, &a, &net, &node, skt))
         return false;
-    if (!*node)
-        *node = at_node();
+    *peer = AT_PEER(net, node ? node : at_node());
     return true;
 }
 
-void ota_netbuf_ddp(gaddr nb, uint8_t node, uint8_t skt) { netbuf_ddp(nb, at_network(), node, skt, 0); }
+void ota_netbuf_ddp(gaddr nb, at_peer node, uint8_t skt) { netbuf_peer(nb, node, skt, 0); }
 
 uint8_t ota_socket(provider *p) { return p->at ? p->at->skt : 0; }
 
@@ -757,7 +765,7 @@ void ota_SndUData(ppc_cpu *c, provider *p)
     uint8_t data[DDP_MAX];
     ot_data_get(data, rd32(ud + 32), rd32(ud + 28), n);
     uint8_t type = to.type ? to.type : a->ddptype;
-    at_send_ddp(node ? node : at_node(), skt, a->skt, type, data, (int)n);
+    at_send_ddp(AT_PEER(net, node ? node : at_node()), skt, a->skt, type, data, (int)n);
     appletalk_poll();
     RETURN(kOTNoError);
 }
@@ -788,7 +796,7 @@ void ota_RcvUData(ppc_cpu *c, provider *p)
         if (n < (uint32_t)d.len && R(2))
             wr32(R(2), T_MORE); /* the rest is dropped */
         wr32(ud + 4, 0);
-        netbuf_ddp(ud, at_network(), d.node, d.skt, d.type);
+        netbuf_peer(ud, d.node, d.skt, d.type);
         wr32(ud + 16, 0); /* no options */
     }
     if (!a->nq)
@@ -850,7 +858,7 @@ static void ota_SndURequest(ppc_cpu *c)
     ot_option_long(p, 0xFFFF, 0x601, &retries);
     ot_option_long(p, 0xFFFF, 0x602, &interval);
     ot_option_long(p, 0x41545020 /* ATK_ATP */, 0x2110, &replies);
-    int16_t e = atp_host_start(a->skt, node ? node : at_node(), skt, user, data + 4, n > 4 ? (int)n - 4 : 0,
+    int16_t e = atp_host_start(a->skt, AT_PEER(net, node ? node : at_node()), skt, user, data + 4, n > 4 ? (int)n - 4 : 0,
                                (R(2) & T_ACKNOWLEDGED) != 0, replies >= 1 && replies <= 8 ? (int)replies : 8,
                                interval ? (int)interval : 2000, retries > 255 ? 255 : (int)retries, &q->reply);
     if (e != noErr) {
@@ -980,7 +988,7 @@ static void ota_RcvURequest(ppc_cpu *c)
         gput(rd32(req + 32), data, k);
         wr32(req + 28, k);
         wr32(req + 4, 0);
-        netbuf_ddp(req, at_network(), h->node, h->rskt, DDP_ATP);
+        netbuf_peer(req, h->node, h->rskt, DDP_ATP);
         wr32(req + 16, 0);
         wr32(req + 36, h->seq);
     }
@@ -1697,7 +1705,7 @@ static void ota_LookupName(ppc_cpu *c)
 static void verify_answer(void *ctx, const uint8_t *t, int len)
 {
     provider *p = ctx;
-    if (p->used && p->at && t[2] != at_node())
+    if (p->used && p->at && !at_same_peer(AT_PEER(t[0] << 8 | t[1], t[2]), AT_PEER(0, at_node())))
         p->at->dup = true;
     (void)len;
 }
@@ -2045,38 +2053,62 @@ static void ota_AsyncOpenMapper(ppc_cpu *c)
         return;                                                    \
     }
 
-/* Zone names in a TNetbuf, Pascal strings one after another. */
-static int32_t put_zones(gaddr nb, int count)
+/* Zone names in a TNetbuf, Pascal strings one after another: as many as
+ * fit (kOTBufferOverflowErr when not all do). */
+static int32_t put_zones(gaddr nb, char (*names)[33], int count)
 {
     if (!nb)
         return kOTBadDataErr;
-    static const uint8_t star[2] = { 1, '*' };
-    if (count && rd32(nb) < 2)
-        return kOTBufferOverflowErr;
-    if (count)
-        gput(rd32(nb + 8), star, 2);
-    wr32(nb + 4, count ? 2 : 0);
-    return kOTNoError;
+    uint32_t cap = rd32(nb), used = 0;
+    gaddr buf = rd32(nb + 8);
+    int32_t r = kOTNoError;
+    for (int i = 0; i < count; i++) {
+        uint32_t l = (uint32_t)strlen(names[i]);
+        if (used + 1 + l > cap) {
+            r = kOTBufferOverflowErr;
+            break;
+        }
+        wr8(buf + used, (uint8_t)l);
+        gput(buf + used + 1, names[i], l);
+        used += 1 + l;
+    }
+    wr32(nb + 4, used);
+    return r;
 }
 
-/* OTATalkGetMyZone(ref, zone TNetbuf *): "*", there being no router. */
+/* OTATalkGetMyZone(ref, zone TNetbuf *): this node's zone ("*" without a
+ * router), as ZIP's GetMyZone or GetNetInfo told it. */
 static void ota_GetMyZone(ppc_cpu *c)
 {
     SERVICES(p);
-    ot_complete(c, p, T_GETMYZONECOMPLETE, put_zones(R(1), 1), R(1));
+    static char zone[1][33];
+    at_my_zone(zone[0]);
+    ot_complete(c, p, T_GETMYZONECOMPLETE, put_zones(R(1), zone, 1), R(1));
 }
 
-/* OTATalkGetLocalZones and OTATalkGetZoneList: the one zone. */
+/* OTATalkGetLocalZones and OTATalkGetZoneList: the router's lists; with
+ * no router, this network's one zone "*". */
+static void zones_complete(ppc_cpu *c, provider *p, int event, bool local)
+{
+    static char names[256][33];
+    int n = local ? at_local_zones(names, 256) : at_zone_list(names, 256);
+    if (!n) {
+        at_my_zone(names[0]);
+        n = 1;
+    }
+    ot_complete(c, p, event, put_zones(R(1), names, n), R(1));
+}
+
 static void ota_GetLocalZones(ppc_cpu *c)
 {
     SERVICES(p);
-    ot_complete(c, p, T_GETLOCALZONESCOMPLETE, put_zones(R(1), 1), R(1));
+    zones_complete(c, p, T_GETLOCALZONESCOMPLETE, true);
 }
 
 static void ota_GetZoneList(ppc_cpu *c)
 {
     SERVICES(p);
-    ot_complete(c, p, T_GETZONELISTCOMPLETE, put_zones(R(1), 1), R(1));
+    zones_complete(c, p, T_GETZONELISTCOMPLETE, false);
 }
 
 /* OTATalkGetInfo(ref, info TNetbuf *): AppleTalkInfo is our address, the
@@ -2091,11 +2123,18 @@ static void ota_GetInfo(ppc_cpu *c)
     } else {
         gaddr info = rd32(nb + 8);
         bool extended = at_bridge_interface() != NULL;
+        uint16_t rnet = 0, lo, hi;
+        uint8_t rnode = 0;
+        bool router = at_router(&rnet, &rnode);
+        at_cable_range(&lo, &hi);
         put_ddp(info, at_network(), at_node(), 0, 0);
-        put_ddp(info + 8, 0, 0, 0, 0);
-        wr16(info + 16, extended ? at_network() : 0);
-        wr16(info + 18, extended ? at_network() : 0);
-        wr16(info + 20, extended ? 0x0005 : 0x0004); /* kATalkInfoIsExtended, kATalkInfoOneZone */
+        put_ddp(info + 8, rnet, rnode, 0, 0);
+        wr16(info + 16, extended ? lo : 0);
+        wr16(info + 18, extended ? hi : 0);
+        /* kATalkInfoIsExtended 1, kATalkInfoHasRouter 2, kATalkInfoOneZone 4 */
+        char zones[2][33];
+        bool one_zone = !router || !extended || at_local_zones(zones, 2) <= 1;
+        wr16(info + 20, (uint16_t)((extended ? 1 : 0) | (router ? 2 : 0) | (one_zone ? 4 : 0)));
         wr32(nb + 4, 22);
     }
     ot_complete(c, p, T_GETATALKINFOCOMPLETE, r, nb);

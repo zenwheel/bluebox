@@ -8,8 +8,9 @@
  * the response at the responder, for repeated requests, until the
  * requester's release (TRel) or the release timer.
  *
- * The network has no router, so ZIP's answers are those of a single
- * LocalTalk: this zone is "*", and there is no zone list.
+ * The other end may be on another network (through a router): its
+ * address is an at_peer, network and node.  ZIP's calls go to the router
+ * RTMP heard; without one, this zone is "*" and there is no zone list.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -48,7 +49,8 @@ typedef struct {
     gaddr pb;
     uint8_t skt;    /* the socket the request goes from */
     bool own_skt;   /* opened for it (sendRequest): closed after */
-    uint8_t node, dskt;
+    at_peer node;
+    uint8_t dskt;
     uint16_t tid;
     uint8_t bitmap, xo;
     int nbufs, got;
@@ -68,7 +70,9 @@ typedef struct {
 /* An XO response kept for repeated requests. */
 typedef struct {
     bool used;
-    uint8_t skt, node, rskt;
+    uint8_t skt;
+    at_peer node;
+    uint8_t rskt;
     uint16_t tid;
     int n;
     uint8_t pkt[8][8 + ATP_DATA];
@@ -78,7 +82,9 @@ typedef struct {
 
 /* Requests delivered lately, so a repeat isn't delivered again. */
 typedef struct {
-    uint8_t skt, node, rskt;
+    uint8_t skt;
+    at_peer node;
+    uint8_t rskt;
     uint16_t tid;
     bool xo;
     uint64_t when;
@@ -142,29 +148,41 @@ static void send_request(request *q)
 /* ---------------------------------------------------------------------- */
 /* Datagrams to ATP sockets */
 
-static bool filter_ok(uint8_t skt, uint8_t node, uint8_t rskt)
+static bool filter_ok(uint8_t skt, at_peer node, uint8_t rskt)
 {
     uint32_t f = filters[skt];
+    uint16_t fnet = (uint16_t)(f >> 16);
     uint8_t fnode = (uint8_t)(f >> 8), fskt = (uint8_t)f;
-    return (!fnode || fnode == node) && (!fskt || fskt == rskt);
+    uint16_t nnet = AT_PEER_NET(node) ? AT_PEER_NET(node) : at_network();
+    return (!fnet || fnet == nnet) && (!fnode || fnode == AT_PEER_NODE(node)) && (!fskt || fskt == rskt);
 }
 
-static seen *find_seen(uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid)
+/* A guest AddrBlock (network, node, socket): the node's address. */
+static at_peer peer_at(gaddr a) { return AT_PEER(rd16(a), rd8(a + 2)); }
+
+static void put_peer(gaddr a, at_peer p, uint8_t skt)
+{
+    wr16(a, AT_PEER_NET(p) ? AT_PEER_NET(p) : at_network());
+    wr8(a + 2, AT_PEER_NODE(p));
+    wr8(a + 3, skt);
+}
+
+static seen *find_seen(uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid)
 {
     for (int i = 0; i < nseen; i++)
-        if (seens[i].skt == skt && seens[i].node == node && seens[i].rskt == rskt && seens[i].tid == tid)
+        if (seens[i].skt == skt && at_same_peer(seens[i].node, node) && seens[i].rskt == rskt && seens[i].tid == tid)
             return &seens[i];
     return NULL;
 }
 
-static void got_request(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t *p, int len)
+static void got_request(uint8_t skt, at_peer node, uint8_t rskt, const uint8_t *p, int len)
 {
     uint16_t tid = (uint16_t)(p[2] << 8 | p[3]);
     /* A repeat of an XO request answered already: the missing responses
      * again, from the kept copy. */
     for (int i = 0; i < MAX_RSPS; i++) {
         response *r = &rsps[i];
-        if (r->used && r->skt == skt && r->node == node && r->rskt == rskt && r->tid == tid) {
+        if (r->used && r->skt == skt && at_same_peer(r->node, node) && r->rskt == rskt && r->tid == tid) {
             for (int k = 0; k < r->n; k++)
                 if (p[1] & (1 << k))
                     at_send_ddp(node, rskt, skt, DDP_ATP, r->pkt[k], r->len[k]);
@@ -194,9 +212,7 @@ static void got_request(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t *
             gput(rd32(pb + P_REQPTR), p + 8, (uint32_t)n);
         wr16(pb + P_REQLEN, (uint16_t)n);
         wr8(pb + P_FLAGS, (uint8_t)(p[0] & XO ? atpXOvalue : 0));
-        wr16(pb + P_ADDR, 0);
-        wr8(pb + P_ADDR + 2, node);
-        wr8(pb + P_ADDR + 3, rskt);
+        put_peer(pb + P_ADDR, node, rskt);
         wr8(pb + P_BITMAP, p[1]);
         wr16(pb + P_TRANSID, tid);
         wr32(pb + P_USERDATA, user_of(p));
@@ -209,12 +225,12 @@ static void got_request(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t *
     /* Nobody listening yet: the requester asks again. */
 }
 
-static void got_response(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t *p, int len)
+static void got_response(uint8_t skt, at_peer node, uint8_t rskt, const uint8_t *p, int len)
 {
     uint16_t tid = (uint16_t)(p[2] << 8 | p[3]);
     for (int i = 0; i < MAX_REQS; i++) {
         request *q = &reqs[i];
-        if (!q->used || q->skt != skt || q->tid != tid || q->node != node)
+        if (!q->used || q->skt != skt || q->tid != tid || !at_same_peer(q->node, node))
             continue;
         int seq = p[1];
         if (seq >= q->nbufs || !(q->bitmap & (1 << seq)))
@@ -253,15 +269,16 @@ static void got_response(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t 
     }
 }
 
-static void got_release(uint8_t skt, uint8_t node, uint8_t rskt, const uint8_t *p)
+static void got_release(uint8_t skt, at_peer node, uint8_t rskt, const uint8_t *p)
 {
     uint16_t tid = (uint16_t)(p[2] << 8 | p[3]);
     for (int i = 0; i < MAX_RSPS; i++)
-        if (rsps[i].used && rsps[i].skt == skt && rsps[i].node == node && rsps[i].rskt == rskt && rsps[i].tid == tid)
+        if (rsps[i].used && rsps[i].skt == skt && at_same_peer(rsps[i].node, node) && rsps[i].rskt == rskt &&
+            rsps[i].tid == tid)
             rsps[i].used = false;
 }
 
-static void atp_in(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len)
+static void atp_in(uint8_t skt, at_peer snode, uint8_t sskt, uint8_t type, const uint8_t *data, int len)
 {
     if (type != DDP_ATP || len < 8)
         return;
@@ -349,7 +366,7 @@ static int16_t start_request(gaddr pb, bool async, bool own)
     q->pb = pb;
     q->skt = (uint8_t)skt;
     q->own_skt = own;
-    q->node = rd8(pb + P_ADDR + 2);
+    q->node = peer_at(pb + P_ADDR);
     q->dskt = rd8(pb + P_ADDR + 3);
     q->tid = ++next_tid;
     q->nbufs = nbufs;
@@ -370,7 +387,8 @@ static int16_t start_request(gaddr pb, bool async, bool own)
     q->reqlen = 8 + n;
     wr16(pb + P_REQTID, q->tid);
     wr8(pb + P_NUMRESPS, 0);
-    LOGF(LOG_TRAPS, "  ATP request to node %u socket %u, TID %u, %d responses%s\n", q->node, q->dskt, q->tid, nbufs,
+    LOGF(LOG_TRAPS, "  ATP request to node %u.%u socket %u, TID %u, %d responses%s\n", AT_PEER_NET(q->node),
+         AT_PEER_NODE(q->node), q->dskt, q->tid, nbufs,
          q->xo ? ", exactly once" : "");
     send_request(q);
     q->next = now_ms() + q->timeout;
@@ -379,7 +397,7 @@ static int16_t start_request(gaddr pb, bool async, bool own)
 
 /* A transaction's responses (count of them, the last with EOM), kept for
  * repeats of the request when it was exactly-once. */
-static void respond(uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint8_t eom, int count,
+static void respond(uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint8_t eom, int count,
                     const uint8_t (*data)[ATP_DATA], const int *lens, const uint32_t *users)
 {
     seen *s = find_seen(skt, node, rskt, tid);
@@ -410,7 +428,8 @@ static int16_t send_response(gaddr pb, bool add)
     int skt = rd8(pb + P_SOCKET);
     if (!atp_sockets[skt])
         return badATPSkt;
-    uint8_t node = rd8(pb + P_ADDR + 2), rskt = rd8(pb + P_ADDR + 3);
+    at_peer node = peer_at(pb + P_ADDR);
+    uint8_t rskt = rd8(pb + P_ADDR + 3);
     uint16_t tid = rd16(pb + P_TRANSID);
     uint8_t eom = rd8(pb + P_FLAGS) & atpEOMvalue ? EOM : 0;
     if (add) { /* one response, from reqPointer */
@@ -501,20 +520,22 @@ static int16_t atp_control(gaddr pb, bool async)
     case addResponse: return send_response(pb, true);
     case relRspCB: {
         int s = rd8(pb + P_SOCKET);
-        uint8_t node = rd8(pb + P_ADDR + 2), rskt = rd8(pb + P_ADDR + 3);
+        at_peer node = peer_at(pb + P_ADDR);
+        uint8_t rskt = rd8(pb + P_ADDR + 3);
         uint16_t tid = rd16(pb + P_TRANSID);
         for (int i = 0; i < MAX_RSPS; i++)
-            if (rsps[i].used && rsps[i].skt == s && rsps[i].node == node && rsps[i].rskt == rskt && rsps[i].tid == tid) {
+            if (rsps[i].used && rsps[i].skt == s && at_same_peer(rsps[i].node, node) && rsps[i].rskt == rskt &&
+                rsps[i].tid == tid) {
                 rsps[i].used = false;
                 return noErr;
             }
         return cbNotFound;
     }
     case relTCB: {
-        uint8_t node = rd8(pb + P_ADDR + 2);
+        at_peer node = peer_at(pb + P_ADDR);
         uint16_t tid = rd16(pb + P_TRANSID);
         for (int i = 0; i < MAX_REQS; i++)
-            if (reqs[i].used && reqs[i].node == node && reqs[i].tid == tid) {
+            if (reqs[i].used && at_same_peer(reqs[i].node, node) && reqs[i].tid == tid) {
                 end_request(&reqs[i], reqAborted);
                 return noErr;
             }
@@ -540,20 +561,23 @@ static int16_t atp_open(gaddr pb) { return at_open(); }
 const native_driver atp_driver = { ".ATP", 10, atp_open, NULL, atp_control, NULL, NULL, NULL, NULL };
 
 /* ---------------------------------------------------------------------- */
-/* .XPP: ZIP's calls (xCall) on a network without a router.  XCallParam:
+/* .XPP: ZIP's calls (xCall), to the router RTMP heard (Inside AppleTalk
+ * 8-19), or as a network without one answers them.  XCallParam:
  * xppSubCode, xppTimeout, xppRetry, filler, zipBuffPtr, zipNumZones,
- * zipLastFlag. */
+ * zipLastFlag, filler, zipInfoField. */
 
 enum { xCall = 246, zipGetLocalZones = 5, zipGetZoneList = 6, zipGetMyZone = 7 };
-enum { X_SUBCODE = 28, X_BUFF = 34, X_NUMZONES = 38, X_LASTFLAG = 40 };
+enum { X_SUBCODE = 28, X_BUFF = 34, X_NUMZONES = 38, X_LASTFLAG = 40, X_INFO = 42 };
+enum { ZIP_GETMYZONE = 7, ZIP_GETZONELIST = 8, ZIP_GETLOCALZONES = 9 };
 
-/* ZIP's ATP calls to the router RTMP heard (socket 6): GetMyZone (7),
+/* ZIP's ATP calls to the router's ZIP socket (6): GetMyZone (7),
  * GetZoneList (8) and GetLocalZones (9) from a 1-based index; the reply's
  * user bytes are LastFlag, 0, the count; its data the zones' names. */
 static int zip_ask(int fn, int start, uint8_t *data, int cap, int *count, bool *last)
 {
     uint16_t rnet;
     uint8_t rnode;
+    at_router_wait();
     if (!at_router(&rnet, &rnode))
         return noBridgeErr;
     int skt = atp_host_open(NULL, NULL);
@@ -561,7 +585,7 @@ static int zip_ask(int fn, int start, uint8_t *data, int cap, int *count, bool *
         return noBridgeErr;
     static atp_reply r;
     uint32_t user = (uint32_t)fn << 24 | (uint16_t)start;
-    int16_t err = atp_host_request(skt, rnode, 6, user, NULL, 0, false, 1, 1000, 3, &r);
+    int16_t err = atp_host_request(skt, AT_PEER(rnet, rnode), 6, user, NULL, 0, false, 1, 1000, 3, &r);
     atp_host_close(skt);
     if (err != noErr || r.count < 1)
         return err ? err : noBridgeErr;
@@ -572,14 +596,15 @@ static int zip_ask(int fn, int start, uint8_t *data, int cap, int *count, bool *
     return n;
 }
 
-int at_zone_list(char (*names)[33], int max)
+/* The whole list, as many replies as it takes. */
+static int zone_names(int fn, char (*names)[33], int max)
 {
     int n = 0;
     bool last = false;
     while (!last && n < max) {
         uint8_t data[578];
         int count = 0;
-        int len = zip_ask(8, n + 1, data, sizeof data, &count, &last);
+        int len = zip_ask(fn, n + 1, data, sizeof data, &count, &last);
         if (len < 0 || count <= 0)
             break;
         for (int i = 0, k = 0; i < count && k < len && n < max; i++) {
@@ -594,16 +619,35 @@ int at_zone_list(char (*names)[33], int max)
     return n;
 }
 
+int at_zone_list(char (*names)[33], int max) { return zone_names(ZIP_GETZONELIST, names, max); }
+
+/* This network's zones: on LocalTalk its one zone. */
+int at_local_zones(char (*names)[33], int max)
+{
+    if (max < 1)
+        return 0;
+    if (!at_bridge_interface()) {
+        at_my_zone(names[0]);
+        return strcmp(names[0], "*") ? 1 : 0;
+    }
+    return zone_names(ZIP_GETLOCALZONES, names, max);
+}
+
+/* This node's zone: GetNetInfo's on an extended network, the router's
+ * answer to GetMyZone on LocalTalk; "*" without a router. */
 void at_my_zone(char out[33])
 {
+    if (at_known_zone(out))
+        return;
     uint8_t data[578];
     int count = 0;
     bool last;
-    int len = zip_ask(7, 0, data, sizeof data, &count, &last);
+    int len = at_bridge_interface() ? -1 : zip_ask(ZIP_GETMYZONE, 0, data, sizeof data, &count, &last);
     if (len > 0 && count > 0 && data[0] && data[0] < len) {
         int l = data[0] > 32 ? 32 : data[0];
         memcpy(out, data + 1, (size_t)l);
         out[l] = 0;
+        at_set_known_zone(out);
     } else {
         strcpy(out, "*");
     }
@@ -616,29 +660,31 @@ static int16_t zip_call(gaddr pb, int fn)
     uint8_t data[578];
     int count = 0;
     bool last = true;
-    /* zipInfoField (42): the program clears it for the first call; the
-     * zones given so far are kept in it. */
-    int done = fn == 7 ? 0 : (int16_t)rd16(pb + 42);
+    if (fn == ZIP_GETMYZONE) {
+        char z[33];
+        at_my_zone(z);
+        size_t l = strlen(z);
+        wr8(rd32(pb + X_BUFF), (uint8_t)l);
+        gput(rd32(pb + X_BUFF) + 1, z, (uint32_t)l);
+        wr16(pb + X_NUMZONES, 1);
+        wr8(pb + X_LASTFLAG, 1);
+        return noErr;
+    }
+    /* zipInfoField: the program clears it for the first call; the zones
+     * given so far are kept in it. */
+    int done = (int16_t)rd16(pb + X_INFO);
     if (done < 0)
         done = 0;
     int len = zip_ask(fn, done + 1, data, sizeof data, &count, &last);
     if (len < 0) {
-        if (fn == 7) { /* no router: this zone is "*" */
-            static const uint8_t star[2] = { 1, '*' };
-            gput(rd32(pb + X_BUFF), star, 2);
-            wr16(pb + X_NUMZONES, 1);
-            wr8(pb + X_LASTFLAG, 1);
-            return noErr;
-        }
         wr16(pb + X_NUMZONES, 0);
         wr8(pb + X_LASTFLAG, 1);
         return (int16_t)len;
     }
     gput(rd32(pb + X_BUFF), data, (uint32_t)len);
     wr16(pb + X_NUMZONES, (uint16_t)count);
-    if (fn != 7)
-        wr16(pb + 42, (uint16_t)(done + count));
-    wr8(pb + X_LASTFLAG, last || fn == 7);
+    wr16(pb + X_INFO, (uint16_t)(done + count));
+    wr8(pb + X_LASTFLAG, last);
     return noErr;
 }
 
@@ -647,9 +693,9 @@ static int16_t xpp_control(gaddr pb, bool async)
     if ((int16_t)rd16(pb + CntrlParam_csCode_off) != xCall)
         return xpp_asp_control(pb, async); /* ASP and AFP (xpp.c) */
     switch ((int16_t)rd16(pb + X_SUBCODE)) {
-    case zipGetMyZone: return zip_call(pb, 7);
-    case zipGetLocalZones: return zip_call(pb, 9);
-    case zipGetZoneList: return zip_call(pb, 8);
+    case zipGetMyZone: return zip_call(pb, ZIP_GETMYZONE);
+    case zipGetLocalZones: return zip_call(pb, ZIP_GETLOCALZONES);
+    case zipGetZoneList: return zip_call(pb, ZIP_GETZONELIST);
     default: return -17;
     }
 }
@@ -692,7 +738,7 @@ void atp_host_close(int s)
     at_close_socket(s);
 }
 
-int16_t atp_host_start(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+int16_t atp_host_start(int skt, at_peer node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
                        int nresp, int timeout_ms, int retries, atp_reply *out)
 {
     if (skt <= 0 || skt > 254 || !atp_sockets[skt])
@@ -728,7 +774,7 @@ int16_t atp_host_start(int skt, uint8_t node, uint8_t dskt, uint32_t user, const
     return noErr;
 }
 
-int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
+int16_t atp_host_request(int skt, at_peer node, uint8_t dskt, uint32_t user, const uint8_t *data, int len, bool xo,
                          int nresp, int timeout_ms, int retries, atp_reply *out)
 {
     int16_t e = atp_host_start(skt, node, dskt, user, data, len, xo, nresp, timeout_ms, retries, out);
@@ -751,7 +797,7 @@ int16_t atp_host_request(int skt, uint8_t node, uint8_t dskt, uint32_t user, con
     return out->result;
 }
 
-void atp_host_respond(int skt, uint8_t node, uint8_t rskt, uint16_t tid, int count, const uint8_t (*data)[578],
+void atp_host_respond(int skt, at_peer node, uint8_t rskt, uint16_t tid, int count, const uint8_t (*data)[578],
                       const int *lens, const uint32_t *users)
 {
     if (skt > 0 && skt < 255 && atp_sockets[skt] && count >= 1 && count <= 8)
@@ -772,13 +818,13 @@ void atp_host_cancel(atp_reply *out)
         }
 }
 
-bool atp_host_xo(int skt, uint8_t node, uint8_t rskt, uint16_t tid)
+bool atp_host_xo(int skt, at_peer node, uint8_t rskt, uint16_t tid)
 {
     seen *s = skt > 0 && skt < 255 ? find_seen((uint8_t)skt, node, rskt, tid) : NULL;
     return s && s->xo;
 }
 
-void atp_host_send_once(int skt, uint8_t node, uint8_t dskt, uint32_t user, const uint8_t *data, int len)
+void atp_host_send_once(int skt, at_peer node, uint8_t dskt, uint32_t user, const uint8_t *data, int len)
 {
     uint8_t pkt[8 + ATP_DATA];
     len = len < 0 ? 0 : len > ATP_DATA ? ATP_DATA : len;

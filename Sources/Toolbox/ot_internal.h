@@ -143,8 +143,8 @@ void ota_ResolveAddress(ppc_cpu *c, provider *p);
 /* For ot_session.c: an address (DDP, or an NBP name looked up), a DDP
  * address into a TNetbuf, the endpoint's socket, and an endpoint bound
  * to any socket (OTAccept's worker). */
-bool ota_address(provider *p, gaddr buf, uint32_t len, uint8_t *node, uint8_t *skt);
-void ota_netbuf_ddp(gaddr nb, uint8_t node, uint8_t skt);
+bool ota_address(provider *p, gaddr buf, uint32_t len, uint32_t *node /* at_peer */, uint8_t *skt);
+void ota_netbuf_ddp(gaddr nb, uint32_t node /* at_peer */, uint8_t skt);
 uint8_t ota_socket(provider *p);
 int32_t ota_bind_any(provider *p);
 

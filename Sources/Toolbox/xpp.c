@@ -95,7 +95,7 @@ static int16_t open_at(gaddr pb, gaddr addr, gaddr attn, int16_t *refnum)
         return aspTooMany;
     int16_t err;
     int secs = rd8(pb + 30) ? rd8(pb + 30) : 1;
-    asp_session *s = asp_open_at(rd8(addr + 2), rd8(addr + 3), 1000 * secs, 1 + rd8(pb + 31), &err);
+    asp_session *s = asp_open_at(AT_PEER(rd16(addr), rd8(addr + 2)), rd8(addr + 3), 1000 * secs, 1 + rd8(pb + 31), &err);
     if (!s)
         return err <= -1066 && err >= -1075 ? err : aspNoServers; /* the server's refusal, or nobody there */
     static int16_t next = 1;
@@ -254,7 +254,7 @@ int16_t xpp_asp_control(gaddr pb, bool async)
         int cap = (int16_t)rd16(pb + X_RBSIZE), n = 0;
         if (cap < 0)
             return aspParamErr;
-        if (asp_status_at(rd8(addr + 2), rd8(addr + 3), status, cap > ASP_QUANTUM ? ASP_QUANTUM : cap, &n))
+        if (asp_status_at(AT_PEER(rd16(addr), rd8(addr + 2)), rd8(addr + 3), status, cap > ASP_QUANTUM ? ASP_QUANTUM : cap, &n))
             return aspNoServers;
         if (n)
             gput(rd32(pb + X_RBPTR), status, (uint32_t)n);

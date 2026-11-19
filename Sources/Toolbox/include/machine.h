@@ -907,8 +907,19 @@ bool machine_set_serial(int port, const char *spec);
  * host only), "lan" (the local network, on the interface the system
  * picks), "lan:IF" (on network interface IF, e.g. en0) or "off"; or
  * "bridge:IF", EtherTalk on wired interface IF (asks for an administrator
- * password when AppleTalk opens).  Before boot. */
+ * password when AppleTalk opens); or "router:HOST[:PORT]", LToUDP by
+ * unicast to a router's hub (port 1955 by default) where multicast doesn't
+ * pass, such as a tailnet.  Before boot. */
 bool machine_set_appletalk(const char *how);
+/* The zone AppleTalk asks to be in on an extended network (EtherTalk: the
+ * AppleTalk control panel's choice), in UTF-8; "" for the router's default
+ * zone.  On LocalTalk the network's one zone is the node's. */
+void machine_set_appletalk_zone(const char *zone);
+/* LToUDP's multicast group and port, "GROUP:PORT", "GROUP" or ":PORT",
+ * for a second LocalTalk network on the same interface (a router's other
+ * port); "" for the standard 239.192.76.84:1954.  False if it isn't an
+ * IPv4 multicast group or a port. */
+bool machine_set_ltoudp(const char *spec);
 /* bluebox bpf-helper: run as root, a BPF device for IF passed to SOCKET. */
 int machine_bpf_helper(const char *sockpath, const char *ifname);
 /* A headless run's clock: by default its time follows the instructions

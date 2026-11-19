@@ -61,7 +61,8 @@ typedef struct {
     uint8_t skt;
     int state;
     uint16_t cid, rcid;
-    uint8_t rnode, rskt;
+    at_peer rnode; /* the other end's network and node */
+    uint8_t rskt;
     uint32_t filter;
     /* opening */
     gaddr open_pb, listen_pb;
@@ -262,7 +263,17 @@ static dsp_end *end_on(uint8_t skt)
     return NULL;
 }
 
-static void adsp_in(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, const uint8_t *p, int len)
+/* An AddrBlock (network, node, socket) in guest memory. */
+static void put_addr(gaddr a, at_peer p, uint8_t skt)
+{
+    wr16(a, AT_PEER_NET(p) ? AT_PEER_NET(p) : at_network());
+    wr8(a + 2, AT_PEER_NODE(p));
+    wr8(a + 3, skt);
+}
+
+static at_peer addr_peer(gaddr a) { return AT_PEER(rd16(a), rd8(a + 2)); }
+
+static void adsp_in(uint8_t skt, at_peer snode, uint8_t sskt, uint8_t type, const uint8_t *p, int len)
 {
     dsp_end *e = end_on(skt);
     if (!e || type != DDP_ADSP || len < HDR)
@@ -278,14 +289,14 @@ static void adsp_in(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, cons
             if (code != C_OPENREQ || !e->listen_pb)
                 return;
             uint32_t f = e->filter;
-            if ((uint8_t)(f >> 8) && (uint8_t)(f >> 8) != snode)
+            if ((uint8_t)(f >> 8) && (uint8_t)(f >> 8) != AT_PEER_NODE(snode))
+                return;
+            if ((uint16_t)(f >> 16) && !at_same_peer(AT_PEER(f >> 16, AT_PEER_NODE(snode)), snode))
                 return;
             gaddr pb = e->listen_pb;
             e->listen_pb = 0;
             wr16(pb + P_REMOTECID, scid);
-            wr16(pb + P_REMOTEADDR, 0);
-            wr8(pb + P_REMOTEADDR + 2, snode);
-            wr8(pb + P_REMOTEADDR + 3, sskt);
+            put_addr(pb + P_REMOTEADDR, snode, sskt);
             wr32(pb + P_SENDSEQ, next);
             wr16(pb + P_SENDWINDOW, (uint16_t)(p[10] << 8 | p[11]));
             wr32(pb + P_ATTNSENDSEQ, n >= 8 ? be32(data + 4) : 0);
@@ -314,18 +325,14 @@ static void adsp_in(uint8_t skt, uint8_t snode, uint8_t sskt, uint8_t type, cons
         } else if (!(code == C_OPENACK && (e->state == sPassive || e->state == sOpening))) {
             return;
         }
-        if (e->ccb) {
-            wr16(e->ccb + CCB_REMOTE, 0);
-            wr8(e->ccb + CCB_REMOTE + 2, e->rnode);
-            wr8(e->ccb + CCB_REMOTE + 3, e->rskt);
-        }
+        if (e->ccb)
+            put_addr(e->ccb + CCB_REMOTE, e->rnode, e->rskt);
         set_state(e, sOpen);
         gaddr pb = e->open_pb;
         e->open_pb = 0;
         if (pb) {
             wr16(pb + P_REMOTECID, e->rcid);
-            wr8(pb + P_REMOTEADDR + 2, e->rnode);
-            wr8(pb + P_REMOTEADDR + 3, e->rskt);
+            put_addr(pb + P_REMOTEADDR, e->rnode, e->rskt);
             finish(pb, noErr);
         }
         push(e);
@@ -515,7 +522,7 @@ static int16_t dsp_open(dsp_end *e, gaddr pb, bool async)
         return errState;
     e->cid = rd16(pb + P_LOCALCID) ? rd16(pb + P_LOCALCID) : ++next_cid;
     wr16(pb + P_LOCALCID, e->cid);
-    e->rnode = rd8(pb + P_REMOTEADDR + 2);
+    e->rnode = addr_peer(pb + P_REMOTEADDR);
     e->rskt = rd8(pb + P_REMOTEADDR + 3);
     e->filter = rd32(pb + P_FILTER);
     e->send_seq = e->acked = rd32(pb + P_SENDSEQ);
@@ -599,7 +606,7 @@ static int16_t dsp_control(gaddr pb, bool async)
         dsp_end tmp = *e; /* the deny goes from the listener's socket */
         tmp.cid = 0;
         tmp.rcid = rd16(pb + P_REMOTECID);
-        tmp.rnode = rd8(pb + P_REMOTEADDR + 2);
+        tmp.rnode = addr_peer(pb + P_REMOTEADDR);
         tmp.rskt = rd8(pb + P_REMOTEADDR + 3);
         send_open(&tmp, C_DENY);
         return noErr;

@@ -1226,6 +1226,8 @@ struct SettingsForm: View {
                 ForEach(NetworkInterface.all().filter { !isWireless($0.name) }, id: \.name) { i in
                     Text("EtherTalk bridged onto \(i.name) (asks for a password)").tag(String?.some("bridge:" + i.name))
                 }
+                Text("Through a router's hub (a tailnet or the internet)")
+                    .tag(String?.some(settings.appletalk.map { $0.hasPrefix("router:") ? $0 : "router:" } ?? "router:"))
                 // An interface from the settings that isn't up now.
                 if let a = settings.appletalk, a.hasPrefix("lan:") || a.hasPrefix("bridge:"),
                    !NetworkInterface.all().contains(where: { a.hasSuffix(":" + $0.name) }) {
@@ -1235,6 +1237,13 @@ struct SettingsForm: View {
                 }
             }
             .help(Self.appleTalkHelp)
+            if let a = settings.appletalk, a.hasPrefix("router:") {
+                TextField("Router hub (host or host:port)", text: Binding(get: { String(a.dropFirst(7)) }, set: {
+                    settings.appletalk = "router:" + $0.trimmingCharacters(in: .whitespaces)
+                }), prompt: Text("e.g. pi.tailnet-name.ts.net"))
+                .help("The router's LToUDP hub, by name or address (port 1955 unless given): AppleTalk reaches it by "
+                      + "unicast, for networks that carry no multicast, such as a Tailscale tailnet.")
+            }
             PortPicker(label: "Modem port", spec: $settings.modemPort, inherit: inherit,
                        inherited: fallback.modemPort ?? "modem")
             PortPicker(label: "Printer port", spec: $settings.printerPort, inherit: inherit,
@@ -1323,6 +1332,7 @@ struct SettingsForm: View {
         case "lan": return "On the local network (automatic interface)"
         case let b where b.hasPrefix("bridge:"): return "EtherTalk bridged onto \(b.dropFirst(7))"
         case let l where l.hasPrefix("lan:"): return "Local network through \(l.dropFirst(4))"
+        case let r where r.hasPrefix("router:"): return "Through the router hub \(r.dropFirst(7))"
         case "off": return "Off"
         default: return "This Mac only"
         }

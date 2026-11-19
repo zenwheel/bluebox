@@ -35,7 +35,8 @@ struct AppSettings: Codable {
     var scale: Double? /* host points per Mac pixel */
     var appearance: String? /* bw, native, or a theme's name */
     var highlight: String? /* host (the host's selection colour) or #RRGGBB */
-    var appletalk: String? /* local, lan, lan:IF (an interface, e.g. en0), bridge:IF (EtherTalk) or off */
+    var appletalk: String? /* local, lan, lan:IF (an interface, e.g. en0), bridge:IF (EtherTalk), router:HOST[:PORT] (a hub) or off */
+    var appletalkZone: String? /* the zone asked for on EtherTalk (the AppleTalk control panel's); unset: the router's default */
     var modemPort: String? /* what the modem port connects to (machine_set_serial's specs) */
     var printerPort: String?
     var printFolder: String? /* printed pages saved there as PDF files, without the print panel ("": the panel) */
@@ -50,7 +51,7 @@ struct AppSettings: Codable {
     var keepSavePoints: Int? /* save points kept per program, apart; unset: HibernatedSnapshots.defaultKeepSavePoints */
     var isEmpty: Bool {
         depth == nil && cpu == nil && fpu == nil && addressing == nil && timing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
-            && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
+            && appletalkZone == nil && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
             && appleShare == nil && display == nil
             && jit == nil && debugger == nil
             && (internet?.isEmpty ?? true)
@@ -64,7 +65,8 @@ struct AppSettings: Codable {
             + "timing \(timing ?? "default (fast, or accurate for a program known to need it)"), "
             + "scale \(scale.map { $0 == 1.5 ? "1.5" : String(Int($0)) } ?? "default"), "
             + "appearance \(appearance ?? "default (native in rootless windows, else bw)"), highlight \(highlight ?? "default (host)"), "
-            + "appletalk \(appletalk ?? "default (local)"), modem-port \(modemPort ?? "default (modem)"), "
+            + "appletalk \(appletalk ?? "default (local)"), "
+            + "appletalk-zone \(appletalkZone.map { "\"\($0)\"" } ?? "default (the router's)"), modem-port \(modemPort ?? "default (modem)"), "
             + "printer-port \(printerPort ?? "default (none)"), "
             + "print-folder \(printFolder.map { $0.isEmpty ? "panel" : $0 } ?? "default (the print panel)"), "
             + "printer \(printer ?? "default (the print panel, or PDF files when there is a print folder)"), "
@@ -84,7 +86,8 @@ struct AppSettings: Codable {
         return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, fpu: fpu ?? f.fpu,
                            addressing: addressing ?? f.addressing, timing: timing ?? f.timing, scale: scale ?? f.scale,
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
-                           appletalk: appletalk ?? f.appletalk, modemPort: modemPort ?? f.modemPort,
+                           appletalk: appletalk ?? f.appletalk, appletalkZone: appletalkZone ?? f.appletalkZone,
+                           modemPort: modemPort ?? f.modemPort,
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
                            printer: printer ?? f.printer, userName: userName ?? f.userName,
                            appleShare: appleShare ?? f.appleShare, display: display ?? f.display, jit: jit ?? f.jit,
@@ -379,7 +382,7 @@ func settings(for app: String) -> AppSettings? {
 
 /// bluebox set <app>|--default [depth 1|2|4|8|16|32|default] [cpu 68020|68040|ppc|default]
 ///     [timing fast|accurate|default] [scale 1|1.5|2|3|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
-///     [appletalk local|lan|lan:IF|bridge:IF|off|default] [modem-port <spec>|default] [printer-port <spec>|default]
+///     [appletalk local|lan|lan:IF|bridge:IF|router:HOST[:PORT]|off|default] [appletalk-zone <zone>|default] [modem-port <spec>|default] [printer-port <spec>|default]
 ///     [print-folder <folder>|panel|default] [printer <spec>|default] [user-name <name>|default]
 ///     [appleshare <spec>|none|default] [display rootless|screen|default]
 ///     [jit on|off|default] [keep-snapshots N|default] [keep-save-points N|default]
@@ -472,11 +475,13 @@ func setCommand(_ args: [String]) {
             } else if value.hasPrefix("bridge:") && isWireless(String(value.dropFirst(7))) {
                 fail("appletalk: \(value.dropFirst(7)) is Wi-Fi, which drops EtherTalk; bridge onto a wired interface")
             } else if ["local", "lan", "off"].contains(value) || (value.hasPrefix("lan:") && value.count > 4)
-                        || (value.hasPrefix("bridge:") && value.count > 7) {
+                        || (value.hasPrefix("bridge:") && value.count > 7) || (value.hasPrefix("router:") && value.count > 7) {
                 s.appletalk = value
             } else {
-                fail("appletalk expects local, lan, lan:IF (e.g. lan:en0), bridge:IF, off or default")
+                fail("appletalk expects local, lan, lan:IF (e.g. lan:en0), bridge:IF, router:HOST[:PORT], off or default")
             }
+        case "appletalk-zone":
+            s.appletalkZone = value == "default" ? nil : String(value.prefix(32))
         case "modem-port", "printer-port":
             let spec: String? = value == "default" ? nil : value
             if let spec, !validSerialSpec(spec) {
@@ -555,7 +560,7 @@ func setCommand(_ args: [String]) {
             i[keyPath: field.path] = value == "default" ? nil : value
             s.internet = i.isEmpty ? nil : i
         default:
-            fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, "
+            fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, appletalk-zone, "
                  + "modem-port, printer-port, print-folder, printer, user-name, appleshare, display, jit, keep-snapshots, "
                  + "keep-save-points, "
                  + InternetSettings.fields.map(\.name).joined(separator: ", ") + ", passive-ftp)")

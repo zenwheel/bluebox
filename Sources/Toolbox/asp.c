@@ -31,7 +31,8 @@ enum { CMD_TIMEOUT = 2000, CMD_RETRIES = 15 };
 
 struct asp_session {
     int wss;
-    uint8_t node, sls, sss, sid;
+    at_peer node; /* the server's network and node */
+    uint8_t sls, sss, sid;
     uint16_t seq;
     bool open;
     /* the write in progress: its data for WriteContinue */
@@ -47,12 +48,12 @@ struct asp_session {
 static uint32_t user_bytes(int fn, int b1, int word) { return (uint32_t)fn << 24 | (uint32_t)(b1 & 0xFF) << 16 | (uint16_t)word; }
 
 /* Requests from the server to our WSS. */
-static void incoming(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+static void incoming(void *ctx, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user,
                      const uint8_t *data, int len)
 {
     asp_session *s = ctx;
     int fn = (int)(user >> 24), sid = (int)(user >> 16 & 0xFF);
-    if (node != s->node || sid != s->sid)
+    if (!at_same_peer(node, s->node) || sid != s->sid)
         return;
     static uint8_t pkts[8][ATP_PKT];
     int lens[8] = { 0 };
@@ -88,12 +89,12 @@ static void incoming(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_
 }
 
 /* GetStatus at a server's SLS, from a socket of its own. */
-static void ignore(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user, const uint8_t *data,
+static void ignore(void *ctx, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user, const uint8_t *data,
                    int len)
 {
 }
 
-int16_t asp_status_at(uint8_t node, uint8_t sls, uint8_t *status, int cap, int *status_len)
+int16_t asp_status_at(at_peer node, uint8_t sls, uint8_t *status, int cap, int *status_len)
 {
     if (status_len)
         *status_len = 0;
@@ -119,7 +120,7 @@ int16_t asp_status_at(uint8_t node, uint8_t sls, uint8_t *status, int cap, int *
     return noErr;
 }
 
-asp_session *asp_open_at(uint8_t node, uint8_t sls, int interval_ms, int tries, int16_t *err)
+asp_session *asp_open_at(at_peer node, uint8_t sls, int interval_ms, int tries, int16_t *err)
 {
     asp_session *s = bb_calloc(1, sizeof *s, BB_TAG(asp_session));
     if (!s) {
@@ -195,9 +196,9 @@ asp_session *asp_open(const char *nbp_name, uint8_t *status, int *status_len, ch
             snprintf(err, errlen, "no %s:%s@%s on the network", obj, type, zone);
         return NULL;
     }
-    asp_status_at(node, sls, status, ASP_QUANTUM, status_len);
+    asp_status_at(AT_PEER(net, node), sls, status, ASP_QUANTUM, status_len);
     int16_t e;
-    asp_session *s = asp_open_at(node, sls, 1000, 5, &e);
+    asp_session *s = asp_open_at(AT_PEER(net, node), sls, 1000, 5, &e);
     if (!s) {
         if (e == -1098)
             snprintf(err, errlen, "no ATP socket");

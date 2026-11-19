@@ -71,14 +71,16 @@ typedef struct ot_session {
     bool pap;
     bool live;            /* a connection: ours to answer, tickle and close */
     bool server;          /* accepted from a listener */
-    uint8_t node, rskt;   /* the other end: PAP its responding socket; ASP the SSS, or the WSS */
+    at_peer node;         /* the other end's network and node */
+    uint8_t rskt;         /* its socket: PAP its responding socket; ASP the SSS, or the WSS */
     uint8_t sls;          /* ASP workstation: the server's SLS, for tickles */
     uint8_t id;           /* PAP's connection ID, ASP's session ID */
     uint8_t quantum;      /* PAP: the other end's flow quantum */
     uint64_t heard_at, tickle_at;
     /* a listener: the open request heard */
     bool have_call;
-    uint8_t cnode, crskt, cfrom, cid, cquantum;
+    at_peer cnode;
+    uint8_t crskt, cfrom, cid, cquantum;
     uint16_t ctid;
     /* opening */
     bool opening;
@@ -145,7 +147,7 @@ static uint8_t skt_of(provider *p) { return p->at ? ota_socket(p) : 0; }
 /* ---------------------------------------------------------------------- */
 /* Connections */
 
-static void begin(provider *p, uint8_t node, uint8_t rskt, uint8_t id)
+static void begin(provider *p, at_peer node, uint8_t rskt, uint8_t id)
 {
     ot_session *s = p->ss;
     s->live = true;
@@ -198,11 +200,11 @@ static void send_close(provider *p)
     atp_host_start(skt_of(p), s->node, s->rskt, user, NULL, 0, true, 1, 1000, 2, &s->scratch);
 }
 
-static provider *session_by_id(bool pap, uint8_t node, uint8_t id)
+static provider *session_by_id(bool pap, at_peer node, uint8_t id)
 {
     for (int i = 0; i < MAX_PROVIDERS; i++) {
         provider *p = &ot_providers[i];
-        if (is_session(p) && p->ss->pap == pap && p->ss->live && p->ss->server && p->ss->node == node &&
+        if (is_session(p) && p->ss->pap == pap && p->ss->live && p->ss->server && at_same_peer(p->ss->node, node) &&
             p->ss->id == id)
             return p;
     }
@@ -215,7 +217,7 @@ static void pap_write(provider *p);
 /* ---------------------------------------------------------------------- */
 /* PAP: requests heard */
 
-static void pap_heard(provider *p, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+static void pap_heard(provider *p, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user,
                       const uint8_t *data, int len)
 {
     ot_session *s = p->ss;
@@ -243,14 +245,14 @@ static void pap_heard(provider *p, uint8_t skt, uint8_t node, uint8_t rskt, uint
     }
     if (s->opening)
         opened(p);
-    if (s->opening && fn == SEND_DATA && node == s->node && id == s->id) {
+    if (s->opening && fn == SEND_DATA && at_same_peer(node, s->node) && id == s->id) {
         s->held = true; /* before the reply to our OpenConn has been seen */
         s->htid = tid;
         s->hrskt = rskt;
         s->hseq = (uint16_t)user;
         return;
     }
-    if (!s->live || node != s->node || id != s->id)
+    if (!s->live || !at_same_peer(node, s->node) || id != s->id)
         return;
     s->heard_at = now_ms();
     switch (fn) {
@@ -345,7 +347,7 @@ static void pap_poll(provider *p)
 /* ---------------------------------------------------------------------- */
 /* ASP: requests heard */
 
-static void asp_heard(provider *p, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+static void asp_heard(provider *p, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user,
                       const uint8_t *data, int len)
 {
     ot_session *s = p->ss;
@@ -371,7 +373,7 @@ static void asp_heard(provider *p, uint8_t skt, uint8_t node, uint8_t rskt, uint
     }
     if (s->opening)
         opened(p);
-    if (!s->live || node != s->node || sid != s->id)
+    if (!s->live || !at_same_peer(node, s->node) || sid != s->id)
         return;
     s->heard_at = now_ms();
     switch (fn) {
@@ -403,7 +405,7 @@ static void asp_heard(provider *p, uint8_t skt, uint8_t node, uint8_t rskt, uint
     }
 }
 
-static void heard_fn(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+static void heard_fn(void *ctx, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user,
                      const uint8_t *data, int len)
 {
     provider *p = ctx;
@@ -471,7 +473,8 @@ void ots_Connect(ppc_cpu *c, provider *p)
 {
     ot_session *s = p->ss;
     gaddr snd = R(1);
-    uint8_t node, sls;
+    at_peer node;
+    uint8_t sls;
     if (p->state != T_IDLE || p->qlen > 0) {
         RETURN((uint32_t)kOTOutStateErr);
         return;
@@ -1097,7 +1100,8 @@ void ots_SndURequest(ppc_cpu *c, provider *p)
 {
     ot_session *s = p->ss;
     gaddr req = R(1);
-    uint8_t node, sls;
+    at_peer node;
+    uint8_t sls;
     if (s->pap || p->state == T_UNBND || s->status_asked) {
         RETURN((uint32_t)(s->pap ? kOTNotSupportedErr : kOTOutStateErr));
         return;

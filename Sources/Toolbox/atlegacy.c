@@ -74,8 +74,13 @@ void tb_BuildLAPwds(gaddr wdsPtr, gaddr dataPtr, int16_t destHost, int16_t proto
     wr16(wdsPtr + 6, 0);
 }
 
-/* The network has no router (ZIP has no zones): no bridge's node. */
-int16_t tb_GetBridgeAddress(void) { return 0; }
+/* A-ROUTER's node, the router RTMP heard; 0 without one. */
+int16_t tb_GetBridgeAddress(void)
+{
+    uint16_t net;
+    uint8_t node;
+    return at_router(&net, &node) ? node : 0;
+}
 
 /* ATP stays loaded while AppleTalk is open. */
 int16_t tb_ATPUnload(void) { return noErr; }

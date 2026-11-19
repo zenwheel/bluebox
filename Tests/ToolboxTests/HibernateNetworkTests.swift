@@ -651,7 +651,7 @@ extension BlueBox {
                 setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &one, socklen_t(MemoryLayout<Int32>.size))
                 var sa = sockaddr_in()
                 sa.sin_family = sa_family_t(AF_INET)
-                sa.sin_port = UInt16(1954).bigEndian
+                sa.sin_port = testLToUDPPort.bigEndian
                 _ = withUnsafePointer(to: &sa) {
                     $0.withMemoryRebound(to: Darwin.sockaddr.self, capacity: 1) {
                         bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
@@ -675,7 +675,7 @@ extension BlueBox {
                 let frame = Self.id + [node, Self.node, 1, UInt8(len >> 8), UInt8(len & 0xFF), dskt, sskt, type] + data
                 var to = sockaddr_in()
                 to.sin_family = sa_family_t(AF_INET)
-                to.sin_port = UInt16(1954).bigEndian
+                to.sin_port = testLToUDPPort.bigEndian
                 to.sin_addr.s_addr = inet_addr("239.192.76.84")
                 _ = withUnsafePointer(to: &to) {
                     $0.withMemoryRebound(to: Darwin.sockaddr.self, capacity: 1) {
@@ -695,7 +695,7 @@ extension BlueBox {
                 let f = Self.id + frame
                 var to = sockaddr_in()
                 to.sin_family = sa_family_t(AF_INET)
-                to.sin_port = UInt16(1954).bigEndian
+                to.sin_port = testLToUDPPort.bigEndian
                 to.sin_addr.s_addr = inet_addr("239.192.76.84")
                 _ = withUnsafePointer(to: &to) {
                     $0.withMemoryRebound(to: Darwin.sockaddr.self, capacity: 1) {

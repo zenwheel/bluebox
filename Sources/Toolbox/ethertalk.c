@@ -13,9 +13,12 @@
  * headers, and AARP (00 00 00 80 F3), which finds this node an address
  * (probing a tentative one ten times) and maps other nodes' addresses to
  * Ethernet addresses.  The network number comes from a router's RTMP
- * broadcasts, or from the startup range ($FF00-$FFFE) when there is none.
- * appletalk.c sees LLAP-like frames as on LocalTalk: dst node, src node,
- * type 2, then the long DDP header.
+ * broadcasts, or from the startup range ($FF00-$FFFE) when there is none;
+ * GetNetInfo (appletalk.c) gives the range too, and this zone's multicast
+ * address, whose frames are taken along with broadcasts.  appletalk.c sees
+ * LLAP-like frames as on LocalTalk: dst node, src node, type 2, then the
+ * long DDP header; it sends them the same way, the LLAP destination node
+ * being the next hop's (a router's for other networks).
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -54,6 +57,9 @@ static uint8_t mac[6];
 static uint16_t my_net;
 static uint8_t my_node;
 static uint16_t range_lo = 0xFF00, range_hi = 0xFFFE;
+static bool range_heard;      /* the range is a router's */
+static uint8_t zone_mc[6];    /* this zone's multicast address, when zone_mc_set */
+static bool zone_mc_set;
 static bool probing, conflict;
 static int heard;             /* AppleTalk frames from other machines */
 static uint8_t rbuf[65536];   /* BPF's read buffer */
@@ -195,16 +201,39 @@ static void got_rtmp(const uint8_t *d, int n)
 {
     if (n < 4 + 6)
         return;
-    /* sender's net (2), id length (1), id (len bytes), then the first tuple:
-     * extended ones start with the range (net, distance | $80, end net). */
-    int k = 3 + d[2];
+    /* sender's net (2), its ID's length in bits (1: 8), the ID, then the
+     * first tuple: extended ones start with the range (net, distance |
+     * $80, end net). */
+    int k = 3 + (d[2] + 7) / 8;
     if (k + 6 > n || !(d[k + 2] & 0x80))
         return;
     uint16_t lo = (uint16_t)(d[k] << 8 | d[k + 1]), hi = (uint16_t)(d[k + 3] << 8 | d[k + 4]);
     if (lo && hi >= lo) {
         range_lo = lo;
         range_hi = hi;
+        range_heard = true;
     }
+}
+
+bool et_range(uint16_t *lo, uint16_t *hi)
+{
+    *lo = range_lo;
+    *hi = range_hi;
+    return range_heard;
+}
+
+void et_set_range(uint16_t lo, uint16_t hi)
+{
+    range_lo = lo;
+    range_hi = hi;
+    range_heard = true;
+}
+
+void et_set_zone_multicast(const uint8_t mc[6])
+{
+    zone_mc_set = mc != NULL;
+    if (mc)
+        memcpy(zone_mc, mc, 6);
 }
 
 /* A frame for appletalk.c (LLAP-like), or 0 when there is none. */
@@ -217,6 +246,10 @@ int et_receive(uint8_t *out, int cap)
             return 0;
         if (n < ETH_HDR + SNAP || !memcmp(f + 6, mac, 6))
             continue; /* ours, seen sent */
+        /* The interface hears everything (promiscuous): to another
+         * machine, or to another zone's multicast address, isn't ours. */
+        if (f[0] & 1 ? memcmp(f, broadcast, 6) && (!zone_mc_set || memcmp(f, zone_mc, 6)) : memcmp(f, mac, 6) != 0)
+            continue;
         heard++;
         const uint8_t *snap = f + ETH_HDR, *p = f + ETH_HDR + SNAP;
         int len = (f[12] << 8 | f[13]) - SNAP;
@@ -230,7 +263,9 @@ int et_receive(uint8_t *out, int cap)
             continue;
         uint16_t dnet = (uint16_t)(p[4] << 8 | p[5]), snet = (uint16_t)(p[6] << 8 | p[7]);
         uint8_t dnode = p[8], snode = p[9];
-        if (snode && snode != 255)
+        /* gleaned only from a node of this cable (not through a router:
+         * hop count 0, a network in the range) */
+        if (snode && snode != 255 && !(p[0] & 0x3C) && snet >= range_lo && snet <= range_hi)
             learn(snet, snode, f + 6);
         if (p[10] == 1 && p[12] == 1) /* RTMP data to socket 1 */
             got_rtmp(p + DDP_LONG, len - DDP_LONG);
@@ -253,7 +288,7 @@ int et_receive(uint8_t *out, int cap)
 /* ---------------------------------------------------------------------- */
 /* Sending: appletalk.c's LLAP-like frames as DDP with long headers. */
 
-void et_send(const uint8_t *f, int n)
+void et_send(const uint8_t *f, int n, uint16_t hop_net)
 {
     if (n < 3 || (f[2] != 1 && f[2] != 2))
         return; /* LLAP control frames (ENQ, ACK): LocalTalk only */
@@ -266,7 +301,7 @@ void et_send(const uint8_t *f, int n)
         p[0] = (uint8_t)(len >> 8 & 3);
         p[1] = (uint8_t)len;
         p[2] = p[3] = 0;                                    /* no checksum */
-        uint16_t to = dnode == 255 ? 0 : net_of(dnode); /* broadcasts: this network */
+        uint16_t to = dnode == 255 ? 0 : hop_net ? hop_net : net_of(dnode); /* broadcasts: this network */
         p[4] = (uint8_t)(to >> 8); p[5] = (uint8_t)to;
         p[6] = (uint8_t)(my_net >> 8); p[7] = (uint8_t)my_net;
         p[8] = dnode;
@@ -279,7 +314,8 @@ void et_send(const uint8_t *f, int n)
         len = n - 3;
         memcpy(p, f + 3, (size_t)len);
     }
-    uint16_t dnet = (uint16_t)(p[4] << 8 | p[5]);
+    /* the next hop: the destination itself, or the router for it */
+    uint16_t dnet = hop_net ? hop_net : (uint16_t)(p[4] << 8 | p[5]);
     if (dnode == 255) {
         put_frame(broadcast, snap_ddp, p, len);
         return;
@@ -348,6 +384,7 @@ void et_close(void)
     namt = nwaiting = rlen = rpos = heard = 0;
     range_lo = 0xFF00;
     range_hi = 0xFFFE;
+    range_heard = zone_mc_set = false;
 }
 
 /* Tests: frames on a datagram socket, as from BPF without its headers. */

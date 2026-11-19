@@ -30,7 +30,8 @@ enum { QUANTUM = 8, PACKET = 512 };
 size_t print_postscript(const machine_print_job *job, char **out);
 
 typedef struct {
-    uint8_t conn, node, srv_skt;
+    uint8_t conn, srv_skt;
+    at_peer node;               /* the printer's network and node */
     int quantum;               /* the printer's: packets per SendData */
     const char *data;
     size_t len, sent;
@@ -47,13 +48,13 @@ static uint64_t ms(void) { return host_clock_ms(); }
 
 /* The printer's requests at our responding socket: SendData (the next
  * piece of the job), Tickle, CloseConn. */
-static void request(void *ctx, uint8_t skt, uint8_t node, uint8_t rskt, uint16_t tid, uint32_t user,
+static void request(void *ctx, uint8_t skt, at_peer node, uint8_t rskt, uint16_t tid, uint32_t user,
                     const uint8_t *data, int len)
 {
     (void)data;
     (void)len;
     pap_conn *c = ctx;
-    if ((user >> 24) != c->conn || node != c->node)
+    if ((user >> 24) != c->conn || !at_same_peer(node, c->node))
         return;
     c->heard = ms();
     int fn = (int)(user >> 16) & 0xFF;
@@ -117,7 +118,7 @@ bool pap_send(const char *nbp, const char *ps, size_t len, char *err, size_t err
     }
     static pap_conn c;
     memset(&c, 0, sizeof c);
-    c.node = node;
+    c.node = AT_PEER(net, node);
     c.data = ps;
     c.len = len;
     c.conn = (uint8_t)(1 + (ms() % 254));
@@ -134,7 +135,7 @@ bool pap_send(const char *nbp, const char *ps, size_t len, char *err, size_t err
     for (int wait = 0; !open && ms() - start < 120000; wait++) {
         uint8_t d[4] = { (uint8_t)skt, QUANTUM, (uint8_t)(wait >> 8), (uint8_t)wait };
         uint32_t user = (uint32_t)c.conn << 24 | (uint32_t)OpenConn << 16;
-        int16_t e = atp_host_request(skt, node, sls, user, d, 4, true, 1, 2000, 4, &r);
+        int16_t e = atp_host_request(skt, c.node, sls, user, d, 4, true, 1, 2000, 4, &r);
         if (e != noErr || r.count < 1 || ((r.user[0] >> 16) & 0xFF) != OpenConnReply || r.len[0] < 4) {
             snprintf(err, errlen, "the printer \"%s\" didn't answer", obj);
             atp_host_close(skt);
@@ -159,7 +160,7 @@ bool pap_send(const char *nbp, const char *ps, size_t len, char *err, size_t err
         atp_host_close(skt);
         return false;
     }
-    LOGF(LOG_TRAPS, "  PAP: connected to %s (node %u socket %u, quantum %d), %zu bytes\n", nbp, node, c.srv_skt,
+    LOGF(LOG_TRAPS, "  PAP: connected to %s (node %u.%u socket %u, quantum %d), %zu bytes\n", nbp, net, node, c.srv_skt,
          c.quantum, len);
     /* The job goes as the printer asks for it; we read what it says back
      * until its EOF; tickles both ways. */
@@ -173,7 +174,7 @@ bool pap_send(const char *nbp, const char *ps, size_t len, char *err, size_t err
     while (c.srv_skt && !(c.eof_sent && printer_eof)) {
         if (!reading) {
             uint32_t user = (uint32_t)c.conn << 24 | (uint32_t)SendData << 16 | seq;
-            if (atp_host_start(skt, node, c.srv_skt, user, NULL, 0, true, QUANTUM, 15000, -1, &rd) == noErr)
+            if (atp_host_start(skt, c.node, c.srv_skt, user, NULL, 0, true, QUANTUM, 15000, -1, &rd) == noErr)
                 reading = true;
         } else if (rd.result != ioInProgress) {
             reading = false;
@@ -189,7 +190,7 @@ bool pap_send(const char *nbp, const char *ps, size_t len, char *err, size_t err
             }
         }
         if (ms() - last_tickle > 60000) {
-            atp_host_send_once(skt, node, c.srv_skt, (uint32_t)c.conn << 24 | (uint32_t)Tickle << 16, NULL, 0);
+            atp_host_send_once(skt, c.node, c.srv_skt, (uint32_t)c.conn << 24 | (uint32_t)Tickle << 16, NULL, 0);
             last_tickle = ms();
         }
         if (ms() - c.heard > 120000) {
@@ -208,7 +209,7 @@ bool pap_send(const char *nbp, const char *ps, size_t len, char *err, size_t err
     bool ok = c.eof_sent && printer_eof;
     if (c.srv_skt) {
         uint32_t user = (uint32_t)c.conn << 24 | (uint32_t)CloseConn << 16;
-        atp_host_request(skt, node, c.srv_skt, user, NULL, 0, true, 1, 2000, 2, &r);
+        atp_host_request(skt, c.node, c.srv_skt, user, NULL, 0, true, 1, 2000, 2, &r);
     }
     atp_host_close(skt);
     if (!ok && !err[0])
