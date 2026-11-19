@@ -249,6 +249,9 @@ void gestalt_powerpc(void)
     gestalt_set(fourcc("cpuf"), cpu);
     gestalt_set(fourcc("ppcf"), ppc_altivec ? 0x3B : 0x03);
     gestalt_set(fourcc("cfrg"), 0x1);    /* gestaltCFMPresent */
+    /* gestaltTeleMgrAttr: the Telephone Manager and its PowerPC library,
+     * with TELNewWithResult (telephone.c), and no telephone tools. */
+    gestalt_set(fourcc("tele"), 0x43);
     gestalt_set(fourcc("mixd"), 0x1);    /* gestaltPowerPCAware */
     /* CarbonLib 1.1 (gestaltCarbonVersion): the Carbon Event Manager, the
      * version's mark, is there (carbon_events.c), with what CarbonLib

@@ -283,6 +283,9 @@ static void (*export_fn(const char *name))(ppc_cpu *)
     for (unsigned i = 0; i < carbonuser_export_count; i++) /* CarbonLib's user and machine names */
         if (!strcmp(carbonuser_exports[i].name, name))
             return carbonuser_exports[i].fn;
+    for (unsigned i = 0; i < tel_export_count; i++) /* the Telephone Manager, without tools */
+        if (!strcmp(tel_exports[i].name, name))
+            return tel_exports[i].fn;
     void (*svc)(ppc_cpu *) = carbonsvc_export_fn(name);
     if (svc)
         return svc;
@@ -745,6 +748,8 @@ static const char *const native_libraries[] = {
     "MacDialogsLib", "ColorPickerLib", "ATSUnicodeLib", "LocalesLib", "Math64Lib", "UnicodeUtilitiesLib",
     "UnicodeUtilitiesCoreLib", "FontSyncLib", "DictionaryMgrLib", "LanguageAnalysisMgrLib", "SpeechRecognitionLib",
     "NSLPPCLib", "DebugLib",
+    /* The Telephone Manager's, in the System file since 7.5 (telephone.c). */
+    "TelephoneLib",
 };
 
 /* Apple libraries left unloaded even where an installer put them: the

@@ -381,6 +381,14 @@ INVOKE(TSMTEPostUpdate, 0x000FFFC0)
 NEW(TSMTEPostUpdate, 0x000FFFC0)
 INVOKE(TSMTEPreUpdate, 0x000003C0)
 NEW(TSMTEPreUpdate, 0x000003C0)
+INVOKE(TelephoneCAMsg, 0x0003EBC0)
+NEW(TelephoneCAMsg, 0x0003EBC0)
+INVOKE(TelephoneChooseIdle, 0x00000000)
+NEW(TelephoneChooseIdle, 0x00000000)
+INVOKE(TelephoneDNMsg, 0x003FEBC0)
+NEW(TelephoneDNMsg, 0x003FEBC0)
+INVOKE(TelephoneTermMsg, 0x0000EBC0)
+NEW(TelephoneTermMsg, 0x0000EBC0)
 INVOKE(TextMedia, 0x00003FE0)
 NEW(TextMedia, 0x00003FE0)
 INVOKE(TrackTransfer, 0x000003E0)
@@ -881,6 +889,18 @@ const ppc_export carbonupps_exports[] = {
     { "DisposeTSMTEPreUpdateUPP", dispose_upp },
     { "InvokeTSMTEPreUpdateUPP", invoke_TSMTEPreUpdate },
     { "NewTSMTEPreUpdateUPP", new_TSMTEPreUpdate },
+    { "DisposeTelephoneCAMsgUPP", dispose_upp },
+    { "InvokeTelephoneCAMsgUPP", invoke_TelephoneCAMsg },
+    { "NewTelephoneCAMsgUPP", new_TelephoneCAMsg },
+    { "DisposeTelephoneChooseIdleUPP", dispose_upp },
+    { "InvokeTelephoneChooseIdleUPP", invoke_TelephoneChooseIdle },
+    { "NewTelephoneChooseIdleUPP", new_TelephoneChooseIdle },
+    { "DisposeTelephoneDNMsgUPP", dispose_upp },
+    { "InvokeTelephoneDNMsgUPP", invoke_TelephoneDNMsg },
+    { "NewTelephoneDNMsgUPP", new_TelephoneDNMsg },
+    { "DisposeTelephoneTermMsgUPP", dispose_upp },
+    { "InvokeTelephoneTermMsgUPP", invoke_TelephoneTermMsg },
+    { "NewTelephoneTermMsgUPP", new_TelephoneTermMsg },
     { "DisposeTextMediaUPP", dispose_upp },
     { "InvokeTextMediaUPP", invoke_TextMedia },
     { "NewTextMediaUPP", new_TextMedia },

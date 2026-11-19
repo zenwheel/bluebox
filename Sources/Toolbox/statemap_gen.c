@@ -3492,6 +3492,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/te.c", "auto_view", 256, 17, 0x95efcc850914303a },
     { "Toolbox/te.c", "next_recent", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/te.c", "recent", 256, 17, 0x95efcc850914303a },
+    { "Toolbox/telephone.c", "new_error", 2, 0, 0x7579d81a04189ef3 },
     { "Toolbox/theme.c", "down", 64, 93, 0x740d96161c14b6d3 },
     { "Toolbox/theme.c", "images", 9600, 238, 0x378bdbd137a8cca7 },
     { "Toolbox/theme.c", "k1", 1, 0, 0xa6aba2e36699f918 },
@@ -3624,7 +3625,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1738;
+const unsigned hb_nstatics = 1739;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {

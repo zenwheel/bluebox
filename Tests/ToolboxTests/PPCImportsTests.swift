@@ -542,6 +542,29 @@ extension BlueBox {
             #expect(call("GetPtrSize", [0]) == 0 && call("GetPtrSize", [tb_NewPtr(10, false, false)]) == 10)
         }
 
+        /// The Telephone Manager's library is there, as in the System file
+        /// since 7.5, with no telephone tools: InitTEL says so (GeoPort
+        /// Audio puts that in its alert), nothing makes a terminal, and
+        /// calls on a terminal, number or call say the handle is bad.
+        @Test func telephoneManagerHasNoTools() {
+            bootMachine()
+            cfm_reset()
+            _ = cfm_ppc_cpu()
+            let toc = cfm_prepare_container(importContainer("InitTEL", cls: 2, library: "TelephoneLib", weak: false))
+            #expect(toc != 0 && rd32(toc) != 0)
+            #expect(result16("InitTEL", []) == 8) // telNoTools
+            #expect(result16("TELGetTELVersion", []) == 3)
+            #expect(result16("TELGetProcID", [bytes([0])]) == -1)
+            let err = tb_NewPtr(2, false, true)
+            #expect(call("TELNewWithResult", [0, 0, 0, 0, err]) == 0)
+            #expect(Int16(bitPattern: rd16(err)) == -10110 && result16("TELGetTelNewErr", []) == -10110) // telBadProcID
+            let out = tb_NewPtr(4, false, true)
+            wr32(out, 0x1234)
+            #expect(result16("TELDNLookupByIndex", [0, 0, 0, 1, out]) == -10001 && rd32(out) == 0) // telBadTermErr
+            #expect(result16("TELGetDNInfo", [0]) == -10002 && result16("TELDialDigits", [0, 0]) == -10003)
+            #expect(call("TELCountDNs", [0, 0, 0]) == 0)
+        }
+
         @Test func slotManagerFindsTheBuiltInVideo() {
             bootMachine()
             let spb = tb_NewPtr(56, false, true)

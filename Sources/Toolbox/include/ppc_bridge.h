@@ -90,6 +90,8 @@ extern const unsigned gimport_export_count;
 /* CarbonLib's user and machine names (carbon_user.c). */
 extern const ppc_export carbonuser_exports[];
 extern const unsigned carbonuser_export_count;
+extern const ppc_export tel_exports[];
+extern const unsigned tel_export_count;
 /* CarbonLib's printing, Navigation, scrap, ATSUI and MLTE (carbon_svc.c). */
 void (*carbonsvc_export_fn(const char *name))(ppc_cpu *);
 /* Its remaining managers: ColorSync, HTML Rendering ... (carbonrest.c). */
