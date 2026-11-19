@@ -701,6 +701,8 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     let title: String
     var window: NSWindow!
     var launchEvents = LaunchEvents()
+    /// Scripted input (--keys), posted live once the machine runs.
+    var script: [String] = []
 
     init(title: String) { self.title = title }
 
@@ -764,6 +766,10 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
                 _ = machine_run(1_000_000)
             }
         }
+        // Scripted input from its own thread, with wall-clock pauses, as
+        // in rootless mode.
+        let script = self.script
+        if !script.isEmpty { Thread.detachNewThread { postScriptLive(script) } }
     }
 
     // MARK: The screen's size
@@ -878,7 +884,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
 }
 
 /// Show the classic screen in a window until the app quits.  Never returns.
-@MainActor func runHostWindow(title: String, icon: NSImage?) -> Never {
+@MainActor func runHostWindow(title: String, icon: NSImage?, script: [String] = []) -> Never {
     nameProcess(title)
     machine_attach_host(true)
     let app = NSApplication.shared
@@ -900,6 +906,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
     if !speechBackend.hasPrefix("record:") { ClassicSpeech.shared.install(avspeech: speechBackend == "avspeech") }
     NotificationRelay.shared.install()
     let delegate = HostDelegate(title: title)
+    delegate.script = script
     app.delegate = delegate
     Suspender.shared.installHibernateKey()
     // Minimal app menu: Hide, Hide Others and Show All (Command-H hides

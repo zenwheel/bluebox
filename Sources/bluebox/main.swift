@@ -1405,7 +1405,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
             // A resumed screen larger than the window: shown first around
             // the program's front window, then around its mouse.
             if resume != nil { MainActor.assumeIsolated { ScreenView.startAtFrontWindow = true } }
-            MainActor.assumeIsolated { runHostWindow(title: title, icon: dockImage(icons)) }
+            MainActor.assumeIsolated { runHostWindow(title: title, icon: dockImage(icons), script: script) }
         } else {
             MainActor.assumeIsolated {
                 runRootless(title: title, icon: dockImage(icons), script: script, background: background)
