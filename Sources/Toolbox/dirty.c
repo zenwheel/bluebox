@@ -224,6 +224,7 @@ void machine_screen_publish(void)
     }
     if (dirty_mode() == 2)
         verify();
+    present_stats_published();
 }
 
 void screen_dirty_machine_thread(void)
@@ -273,6 +274,32 @@ int present_dirty_rows(uint64_t *seen, int y0, int y1, int32_t *bands, int max)
         if (run >= 0)
             present_add_band(bands, &n, max, run, y1);
     }
+    *seen = p;
+    pthread_mutex_unlock(&lock);
+    return n;
+}
+
+/* For the statistics (present.c): how many rows of the page shown were
+ * published since *seen, *seen brought up to date; *height the page's.
+ * All of them when everything changed, PRESENT_DIRTY_UNKNOWN when nothing
+ * is tracked.  A frame is the rows written, not compared: a row drawn
+ * again the same counts. */
+int screen_dirty_count(uint64_t *seen, int *height)
+{
+    *height = 0;
+    if (!dirty_mode() || !atomic_load_explicit(&watching, memory_order_relaxed))
+        return PRESENT_DIRTY_UNKNOWN;
+    if (atomic_load_explicit(&pub_seq, memory_order_acquire) == *seen)
+        return 0;
+    pthread_mutex_lock(&lock);
+    uint64_t p = atomic_load(&pub_seq);
+    int n = 0;
+    *height = nstamps;
+    if (!*seen || all_seq > *seen)
+        n = nstamps;
+    else
+        for (int y = 0; y < nstamps; y++)
+            n += stamps[y] > *seen;
     *seen = p;
     pthread_mutex_unlock(&lock);
     return n;

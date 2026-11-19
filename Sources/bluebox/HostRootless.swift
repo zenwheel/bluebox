@@ -639,6 +639,7 @@ final class TransientView: NSView {
         if background { noteActivityElsewhere() }
         CursorSync.shared.tick()
         DragOut.shared.tick()
+        present_stats_host_look()
         present_stats_tick()
     }
 

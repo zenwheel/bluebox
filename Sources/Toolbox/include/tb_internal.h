@@ -147,6 +147,9 @@ bool idle_poll(void);
 void idle_work(void);
 void idle_wrote(gaddr a, uint32_t len); /* a quiet call's answer, written into the program's memory */
 void idle_wrote_handle(gaddr h);        /* ... into a handle (a region) */
+void idle_after_restore(void); /* the machine put back from a snapshot */
+/* Tests: an iteration's stores as the watch records them, hashed (idle.c). */
+uint64_t idle_test_store_pattern(const gaddr *addrs, const uint8_t *ops, int n, int reps);
 uint64_t mm_heap_fingerprint(void);     /* the zones' shape, for idle.c (memmgr.c) */
 void idle_slice(void);
 void idle_interrupt_enter(void);

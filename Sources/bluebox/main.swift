@@ -1471,7 +1471,10 @@ func runCommand(_ args: [String], resume: String? = nil) {
     if !debuggerScript.isEmpty { startDebuggerScript(debuggerScript, setMode: !debuggerGiven) }
     if let gdbPort { startGDBStub(gdbPort) }
     if let hibernateAt { machine_hibernate_at(start + hibernateAt) }
-    if !interactive { installHeadlessSavePoints() }
+    if !interactive {
+        installHeadlessSavePoints()
+        present_stats_headless() // BLUEBOX_PRESENT_STATS: the guest's frames, 60 looks a second
+    }
     // With --then the walk starts once the run has hibernated, as a resumed
     // run's does: the two are then alike but for the process.
     if walkMenus && thenRun != nil { machine_set_menu_walk(false) }

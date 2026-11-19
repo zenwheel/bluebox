@@ -124,6 +124,15 @@ void present_stats_main(uint64_t ns);
 void present_stats_cpu_frame(int rows, int width);
 /* Logged when a second has passed (call from the host's tick). */
 void present_stats_tick(void);
+/* A look at the screen for the guest's own frames (written since the
+ * last look): the GPU presenter's refreshes call present_stats_look, the
+ * host's tick present_stats_host_look (which counts only on the CPU
+ * path).  A headless run (present_stats_headless) looks 60 times a
+ * second at the machine's publications (present_stats_published). */
+void present_stats_look(void);
+void present_stats_host_look(void);
+void present_stats_headless(void);
+void present_stats_published(void);
 uint64_t present_now_ns(void);
 /* Benchmarks: the presenter thread's processor time so far. */
 uint64_t present_cpu_ns(void);

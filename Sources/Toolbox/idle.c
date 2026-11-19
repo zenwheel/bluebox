@@ -478,6 +478,55 @@ static gaddr sp_now(void) { return g_ppc_mode ? g_ppc.gpr[1] : g_cpu->a[7]; }
 static bool drawn_store(gaddr a, uint32_t len);
 static void store_run(gaddr a, uint32_t len);
 
+/* The places stored to, indexed by address: a program at work stores to
+ * many (its own pixels a long at a time), and each store looked through
+ * all of them, up to MOST_STORES, before it was taken as a stretch.  Each
+ * slot holds a place's number for this generation; a new iteration (fewer
+ * places than indexed) starts a new one, and a record put back from a
+ * snapshot (idle_after_restore) is indexed again.  The host's: the record
+ * itself is what is saved. */
+enum { PLACE_SLOTS = 2 * MOST_STORES }; /* a power of two: at most half full */
+BB_HOST static struct {
+    uint32_t gen;
+    uint16_t i;
+} place_ix[PLACE_SLOTS];
+BB_HOST static uint32_t place_gen = 1;
+BB_HOST static int place_n; /* the places indexed */
+BB_HOST static bool place_stale;
+
+void idle_after_restore(void) { place_stale = true; }
+
+static unsigned place_slot(gaddr a) { return (a * 2654435761u) >> 23; /* < PLACE_SLOTS */ }
+
+/* Place a's number in the record, -1 if it has none (*slot then where it
+ * goes). */
+static int place_find(gaddr a, unsigned *slot)
+{
+    if (st.nstores < place_n || place_stale) {
+        if (++place_gen == 0) {
+            memset(place_ix, 0, sizeof place_ix);
+            place_gen = 1;
+        }
+        place_n = 0;
+        place_stale = false;
+    }
+    for (; place_n < st.nstores; place_n++) {
+        unsigned k = place_slot(st_store(place_n)->a);
+        while (place_ix[k].gen == place_gen)
+            k = (k + 1) & (PLACE_SLOTS - 1);
+        place_ix[k].gen = place_gen;
+        place_ix[k].i = (uint16_t)place_n;
+    }
+    for (unsigned k = place_slot(a);; k = (k + 1) & (PLACE_SLOTS - 1)) {
+        if (place_ix[k].gen != place_gen) {
+            *slot = k;
+            return -1;
+        }
+        if (st_store(place_ix[k].i)->a == a)
+            return place_ix[k].i;
+    }
+}
+
 /* A place stored to: by the program (before the store, so what the place
  * held can be read) or by a call answering (after). */
 static void store_place(gaddr a, uint32_t len, bool before)
@@ -492,15 +541,13 @@ static void store_place(gaddr a, uint32_t len, bool before)
         return;
     if (len > 4)
         len = 4;
-    BB_HOST static int last;
-    for (int i = last < st.nstores && st_store(last)->a == a ? last : 0; i < st.nstores; i++) {
+    unsigned slot;
+    int i = place_find(a, &slot);
+    if (i >= 0) {
         store *s = st_store(i);
-        if (s->a == a) {
-            if (len > s->len)
-                s->len = len;
-            last = i + 1;
-            return;
-        }
+        if (len > s->len)
+            s->len = len;
+        return;
     }
     if (st.nstores == MOST_STORES) {
         store_run(a, len);
@@ -509,9 +556,11 @@ static void store_place(gaddr a, uint32_t len, bool before)
     st_had[st.nstores] = before;
     for (uint32_t k = 0; before && k < 4; k++)
         st_before[st.nstores][k] = rd8(a + k);
+    place_ix[slot].gen = place_gen;
+    place_ix[slot].i = (uint16_t)st.nstores;
     st_store(st.nstores)->a = a;
     st_store(st.nstores++)->len = len;
-    last = st.nstores;
+    place_n = st.nstores;
 }
 
 static void store_seen(gaddr a, uint32_t len) { store_place(a, len, true); }
@@ -1438,3 +1487,50 @@ uint64_t machine_idle_sleeps(uint64_t *ns)
 }
 
 void machine_set_idle_sleep(bool allowed) { enabled = allowed; }
+
+/* Tests: an iteration's stores, as the watch records them (n of them,
+ * reps times round): addrs[i] stored to, ops[i] its length (1 to 127),
+ * with 0x80 a quiet call's answer (idle_wrote) rather than the program's
+ * own store.  A hash of the record (the places in order, their lengths
+ * and what they held before, the stretches, the pixels taken, the
+ * overflows); the watch is then reset. */
+uint64_t idle_test_store_pattern(const gaddr *addrs, const uint8_t *ops, int n, int reps)
+{
+    idle_reset();
+    st.watching = true;
+    for (int r = 0; r < reps; r++)
+        for (int i = 0; i < n; i++) {
+            uint32_t len = ops[i] & 0x7F;
+            if (ops[i] & 0x80)
+                idle_wrote(addrs[i], len);
+            else
+                store_seen(addrs[i], len);
+        }
+    uint64_t h = 0xCBF29CE484222325ull;
+#define MIX(v) (h = (h ^ (uint64_t)(v)) * 0x100000001B3ull)
+    MIX(st.nstores);
+    for (int i = 0; i < st.nstores; i++) {
+        MIX(st_store(i)->a);
+        MIX(st_store(i)->len);
+        MIX(st_had[i]);
+        for (int k = 0; st_had[i] && k < 4; k++)
+            MIX(st_before[i][k]);
+    }
+    MIX(st.overflow);
+    MIX(more.n);
+    MIX(more.overflow);
+    for (int i = 0; i < more.n; i++) {
+        MIX(more.r[i].a);
+        MIX(more.r[i].len);
+        MIX(more.r[i].handle);
+    }
+    MIX(st.ndrawn);
+    MIX(st.drawn_overflow);
+    for (int i = 0; i < st.ndrawn; i++) {
+        const drawn *d = &st.drawn[i];
+        MIX(d->base), MIX(d->row_bytes), MIX(d->rows), MIX(d->r0), MIX(d->r1), MIX(d->b0), MIX(d->b1);
+    }
+#undef MIX
+    idle_reset();
+    return h;
+}

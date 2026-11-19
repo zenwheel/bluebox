@@ -130,6 +130,57 @@ void present_note_hold(uint64_t ns)
     note_max(&st_hold_max, ns);
 }
 
+/* The guest's own frames: at each look a presenter takes (a GPU refresh,
+ * the CPU path's tick, a headless run's 60th of a second), whether the
+ * program wrote the screen since the last (dirty.c's rows, not a
+ * comparison), so a program drawing 20 frames a second shows 20 however
+ * often the host presents.  Its own reader, so no presenter's is moved. */
+int screen_dirty_count(uint64_t *seen, int *height);
+BB_HOST static uint64_t guest_seen;
+BB_HOST static _Atomic uint64_t st_looks, st_gframes, st_grows, st_gheight;
+BB_HOST static _Atomic bool guest_untracked;
+BB_HOST static bool headless;
+BB_HOST static uint64_t headless_at;
+
+void present_stats_look(void)
+{
+    if (!present_stats_on())
+        return;
+    int h;
+    int n = screen_dirty_count(&guest_seen, &h);
+    atomic_fetch_add(&st_looks, 1);
+    atomic_store(&guest_untracked, n == PRESENT_DIRTY_UNKNOWN);
+    if (n > 0) {
+        atomic_fetch_add(&st_gframes, 1);
+        atomic_fetch_add(&st_grows, (uint64_t)n);
+        atomic_fetch_add(&st_gheight, (uint64_t)h);
+    }
+}
+
+void present_stats_host_look(void)
+{
+    if (present_stats_on() && !strcmp(present_path(), "cpu"))
+        present_stats_look(); /* a GPU path looks at its own refreshes */
+}
+
+void present_stats_headless(void)
+{
+    if (present_stats_on())
+        headless = true;
+}
+
+void present_stats_published(void)
+{
+    if (!headless)
+        return;
+    uint64_t now = present_now_ns();
+    if (now - headless_at < 1000000000u / 60)
+        return;
+    headless_at = now;
+    present_stats_look();
+    present_stats_tick();
+}
+
 void present_stats_tick(void)
 {
     if (!present_stats_on())
@@ -152,16 +203,25 @@ void present_stats_tick(void)
     uint64_t hold_max = atomic_exchange(&st_hold_max, 0);
     uint64_t read = atomic_exchange(&st_read_ns, 0), read_n = atomic_exchange(&st_read_n, 0);
     uint64_t read_max = atomic_exchange(&st_read_max, 0);
+    uint64_t looks = atomic_exchange(&st_looks, 0), gframes = atomic_exchange(&st_gframes, 0);
+    uint64_t grows = atomic_exchange(&st_grows, 0), gheight = atomic_exchange(&st_gheight, 0);
+    char guest[160];
+    if (atomic_load(&guest_untracked))
+        snprintf(guest, sizeof guest, "guest frames untracked");
+    else
+        snprintf(guest, sizeof guest, "guest %.1f frames/s of %.1f looks/s, %.0f rows/s written (%.1f%% of the screen a frame)",
+                 (double)gframes / s, (double)looks / s, (double)grows / s,
+                 gheight ? 100.0 * (double)grows / (double)gheight : 0.0);
     fprintf(stderr,
             "present: %s; main thread %.3f ms a frame over %llu; %.1f frames/s drawn, %llu rows (%.1f MB) copied; "
             "vsyncs %llu, full looks %llu, skipped %llu, unmarked rows found %llu; render %.3f ms avg %.3f max; "
-            "held past the refresh %.3f ms avg %.3f max; paced waits %.3f ms avg %.3f max over %llu; pacing %s\n",
-            present_path(), main_n ? (double)main_ns / (double)main_n / 1e6 : 0.0, (unsigned long long)main_n,
+            "held past the refresh %.3f ms avg %.3f max; paced waits %.3f ms avg %.3f max over %llu; pacing %s; %s\n",
+            headless ? "headless" : present_path(), main_n ? (double)main_ns / (double)main_n / 1e6 : 0.0, (unsigned long long)main_n,
             (double)frames / s, (unsigned long long)rows, (double)bytes / 1e6, (unsigned long long)vsyncs,
             (unsigned long long)scans, (unsigned long long)skips, (unsigned long long)atomic_exchange(&st_missed, 0), vsyncs ? (double)render / (double)vsyncs / 1e6 : 0.0,
             (double)render_max / 1e6, read_n ? (double)read / (double)read_n / 1e6 : 0.0, (double)read_max / 1e6,
             hold_n ? (double)hold / (double)hold_n / 1e6 : 0.0, (double)hold_max / 1e6, (unsigned long long)hold_n,
-            present_live() ? "on refreshes" : "wall clock");
+            present_live() ? "on refreshes" : "wall clock", guest);
 }
 
 /* ---- No GPU presenter on this host ---- */

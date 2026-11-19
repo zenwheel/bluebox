@@ -733,8 +733,10 @@ static void refresh(PresentSurface *only)
     bool all = false, scanned = false;
     int n = 0;
     id<MTLCommandBuffer> copy = nil;
-    if (!only)
+    if (!only) {
+        present_stats_look();
         n = update_copy(bands, false, &all, &scanned, &copy);
+    }
     if (copy) {
         /* Zero-copy: the GPU's copy of the rows goes first, on its own, and
          * a program waiting for the refresh goes on once it is done, not

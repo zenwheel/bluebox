@@ -148,6 +148,7 @@ final class ScreenView: NSView, MacScreenView {
                 let seen = noteHostVisibility() < 2
                 self?.surface?.visible(seen)
                 if seen { self?.refreshIfChanged() }
+                present_stats_host_look()
                 present_stats_tick()
                 self?.updateCapture()
                 self?.followMouse()

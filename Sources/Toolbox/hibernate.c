@@ -113,6 +113,8 @@
 #include <mach-o/stab.h>
 #endif
 
+void idle_after_restore(void); /* idle.c */
+
 #define MAGIC "BBHIBER2"
 #define VERSION 2
 
@@ -3521,6 +3523,7 @@ bool hb_restore_buffer(const uint8_t *buf, size_t len, int flags, hb_stats *stat
     /* The JIT's translations are of the code that was there; the
      * instruction cache came back with the rest of the machine. */
     mem_code_after_restore();
+    idle_after_restore(); /* the idle watch's index of its record */
     st->bytes = len;
     return true;
 }
