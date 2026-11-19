@@ -272,6 +272,9 @@ static void load_ctx(const exec_ctx *x)
     p->ctr = x->ppc.ctr;
     p->xer = x->ppc.xer;
     p->fpscr = x->ppc.fpscr;
+    memcpy(p->vr, x->ppc.vr, sizeof p->vr); /* AltiVec's, as Mac OS keeps them per thread and task */
+    p->vscr = x->ppc.vscr;
+    p->vrsave = x->ppc.vrsave;
     p->pc = x->ppc.pc;
     p->op_pc = x->ppc.op_pc;
     p->prev_pc = x->ppc.prev_pc;

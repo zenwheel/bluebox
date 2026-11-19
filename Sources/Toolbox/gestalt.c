@@ -219,7 +219,7 @@ void gestalt_init(void)
         gestalt_machine(hw_machine());
 }
 
-/* A PowerPC application: a PowerPC Mac's answers (a G3 with Mac OS 8.1,
+/* A PowerPC application: a PowerPC Mac's answers (a G4 or G3 with Mac OS 8.1,
  * the Code Fragment Manager, Mixed Mode, QuickTime's PowerPC library).
  * 8.1, as the Appearance Manager, Navigation Services, Contextual Menus
  * and Open Transport are there: Setback, Spades and sixtyforce ask for
@@ -238,7 +238,16 @@ void gestalt_powerpc(void)
      * and AppleTalk on our stack when it's on (ot_appletalk.c) */
     gestalt_set(fourcc("otan"), 0x33 | (appletalk_enabled() ? 0x0C : 0)); /* present and loaded; TCP, AppleTalk */
     gestalt_set(fourcc("otvr"), 0x01208000); /* 1.2 */
-    gestalt_set(fourcc("cput"), 0x0108); /* gestaltCPU750 */
+    /* The processor (machine_set_powerpc): a G4, an MPC7400, whose
+     * family is the G4's too (gestaltCPUG4), or a G3 (gestaltCPU750); and
+     * gestaltPowerPCProcessorFeatures as those had them: fres, frsqrte and
+     * fsel (bit 0) and stfiwx (1), and on a G4 dcba (3), the vector
+     * instructions (4) and the data stream touches (5).  Neither has
+     * fsqrt in hardware (2), though Blue Box runs it. */
+    uint32_t cpu = ppc_altivec ? 0x010C : 0x0108;
+    gestalt_set(fourcc("cput"), cpu);
+    gestalt_set(fourcc("cpuf"), cpu);
+    gestalt_set(fourcc("ppcf"), ppc_altivec ? 0x3B : 0x03);
     gestalt_set(fourcc("cfrg"), 0x1);    /* gestaltCFMPresent */
     gestalt_set(fourcc("mixd"), 0x1);    /* gestaltPowerPCAware */
     /* CarbonLib 1.1 (gestaltCarbonVersion): the Carbon Event Manager, the

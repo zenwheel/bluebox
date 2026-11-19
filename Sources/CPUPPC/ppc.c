@@ -40,6 +40,7 @@ static inline void ppc_wr32(gaddr a, uint32_t v) { watch_store(a, 4); wr32(a, v)
 void ppc_init(ppc_cpu *c)
 {
     memset(c, 0, sizeof *c);
+    c->vscr = PPC_VSCR_NJ; /* non-Java mode, as Mac OS starts a program */
 }
 
 void ppc_halt(ppc_cpu *c, const char *fmt, ...)
@@ -614,7 +615,7 @@ static void op31(ppc_cpu *c, uint32_t op)
         c->xer &= 0x0FFFFFFFu;
         return;
     case 83: /* mfmsr: user mode, as a program sees it */
-        c->gpr[d] = 0x0000D032u;
+        c->gpr[d] = ppc_msr();
         return;
     case 146: /* mtmsr */
     case 210: /* mtsr */
@@ -632,7 +633,8 @@ static void op31(ppc_cpu *c, uint32_t op)
         case 268: c->gpr[d] = (uint32_t)c->tb; break;
         case 269: c->gpr[d] = (uint32_t)(c->tb >> 32); break;
         case 0: c->gpr[d] = c->mq; break;
-        case 287: c->gpr[d] = 0x00080200u; break; /* PVR: a 750 (G3) */
+        case 256: c->gpr[d] = c->vrsave; break;
+        case 287: c->gpr[d] = ppc_pvr(); break;
         default: c->gpr[d] = 0; break;
         }
         return;
@@ -646,6 +648,7 @@ static void op31(ppc_cpu *c, uint32_t op)
         case 1: c->xer = rs; break;
         case 8: c->lr = rs; break;
         case 9: c->ctr = rs; break;
+        case 256: c->vrsave = rs; break;
         default: break;
         }
         return;
@@ -706,6 +709,7 @@ static void op31(ppc_cpu *c, uint32_t op)
         return;
     }
     case 54: case 86: case 246: case 278: case 470: case 982: /* dcbst dcbf dcbtst dcbt dcbi icbi */
+    case 758:                                                /* dcba */
     case 598: case 854: case 306: case 370: case 566:        /* sync eieio tlbie tlbia tlbsync */
         return;
     /* Logical, shifts, extends: result to rA */
@@ -746,7 +750,8 @@ static void op31(ppc_cpu *c, uint32_t op)
         break;
     }
     if (!logical) {
-        illegal(c);
+        if (!ppc_vec_op31(c, op)) /* AltiVec's loads, stores and stream touches */
+            illegal(c);
         return;
     }
     c->gpr[a] = r;
@@ -783,6 +788,10 @@ void ppc_execute(ppc_cpu *c, uint32_t op)
         if (c->native)
             c->native(c, op & 0x03FFFFFFu);
         else
+            illegal(c);
+        return;
+    case 4: /* AltiVec */
+        if (!ppc_vec_op4(c, op))
             illegal(c);
         return;
     case 3: /* twi */

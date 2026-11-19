@@ -1017,6 +1017,11 @@ static void run_to_return(void)
     uint64_t pumped = c->icount;
     while (!c->halted && returned_depth != depth) {
         cpu_step(c);
+        /* Returned: no interrupt-time work in between, as a task's own
+         * guest call would end by clearing returned_depth, and this call
+         * would run on past its return into whatever its stack held. */
+        if (returned_depth == depth)
+            break;
         /* Interrupt-time work goes on inside callbacks too: a program
          * may wait there for Ticks to move or a VBL task's flag. */
         if (c->icount - pumped >= 20000) {

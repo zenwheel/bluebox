@@ -2,9 +2,9 @@
  * PowerPC (32-bit, big-endian) disassembler, MacsBug style: lowercase
  * mnemonics padded to 10 columns, simplified mnemonics where they apply,
  * branch targets as absolute $XXXXXXXX.  Covers the 601 (POWER leftovers
- * included), 603/604/G3 user and supervisor instructions and the AltiVec
- * loads and stores of opcode 31; the AltiVec vector ops (opcode 4) print
- * as .long.  Pure function, no state.
+ * included), 603/604/G3 user and supervisor instructions and the whole of
+ * AltiVec (opcode 4, and opcode 31's vector loads, stores and data stream
+ * touches).  Pure function, no state.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -196,6 +196,128 @@ static void do_branch(Dis *d, uint32_t addr, uint32_t op, int kind)
     }
 }
 
+/* Opcode 4: AltiVec.  Operand forms: */
+enum {
+    V_DAB,   /* vD,vA,vB */
+    V_DB,    /* vD,vB */
+    V_DBU,   /* vD,vB,UIMM */
+    V_DS,    /* vD,SIMM */
+    V_D,     /* vD */
+    V_B,     /* vB */
+};
+
+typedef struct {
+    uint16_t xo;
+    uint8_t fmt;
+    const char *name;
+} V4;
+
+static const V4 v4[] = {
+    {0, V_DAB, "vaddubm"}, {2, V_DAB, "vmaxub"}, {4, V_DAB, "vrlb"}, {8, V_DAB, "vmuloub"},
+    {10, V_DAB, "vaddfp"}, {12, V_DAB, "vmrghb"}, {14, V_DAB, "vpkuhum"},
+    {64, V_DAB, "vadduhm"}, {66, V_DAB, "vmaxuh"}, {68, V_DAB, "vrlh"}, {72, V_DAB, "vmulouh"},
+    {74, V_DAB, "vsubfp"}, {76, V_DAB, "vmrghh"}, {78, V_DAB, "vpkuwum"},
+    {128, V_DAB, "vadduwm"}, {130, V_DAB, "vmaxuw"}, {132, V_DAB, "vrlw"}, {140, V_DAB, "vmrghw"},
+    {142, V_DAB, "vpkuhus"}, {206, V_DAB, "vpkuwus"},
+    {258, V_DAB, "vmaxsb"}, {260, V_DAB, "vslb"}, {264, V_DAB, "vmulosb"}, {266, V_DB, "vrefp"},
+    {268, V_DAB, "vmrglb"}, {270, V_DAB, "vpkshus"},
+    {322, V_DAB, "vmaxsh"}, {324, V_DAB, "vslh"}, {328, V_DAB, "vmulosh"}, {330, V_DB, "vrsqrtefp"},
+    {332, V_DAB, "vmrglh"}, {334, V_DAB, "vpkswus"},
+    {384, V_DAB, "vaddcuw"}, {386, V_DAB, "vmaxsw"}, {388, V_DAB, "vslw"}, {394, V_DB, "vexptefp"},
+    {396, V_DAB, "vmrglw"}, {398, V_DAB, "vpkshss"},
+    {452, V_DAB, "vsl"}, {458, V_DB, "vlogefp"}, {462, V_DAB, "vpkswss"},
+    {512, V_DAB, "vaddubs"}, {514, V_DAB, "vminub"}, {516, V_DAB, "vsrb"}, {520, V_DAB, "vmuleub"},
+    {522, V_DB, "vrfin"}, {524, V_DBU, "vspltb"}, {526, V_DB, "vupkhsb"},
+    {576, V_DAB, "vadduhs"}, {578, V_DAB, "vminuh"}, {580, V_DAB, "vsrh"}, {584, V_DAB, "vmuleuh"},
+    {586, V_DB, "vrfiz"}, {588, V_DBU, "vsplth"}, {590, V_DB, "vupkhsh"},
+    {640, V_DAB, "vadduws"}, {642, V_DAB, "vminuw"}, {644, V_DAB, "vsrw"}, {650, V_DB, "vrfip"},
+    {652, V_DBU, "vspltw"}, {654, V_DB, "vupklsb"},
+    {708, V_DAB, "vsr"}, {714, V_DB, "vrfim"}, {718, V_DB, "vupklsh"},
+    {768, V_DAB, "vaddsbs"}, {770, V_DAB, "vminsb"}, {772, V_DAB, "vsrab"}, {776, V_DAB, "vmulesb"},
+    {778, V_DBU, "vcfux"}, {780, V_DS, "vspltisb"}, {782, V_DAB, "vpkpx"},
+    {832, V_DAB, "vaddshs"}, {834, V_DAB, "vminsh"}, {836, V_DAB, "vsrah"}, {840, V_DAB, "vmulesh"},
+    {842, V_DBU, "vcfsx"}, {844, V_DS, "vspltish"}, {846, V_DB, "vupkhpx"},
+    {896, V_DAB, "vaddsws"}, {898, V_DAB, "vminsw"}, {900, V_DAB, "vsraw"}, {906, V_DBU, "vctuxs"},
+    {908, V_DS, "vspltisw"}, {970, V_DBU, "vctsxs"}, {974, V_DB, "vupklpx"},
+    {1024, V_DAB, "vsububm"}, {1026, V_DAB, "vavgub"}, {1028, V_DAB, "vand"}, {1034, V_DAB, "vmaxfp"},
+    {1036, V_DAB, "vslo"},
+    {1088, V_DAB, "vsubuhm"}, {1090, V_DAB, "vavguh"}, {1092, V_DAB, "vandc"}, {1098, V_DAB, "vminfp"},
+    {1100, V_DAB, "vsro"},
+    {1152, V_DAB, "vsubuwm"}, {1154, V_DAB, "vavguw"}, {1156, V_DAB, "vor"},
+    {1220, V_DAB, "vxor"},
+    {1282, V_DAB, "vavgsb"}, {1284, V_DAB, "vnor"},
+    {1346, V_DAB, "vavgsh"},
+    {1408, V_DAB, "vsubcuw"}, {1410, V_DAB, "vavgsw"},
+    {1536, V_DAB, "vsububs"}, {1540, V_D, "mfvscr"}, {1544, V_DAB, "vsum4ubs"},
+    {1600, V_DAB, "vsubuhs"}, {1604, V_B, "mtvscr"}, {1608, V_DAB, "vsum4shs"},
+    {1664, V_DAB, "vsubuws"}, {1672, V_DAB, "vsum2sws"},
+    {1792, V_DAB, "vsubsbs"}, {1800, V_DAB, "vsum4sbs"},
+    {1856, V_DAB, "vsubshs"},
+    {1920, V_DAB, "vsubsws"}, {1928, V_DAB, "vsumsws"},
+    /* VC form: compares, with a "." form (Rc, bit 21) */
+    {6, V_DAB, "vcmpequb"}, {70, V_DAB, "vcmpequh"}, {134, V_DAB, "vcmpequw"}, {198, V_DAB, "vcmpeqfp"},
+    {454, V_DAB, "vcmpgefp"}, {518, V_DAB, "vcmpgtub"}, {582, V_DAB, "vcmpgtuh"}, {646, V_DAB, "vcmpgtuw"},
+    {710, V_DAB, "vcmpgtfp"}, {774, V_DAB, "vcmpgtsb"}, {838, V_DAB, "vcmpgtsh"}, {902, V_DAB, "vcmpgtsw"},
+    {966, V_DAB, "vcmpbfp"},
+};
+
+static int dec4(Dis *d, uint32_t op)
+{
+    int vd = RD(op), va = RA(op), vb = RB(op), vc = (int)((op >> 6) & 31);
+    if (op & 0x20) { /* VA form */
+        static const char *const va_names[16] = {
+            "vmhaddshs", "vmhraddshs", "vmladduhm", NULL, "vmsumubm", "vmsummbm", "vmsumuhm", "vmsumuhs",
+            "vmsumshm", "vmsumshs", "vsel", "vperm", "vsldoi", NULL, "vmaddfp", "vnmsubfp",
+        };
+        int xo = (int)(op & 0x3F);
+        const char *n = xo < 48 ? va_names[xo - 32] : NULL;
+        if (!n)
+            return 0;
+        strcpy(d->mn, n);
+        if (xo == 44) {
+            if (op & 0x400) return 0;
+            OPS(d, "v%d,v%d,v%d,%d", vd, va, vb, vc & 15);
+        } else if (xo >= 46) /* vmaddfp, vnmsubfp: written vD,vA,vC,vB */
+            OPS(d, "v%d,v%d,v%d,v%d", vd, va, vc, vb);
+        else
+            OPS(d, "v%d,v%d,v%d,v%d", vd, va, vb, vc);
+        return 1;
+    }
+    int xo = (int)(op & 0x7FF);
+    bool cmp = (xo & 15) == 6;
+    if (cmp)
+        xo &= 0x3FF;
+    for (size_t k = 0; k < sizeof v4 / sizeof v4[0]; k++) {
+        const V4 *e = &v4[k];
+        if (e->xo != xo)
+            continue;
+        if ((e->fmt == V_DB && va) || (e->fmt == V_D && (va || vb)) || (e->fmt == V_B && (vd || va)) ||
+            (e->fmt == V_DS && vb))
+            return 0;
+        if (xo == 1156 && va == vb) { /* vor: vmr */
+            strcpy(d->mn, "vmr");
+            OPS(d, "v%d,v%d", vd, va);
+            return 1;
+        }
+        if (xo == 1284 && va == vb) { /* vnor: vnot */
+            strcpy(d->mn, "vnot");
+            OPS(d, "v%d,v%d", vd, va);
+            return 1;
+        }
+        snprintf(d->mn, sizeof d->mn, "%s%s", e->name, cmp && (op & 0x400) ? "." : "");
+        switch (e->fmt) {
+        case V_DAB: OPS(d, "v%d,v%d,v%d", vd, va, vb); break;
+        case V_DB: OPS(d, "v%d,v%d", vd, vb); break;
+        case V_DBU: OPS(d, "v%d,v%d,%d", vd, vb, va); break;
+        case V_DS: OPS(d, "v%d,%d", vd, (va ^ 16) - 16); break;
+        case V_D: OPS(d, "v%d", vd); break;
+        default: OPS(d, "v%d", vb); break;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 /* Opcode 31 forms handled by table. */
 enum {
     F_DAB,      /* rD,rA,rB */
@@ -363,11 +485,11 @@ static int dec31(Dis *d, uint32_t op)
         if (rc) return 0;
         spr = ra | (rb << 5);
         if (xo == 339) {
-            const char *n = spr == 8 ? "mflr" : spr == 9 ? "mfctr" : spr == 1 ? "mfxer" : NULL;
+            const char *n = spr == 8 ? "mflr" : spr == 9 ? "mfctr" : spr == 1 ? "mfxer" : spr == 256 ? "mfvrsave" : NULL;
             if (n) { strcpy(d->mn, n); OPS(d, "r%d", rd); }
             else { strcpy(d->mn, "mfspr"); OPS(d, "r%d,%d", rd, spr); }
         } else {
-            const char *n = spr == 8 ? "mtlr" : spr == 9 ? "mtctr" : spr == 1 ? "mtxer" : NULL;
+            const char *n = spr == 8 ? "mtlr" : spr == 9 ? "mtctr" : spr == 1 ? "mtxer" : spr == 256 ? "mtvrsave" : NULL;
             if (n) { strcpy(d->mn, n); OPS(d, "r%d", rd); }
             else { strcpy(d->mn, "mtspr"); OPS(d, "%d,r%d", spr, rd); }
         }
@@ -382,6 +504,12 @@ static int dec31(Dis *d, uint32_t op)
     case 512:
         if (rc || (op & 0x0063F800) || (rd & 3)) return 0;
         strcpy(d->mn, "mcrxr"); OPS(d, "cr%d", rd >> 2); return 1;
+    case 342:   /* dst, dstt */
+    case 374:   /* dstst, dststt */
+        if (rc || (op & 0x01800000)) return 0;
+        snprintf(d->mn, sizeof d->mn, "%s%s", xo == 342 ? "dst" : "dstst", (op & 0x02000000) ? "t" : "");
+        OPS(d, "%s,r%d,%d", ra0(d->t[0], ra), rb, (int)((op >> 21) & 3));
+        return 1;
     case 822:   /* dss, dssall */
         if (rc) return 0;
         strcpy(d->mn, (op & 0x02000000) ? "dssall" : "dss");
@@ -585,6 +713,7 @@ static int decode(Dis *d, uint32_t addr, uint32_t op)
         return 1;
     }
     switch (pri) {
+    case 4: return dec4(d, op);
     case 1:
         strcpy(d->mn, "NATIVE");
         OPS(d, "$%07X", (unsigned)(op & 0x03FFFFFF));

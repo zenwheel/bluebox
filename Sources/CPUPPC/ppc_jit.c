@@ -390,13 +390,13 @@ static enum kind classify(uint32_t op)
         if (arith_xo9(XO9(op)))
             return OEBIT(op) || XO9(op) == 491 ? K_EXEC : K_NATIVE;
         switch (XO10(op)) {
-        case 0: case 32: case 19: case 144: case 83:
+        case 0: case 32: case 19: case 144:
         case 23: case 55: case 87: case 119: case 279: case 311: case 343: case 375:
         case 151: case 183: case 215: case 247: case 407: case 439:
         case 534: case 790: case 662: case 918:
         case 28: case 60: case 444: case 412: case 316: case 476: case 124: case 284:
         case 954: case 922: case 26: case 24: case 536: case 792: case 824:
-        case 54: case 86: case 246: case 278: case 470: case 982:
+        case 54: case 86: case 246: case 278: case 470: case 982: case 758:
         case 598: case 854: case 306: case 370: case 566: case 146: case 210: case 242:
             return K_NATIVE;
         case 339: case 467: {
@@ -405,6 +405,7 @@ static enum kind classify(uint32_t op)
                 return K_STOP; /* the time base: counted per instruction */
             return (spr == 1 || spr == 8 || spr == 9) ? K_NATIVE : K_EXEC;
         }
+        case 83: /* mfmsr: the processor's (ppc_msr), which a cached translation can't know */
         case 512: case 595: case 659: case 20: case 150: case 533: case 597: case 661: case 725:
         case 535: case 567: case 599: case 631: case 663: case 695: case 727: case 759: case 983: case 1014:
             return K_EXEC;
@@ -806,11 +807,6 @@ static bool emit(tctx *t, uint32_t op, uint32_t pc)
         stf(t, 0, FIELD(cr));
         return true; /* the flags no longer describe any field */
     }
-    case 83: /* mfmsr */
-        a64_mov32(b, 0, 0x0000D032u);
-        stg(t, 0, d);
-        t->keeps_flags = true;
-        return true;
     case 339: { /* mfspr: XER, LR, CTR */
         uint32_t spr = ((op >> 16) & 31) | (((op >> 11) & 31) << 5);
         ldf(t, 0, spr == 1 ? FIELD(xer) : spr == 8 ? FIELD(lr) : FIELD(ctr));
@@ -926,7 +922,7 @@ static bool emit(tctx *t, uint32_t op, uint32_t pc)
         a64_add(b, 0, 1, 2);
         jit_call(&t->b, H_ICBI);
         return true;
-    case 54: case 86: case 246: case 278: case 470: /* data cache hints */
+    case 54: case 86: case 246: case 278: case 470: case 758: /* data cache hints */
     case 598: case 854: case 306: case 370: case 566: case 146: case 210: case 242: /* sync and supervisor no-ops */
         t->keeps_flags = true;
         return true;

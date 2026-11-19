@@ -1171,6 +1171,13 @@ struct SettingsForm: View {
                 Text(cpuName(68000)).tag(Int?.some(68000))
                 Text(cpuName(powerPCSetting)).tag(Int?.some(powerPCSetting))
             }
+            Picker("PowerPC", selection: $settings.powerpc) {
+                Text("\(inherit) (\(powerPCName(fallback.powerpc ?? powerPCDefault)))").tag(String?.none)
+                Text(powerPCName("g4")).tag(String?.some("g4"))
+                Text(powerPCName("g3")).tag(String?.some("g3"))
+            }
+            .help("The processor PowerPC code runs on: a G4, with the AltiVec vector unit programs check for "
+                  + "and take their fast paths with, or a G3 without it, for a program whose G4 path misbehaves.")
             Picker("Floating point", selection: $settings.fpu) {
                 Text("\(inherit) (\(fallback.fpu.map(fpuName) ?? "the processor's own"))").tag(Int?.none)
                 ForEach([0, 68881, 68882, 68040], id: \.self) { f in Text(fpuName(f)).tag(Int?.some(f)) }
@@ -1356,6 +1363,7 @@ struct SettingsForm: View {
         default: return "68040, a Quadra 800 (68k code)"
         }
     }
+    private func powerPCName(_ p: String) -> String { p == "g3" ? "G3 (no AltiVec)" : "G4 (with AltiVec)" }
     private func fpuName(_ f: Int) -> String {
         f == 0 ? "None" : f == 68040 ? "The 68040's own" : "\(f)"
     }

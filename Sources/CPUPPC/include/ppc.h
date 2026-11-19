@@ -1,7 +1,8 @@
 /*
  * PowerPC interpreter: 32-bit user mode (the 601/603/604/G3 instruction set
  * application programs use: integer, branch, condition register, load and
- * store, floating point), big-endian, on the guest memory of mem.h.
+ * store, floating point, and the G4's AltiVec vector unit, ppc_vec.c),
+ * big-endian, on the guest memory of mem.h.
  *
  * Special opcode:
  *   0x04000000 | n    NATIVE: primary opcode 1, unused by the architecture;
@@ -47,10 +48,26 @@ struct ppc_cpu {
     void *user;
     uint32_t mq; /* the 601's MQ register, for the POWER multiply and divide */
     bool stop;   /* ppc_run returns before the next instruction (a drain's safe point) */
+    /* AltiVec (ppc_vec.c): the 32 vector registers, each its 16 bytes in
+     * the guest's order (element 0 first, big-endian within an element),
+     * VSCR (PPC_VSCR_NJ, PPC_VSCR_SAT) and VRSAVE (SPR 256).  All zero in
+     * a snapshot saved before they existed. */
+    uint8_t vr[32][16];
+    uint32_t vscr, vrsave;
 };
 
 /* XER bits */
 enum { PPC_XER_SO = 0x80000000u, PPC_XER_OV = 0x40000000u, PPC_XER_CA = 0x20000000u };
+/* VSCR bits: non-Java mode (denormals read and made as zero), saturation */
+enum { PPC_VSCR_NJ = 0x00010000u, PPC_VSCR_SAT = 0x00000001u };
+
+/* The processor: a G4 (an MPC7400, with AltiVec) when true, else a G3 (an
+ * MPC750), on which the vector instructions are illegal.  The machine sets
+ * it before a program starts; a snapshot keeps the one it ran on. */
+extern bool ppc_altivec;
+/* The processor version register and the MSR a program reads, for it. */
+uint32_t ppc_pvr(void);
+uint32_t ppc_msr(void);
 
 void ppc_init(ppc_cpu *c);
 /* Run until halted or `max` instructions have executed; returns the count. */
@@ -82,6 +99,16 @@ void ppc_jit_get_stats(ppc_jit_stats *s);
  * a scratch area of memory (at `scratch`, 64 KB) compared.  Returns the
  * number of mismatches; describes the first in `why`. */
 int ppc_jit_selftest(uint32_t seed, int blocks, uint32_t code_at, uint32_t scratch, char *why, int whylen);
+
+/* The vector unit (ppc_vec.c), for ppc_execute: an opcode 4 instruction,
+ * and the AltiVec ones of opcode 31 (vector loads and stores, data stream
+ * touches).  False when op is none of them (or the processor is a G3). */
+bool ppc_vec_op4(ppc_cpu *c, uint32_t op);
+bool ppc_vec_op31(ppc_cpu *c, uint32_t op);
+/* Vector instructions run since the process started (for the run's report). */
+extern uint64_t ppc_vec_count;
+/* Whether op is an AltiVec instruction (opcode 4, or one of opcode 31's). */
+bool ppc_vec_insn(uint32_t op);
 
 /* Disassemble instruction word op, found at addr (for branch targets), into buf. */
 void ppc_disasm(uint32_t addr, uint32_t op, char *buf, int bufsize);

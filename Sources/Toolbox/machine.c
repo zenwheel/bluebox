@@ -190,6 +190,9 @@ void machine_set_cpu(int model)
 {
     cpu_model = model == 68000 || model == 68020 || model == 68030 ? model : 68040;
 }
+void machine_set_powerpc(int g) { ppc_altivec = g != 3; }
+int machine_powerpc(void) { return ppc_altivec ? 4 : 3; }
+uint64_t machine_vector_instructions(void) { return ppc_vec_count; }
 void machine_set_fpu(int fpu) { fpu_choice = fpu == 0 || fpu == 68881 || fpu == 68882 || fpu == 68040 ? fpu : -1; }
 void machine_set_addressing(int bits) { addressing = bits == 24 || bits == 32 ? bits : 0; }
 

@@ -1507,7 +1507,7 @@ static const hb_run runs[] = {
     { 1072, 'F', 1, 0, 1, 0 },
     { 1080, 'F', 1, 0, 1, 0 },
     { 1088, 'P', 1, 0, 1, 0 },
-    { 3336, 'G', 1, 0, 1, 0 },
+    { 3856, 'G', 1, 0, 1, 0 },
 };
 
 const hb_layout hb_layouts[] = {
@@ -1917,6 +1917,7 @@ const hb_static hb_statics[] = {
     { "CPU68K/cpu68k_strict.c", "op_pmmu030.srp", 8, 0, 0xc95d3f855a783b82 },
     { "CPU68K/cpu68k_strict.c", "op_pmmu030.tc", 4, 0, 0x4984645b460455b1 },
     { "CPU68K/cpu68k_strict.c", "op_pmmu030.tt", 8, 0, 0xc95d3f855a783b82 },
+    { "CPUPPC/ppc_vec.c", "ppc_altivec", 1, 0, 0xa6aba2e36699f918 },
     { "ForkStore/hfsbuild.c", "sort_compare", 8, 2, 0x4e6b49877cd40551 },
     { "Toolbox/aem.c", "coercion_room", 8, 0, 0x2c36dcdb10ee83fb },
     { "Toolbox/aem.c", "coercions", 16, 4, 0x5002b9f2a1db35e2 },
@@ -2249,7 +2250,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/cfm.c", "data_blocks", 8704, 61, 0xe469a883da494ce2 },
     { "Toolbox/cfm.c", "done_code", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/cfm.c", "frags", 78336, 62, 0x5dd3f52d317213b3 },
-    { "Toolbox/cfm.c", "g_ppc", 656, 63, 0x81078426e75acdae },
+    { "Toolbox/cfm.c", "g_ppc", 1176, 63, 0x8d1333a8a28c109d },
     { "Toolbox/cfm.c", "g_ppc_mode", 1, 0, 0xa6aba2e36699f918 },
     { "Toolbox/cfm.c", "glue_area", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/cfm.c", "glue_size", 4, 0, 0x4984645b460455b1 },
@@ -2266,7 +2267,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/cfm.c", "ninit", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/cfm.c", "nnatives", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/cfm.c", "ppc_cpu_ready", 1, 0, 0xa6aba2e36699f918 },
-    { "Toolbox/cfm.c", "raw_CodeFragmentDispatch.regs", 656, 63, 0x81078426e75acdae },
+    { "Toolbox/cfm.c", "raw_CodeFragmentDispatch.regs", 1176, 63, 0x8d1333a8a28c109d },
     { "Toolbox/chooser.c", "ch_pstr.next", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/chooser.c", "ch_rect.next", 4, 0, 0xb34e18f570e7c710 },
     { "Toolbox/chooser.c", "drvr", 64, 0, 0x031284654fe43be2 },
@@ -2959,7 +2960,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/osutil.c", "cursor_devices", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/osutil.c", "random_state", 8, 19, 0x003ae18bf90d2c1c },
     { "Toolbox/osutil.c", "xpram", 256, 0, 0x078d2f2df9f075d7 },
-    { "Toolbox/ot_68k.c", "adapter.regs", 656, 63, 0x81078426e75acdae },
+    { "Toolbox/ot_68k.c", "adapter.regs", 1176, 63, 0x8d1333a8a28c109d },
     { "Toolbox/ot_68k.c", "bound", 65536, 156, 0xae7e94a5a1c893bc },
     { "Toolbox/ot_68k.c", "dispatch_stub", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/ot_68k.c", "impl", 4096, 157, 0x7962a5e563e2261d },
@@ -3612,7 +3613,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1730;
+const unsigned hb_nstatics = 1731;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
@@ -3655,7 +3656,7 @@ const hb_typemap hb_types[] = {
     { "carbon_cfurl.c", "factory", 32, 268, 0x146cd320f9eb9e1f },
     { "carbon_cfurl.c", "registration", 32, 0, 0xf1e8acd8b5b4de96 },
     { "carbon_controls.c", "carbon_ctl", 40, 269, 0x54535e27c5b20ed5 },
-    { "carbon_controls.c", "ppc_cpu", 656, 63, 0x81078426e75acdae },
+    { "carbon_controls.c", "ppc_cpu", 1176, 63, 0x8d1333a8a28c109d },
     { "carbon_controls.c", "property", 24, 261, 0x22fe1504572b799b },
     { "carbon_databrowser.c", "databrowser", 264, 270, 0x966e2d85d9d11726 },
     { "carbon_databrowser.c", "db_column", 280, 0, 0xe6b8db4aa07f6c5a },
@@ -3891,7 +3892,7 @@ const hb_typemap hb_types[] = {
     { "rsrcmgr.c", "ref_rec", 272, 362, 0x3f8cd6bd845566ba },
     { "thme.c", "tcoord", 12, 0, 0xf9565e4337452c3a },
     { "thme.c", "trec", 32, 0, 0x9de4074f7f6362e7 },
-    { "threadmgr.c", "exec_ctx", 3344, 363, 0x348768a815707f41 },
+    { "threadmgr.c", "exec_ctx", 3864, 363, 0x8c38da99b6f9fec6 },
     { "wm.c", "window_property", 24, 262, 0xe66ae5c53b0ee4bf },
 };
 const unsigned hb_ntypes = 277;
@@ -4168,7 +4169,6 @@ const char *const hb_shape_lines[] = {
     "34267fc857a6cde9\tA\t8\t9425cda84eb71710",
     "343b56abdc800496\tS\t416\tused@0x00=a6aba2e36699f918;cls@0x04=4984645b460455b1;data@0x08=9fd7d7c6b4c5d1e4;length@0x10=4984645b460455b1;attrs@0x18=53893e4d7f12a9f3;nattrs@0x0198=b34e18f570e7c710;refs@0x019c=4984645b460455b1",
     "3440ef7575c2a74a\tS\t20\tfrom@0x00=4984645b460455b1;to@0x04=4984645b460455b1;handler@0x08=4984645b460455b1;refcon@0x0c=b34e18f570e7c710;from_desc@0x10=a6aba2e36699f918",
-    "348768a815707f41\tS\t3344\tcpu@0x00=c72aaa52c95cfa68;ppc@0x01c0=81078426e75acdae;trap@0x0450=f064d61e36418a49;ppc_trap@0x045c=df5f07ddf3e0fdfd;ppc_returned@0x0d00=a6aba2e36699f918;ppc_depth@0x0d04=b34e18f570e7c710;level_68k@0x0d08=4984645b460455b1",
     "3489b01dba6d8690\tA\t32\tb34e18f570e7c710",
     "34b6c47c7a55937e\tP\t*hotkey",
     "34bfd8af0129313d\tS\t16\ttag@0x00=4984645b460455b1;length@0x04=4984645b460455b1;data@0x08=9fd7d7c6b4c5d1e4",
@@ -4555,7 +4555,6 @@ const char *const hb_shape_lines[] = {
     "8079de5496f57696\tP\t*qt_native",
     "8097096a42cda3c1\tA\t280\t24fa16e46ec9be9d",
     "80e0ea633c701de4\tP\t*texcache",
-    "81078426e75acdae\tS\t656\tgpr@0x00=358775f76f0e5d1f;fpr@0x80=006d864ffcbd0b9b;cr@0x0180=4984645b460455b1;lr@0x0184=4984645b460455b1;ctr@0x0188=4984645b460455b1;xer@0x018c=4984645b460455b1;fpscr@0x0190=4984645b460455b1;pc@0x0194=4984645b460455b1;op_pc@0x0198=4984645b460455b1;prev_pc@0x019c=4984645b460455b1;op@0x01a0=4984645b460455b1;icount@0x01a8=003ae18bf90d2c1c;reserve_addr@0x01b0=4984645b460455b1;reserved@0x01b4=a6aba2e36699f918;halted@0x01b5=a6aba2e36699f918;halt_reason@0x01b6=d9cc1e69dd94b149;tb@0x0258=003ae18bf90d2c1c;native@0x0260=4e6b49877cd40551;syscall@0x0268=4e6b49877cd40551;trace@0x0270=4e6b49877cd40551;illegal@0x0278=4e6b49877cd40551;user@0x0280=d7288dc52e97bd02;mq@0x0288=4984645b460455b1;stop@0x028c=a6aba2e36699f918",
     "811e76b9fe7cf18d\tS\t72\thas@0x00=6fce0cd82d5f48e1;hilite@0x02=a6aba2e36699f918;n@0x04=3df5cd0ddb553141;uv@0x10=caa0e461be8c5525;kd@0x18=3df5cd0ddb553141;ks@0x24=3df5cd0ddb553141;kt@0x30=3df5cd0ddb553141;spc@0x3c=2f30739a97d4ec61;amb@0x40=2f30739a97d4ec61;shader@0x44=4984645b460455b1",
     "812f4d8edfa60dfc\tA\t4\t4984645b460455b1",
     "814a4c7638d45c3e\tE\t4\tGRANT_TREE=0,GRANT_FILE=1",
@@ -4622,12 +4621,14 @@ const char *const hb_shape_lines[] = {
     "8b872e5db73bdcaf\tA\t7\t2f30739a97d4ec61",
     "8b8e1fb9f9fbb27d\tS\t96\tused@0x00=a6aba2e36699f918;writable@0x01=a6aba2e36699f918;spec@0x02=7de72d861ab4dbba;refnum@0x48=7579d81a04189ef3;script@0x4a=7579d81a04189ef3;max_key@0x4c=7579d81a04189ef3;attributes@0x4e=71afa73e9abbc280;recs@0x50=ce645cdcb6cf8ec1;count@0x58=4984645b460455b1;cap@0x5c=4984645b460455b1",
     "8bb7bcff8328cd7b\tS\t1224\tname@0x00=47691214f2152784;app_name@0x40=47691214f2152784;path@0x80=aed46b2759dc8470;offset@0x0480=4984645b460455b1;length@0x0484=4984645b460455b1;main_tv@0x0488=4984645b460455b1;init_tv@0x048c=4984645b460455b1;term_tv@0x0490=4984645b460455b1;exports@0x0498=340202f584733f23;nexports@0x04a0=4984645b460455b1;native@0x04a4=a6aba2e36699f918;memory@0x04a8=4984645b460455b1;loading@0x04ac=a6aba2e36699f918;code@0x04b0=4984645b460455b1;data@0x04b4=4984645b460455b1;code_size@0x04b8=4984645b460455b1;data_size@0x04bc=4984645b460455b1;container@0x04c0=4984645b460455b1",
+    "8c38da99b6f9fec6\tS\t3864\tcpu@0x00=c72aaa52c95cfa68;ppc@0x01c0=8d1333a8a28c109d;trap@0x0658=f064d61e36418a49;ppc_trap@0x0664=df5f07ddf3e0fdfd;ppc_returned@0x0f08=a6aba2e36699f918;ppc_depth@0x0f0c=b34e18f570e7c710;level_68k@0x0f10=4984645b460455b1",
     "8c779c17b2b09eb3\tA\t64\ta6aba2e36699f918",
     "8c83e01b578907d0\tS\t8\tpb@0x00=4984645b460455b1;trap@0x04=71afa73e9abbc280;ppc@0x05=a6aba2e36699f918",
     "8c928021de4a49d5\tE\t4\tFREE=0,COMMAND=1,DATA=2,STATUS=3",
     "8ca6658b77bce6f6\tS\t48\tpending@0x00=a6aba2e36699f918;taken@0x01=a6aba2e36699f918;done@0x02=a6aba2e36699f918;ok@0x03=a6aba2e36699f918;item@0x04=b34e18f570e7c710;kind@0x08=b34e18f570e7c710;folder@0x10=3f8fbaebd5612a91;result@0x18=5c52625b3db9ed3a",
     "8cc234fee0a6b06f\tA\t32\t5436671a5b212fec",
     "8ce299ca7c22d733\tA\t4688\t71afa73e9abbc280",
+    "8d1333a8a28c109d\tS\t1176\tgpr@0x00=358775f76f0e5d1f;fpr@0x80=006d864ffcbd0b9b;cr@0x0180=4984645b460455b1;lr@0x0184=4984645b460455b1;ctr@0x0188=4984645b460455b1;xer@0x018c=4984645b460455b1;fpscr@0x0190=4984645b460455b1;pc@0x0194=4984645b460455b1;op_pc@0x0198=4984645b460455b1;prev_pc@0x019c=4984645b460455b1;op@0x01a0=4984645b460455b1;icount@0x01a8=003ae18bf90d2c1c;reserve_addr@0x01b0=4984645b460455b1;reserved@0x01b4=a6aba2e36699f918;halted@0x01b5=a6aba2e36699f918;halt_reason@0x01b6=d9cc1e69dd94b149;tb@0x0258=003ae18bf90d2c1c;native@0x0260=4e6b49877cd40551;syscall@0x0268=4e6b49877cd40551;trace@0x0270=4e6b49877cd40551;illegal@0x0278=4e6b49877cd40551;user@0x0280=d7288dc52e97bd02;mq@0x0288=4984645b460455b1;stop@0x028c=a6aba2e36699f918;vr@0x028d=2c3971b9e6e9cec2;vscr@0x0490=4984645b460455b1;vrsave@0x0494=4984645b460455b1",
     "8d4fff96d90dd64b\tA\t8\tcb398e04eb200441",
     "8dad36ba5aedaeb6\tS\t1248\tw@0x00=b34e18f570e7c710;h@0x04=b34e18f570e7c710;bg@0x08=b4b605d138020b57;visible@0x0b=a6aba2e36699f918;all_overrides@0x0c=a6aba2e36699f918;img@0x10=b81356ddfa85d552;nimg@0x18=b34e18f570e7c710;key@0x20=03c9d669e654aaae;cur@0x28=03c9d669e654aaae;nspr@0x30=b34e18f570e7c710;key_data@0x38=9fd7d7c6b4c5d1e4;key_len@0x40=4984645b460455b1;pending@0x48=85865d197c2b0866;npending@0xc8=b34e18f570e7c710;vars@0xd0=660e21faa726321d;nvars@0x04d0=b34e18f570e7c710;idle_frequency@0x04d4=b34e18f570e7c710;idle_mark@0x04d8=4984645b460455b1;hover@0x04dc=4984645b460455b1",
     "8dbfb6573d3201ca\tP\t*term",

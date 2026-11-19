@@ -1828,6 +1828,12 @@ static void main_returned(ppc_cpu *c)
 /* BLUEBOX_PPC_TRACE: each PowerPC instruction, for study. */
 static void trace_instruction(ppc_cpu *c)
 {
+    /* BLUEBOX_PPC_TRACE=N: from the Nth PowerPC instruction on. */
+    BB_HOST static long long from = -1;
+    if (from < 0)
+        from = atoll(getenv("BLUEBOX_PPC_TRACE"));
+    if ((long long)c->icount < from)
+        return;
     fprintf(stderr, "%08X %08X  r3 %08X r4 %08X r5 %08X lr %08X\n", c->pc, rd32(c->pc), c->gpr[3], c->gpr[4],
             c->gpr[5], c->lr);
 }

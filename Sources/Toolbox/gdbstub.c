@@ -182,7 +182,7 @@ static uint64_t reg_value(int r)
             return c->fpr[r - 32];
         switch (r) {
         case 64: return c->pc;
-        case 65: return 0x0000D032; /* user mode, FP and machine checks on, as an application ran */
+        case 65: return ppc_msr(); /* user mode, as an application ran */
         case 66: return c->cr;
         case 67: return c->lr;
         case 68: return c->ctr;

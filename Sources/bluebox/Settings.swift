@@ -29,6 +29,7 @@ let powerPCSetting = 750
 struct AppSettings: Codable {
     var depth: Int?
     var cpu: Int?
+    var powerpc: String? /* g4 (with AltiVec) or g3, the PowerPC processor; unset: g4 */
     var fpu: Int? /* 0 (none), 68881, 68882 or 68040; unset: the processor's own */
     var addressing: Int? /* 24 or 32; unset: 24 for a program whose SIZE resource doesn't say 32-bit clean */
     var timing: String? /* fast or accurate (a 68000 at a compact Mac's speed); unset: fast, or accurate for a program known to need it */
@@ -50,7 +51,7 @@ struct AppSettings: Codable {
     var keepSnapshots: Int? /* hibernated snapshots kept per program; unset: HibernatedSnapshots.defaultKeep */
     var keepSavePoints: Int? /* save points kept per program, apart; unset: HibernatedSnapshots.defaultKeepSavePoints */
     var isEmpty: Bool {
-        depth == nil && cpu == nil && fpu == nil && addressing == nil && timing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
+        depth == nil && cpu == nil && powerpc == nil && fpu == nil && addressing == nil && timing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && appletalkZone == nil && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
             && appleShare == nil && display == nil
             && jit == nil && debugger == nil
@@ -60,6 +61,7 @@ struct AppSettings: Codable {
     var summary: String {
         "depth \(depth.map(String.init) ?? "default (32)"), "
             + "cpu \(cpu.map { $0 == powerPCSetting ? "ppc" : String($0) } ?? "default (ppc if fat, else 68040)"), "
+            + "powerpc \(powerpc ?? "default (\(powerPCDefault))"), "
             + "fpu \(fpu.map { $0 == 0 ? "none" : String($0) } ?? "default (the processor's own)"), "
             + "addressing \(addressing.map(String.init) ?? "default (24 unless the program is 32-bit clean)"), "
             + "timing \(timing ?? "default (fast, or accurate for a program known to need it)"), "
@@ -83,7 +85,7 @@ struct AppSettings: Codable {
     /// These settings, with any left unset taken from `fallback`.
     func over(_ fallback: AppSettings?) -> AppSettings {
         guard let f = fallback else { return self }
-        return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, fpu: fpu ?? f.fpu,
+        return AppSettings(depth: depth ?? f.depth, cpu: cpu ?? f.cpu, powerpc: powerpc ?? f.powerpc, fpu: fpu ?? f.fpu,
                            addressing: addressing ?? f.addressing, timing: timing ?? f.timing, scale: scale ?? f.scale,
                            appearance: appearance ?? f.appearance, highlight: highlight ?? f.highlight,
                            appletalk: appletalk ?? f.appletalk, appletalkZone: appletalkZone ?? f.appletalkZone,
@@ -97,6 +99,10 @@ struct AppSettings: Codable {
                            keepSavePoints: keepSavePoints ?? f.keepSavePoints)
     }
 }
+
+/// The PowerPC processor when neither the run (--powerpc) nor the settings
+/// say: a G4, whose AltiVec unit the interpreter runs (ppc_vec.c).
+let powerPCDefault = "g4"
 
 /// Whether programs' code is translated (the JIT) when neither the run
 /// (--jit, --no-jit, BLUEBOX_JIT) nor the settings say.
@@ -435,6 +441,14 @@ func setCommand(_ args: [String]) {
                 s.cpu = m
             } else {
                 fail("cpu expects 68000, 68020, 68030, 68040, ppc or default")
+            }
+        case "powerpc":
+            if value == "default" {
+                s.powerpc = nil
+            } else if ["g3", "g4"].contains(value) {
+                s.powerpc = value
+            } else {
+                fail("powerpc expects g3, g4 or default")
             }
         case "fpu":
             if value == "default" {

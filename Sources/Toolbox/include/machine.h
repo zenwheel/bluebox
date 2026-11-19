@@ -268,6 +268,13 @@ int machine_screen_depth(void);
 /* The processor: 68040 (the default), 68030, 68020 or 68000.  Before
  * machine_boot. */
 void machine_set_cpu(int model);
+/* The PowerPC processor: 4, a G4 (an MPC7400, with AltiVec; the
+ * default), or 3, a G3 (an MPC750, without).  Before machine_boot; a
+ * resumed snapshot keeps the one it was saved on. */
+void machine_set_powerpc(int g);
+int machine_powerpc(void);
+/* AltiVec instructions run so far (all programs of the process). */
+uint64_t machine_vector_instructions(void);
 /* Its FPU: 0 (none), 68881, 68882 or 68040 (the 68040's own), where the
  * processor could have it; -1 (the default) gives the model its usual
  * one: the 68040's own, a 68882 with a 68030, none with a 68020 or 68000.
