@@ -925,9 +925,12 @@ static void play(reader *r, mapping *m, gaddr port, const hrgn *base_clip)
 
 void tb_DrawPicture(gaddr pic, gaddr dst)
 {
-    if (!pic || !rd32(pic) || !dst)
-        return;
     gaddr port = qd_port();
+    /* No port (SetPort(FrontWindow()) with no windows left, a GWorld that
+     * failed): nothing to draw into, as for the shapes, not low memory
+     * read as one with its "getPicProc" called (Cutout, Mike's Cards). */
+    if (!pic || !rd32(pic) || !dst || !port)
+        return;
     qrect at = qrect_get(dst);
     walker_note_drawn(port, at.top, at.left, at.bottom, at.right);
     int8_t state = tb_HGetState(pic);

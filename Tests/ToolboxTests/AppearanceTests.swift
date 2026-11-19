@@ -659,10 +659,34 @@ extension BlueBox {
             let text = tb_NewPtr(256, false, true)
             tb_GetMenuItemText(m, 1, text)
             #expect(rd8(text) == 5 && rd8(text + 1) == 0x48)
-            // Set from outside, the item still has the MDEF measure the menu.
+            // Set from outside, the item is measured by ours; CalcMenuSize
+            // (or showing the menu) has the MDEF measure it again.
             wr16(rd32(m) + 2, 0)
             tb_SetMenuItemText(m, 1, pstr("Other"))
+            #expect(rd16(rd32(m) + 2) != 0 && rd16(rd32(m) + 2) != 77)
+            tb_CalcMenuSize(m)
             #expect(rd16(rd32(m) + 2) == 77)
+        }
+
+        /// Changing a menu's items doesn't call its own MDEF: Wish's is a stub
+        /// that jumps through a routine filled in only before its menus are
+        /// shown.  CalcMenuSize (and showing it) asks the MDEF.
+        @Test func changingItemsLeavesTheMenusMDEFAlone() {
+            // movea.l 16(sp),a0; movea.l (a0),a0; cmpi.w #2,20(sp); bne.s +12;
+            // move.w #123,2(a0); move.w #45,4(a0); movea.l (sp)+,a0; lea 18(sp),sp; jmp (a0)
+            let mdef: [UInt8] = [0x20, 0x6F, 0x00, 0x10, 0x20, 0x50, 0x0C, 0x6F, 0x00, 0x02, 0x00, 0x14,
+                                 0x66, 0x0C, 0x31, 0x7C, 0x00, 0x7B, 0x00, 0x02, 0x31, 0x7C, 0x00, 0x2D,
+                                 0x00, 0x04, 0x20, 0x5F, 0x4F, 0xEF, 0x00, 0x12, 0x4E, 0xD0]
+            launchTestApp([TestResource(type: "MDEF", id: 591, data: mdef)])
+            _ = initToolbox()
+            let m = tb_NewMenu(257, pstr("Tk"))
+            wr32(rd32(m) + 6, tb_GetResource(Int32(bitPattern: fourCC("MDEF")), 591))
+            tb_AppendMenu(m, pstr("Open"))
+            tb_InsertMenuItem(m, pstr("Close"), 1)
+            tb_SetMenuItemText(m, 1, pstr("Open..."))
+            #expect(rd16(rd32(m) + 2) != 123 && rd16(rd32(m) + 4) == 32) // measured by ours
+            tb_CalcMenuSize(m)
+            #expect(rd16(rd32(m) + 2) == 123 && rd16(rd32(m) + 4) == 45)
         }
 
         @Test func xmnuResourcesApply() {

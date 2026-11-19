@@ -391,6 +391,27 @@ static void standard_size(gaddr mh)
     MenuInfo_set_menuHeight(p, (int16_t)h);
 }
 
+/* A menu's items changed: its size measured again, by our MDEF's rule.  A
+ * menu with a definition of its own is asked for its size (mSizeMsg) when
+ * it is shown and when the program calls CalcMenuSize, not here: Tk's MDEF
+ * is a stub that jumps through a routine Tk fills in only before showing
+ * its menus, so calling it while Wish built them (InsertMenuItem,
+ * SetMenuItemText) ran into the stack.  (From Mac OS 8.5 the Menu Manager
+ * also left the size to be worked out when needed.) */
+static void items_changed(gaddr mh)
+{
+    if (mh && rd32(mh))
+        standard_size(mh);
+}
+
+/* About to be shown: a menu with its own definition sized by it. */
+static void size_for_showing(gaddr mh)
+{
+    gaddr proc = mh && rd32(mh) ? menu_proc(mh) : 0;
+    if (proc && rd32(proc) && !standard_mdef(mh))
+        tb_CalcMenuSize(mh);
+}
+
 gaddr tb_NewMenu(int16_t mid, gaddr str)
 {
     uint32_t tl = (uint32_t)rd8(str) + 1;
@@ -401,7 +422,7 @@ gaddr tb_NewMenu(int16_t mid, gaddr str)
     MenuInfo_set_enableFlags(p, -1);
     gmemcpy(p + MenuInfo_menuData_off, str, tl);
     wr8(p + MenuInfo_menuData_off + tl, 0);
-    tb_CalcMenuSize(h);
+    items_changed(h);
     return h;
 }
 
@@ -423,7 +444,7 @@ gaddr tb_GetMenu(int16_t rid)
         mh = tb_GetResource((int32_t)fourcc("MDEF"), 0);
     MenuInfo_set_menuProc(rd32(h), mh);
     menu_apply_xmnu(h, rid);
-    tb_CalcMenuSize(h);
+    tb_CalcMenuSize(h); /* its MDEF, loaded with it, is asked */
     return h;
 }
 
@@ -499,7 +520,7 @@ static void append_items(gaddr mh, const uint8_t *s, int n, int after)
         if (after >= 0)
             after++;
     }
-    tb_CalcMenuSize(mh);
+    items_changed(mh);
 }
 
 void tb_InsertMenuItem(gaddr mh, gaddr str, int16_t after)
@@ -531,7 +552,7 @@ void tb_DeleteMenuItem(gaddr mh, int16_t item)
         flags = low | high | 0x80000000u;
     }
     MenuInfo_set_enableFlags(p, (int32_t)flags);
-    tb_CalcMenuSize(mh);
+    items_changed(mh);
 }
 
 void tb_AppendMenu(gaddr mh, gaddr str)
@@ -633,7 +654,7 @@ static void res_menu(gaddr mh, int32_t restype, int after)
         if (index <= 31)
             MenuInfo_set_enableFlags(p, MenuInfo_enableFlags(p) | (int32_t)(1u << index));
     }
-    tb_CalcMenuSize(mh);
+    items_changed(mh);
 }
 
 void tb_AppendResMenu(gaddr mh, int32_t restype) { res_menu(mh, restype, -1); }
@@ -1747,6 +1768,7 @@ int32_t tb_MenuSelect(uint32_t p)
             }
             open = title;
             gaddr mh = menu_at(open);
+            size_for_showing(mh);
             tb_HiliteMenu(MenuInfo_menuID(menu_ptr(mh)));
             if (MenuInfo_enableFlags(menu_ptr(mh)) & 1) {
                 gaddr mp = menu_ptr(mh);
@@ -1850,6 +1872,7 @@ uint32_t ev_key_count(void);
 
 int32_t tb_PopUpMenuSelect(gaddr mh, int16_t top, int16_t left, int16_t item)
 {
+    size_for_showing(mh);
     gaddr saved;
     with_wmgr_port(&saved);
     gaddr mp = menu_ptr(mh);
@@ -2060,7 +2083,7 @@ void tb_SetMenuItemText(gaddr mh, int16_t item, gaddr str)
     if (newlen < oldlen)
         menu_delete_bytes(mh, at + 1, oldlen - newlen);
     gput(rd32(mh) + at, buf, newlen + 1);
-    tb_CalcMenuSize(mh);
+    items_changed(mh);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2363,7 +2386,7 @@ int32_t tb_SetMenuFont(gaddr mh, int16_t font, uint16_t size)
         return memFullErr;
     m->font = font;
     m->size = size;
-    tb_CalcMenuSize(mh);
+    items_changed(mh);
     return noErr;
 }
 

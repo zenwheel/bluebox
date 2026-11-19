@@ -227,6 +227,8 @@ int16_t ic_get_ind_pref(int32_t index, gaddr key);
 int32_t ic_count_prefs(void);
 uint32_t ic_get_seed(void);
 uint32_t seg_launch(int16_t app_refnum, uint32_t *a5_out, char *err, size_t errlen);
+/* Whether a block holds a loaded segment (a jump table entry jumps into it). */
+bool seg_loaded_at(gaddr start, uint32_t size);
 
 /* ---- Gestalt ---- */
 

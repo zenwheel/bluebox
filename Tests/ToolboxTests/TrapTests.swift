@@ -474,6 +474,48 @@ extension BlueBox {
             #expect(g_cpu!.pointee.d.2 == 1)  // through the patch, once
         }
 
+        /// MoveHHi leaves a loaded segment where it is: the Segment Loader had
+        /// put it high, so a program's MoveHHi on it did nothing (NetHack
+        /// 3.0j calls MoveHHi on each segment it has just loaded, from glue in
+        /// that segment); moved, its jump table entries pointed at nothing.
+        @Test func moveHHiLeavesALoadedSegment() throws {
+            bootMachine()
+            let jt = cat(
+                be16(0), be16(0x3F3C), be16(1), be16(0xA9F0),     // entry 0: seg 1, offset 0
+                be16(0), be16(0x3F3C), be16(2), be16(0xA9F0))     // entry 1: seg 2, offset 0
+            let code0 = cat(be32(48), be32(256), be32(16), be32(32), jt)
+            let code1 = cat(
+                be16(0), be16(1),
+                be16(0xA063),                                     // _MaxApplZone
+                be16(0x4EAD), be16(42),                           // JSR 42(A5): entry 1, CODE 2
+                be16(0xA9F4))                                     // _ExitToShell
+            let code2 = cat(be16(0), be16(1), be16(0x4E75))       // RTS
+            var fork = buildFork([
+                TestResource(type: "CODE", id: 0, data: code0),
+                TestResource(type: "CODE", id: 1, data: code1),
+                TestResource(type: "CODE", id: 2, data: code2),
+            ])
+            let dir = tempDir()
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let path = dir.appendingPathComponent("Glue").path
+            var f = mac_file()
+            var empty: [UInt8] = []
+            empty.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = 0 }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            var err = [CChar](repeating: 0, count: 256)
+            #expect(appledouble_write(path, &f, &err, err.count))
+
+            #expect(machine_launch(path, &err, err.count))
+            #expect(machine_run(10_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            let seg = tb_GetResource(Int32(bitPattern: fourCC("CODE")), 2)
+            let at = rd32(seg)
+            tb_HUnlock(seg)
+            tb_MoveHHi(seg)
+            #expect(seg != 0 && rd32(seg) == at)
+            #expect(rd16(0x220) == 0)                             // MemErr: noErr
+        }
+
         /// A segment the application's file lacks is found in a resource file
         /// the program opened itself (FrameMaker keeps most of its code in
         /// "Module A" and "Module B").

@@ -298,6 +298,36 @@ extension BlueBox {
             #expect(g_cpu!.pointee.d.3 == 5)                // as the program had it
         }
 
+        /// A 68k handler declared with too few arguments (Char11ToReturn's
+        /// Open Application takes one and pops four bytes of the twelve):
+        /// the dispatch goes on from its frame, the result read where room was
+        /// made for it, and the program's call returns with its stack and
+        /// registers as they were.
+        @Test func anAppleEventHandlerPoppingTooLittleReturns() {
+            launchTestApp(sizeFlags: 0x0040)
+            func hi(_ v: UInt32) -> UInt16 { UInt16(v >> 16) }
+            func lo(_ v: UInt32) -> UInt16 { UInt16(v & 0xFFFF) }
+            let vars = ptr(12) // result (word), stack after
+            let result = vars, sp = vars + 4
+            // pascal OSErr handler(long): LINK A6,#0; MOVE.W #-1708,12(A6); UNLK A6; MOVE.L (SP)+,(SP); RTS
+            let handler = code([0x4E56, 0x0000, 0x3D7C, 0xF954, 0x000C, 0x4E5E, 0x2E9F, 0x4E75])
+            #expect(tb_AEInstallEventHandler(Int32(bitPattern: fourCC("aevt")), Int32(bitPattern: fourCC("oapp")),
+                                             handler, 0, 0) == 0)
+            machine_send_apple_event(fourCC("aevt"), fourCC("oapp"), nil, 0, nil, nil, nil)
+            let e = ptr(UInt32(EventRecord_SIZEOF))
+            #expect(tb_GetNextEvent(0x0400, e) != 0 && rd16(e) == 23)
+            wr16(result, 0x7777)
+            // MOVEQ #5,D3; MOVEA.L SP,A4; CLR.W -(SP); MOVE.L #e,-(SP); MOVE.W #$021B,D0; _Pack8;
+            // MOVE.W (SP)+,result; MOVE.L SP,sp; SUBA.L SP,A4; loop: _SystemTask; BRA.S loop
+            _ = start([0x7605, 0x284F, 0x4267, 0x2F3C, hi(e), lo(e), 0x303C, 0x021B, 0xA816, 0x33DF, hi(result),
+                       lo(result), 0x23CF, hi(sp), lo(sp), 0x99CF, 0xA9B4, 0x60FC])
+            g_cpu!.pointee.d.3 = 0
+            _ = machine_run(200_000)
+            #expect(rd16(result) == 0)                      // what the handler's own room held: noErr
+            #expect(g_cpu!.pointee.a.4 == 0)                // the stack as it was before the call
+            #expect(g_cpu!.pointee.d.3 == 5)
+        }
+
         /// A program reading from a driver of its own that waits for input
         /// inside its Prime routine, calling GetNextEvent until a line comes
         /// (Small Talk's console driver): at the idle call there the routine

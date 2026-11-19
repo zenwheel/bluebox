@@ -1700,6 +1700,11 @@ static bool go_on(gaddr f, int isa)
         }
         if (isa == 1) {
             cpu68k *c = g_cpu;
+            /* A6 at the frame, as the Apple Event Manager's own A6 frame:
+             * found again by it when the handler returns, wherever the
+             * handler left the stack (see handler_returned_68k). */
+            c->a[7] = f;
+            c->a[6] = f;
             cpu_push16(c, 0); /* pascal OSErr (AppleEvent *, AppleEvent *, long) */
             cpu_push32(c, evt);
             cpu_push32(c, reply);
@@ -1801,12 +1806,21 @@ void aem_trap_ProcessAppleEvent(cpu68k *c, uint16_t tw)
     cpu_push32(c, ret);
 }
 
-/* A 68k handler returned (its result on top of its frame). */
+/* A 68k handler returned: its frame at A6, which it kept (as compiled code
+ * keeps its caller's), and its result in the word under the frame.  A
+ * handler declared with the wrong arguments leaves the stack elsewhere:
+ * Char11ToReturn's and Personal eCard's Open Application handlers take one
+ * argument and pop four bytes of the twelve.  The Apple Event Manager went
+ * on from its own A6 frame and read the result where it had made room for
+ * it, and so does this. */
 static void handler_returned_68k(cpu68k *c, uint16_t tw)
 {
     (void)tw;
-    int16_t r = (int16_t)cpu_pop16(c);
-    gaddr f = c->a[7];
+    gaddr f = c->a[6];
+    if (rd32(f + AF_EVENT) != current_event_desc) /* a snapshot from before A6 held it: on top of the stack */
+        f = c->a[7] + 2;
+    int16_t r = (int16_t)rd16(f - 2);
+    c->a[7] = f;
     wr16(f + AF_RESULT, (uint16_t)r);
     if (go_on(f, 1))
         return;

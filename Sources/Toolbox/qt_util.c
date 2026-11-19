@@ -68,7 +68,8 @@ static int16_t new_gworld(gaddr out, uint32_t format, gaddr bounds, gaddr ctab, 
     int depth = pixel_depth(format);
     if (!depth) /* the other formats as the nearest QuickDraw has */
         depth = tb_QTGetPixelSize((int32_t)format) >= 24 ? 32 : tb_QTGetPixelSize((int32_t)format) == 16 ? 16 : 0;
-    if (!depth)
+    /* Format 0 is NewGWorld's depth 0: the deepest screen's under bounds. */
+    if (!depth && format)
         return update ? (int16_t)-2096 : (int16_t)paramErr;
     if (update)
         return (int16_t)tb_UpdateGWorld(out, (int16_t)depth, bounds, ctab, gdh, flags);

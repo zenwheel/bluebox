@@ -393,6 +393,31 @@ extension BlueBox {
             [big, after].forEach { tb_DisposeHandle($0) }
         }
 
+        /// A pointer Blue Box takes for itself inside another call doesn't take
+        /// the block the program has just freed (mrc2M disposes of routine
+        /// descriptors it still uses); the program's own NewPtr does.
+        @Test func pointersTakenInsideACallLeaveFreedBlocksAlone() {
+            let hole = tb_NewPtr(32, false, false)
+            let big = tb_NewHandle(30000, false, false)
+            tb_DisposePtr(hole)
+            // The dispatcher passes the call's name, a string that lasts.
+            func lasting(_ s: StaticString) -> UnsafePointer<CChar> {
+                UnsafeRawPointer(s.utf8Start).assumingMemoryBound(to: CChar.self)
+            }
+            let call = lasting("AEProcessAppleEvent"), newPtr = lasting("NewPtr")
+            _ = mm_debug_before_call(call)
+            let inside = tb_NewPtr(8, false, false)
+            _ = mm_debug_after_call(call)
+            #expect(inside != 0 && !(inside >= hole && inside < hole + 32))
+            _ = mm_debug_before_call(newPtr)
+            let own = tb_NewPtr(8, false, false)
+            _ = mm_debug_after_call(newPtr)
+            #expect(own != 0 && own <= hole) // as low as there is room
+            #expect(mm_check_zone(appZone))
+            [inside, own].forEach { tb_DisposePtr($0) }
+            tb_DisposeHandle(big)
+        }
+
         @Test func handleStateAndRecovery() {
             let h = tb_NewHandle(8, false, false)
             #expect(tb_HGetState(h) == 0)

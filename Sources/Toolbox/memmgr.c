@@ -375,8 +375,21 @@ static void link_masters(gaddr z, gaddr first, unsigned n)
     Zone_set_hFstFree(z, head);
 }
 
+/* The program's Toolbox call being made (see mm_debug_before_call), NULL
+ * between calls.  A pointer the program asks for goes as low as it can,
+ * as the Memory Manager put it; one Blue Box takes for its own use inside
+ * another call (a picture's opcode buffer, an Apple event's descriptor),
+ * where the ROM's code used its stack, is taken from the rover instead,
+ * so it doesn't land at once on a block the program has just freed and
+ * still uses: mrc2M disposes of its Apple event handlers' routine
+ * descriptors after installing them, and AEProcessAppleEvent's descriptor
+ * took their place; Word Translator, Infini-D, GrafEq, CD Remote Buddy
+ * and 3-D Cannon read freed blocks as well. */
+BB_HOST static const char *in_call;
+
 void mm_init_zone(gaddr z, gaddr limit, uint16_t more_masters)
 {
+    in_call = NULL; /* a new zone: a new program, between calls */
     limit &= ~3u;
     gmemset(z, 0, Zone_SIZEOF);
     gaddr first = z_first(z);
@@ -716,10 +729,12 @@ static void free_master(gaddr z, gaddr mp)
     Zone_set_hFstFree(z, mp);
 }
 
+static bool program_pointer(void) { return !in_call || !strncmp(in_call, "NewPtr", 6); }
+
 gaddr mm_new_ptr_in(gaddr z, uint32_t size, bool clear)
 {
     uint32_t ps = phys_for(size);
-    gaddr b = ps ? make_room_for(z, ps, true) : 0;
+    gaddr b = ps ? make_room_for(z, ps, program_pointer()) : 0;
     if (!b) {
         set_mem_err(memFullErr);
         return 0;
@@ -1245,7 +1260,24 @@ int16_t mm_move_handle(gaddr h, bool high)
     return noErr;
 }
 
-void tb_MoveHHi(gaddr h) { set_mem_err(mm_move_handle(h, true)); }
+/* A loaded segment stays where it is: its jump table entries point into
+ * it.  The Segment Loader had moved it high as it loaded it, so a
+ * program's own MoveHHi on it found it there and did nothing; NetHack
+ * 3.0j's runtime calls MoveHHi on each segment it has just loaded, from
+ * glue in that very segment, and the segment moved away under its jump
+ * table entries and the code running in it.  (Loading segments high
+ * here instead leaves them in the middle of a zone that grows as it is
+ * needed, and a big pointer no longer fits: MPj Astro's printing.) */
+void tb_MoveHHi(gaddr h)
+{
+    int16_t err;
+    gaddr b = handle_block(h, &err);
+    if (b && seg_loaded_at(b_data(b), b_psize(b) - HDR)) {
+        set_mem_err(noErr);
+        return;
+    }
+    set_mem_err(mm_move_handle(h, true));
+}
 
 int8_t tb_HGetState(gaddr h)
 {
@@ -1682,6 +1714,7 @@ static bool zones_intact(void)
 
 bool mm_debug_after_call(const char *name)
 {
+    in_call = NULL;
     static unsigned calls;
     if (screen_dirty_verifying())
         screen_dirty_note_call(name);
@@ -1700,6 +1733,7 @@ bool mm_debug_after_call(const char *name)
  * damage the call does. */
 bool mm_debug_before_call(const char *name)
 {
+    in_call = name;
     if (heap_check_every() != 1 || !checked_after)
         return true;
     if (!zones_intact()) {

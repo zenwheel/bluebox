@@ -127,6 +127,39 @@ extension BlueBox {
             return pp
         }
 
+        /// QTNewGWorld's pixel format 0 is NewGWorld's depth 0, the
+        /// screen's (Katabounga makes all its offscreen worlds so).
+        @Test func qtNewGWorldFormatZeroIsTheScreensDepth() {
+            _ = offscreen()
+            let screen = rd16(rd32(rd32(rd32(rd32(LM_MainDevice)) + GDevice_gdPMap_off)) + PixMap_pixelSize_off)
+            let gw = tb_NewPtr(4, false, true)
+            #expect(tb_QTNewGWorld(gw, 0, rect(0, 0, 10, 20), 0, 0, 0) == 0)
+            #expect(rd32(gw) != 0)
+            #expect(rd16(rd32(tb_GetGWorldPixMap(rd32(gw))) + PixMap_pixelSize_off) == screen)
+            #expect(tb_QTUpdateGWorld(gw, 0, rect(0, 0, 30, 40), 0, 0, 0) >= 0)
+            #expect(rd32(gw) != 0)
+            tb_DisposeGWorld(rd32(gw))
+        }
+
+        /// DrawPicture with no port (a program's SetPort(FrontWindow()) with
+        /// its windows closed, Cutout's) draws nothing: low memory is not
+        /// taken for a port and written over.
+        @Test func drawPictureWithNoPortLeavesLowMemory() {
+            let world = offscreen()
+            let pic = tb_OpenPicture(rect(0, 0, 20, 20))
+            tb_PaintRect(rect(0, 0, 10, 10))
+            tb_ClosePicture()
+            var before = [UInt8](repeating: 0, count: 0x100)
+            tb_SetPort(0)
+            for i in 0..<before.count { before[i] = rd8(UInt32(i)) }
+            tb_DrawPicture(pic, rect(0, 0, 20, 20))
+            var after = [UInt8](repeating: 0, count: 0x100)
+            for i in 0..<after.count { after[i] = rd8(UInt32(i)) }
+            #expect(before == after)
+            tb_SetGWorld(world, 0)
+            tb_KillPicture(pic)
+        }
+
         /// Colour patterns are recorded in pictures with their colours.
         @Test func picturesKeepColourPatterns() {
             _ = offscreen()

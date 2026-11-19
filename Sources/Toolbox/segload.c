@@ -101,6 +101,19 @@ static gaddr load_segment(int16_t seg)
     return code;
 }
 
+/* Whether the block at [start, start + size) is a loaded segment: a jump
+ * table entry jumps into it. */
+bool seg_loaded_at(gaddr start, uint32_t size)
+{
+    if (!rd32(LM_CurrentA5) || !jt_size)
+        return false;
+    gaddr jt = jt_base();
+    for (gaddr e = jt; e < jt + jt_size; e += 8)
+        if (rd16(e + 2) == JMP_ABS_L && rd32(e + 4) - start < size)
+            return true;
+    return false;
+}
+
 /* _LoadSeg: stack is [return][segment]; the return address is just past
  * the trap in the jump table entry. */
 static void raw_LoadSeg(cpu68k *c, uint16_t tw)
