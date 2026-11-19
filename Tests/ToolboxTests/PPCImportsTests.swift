@@ -1,5 +1,6 @@
 import CCore
 import CPUPPC
+import ForkStore
 import Foundation
 import Testing
 import Toolbox
@@ -125,6 +126,12 @@ extension BlueBox {
         /// InterfaceLib, and main at the data section's start.
         func importContainer(_ symbol: String, cls: UInt8, library: String = "InterfaceLib", weak: Bool = false,
                              stale: UInt32 = 0) -> UInt32 {
+            bytes(importPEF(symbol, cls: cls, library: library, weak: weak, stale: stale))
+        }
+
+        /// The container importContainer puts in guest memory.
+        func importPEF(_ symbol: String, cls: UInt8, library: String = "InterfaceLib", weak: Bool = false,
+                       stale: UInt32 = 0) -> [UInt8] {
             func be32(_ v: UInt32) -> [UInt8] { [UInt8(v >> 24), UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF)] }
             func be16(_ v: UInt16) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xFF)] }
             let strings = Array(library.utf8) + [0] + Array(symbol.utf8) + [0]
@@ -144,7 +151,7 @@ extension BlueBox {
             pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(dataOff) + [1, 1, 0, 0]
             pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
             pef += be32(stale) + be32(0) + loader
-            return bytes(pef)
+            return pef
         }
 
         /// CFM binds an import by its name: a routine a program imports as
@@ -355,6 +362,115 @@ extension BlueBox {
             _ = ppc_run(&g_ppc, 20)
             let reason = withUnsafeBytes(of: g_ppc.halt_reason) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
             #expect(reason == "library not found: NOVA Library (PPC) (for SaverInitialize)")
+        }
+
+        /// A file of PowerPC code: a 'cfrg' 0 naming one fragment (usage 1
+        /// an application's, 0 a library's), the whole data fork.
+        func writeFragmentFile(_ path: String, type: String, usage: UInt8, name: String, pef: [UInt8],
+                               libraryDirectory: [UInt8]? = nil) {
+            var member = cat(Array("pwpc".utf8), [0, 0, 0, 0], be32(0), be32(0), be32(0),
+                             be16(libraryDirectory == nil ? 0 : 128), [usage, 1],
+                             be32(0), be32(0), be32(0), be32(0))
+            let size = (member.count + 2 + 1 + name.utf8.count + 3) & ~3
+            member += be16(size) + [UInt8(name.utf8.count)] + Array(name.utf8)
+            while member.count < size { member.append(0) }
+            let cfrg = cat(be32(0), be32(0), be32(1), be32(0), be32(0), be32(0), be32(0), be32(1), member)
+            var resources = [TestResource(type: "cfrg", id: 0, data: cfrg)]
+            if let alias = libraryDirectory { resources.append(TestResource(type: "alis", id: 128, data: alias)) }
+            writeFile(path, type: type, fork: buildFork(resources), data: pef)
+        }
+
+        func writeFile(_ path: String, type: String, flags: UInt16 = 0, fork: [UInt8], data: [UInt8]) {
+            var fork = fork
+            var data = data
+            var f = mac_file()
+            var err = [CChar](repeating: 0, count: 256)
+            data.withUnsafeMutableBufferPointer { f.data = $0.baseAddress; f.data_len = $0.count }
+            fork.withUnsafeMutableBufferPointer { f.rsrc = $0.baseAddress; f.rsrc_len = $0.count }
+            withUnsafeMutableBytes(of: &f.finder_info) { $0.copyBytes(from: Array((type + "test").utf8) + be16(Int(flags))) }
+            f.has_finder_info = true
+            #expect(appledouble_write(path, &f, &err, err.count))
+        }
+
+        /// An alias record (host memory) for a host path.
+        func aliasRecord(_ host: String) -> [UInt8] {
+            let out = tb_NewPtr(4, true, false)
+            #expect(alias_new_for_host(host, out) == 0)
+            let h = rd32(out), rec = rd32(h)
+            return (0..<Int(tb_GetHandleSize(h))).map { rd8(rec + UInt32($0)) }
+        }
+
+        /// The library one exporting Hello, li r3,7; blr.
+        var helloLibrary: [UInt8] {
+            var loader = be32(UInt32(bitPattern: -1)) + be32(0) + be32(UInt32(bitPattern: -1)) + be32(0)
+            loader += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(0)
+            loader += be32(56) + be32(56) + be32(64) + be32(0) + be32(1)
+            loader += Array("Hello".utf8) + [0, 0, 0]                                     // the strings
+            loader += be32(1 << 18)                                                         // one hash slot
+            loader += be32(5 << 16)                                                         // the key: length 5
+            loader += be32(0) + be32(0) + be16(0) + [0, 0]                                  // code, offset 0, section 0
+            let codeOff = UInt32(40 + 2 * 28), loaderOff = codeOff + 8
+            var pef = Array("Joy!peffpwpc".utf8) + be32(1) + be32(0) + be32(0) + be32(0) + be32(0) + be16(2) + be16(1) + be32(0)
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(8) + be32(8) + be32(8) + be32(codeOff) + [0, 1, 2, 0]
+            pef += be32(UInt32(bitPattern: -1)) + be32(0) + be32(0) + be32(0) + be32(UInt32(loader.count)) + be32(loaderOff) + [4, 1, 0, 0]
+            return pef + be32(0x3860_0007) + be32(0x4E80_0020) + loader
+        }
+
+        /// The Code Fragment Manager follows an alias to a library in the
+        /// application's folder, and finds one in the library directory its
+        /// 'cfrg' names by an alias resource.
+        @Test func librariesThroughAliases() {
+            bootMachine()
+            let root = tempDir()
+            let elsewhere = root.appendingPathComponent("Elsewhere"), app = root.appendingPathComponent("App")
+            try? FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+            try? FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+            let lib = elsewhere.appendingPathComponent("Hello Lib").path
+            writeFragmentFile(lib, type: "shlb", usage: 0, name: "Hello Lib", pef: helloLibrary)
+            let appPEF = importPEF("Hello", cls: 2, library: "Hello Lib")
+            let tool = app.appendingPathComponent("Tool").path
+            var err = [CChar](repeating: 0, count: 256)
+            var found: UInt32 = 0
+            writeFragmentFile(tool, type: "APPL", usage: 1, name: "Tool", pef: appPEF)
+            #expect(cfm_launch(tool, &err, err.count))
+            #expect(!cfm_symbol_code("Hello", &found))
+            // An alias file (isAlias, type 'shlb') beside the application.
+            let alias = app.appendingPathComponent("Hello Lib alias").path
+            writeFile(alias, type: "shlb", flags: 0x8000,
+                      fork: buildFork([TestResource(type: "alis", id: 0, data: aliasRecord(lib))]), data: [])
+            #expect(cfm_launch(tool, &err, err.count))
+            #expect(cfm_symbol_code("Hello", &found))
+            try? FileManager.default.removeItem(atPath: alias)
+            try? FileManager.default.removeItem(atPath: app.appendingPathComponent("._Hello Lib alias").path)
+            // The library directory.
+            writeFragmentFile(tool, type: "APPL", usage: 1, name: "Tool", pef: appPEF,
+                              libraryDirectory: aliasRecord(elsewhere.path))
+            #expect(cfm_launch(tool, &err, err.count))
+            #expect(cfm_symbol_code("Hello", &found))
+        }
+
+        /// A library a program's package keeps in the folders above its own
+        /// (Unity DS-1's utilities, a FlavorSavers saver's host) is found
+        /// there, where its installer would have put it in the Extensions
+        /// folder; one three folders up is not.
+        @Test func aLibraryInThePackageAboveIsFound() {
+            bootMachine()
+            let libPEF = helloLibrary
+            let appPEF = importPEF("Hello", cls: 2, library: "Package Lib")
+            let root = tempDir()
+            let deep = root.appendingPathComponent("Package/Utilities/Tool")
+            try? FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+            writeFragmentFile(deep.appendingPathComponent("Tool").path, type: "APPL", usage: 1, name: "Tool", pef: appPEF)
+            var err = [CChar](repeating: 0, count: 256)
+            var found: UInt32 = 0
+            for (at, expected) in [("", false), ("Package", true), ("Package/Utilities", true)] {
+                let lib = root.appendingPathComponent(at).appendingPathComponent("Package Lib").path
+                writeFragmentFile(lib, type: "shlb", usage: 0, name: "Package Lib", pef: libPEF)
+                #expect(cfm_launch(deep.appendingPathComponent("Tool").path, &err, err.count))
+                #expect(cfm_symbol_code("Hello", &found) == expected, "the library in \(at)")
+                try? FileManager.default.removeItem(atPath: lib)
+                try? FileManager.default.removeItem(atPath: (lib as NSString).deletingLastPathComponent + "/._Package Lib")
+            }
         }
 
         /// Mixed Mode calls a PowerPC routine with r12 at its transition

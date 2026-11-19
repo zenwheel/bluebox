@@ -41,6 +41,38 @@ bin=${3:-${BLUEBOX:-"$(cd "$root" && swift build -c release --show-bin-path)/blu
 jobs=${4:-8}
 mkdir -p "$work/logs" "$work/homes"
 
+# A copy of a program's folder in the home, where the run is to find it
+# (printed): under the two folders above it, holding copies of the files
+# in them (not the folders), as a library its package keeps there is
+# found (cfm.c), the corpus root not passed.  The folders are called
+# "up" and the program's own "copy", as it always was in the walk: the
+# names don't matter to the search, and iShell Editor's own path code
+# overwrites its code where a folder in its path has a dot in its name.
+copy_folder() {
+	from=$1
+	to=$2/pkg
+	up=$from
+	for _ in 1 2; do
+		up=$(dirname "$up")
+		[ "$up" != "$dir/corpus" ] && [ "$up" != "$dir" ] || break
+		to=$to/up
+	done
+	to=$to/copy
+	mkdir -p "$(dirname "$to")"
+	cp -cR "$from" "$to" 2>/dev/null || cp -R "$from" "$to"
+	up=$from
+	at=$(dirname "$to")
+	while [ "$at" != "$2/pkg" ]; do
+		up=$(dirname "$up")
+		for f in "$up"/* "$up"/.[!.]*; do
+			[ -f "$f" ] || continue
+			cp -c "$f" "$at/" 2>/dev/null || cp "$f" "$at/"
+		done
+		at=$(dirname "$at")
+	done
+	printf '%s\n' "$to"
+}
+
 # One program: its line of walk.tsv.  With a second argument, that one of
 # the applications an archive holds (--app).
 walk_one() {
@@ -78,10 +110,9 @@ walk_one() {
 	tries=0
 	while :; do
 		rm -rf "$home"
-		mkdir -p "$home"
-		cp -cR "$folder" "$home/copy" 2>/dev/null || cp -R "$folder" "$home/copy"
+		copy=$(copy_folder "$folder" "$home")
 		status=0
-		set -- "$home/copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-24000000000}"
+		set -- "$copy/$(basename "$rel")" --headless --census "$walk" --max "${MAX:-24000000000}"
 		[ -z "$app" ] || set -- "$@" --app "$app"
 		while IFS= read -r step; do
 			[ -z "$step" ] || set -- "$@" --walk-avoid "$step"

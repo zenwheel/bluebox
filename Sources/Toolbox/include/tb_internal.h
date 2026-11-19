@@ -737,6 +737,9 @@ void dialogs_reset(void);
 
 /* A new alias handle for a host path, stored at alias_out. */
 int16_t alias_new_for_host(const char *host, gaddr alias_out);
+/* Where an alias record held in host memory leads, by its paths or
+ * relative to from_host, the file holding it (NULL: none). */
+bool alias_host_of_bytes(const uint8_t *rec, size_t len, const char *from_host, char *host, size_t hostsize);
 
 /* ---- Process Manager ---- */
 

@@ -352,6 +352,32 @@ static bool relative_host(gaddr fromFile, gaddr alias, char *host, size_t hostsi
     return fm_host_of_mac_path(mac, n, host, hostsize) && fm_host_exists(host);
 }
 
+/* Where an alias record read from a file (host memory) leads: by its
+ * paths, else relative to the host file from_host that holds it (an
+ * alias file, or an application's library directory in its 'cfrg'),
+ * as the Code Fragment Manager resolved them.  False where it leads
+ * nowhere that exists. */
+bool alias_host_of_bytes(const uint8_t *rec, size_t len, const char *from_host, char *host, size_t hostsize)
+{
+    if (len < FIXED_SIZE || len > 0x8000)
+        return false;
+    gaddr h = tb_NewHandle((int32_t)len, false, false);
+    if (!h)
+        return false;
+    gput(rd32(h), rec, (uint32_t)len);
+    bool ok = target_host(h, host, hostsize) && fm_host_exists(host);
+    if (!ok && from_host) {
+        gaddr spec = tb_NewPtr(FSSpec_SIZEOF, true, false);
+        if (spec) {
+            fm_spec_for_path(from_host, spec);
+            ok = relative_host(spec, h, host, hostsize);
+            tb_DisposePtr(spec);
+        }
+    }
+    tb_DisposeHandle(h);
+    return ok;
+}
+
 int16_t tb_ResolveAlias(gaddr fromFile, gaddr alias, gaddr target, gaddr wasChanged)
 {
     if (wasChanged)

@@ -912,10 +912,10 @@ static gaddr bind_import(const char *lname, int li, const char *sname, int cls, 
         return data_import(sname);
     }
     if (li < 0) {
-        /* A library Mac OS didn't have either: a plug-in's host
-         * (NOVA's saverlets import from a fragment inside NOVA, found
-         * only once NOVA has loaded it), or one the program needs
-         * installed.  Called, it stops naming the library. */
+        /* A library Mac OS didn't have either, found nowhere searched:
+         * one the program needs installed (a NOVA saverlet run away from
+         * NOVA, whose library is in it).  Called, it stops naming the
+         * library. */
         char both[64];
         snprintf(both, sizeof both, "%s (for %s)", lname, sname);
         return native_tvector(missing_library_import, both);
@@ -1307,6 +1307,7 @@ typedef struct {
     uint32_t offset, length;
     uint32_t rtype;
     int16_t rid;
+    int16_t libdir; /* an application's: its library directory's 'alis' ID, 0 for none */
     char name[64];
 } cfrg_member;
 
@@ -1323,7 +1324,8 @@ static bool cfrg_each(const uint8_t *p, size_t len, bool (*fn)(const cfrg_member
             /* A fragment in a resource has the resource's type and ID
              * where one in the data fork has its offset and length. */
             cfrg_member cm = { .usage = m[22], .where = m[23], .offset = be32(m + 24), .length = be32(m + 28),
-                               .rtype = be32(m + 24), .rid = (int16_t)be32(m + 28) };
+                               .rtype = be32(m + 24), .rid = (int16_t)be32(m + 28),
+                               .libdir = (int16_t)be16(m + 20) };
             pname_to_c(m + 42, cm.name, sizeof cm.name);
             if (fn(&cm, ctx))
                 return true;
@@ -1511,13 +1513,65 @@ bool cfm_app_fragment_loadable(const char *path)
     return ok;
 }
 
-/* Does this file hold an import library of this name? */
-static bool file_has_library(const char *path, const char *name)
+/* The resource of this type and ID in a file read (host memory, not to
+ * be freed; NULL where there is none). */
+static const uint8_t *file_resource(const mac_file *mf, uint32_t type, int16_t id, size_t *len)
+{
+    rsrc_index idx;
+    char err[128];
+    if (!mf->rsrc || !rsrc_parse(mf->rsrc, mf->rsrc_len, &idx, err, sizeof err))
+        return NULL;
+    const uint8_t *out = NULL;
+    for (size_t i = 0; i < idx.count && !out; i++)
+        if (idx.entries[i].type == type && idx.entries[i].id == id) {
+            out = rsrc_data(mf->rsrc, &idx, &idx.entries[i]);
+            *len = idx.entries[i].data_len;
+        }
+    rsrc_index_free(&idx);
+    return out;
+}
+
+/* Where an alias file leads (its 'alis' 0), if it is one of the type
+ * given ('shlb' a library's, 'fdrp' a folder's): the Code Fragment
+ * Manager followed both where it searched. */
+static bool alias_file_target(const mac_file *mf, const char *path, uint32_t type, char *out, size_t outsize)
+{
+    if (!mf->has_finder_info || !(be16(mf->finder_info + 8) & 0x8000) || mac_file_type(mf) != type)
+        return false;
+    size_t len = 0;
+    const uint8_t *rec = file_resource(mf, 0x616C6973u /* alis */, 0, &len);
+    return rec && alias_host_of_bytes(rec, len, path, out, outsize);
+}
+
+static bool file_has_library(const char *path, const char *name);
+
+/* Does this file hold an import library of this name?  An alias to a
+ * library file stands for its target (*target set to where it is).  An
+ * alias to a folder sets *folder (when given) to the folder. */
+static bool file_holds_library(const char *path, const char *name, char *target, size_t targetsize, char *folder,
+                               size_t foldersize)
 {
     mac_file mf;
-    char err[128];
-    if (!appledouble_read(path, &mf, err, sizeof err))
+    /* The resource fork alone: a folder of large documents is searched
+     * without reading them. */
+    if (!appledouble_read_meta(path, &mf))
         return false;
+    char to[1024];
+    struct stat st;
+    if (folder && alias_file_target(&mf, path, 0x66647270u /* fdrp */, to, sizeof to) && !stat(to, &st) &&
+        S_ISDIR(st.st_mode)) {
+        mac_file_free(&mf);
+        snprintf(folder, foldersize, "%s", to);
+        return false;
+    }
+    if (alias_file_target(&mf, path, 0x73686C62u /* shlb */, to, sizeof to)) {
+        mac_file_free(&mf);
+        if (strcmp(to, path) && file_has_library(to, name)) {
+            snprintf(target, targetsize, "%s", to);
+            return true;
+        }
+        return false;
+    }
     size_t clen;
     uint8_t *cfrg = file_cfrg(&mf, &clen);
     mac_file_free(&mf);
@@ -1525,7 +1579,15 @@ static bool file_has_library(const char *path, const char *name)
     if (cfrg)
         cfrg_each(cfrg, clen, match_member, &s);
     bb_free(cfrg);
+    if (s.ok)
+        snprintf(target, targetsize, "%s", path);
     return s.ok;
+}
+
+static bool file_has_library(const char *path, const char *name)
+{
+    char target[1024];
+    return file_holds_library(path, name, target, sizeof target, NULL, 0) && !strcmp(target, path);
 }
 
 /* Look for a library file in a folder (and the folders in it, one level). */
@@ -1536,11 +1598,19 @@ static bool find_library_file(const char *dir, const char *name, int depth, char
         return false;
     struct dirent *e;
     bool found = false;
-    char sub[64][256];
+    char (*sub)[1024] = bb_malloc(64 * sizeof *sub, BB_BYTES);
+    if (!sub) {
+        closedir(d);
+        return false;
+    }
     int nsub = 0;
     while (!found && (e = readdir(d))) {
         if (e->d_name[0] == '.')
             continue;
+#ifdef DT_DIR
+        if (!depth && e->d_type == DT_DIR) /* not to be searched: not looked at (a crowded folder above) */
+            continue;
+#endif
         char path[1024];
         snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
         struct stat st;
@@ -1548,25 +1618,56 @@ static bool find_library_file(const char *dir, const char *name, int depth, char
             continue;
         if (S_ISDIR(st.st_mode)) {
             if (nsub < 64)
-                snprintf(sub[nsub++], sizeof sub[0], "%s", e->d_name);
+                snprintf(sub[nsub++], sizeof sub[0], "%s", path);
             continue;
         }
-        if (file_has_library(path, name)) {
-            snprintf(out, outsize, "%s", path);
+        /* An alias to a folder is searched as a folder in this one. */
+        char folder[1024] = "";
+        if (file_holds_library(path, name, out, outsize, depth > 0 ? folder : NULL, sizeof folder))
             found = true;
-        }
+        else if (folder[0] && nsub < 64)
+            snprintf(sub[nsub++], sizeof sub[0], "%s", folder);
     }
     closedir(d);
-    for (int i = 0; i < nsub && !found && depth > 0; i++) {
-        char path[1024];
-        snprintf(path, sizeof path, "%s/%s", dir, sub[i]);
-        found = find_library_file(path, name, depth - 1, out, outsize);
-    }
+    for (int i = 0; i < nsub && !found && depth > 0; i++)
+        found = find_library_file(sub[i], name, depth - 1, out, outsize);
+    bb_free(sub);
     return found;
 }
 
+/* The application's library directory: the folder its 'cfrg' names by
+ * an alias resource in its file (Outlook Express 5's, "Office").  False
+ * where it names none, or one not there. */
+static bool library_directory(char *out, size_t outsize)
+{
+    if (!frags[0].path[0])
+        return false;
+    mac_file mf;
+    char err[128];
+    if (!appledouble_read(frags[0].path, &mf, err, sizeof err))
+        return false;
+    size_t clen, len = 0;
+    uint8_t *cfrg = file_cfrg(&mf, &clen);
+    member_search s = { .want = NULL };
+    if (cfrg)
+        cfrg_each(cfrg, clen, match_member, &s);
+    bb_free(cfrg);
+    bool ok = false;
+    if (s.ok && s.found.libdir) {
+        const uint8_t *rec = file_resource(&mf, 0x616C6973u /* alis */, s.found.libdir, &len);
+        struct stat st;
+        ok = rec && alias_host_of_bytes(rec, len, frags[0].path, out, outsize) && !stat(out, &st) &&
+             S_ISDIR(st.st_mode);
+    }
+    mac_file_free(&mf);
+    return ok;
+}
+
 /* The fragment index of a library, loading it if need be: one already
- * loaded, one of ours, one in the application's file, one in its folder. */
+ * loaded, one of ours, one in the application's file, its library
+ * directory, its folder, the Extensions folder (Inside Macintosh:
+ * PowerPC System Software, "Import Library Searching"), and last the
+ * folders its package put it in above it. */
 static int library_named(const char *name, char *err, size_t errlen)
 {
     for (int i = 0; i < nfrags; i++)
@@ -1592,7 +1693,11 @@ static int library_named(const char *name, char *err, size_t errlen)
     }
     if (frags[0].path[0] && file_has_library(frags[0].path, name))
         return load_from_file(frags[0].path, name, err, errlen);
-    char path[1024];
+    char path[1024], dir[1024];
+    if (library_directory(dir, sizeof dir) && find_library_file(dir, name, 0, path, sizeof path))
+        return load_from_file(path, name, err, errlen);
+    /* The application's folder: the Code Fragment Manager looked at its
+     * top level only, but folders in it are searched too, two deep. */
     if (app_dir[0] && find_library_file(app_dir, name, 2, path, sizeof path))
         return load_from_file(path, name, err, errlen);
     /* The folders of the fragments loaded from other files: an After Dark
@@ -1601,7 +1706,6 @@ static int library_named(const char *name, char *err, size_t errlen)
     for (int i = nfrags - 1; i >= 0; i--) {
         if (frags[i].native || !frags[i].path[0])
             continue;
-        char dir[1024];
         snprintf(dir, sizeof dir, "%s", frags[i].path);
         char *slash = strrchr(dir, '/');
         if (!slash)
@@ -1618,6 +1722,24 @@ static int library_named(const char *name, char *err, size_t errlen)
     snprintf(ext, sizeof ext, "%s/Extensions", fm_system_folder_host());
     if (find_library_file(ext, name, 2, path, sizeof path))
         return load_from_file(path, name, err, errlen);
+    /* The two folders above the application's, the files in them alone:
+     * a package's library that its installer or host program put in the
+     * Extensions folder, where the program in a folder of its own expects
+     * it.  Unity DS-1's and Retro AS-1's utilities (their installers'
+     * "Move objects lib"), PanoTools' helpers (pano12.lib), and the
+     * screen savers FlavorSavers and NOVA launch, whose library is a
+     * fragment in the host application, which installs it when first run. */
+    snprintf(dir, sizeof dir, "%s", app_dir);
+    for (int up = 0; up < 2 && dir[0]; up++) {
+        char *slash = strrchr(dir, '/');
+        if (!slash || slash == dir)
+            break;
+        *slash = 0;
+        if (find_library_file(dir, name, 0, path, sizeof path)) {
+            LOGF(LOG_SEG, "cfm: %s from its package, %s\n", name, path);
+            return load_from_file(path, name, err, errlen);
+        }
+    }
     snprintf(err, errlen, "library %s not found", name);
     return -1;
 }
