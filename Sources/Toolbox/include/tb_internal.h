@@ -116,6 +116,11 @@ uint32_t dialog_signature(gaddr d);
 bool dialog_modal(gaddr d);
 int dialog_button(gaddr d, int n, char *title, size_t size, int *x, int *y);
 int dialog_empty_field(gaddr d, bool *active);
+int dialog_fields(gaddr d);
+int dialog_field_length(gaddr d, int n);
+size_t dialog_text(gaddr d, char *out, size_t cap);
+void dialog_describe(gaddr d);
+size_t dialog_field_label(gaddr d, int n, char *out, size_t cap);
 gaddr te_field_in(gaddr port); /* the TextEdit record typing goes into in a port, or 0 (te.c) */
 /* The standard dialog filter: Return and Enter press the default button,
  * Escape and Command-period the cancel button (dialogs.c). */
@@ -464,6 +469,7 @@ void slots_screen_changed(void); /* the screen's size changed */
 const char *wm_screen_fixed(void);
 void wm_screen_resized(int old_w, int old_h);
 void aem_display_notice(void);
+int aem_app_handler_count(void);
 bool aem_handles_display_notice(void);
 void machine_screen_request_poll(void);
 void raw_MemoryDispatch(cpu68k *c, uint16_t tw);

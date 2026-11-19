@@ -764,6 +764,27 @@ extension BlueBox {
             #expect(dialog_standard_alert(2, guestString("Disk full"), 0, param, hit) == 0 && rd16(hit) == 2)
         }
 
+        /// Two alerts in turn with no other wait between (IntelliBots'
+        /// installer: "disk error", then "Reinstall or Quit?", round and
+        /// round) are a cycle too: each, back again, gets another answer.
+        @Test func withoutAHostAlertsInTurnGetAnotherAnswer() {
+            launchTestApp(Self.alertResources())
+            machine_set_alert_handler(nil, nil)
+            machine_set_instruction_limit(0)
+            machine_idle()
+            tb_ParamText(guestString("One"), 0, 0, 0)
+            #expect(tb_Alert(128, 0) == 1)
+            tb_ParamText(guestString("Other"), 0, 0, 0)
+            #expect(tb_Alert(128, 0) == 1)
+            tb_ParamText(guestString("One"), 0, 0, 0)
+            #expect(tb_Alert(128, 0) == 2) // back: Cancel this time
+            tb_ParamText(guestString("Other"), 0, 0, 0)
+            #expect(tb_Alert(128, 0) == 2)
+            machine_idle()
+            tb_ParamText(guestString("One"), 0, 0, 0)
+            #expect(tb_Alert(128, 0) == 1) // after a wait for input: the default
+        }
+
         /// The alert window closing makes the window in front active
         /// again, with an activate event, whether the host showed the
         /// alert or (headless) answered it: Bolo reads the keyboard only

@@ -545,6 +545,9 @@ void raw_ComponentDispatch(cpu68k *c, uint16_t tw)
             if (comps[i].used && !comps[i].captured_by && comps[i].type == ARG32(4) &&
                 (!ARG32(0) || comps[i].subtype == ARG32(0)))
                 found = COMPONENT_TAG | i;
+        LOGF(LOG_TRAPS, "  OpenDefaultComponent '%c%c%c%c' '%c%c%c%c'%s\n", (char)(ARG32(4) >> 24),
+             (char)(ARG32(4) >> 16), (char)(ARG32(4) >> 8), (char)ARG32(4), (char)(ARG32(0) >> 24),
+             (char)(ARG32(0) >> 16), (char)(ARG32(0) >> 8), (char)ARG32(0), found ? "" : ": none");
         finish(c, ret, 8, 4, found ? open_component(found, &err) : 0);
         return;
     }

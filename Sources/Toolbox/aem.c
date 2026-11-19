@@ -1251,6 +1251,11 @@ static bool has_handler(uint32_t cls, uint32_t id)
 
 static bool app_has_handlers(void) { return nhandlers[0] > 0 || nhandlers[1] > 0; }
 
+/* The Apple event handlers the program installed, for the menu walker: a
+ * program with nothing on the screen that has some is a server waiting
+ * for events (Cron's commands). */
+int aem_app_handler_count(void) { return nhandlers[0]; }
+
 /* ---------------------------------------------------------------------- */
 /* Coercion and special handlers */
 

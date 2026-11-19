@@ -24,6 +24,7 @@
  * walk ends "found no menu bar", or "no menu bar or window" for one with
  * nothing on the screen (a background program).
  */
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,6 +76,9 @@ static struct {
     unsigned seen;    /* the step it was last in front at */
     bool again;       /* it went and came back: the program asks again */
     bool quits;       /* a button passed over as Quit */
+    int rearmed;      /* times its buttons were all clicked and it came back */
+    bool cancelled;   /* its Cancel pressed as the last resort */
+    int poked;        /* clicks in one with no buttons */
     uint32_t polls;   /* ev_queue_polls when it came up */
 } open_dialogs[NDIALOGS];
 static int nopen;
@@ -162,15 +166,86 @@ static bool passed_over(const char *text)
     return false;
 }
 
+/* Whether text holds one of words, each a word of its own ("ok", not the
+ * "ok" in "Book"), or with a '*' at its end the start of one ("regist*":
+ * Register, Registration). */
+static bool has_word(const char *text, const char *const *words, size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        size_t len = strlen(words[i]);
+        bool prefix = len && words[i][len - 1] == '*';
+        char w[32];
+        snprintf(w, sizeof w, "%.*s", (int)(prefix ? len - 1 : len), words[i]);
+        size_t wl = strlen(w);
+        for (const char *p = text; (p = strcasestr(p, w)); p++) {
+            bool starts = p == text || !isalnum((unsigned char)p[-1]);
+            bool ends = prefix || !isalnum((unsigned char)p[wl]);
+            if (starts && ends)
+                return true;
+        }
+    }
+    return false;
+}
+#define HAS_WORD(text, ...) has_word(text, (const char *const[]){ __VA_ARGS__ }, \
+                                     sizeof (const char *const[]){ __VA_ARGS__ } / sizeof(const char *))
+
+/* What a dialog at the start the walk can't get past asks for, from its
+ * text: what a person would need to have (a serial number, the program's
+ * floppy), or NULL. */
+static const char *asks_for(const char *text)
+{
+    if (HAS_WORD(text, "password*", "authoriz*", "protected"))
+        return "a password";
+    if (HAS_WORD(text, "serial*", "unlock*", "personaliz*", "activation", "key code") ||
+        (HAS_WORD(text, "regist*", "licen*") && HAS_WORD(text, "code*", "number*", "key")))
+        return "a serial number";
+    if (HAS_WORD(text, "insert*", "diskette*", "floppy", "master disk", "original disk", "key disk"))
+        return "its disk";
+    if (HAS_WORD(text, "where is", "can't find", "cannot find", "could not find", "couldn't find", "unable to find"))
+        return "a file it can't find";
+    return NULL;
+}
+
+/* Whether a dialog's text asks whether to delete or overwrite something
+ * (RemoveOldEMPs' "Delete all old copies?", a question): its Yes is
+ * passed over for its No, as Erase is. */
+static bool destroys(const char *text)
+{
+    return strchr(text, '?') && HAS_WORD(text, "delete*", "erase*", "remove*", "trash*", "throw away", "overwrite*",
+                                         "replace*", "discard*", "destroy*", "wipe*");
+}
+
+/* How well a button of a dialog at the program's start goes on with the
+ * program, the walk's order among them: 0, a nag's "Not Yet", "Later",
+ * "Continue", "Try It", an OK; 1, any other; 2, one that goes off to a
+ * form or a page of its own (Register, Buy, Print), tried last.  A
+ * dialog asking for a disk or a file, or asking whether to delete
+ * something (prompt), goes on at Cancel, Eject or No. */
+static int button_rank(const char *text, bool prompt)
+{
+    if (prompt && HAS_WORD(text, "cancel", "eject", "skip", "ignore", "no", "don't", "keep"))
+        return 0;
+    if (HAS_WORD(text, "not yet", "later", "continue", "try*", "demo*", "evaluat*", "skip", "remind*", "not now",
+                 "unregistered", "no thanks", "ok", "okay", "yes", "start", "play", "begin", "agree", "accept",
+                 "done", "close", "proceed", "go", "run", "use"))
+        return 0;
+    if (HAS_WORD(text, "regist*", "buy", "order*", "purchase", "pay*", "print*", "info*", "help", "read*", "more",
+                 "web", "e-mail", "email", "mail", "fax", "visit", "about"))
+        return 2;
+    return 1;
+}
+
 /* Whether the walk has done anything yet (a menu item chosen, a button
  * pressed): a dialog before is the program's own start. */
 static bool begun(void) { return chosen || pressed || pictured || targets_clicked; }
 
 /* A button that would turn the program down at its start (a licence's
- * Decline), as Cancel would. */
+ * Decline), as Cancel would, or cut short what it is doing (KQKR
+ * Generator's Abort). */
 static bool declines(const char *text)
 {
-    return strcasestr(text, "cancel") || strcasestr(text, "decline") || strcasestr(text, "disagree");
+    return strcasestr(text, "cancel") || strcasestr(text, "decline") || strcasestr(text, "disagree") ||
+           strcasestr(text, "abort");
 }
 
 /* Whether dialog d is a licence (a button of its own Disagrees or
@@ -213,12 +288,28 @@ static void click(int x, int y)
 {
     machine_post_mouse(x, y, 1);
     machine_script_add(g_cpu->icount + 1000000, 1, x, y, 0); /* scripts go by instructions */
+    /* The next step no sooner than a double click's time (and a tenth of a
+     * second) after: a click on one place, then another the next step,
+     * would be a double click to a program that times only the clicks
+     * (Cuboids ignores its title's New Game so). */
+    uint64_t gap = (uint64_t)rd32(LM_DoubleTime) * 1000000000 / 60 + 100000000;
+    if (next_at < machine_time_ns() + gap)
+        next_at = machine_time_ns() + gap;
 }
 
+/* Each step said; with BLUEBOX_WALK_SNAPS=dir, the screen a moment after
+ * it saved there (dir/step-N.png), to see what each step did. */
 static void say(const char *what)
 {
+    static unsigned said;
     printf("walk: %s\n", what);
     fflush(stdout);
+    const char *dir = getenv("BLUEBOX_WALK_SNAPS");
+    if (dir && *dir && g_cpu) {
+        char path[1024];
+        snprintf(path, sizeof path, "%s/step-%03u.png", dir, ++said);
+        machine_script_add_snap(g_cpu->icount + 2500000, path);
+    }
 }
 
 /* ---- The screen walk ----
@@ -955,7 +1046,27 @@ static void find_patches(int s)
         }
     patch found[PATCHES];
     int nfound = 0;
-    /* Cells that stand out from the background, whatever their colour. */
+    /* First, cells of a strong colour, by its hue whatever its shade: a
+     * button of the program's own drawing is most often coloured, where
+     * text and frames are black, white or grey (Dragon Clash's green
+     * arrow on its dark frame, Cuboids' green New Game on black). */
+    int16_t *hue = bb_host_malloc((size_t)gw * (size_t)gh * sizeof *hue);
+    if (hue) {
+        for (int c = 0; c < gw * gh; c++) {
+            int r = avg[c * 3], g = avg[c * 3 + 1], b = avg[c * 3 + 2];
+            int hi = r > g ? (r > b ? r : b) : (g > b ? g : b), lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
+            hue[c] = -1;
+            if (hi - lo < 64 || hi < 64)
+                continue;
+            int h6 = hi == r ? (g >= b ? 0 : 5) : hi == g ? (b >= r ? 2 : 1) : (r >= g ? 4 : 3);
+            hue[c] = (int16_t)h6;
+        }
+        patches_of(hue, gw, gh, queue, a, found, &nfound);
+        add_patches(found, nfound, s);
+        bb_free(hue);
+        nfound = 0;
+    }
+    /* Then cells that stand out from the background, whatever their colour. */
     int16_t *fg = bb_host_malloc((size_t)gw * (size_t)gh * sizeof *fg);
     if (fg) {
         for (int c = 0; c < gw * gh; c++) {
@@ -1140,6 +1251,13 @@ static bool nudge(void)
     /* A program with no menus (a game) gets the keys a game takes too:
      * space, the arrows, a digit. */
     bool menuless = !menu_bar_count();
+    /* Not into a modal dialog's fields, walked past (the keys would be
+     * typed there: ladder's student number). */
+    gaddr d = dialog_in_front();
+    if (d && dialog_modal(d) && dialog_fields(d)) {
+        waits++;
+        return true;
+    }
     switch (waits++ % 6) {
     case 0:
         if (menuless)
@@ -1341,16 +1459,33 @@ static void no_menu_bar(const char *why)
 static void no_menu_bar_found(void)
 {
     bool windowless = !tb_FrontWindow() && !machine_screen_mode_wanted();
+    /* One that installed Apple event handlers of its own and waits for
+     * them with nothing on the screen is a server (Cron's commands, a
+     * CGI, a mail router): it ran on, and that was its walk. */
+    if (windowless && aem_app_handler_count() > 0 && machine_waiting_for_input()) {
+        no_menu_bar("the program has nothing on the screen, it waits for Apple events");
+        return;
+    }
     printf("walk: no menu bar appeared%s\n", windowless ? ", nor a window" : "");
     fflush(stdout);
     walking = false;
     cpu_halt(g_cpu, windowless ? "menu walk found no menu bar or window" : "menu walk found no menu bar");
 }
 
+/* What the dialog d asks for (asks_for), from its text and its fields'
+ * labels, or NULL. */
+static const char *dialog_asks_for(gaddr d)
+{
+    char text[1024];
+    dialog_text(d, text, sizeof text);
+    return asks_for(text);
+}
+
 /* The end of the walk at a dialog that stays.  With a Quit of its own,
  * its other buttons pressed and no menus to walk, it is the program
- * (MacroMind Player), walked; else it wants
- * what the walk can't give, as a registration's serial number. */
+ * (MacroMind Player), walked; else it wants what the walk can't give, as
+ * a registration's serial number or the program's own floppy, said when
+ * its text tells. */
 static void stays_up(int at)
 {
     walking = false;
@@ -1363,7 +1498,131 @@ static void stays_up(int at)
     }
     printf("walk: a dialog stays up after %s\n", last);
     fflush(stdout);
-    cpu_halt(g_cpu, "menu walk stuck in a dialog after %s", last);
+    gaddr d = dialog_in_front();
+    const char *wants = d ? dialog_asks_for(d) : NULL;
+    if (d)
+        dialog_describe(d);
+    if (wants)
+        cpu_halt(g_cpu, "menu walk stuck in a dialog after %s: it asks for %s", last, wants);
+    else
+        cpu_halt(g_cpu, "menu walk stuck in a dialog after %s", last);
+}
+
+/* A dialog come to the front for the first time, said: its text and
+ * buttons, so a walk's log tells what it answered. */
+static void note_dialog(gaddr d)
+{
+    char text[1024], line[256], title[64];
+    int x, y, b;
+    dialog_text(d, text, sizeof text);
+    size_t n = (size_t)snprintf(line, sizeof line, "dialog \"%.80s%s\"", text, strlen(text) > 80 ? "..." : "");
+    for (int i = 1; i <= 64 && (b = dialog_button(d, i, title, sizeof title, &x, &y)) >= 0 && n < sizeof line; i++)
+        if (b)
+            n += (size_t)snprintf(line + n, sizeof line - n, ", [%s]%s", title, b == 1 ? " (dimmed)" : "");
+    for (char *c = line; *c; c++)
+        if ((uint8_t)*c >= 0x7F)
+            *c = '?';
+    say(line);
+}
+
+/* Whether dialog d has items to click besides its push buttons, shown and
+ * enabled (radio buttons, check boxes, scroll bars, pictures and user
+ * items): a dialog the program is, an order form, a control panel. */
+static bool has_controls(gaddr d)
+{
+    char text[64];
+    qrect r;
+    int x, y, b, n = 0;
+    for (int i = 1; i <= 64 && (b = dialog_target(d, i, text, sizeof text, &r)) >= 0; i++)
+        if (b == 2 && dialog_button(d, i, text, sizeof text, &x, &y) == 0)
+            n++;
+    return n >= 2;
+}
+
+/* A nag at the program's start (a button to Register, Buy or Order among
+ * its buttons, whose Return may well be that one: Zap'T'Balls', XTimer's)
+ * has its button that goes on unregistered ("Not Yet", "Later",
+ * "Continue") clicked first, before the keys, as a person would; so does
+ * one asking whether to delete something, its No (Return would be Yes). */
+static bool nag_answered(gaddr d, int at)
+{
+    char text[64], what[96], said[1024];
+    int x, y, b, best = 0, nag = 0;
+    dialog_text(d, said, sizeof said);
+    bool destructive = destroys(said);
+    for (int i = 1; i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++) {
+        if (b != 2 || passed_over(text) || (declines(text) && !destructive))
+            continue;
+        int rank = button_rank(text, destructive);
+        nag |= rank == 2 || destructive;
+        if (rank == 0 && !best && !(destructive && HAS_WORD(text, "yes", "ok", "delete*", "remove*", "erase*")))
+            best = i;
+    }
+    if (!nag || !best || dialog_button(d, best, text, sizeof text, &x, &y) != 2)
+        return false;
+    open_dialogs[at].clicked |= 1ull << (best - 1);
+    snprintf(what, sizeof what, "button \"%s\"", text);
+    say(what);
+    click(x, y);
+    return true;
+}
+
+/* Text typed as the user would, a key a character (the ANSI keyboard's;
+ * capitals and '@' shifted), Return following at the next step. */
+static void type_text(const char *text)
+{
+    static const char keys[] = "asdfhgzxcv\0bqweryt123465=97-80]ou[ip\0lj'k;\\,/nm.";
+    char what[96];
+    snprintf(what, sizeof what, "text \"%s\" (an empty field)", text);
+    say(what);
+    for (const char *c = text; *c; c++) {
+        int ch = *c == '@' ? '2' : (unsigned char)tolower((unsigned char)*c), code = 0x31; /* else the space bar */
+        for (int k = 0; k < (int)sizeof keys - 1; k++)
+            if (keys[k] == ch && ch)
+                code = k;
+        bool shift = isupper((unsigned char)*c) || *c == '@';
+        key((unsigned char)*c, code, shift ? 0x0200 : 0);
+    }
+    return_next = true;
+}
+
+/* A sum the dialog's text asks for ("What is 15 + 38?", Multimedia
+ * Designer's until it is registered), worked out into out. */
+static bool sum_asked(const char *text, char *out, size_t size)
+{
+    for (const char *p = text; *p; p++) {
+        if (!isdigit((unsigned char)*p) || (p > text && isdigit((unsigned char)p[-1])))
+            continue;
+        char *e;
+        long a = strtol(p, &e, 10), b;
+        while (*e == ' ')
+            e++;
+        char op = *e++;
+        while (*e == ' ')
+            e++;
+        if (!strchr("+-x*", op) || !isdigit((unsigned char)*e))
+            continue;
+        b = strtol(e, &e, 10);
+        while (*e == ' ')
+            e++;
+        if (*e != '?' && *e != '=') /* a question, not a date's "1995-1996" */
+            continue;
+        snprintf(out, size, "%ld", op == '+' ? a + b : op == '-' ? a - b : a * b);
+        return true;
+    }
+    return false;
+}
+
+/* What goes in a field labelled label: a name, unless it asks for a
+ * number, a code or an address. */
+static const char *field_text(const char *label)
+{
+    if (HAS_WORD(label, "mail*", "e-mail*", "internet", "address") && !HAS_WORD(label, "street"))
+        return HAS_WORD(label, "mail*", "e-mail*", "internet") ? "bluebox@example.com" : "1 Infinite Loop";
+    if (HAS_WORD(label, "serial*", "code*", "number*", "key", "password*", "unlock*", "licen*", "phone", "zip",
+                 "postal", "#"))
+        return "12345678";
+    return "Blue Box";
 }
 
 /* A field left empty at the program's start that the program will not go
@@ -1373,33 +1632,29 @@ static void stays_up(int at)
  * again: a field may be left empty on purpose (Bolo RandomMap's, for a
  * value of its own choosing), and a registration's (HexaSuper's) has a
  * Not Yet to press instead. */
-static void type_name(void)
-{
-    static const char name[] = "Blue Box";
-    /* The keys of its letters (the ANSI keyboard's). */
-    static const uint8_t letter_code[26] = { 0x00, 0x0B, 0x08, 0x02, 0x0E, 0x03, 0x05, 0x04, 0x22,
-                                             0x26, 0x28, 0x25, 0x2E, 0x2D, 0x1F, 0x23, 0x0C, 0x0F,
-                                             0x01, 0x11, 0x20, 0x09, 0x0D, 0x07, 0x10, 0x06 };
-    say("text \"Blue Box\" (an empty field)");
-    for (const char *c = name; *c; c++) {
-        int l = (*c | 0x20) - 'a';
-        bool upper = *c >= 'A' && *c <= 'Z';
-        key(*c, l >= 0 && l < 26 ? letter_code[l] : 0x31, upper ? 0x0200 : 0); /* else the space bar */
-    }
-    return_next = true;
-}
+static void type_name(void) { type_text("Blue Box"); }
 
-/* In a modal dialog put up again: a field a step, Tab moving on to the
- * next. */
-static bool fill_in(gaddr d, int at)
+/* In a modal dialog put up again, or one stuck at the start with its
+ * buttons pressed (stuck): a field a step, Tab moving on to the next,
+ * what is typed going by the field's label ("Serial Number:" a number,
+ * "E-mail:" an address). */
+static bool fill_in(gaddr d, int at, bool stuck)
 {
     bool active = false;
-    if (begun() || !open_dialogs[at].again || !dialog_modal(d) || open_dialogs[at].typed >= 8 ||
-        !dialog_empty_field(d, &active))
+    int item;
+    if (begun() || !(open_dialogs[at].again || stuck) || !dialog_modal(d) || open_dialogs[at].typed >= 8 ||
+        !(item = dialog_empty_field(d, &active)))
         return false;
     open_dialogs[at].typed++;
     if (active) {
-        type_name();
+        char label[64], text[1024], sum[16];
+        /* What is in it (spaces, an Escape the walk's keys typed) taken
+         * out first, with Delete. */
+        for (int n = dialog_field_length(d, item); n > 0 && n <= 64; n--)
+            key(0x08, 0x33, 0);
+        dialog_field_label(d, item, label, sizeof label);
+        dialog_text(d, text, sizeof text);
+        type_text(sum_asked(text, sum, sizeof sum) ? sum : field_text(label));
     } else {
         say("key tab (an empty field)");
         key('\t', 0x30, 0);
@@ -1471,7 +1726,10 @@ void walker_idle(uint64_t icount)
     }
     gaddr d = dialog_in_front();
     uint32_t sig = d ? dialog_signature(d) : 0;
-    if (d && sig != left_open) {
+    /* (Once the screen is walked, a dialog in front is one of its
+     * screens, its items targets: an order form changing as its radio
+     * buttons are clicked is not a new dialog to dismiss.) */
+    if (d && sig != left_open && !screening) {
         int at = 0;
         while (at < nopen && open_dialogs[at].sig != sig)
             at++;
@@ -1484,6 +1742,10 @@ void walker_idle(uint64_t icount)
             open_dialogs[at].clicked = 0;
             open_dialogs[at].quits = false;
             open_dialogs[at].again = false;
+            open_dialogs[at].rearmed = 0;
+            open_dialogs[at].cancelled = false;
+            open_dialogs[at].poked = 0;
+            note_dialog(d);
             open_dialogs[at].polls = ev_queue_polls();
             open_dialogs[at].seen = steps;
             dialogs++;
@@ -1494,7 +1756,9 @@ void walker_idle(uint64_t icount)
             dialogs_shown++;
         }
         open_dialogs[at].seen = steps;
-        if (fill_in(d, at))
+        if (fill_in(d, at, false))
+            return;
+        if (!begun() && !open_dialogs[at].tries && nag_answered(d, at))
             return;
         int *tries = &open_dialogs[at].tries;
         /* Before the walk's first choice, a dialog is the program's own
@@ -1529,15 +1793,26 @@ void walker_idle(uint64_t icount)
             int x, y, b;
             bool modal = dialog_modal(d), dimmed = false, starting = !begun() && !has_quit(d, true);
             bool own = !modal && ev_queue_polls() == open_dialogs[at].polls;
+            /* At the start, the button that best goes on with the program
+             * first (button_rank: "Not Yet" before "Register"); after, in
+             * turn.  A dialog asking for a disk or a file goes on at its
+             * Cancel. */
+            const char *wants = starting ? dialog_asks_for(d) : NULL;
+            char said[1024];
+            dialog_text(d, said, sizeof said);
+            bool prompt = (wants && (!strcmp(wants, "its disk") || !strcmp(wants, "a file it can't find"))) ||
+                          (starting && destroys(said));
+            int best = 0, best_rank = 0, buttons = 0;
             for (int i = 1; (modal || own) && i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0;
                  i++) {
+                buttons += b != 0;
                 if (!b || (open_dialogs[at].clicked & 1ull << (i - 1)))
                     continue;
                 if (passed_over(text)) {
                     open_dialogs[at].quits = true;
                     continue;
                 }
-                if ((starting || own) && declines(text))
+                if ((starting || own) && declines(text) && !prompt)
                     continue;
                 if (own && strcasestr(text, "stop"))
                     continue;
@@ -1545,10 +1820,43 @@ void walker_idle(uint64_t icount)
                     dimmed = true;
                     continue;
                 }
-                open_dialogs[at].clicked |= 1ull << (i - 1);
+                int rank = starting ? button_rank(text, prompt) : 0;
+                if (starting && prompt && destroys(said) && HAS_WORD(text, "yes", "ok", "delete*", "remove*", "erase*",
+                                                                         "trash*", "replace*", "overwrite*", "discard*"))
+                    rank = 3; /* only when nothing else goes on */
+                if (!best || rank < best_rank)
+                    best = i, best_rank = rank;
+            }
+            /* All pressed and the dialog put up again (an alert's Continue
+             * back to the program's window, which puts it up again): its
+             * buttons again, an alert's any number of times, another's
+             * once (Apple HD SC Setup, with no drive to find). */
+            if (!best && open_dialogs[at].clicked && open_dialogs[at].again &&
+                open_dialogs[at].rearmed < (buttons == 1 ? 8 : 1)) {
+                open_dialogs[at].rearmed++;
+                open_dialogs[at].again = false;
+                open_dialogs[at].clicked = 0;
+                open_dialogs[at].tries = 5; /* not its keys again */
+                next_at = now; /* its buttons at the next turn */
+                return;
+            }
+            if (best && dialog_button(d, best, text, sizeof text, &x, &y) == 2) {
+                open_dialogs[at].clicked |= 1ull << (best - 1);
                 snprintf(what, sizeof what, "button \"%s\"", text);
                 say(what);
                 click(x, y);
+                return;
+            }
+            /* None at all (a game's "Player 2 goes first...", Power
+             * Players', waiting for a click anywhere): a click in its
+             * middle, as a person would. */
+            if (modal && !buttons && open_dialogs[at].poked < 3) {
+                open_dialogs[at].poked++;
+                pixdst px = qd_port_pixels(d);
+                qrect pr = qrect_get(d + GrafPort_portRect_off);
+                snprintf(what, sizeof what, "click in the dialog");
+                say(what);
+                click((pr.left + pr.right) / 2 - px.bounds.left, (pr.top + pr.bottom) / 2 - px.bounds.top);
                 return;
             }
             /* A button dimmed for now: a nag's "Not Yet" counting down. */
@@ -1560,7 +1868,27 @@ void walker_idle(uint64_t icount)
              * at the start is walked past too: the splash, then a
              * program's palettes, Fusion's, or its licence, Terrain
              * Builder's.) */
-            if (left_open && !begun() && modal) {
+            if (modal && fill_in(d, at, true))
+                return;
+            /* At the start, a dialog that wants what the walk can't give (a
+             * serial number) ends the walk saying so; another (a nag whose
+             * Cancel goes on unregistered: XTimer's) has its Cancel pressed
+             * as the last resort, not a licence's Decline, which quits, nor in a
+             * dialog that is the program (see has_controls), whose Cancel
+             * is its Quit. */
+            if (modal && !begun() && !open_dialogs[at].cancelled && !wants && !licence(d) && !has_controls(d)) {
+                for (int i = 1; i <= 64 && (b = dialog_button(d, i, text, sizeof text, &x, &y)) >= 0; i++)
+                    if (b == 2 && declines(text) && !passed_over(text)) {
+                        open_dialogs[at].cancelled = true;
+                        open_dialogs[at].clicked |= 1ull << (i - 1);
+                        dialog_describe(d); /* what it was the walk gave up on */
+                        snprintf(what, sizeof what, "button \"%s\" (the last resort)", text);
+                        say(what);
+                        click(x, y);
+                        return;
+                    }
+            }
+            if ((left_open || wants) && !begun() && modal) {
                 stays_up(at);
                 return;
             }
@@ -1636,10 +1964,14 @@ void walker_idle(uint64_t icount)
             int at = 0;
             while (at < nopen && open_dialogs[at].sig != sig)
                 at++;
-            if (at < nopen && (open_dialogs[at].clicked || open_dialogs[at].quits)) {
+            if (at < nopen && (open_dialogs[at].clicked || open_dialogs[at].quits) &&
+                (open_dialogs[at].quits || dialog_asks_for(d) || !has_controls(d))) {
                 stays_up(at);
                 return;
             }
+            /* One with controls besides its push buttons (an order form's
+             * radio buttons and arrows: IMG's) is the program: walked as a
+             * screen of its own, below. */
         }
         /* Perhaps still starting: its window's buttons and its screen are
          * looked at again at each step until PATIENCE has passed, and it

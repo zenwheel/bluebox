@@ -9,6 +9,7 @@
  *
  * Alerts are in dialog.c (shown by the host).
  */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -2041,13 +2042,35 @@ int dialog_empty_field(gaddr d, bool *active)
     for (int i = 1; i <= n; i++) {
         if ((item_type(d, i) & 0x7F) != editText || item_rect(d, i).left >= 8192)
             continue;
+        /* (Spaces only are empty too, SoftPC's Company field, and keys
+         * typed in that are no text: an Escape.) */
         gaddr h = item_handle(d, i);
-        if (h && rd32(h) && tb_GetHandleSize(h) > 0)
+        int32_t len = h && rd32(h) ? tb_GetHandleSize(h) : 0;
+        bool blank = true;
+        for (int32_t k = 0; k < len && blank; k++)
+            blank = rd8(rd32(h) + (gaddr)k) <= ' ';
+        if (!blank)
             continue;
         *active = edit_te(d) && edit_item(d) == i;
         return i;
     }
     return 0;
+}
+
+/* For the menu walker: the length of edit text item n's text. */
+int dialog_field_length(gaddr d, int n)
+{
+    gaddr h = n >= 1 && n <= item_count(d) ? item_handle(d, n) : 0;
+    return h && rd32(h) ? (int)tb_GetHandleSize(h) : 0;
+}
+
+/* For the menu walker: how many edit text items dialog d shows. */
+int dialog_fields(gaddr d)
+{
+    int n = 0;
+    for (int i = 1; i <= item_count(d); i++)
+        n += (item_type(d, i) & 0x7F) == editText && item_rect(d, i).left < 8192;
+    return n;
 }
 
 /* For the screen walk, as dialog_button: whether item n is something a
@@ -2080,4 +2103,113 @@ int dialog_target(gaddr d, int n, char *title, size_t size, qrect *on_screen)
     *on_screen = (qrect){ (int16_t)(r.top - px.bounds.top), (int16_t)(r.left - px.bounds.left),
                           (int16_t)(r.bottom - px.bounds.top), (int16_t)(r.right - px.bounds.left) };
     return 2;
+}
+
+/* For the menu walker: the dialog's static text, the items' joined by a
+ * space (a nag's "Please register", a prompt's "Insert the disk"), into
+ * out; its length. */
+size_t dialog_text(gaddr d, char *out, size_t cap)
+{
+    size_t n = 0;
+    out[0] = 0;
+    for (int i = 1; i <= item_count(d); i++) {
+        if ((item_type(d, i) & 0x7F) != statText || item_rect(d, i).left >= 8192)
+            continue;
+        gaddr h = item_handle(d, i);
+        if (!h || !rd32(h))
+            continue;
+        uint32_t len = (uint32_t)tb_GetHandleSize(h);
+        uint8_t text[512];
+        if (len > sizeof text)
+            len = sizeof text;
+        gget(text, rd32(h), len);
+        if (n)
+            n = append_text(out, n, cap, (const uint8_t *)" ", 1);
+        n = append_text(out, n, cap, text, len);
+    }
+    for (size_t i = 0; i < n; i++)
+        if ((uint8_t)out[i] < ' ')
+            out[i] = ' ';
+    return n;
+}
+
+/* For the menu walker's log of a dialog it could not get past: each item,
+ * its kind, place on the screen and text. */
+void dialog_describe(gaddr d)
+{
+    static const char *const kinds[8] = { "button", "check box", "radio", "control", "text", "field", "icon", "picture" };
+    pixdst px = qd_port_pixels(d);
+    int n = item_count(d);
+    printf("walk: the dialog (%d items%s):\n", n, dialog_modal(d) ? ", modal" : "");
+    for (int i = 1; i <= n && i <= 40; i++) {
+        int type = item_type(d, i), kind = type & 0x7F;
+        qrect r = item_rect(d, i);
+        const char *k = kind == userItem ? "user item"
+                        : kind & ctrlItem ? kinds[kind & 3]
+                        : kind == statText ? kinds[4]
+                        : kind == editText ? kinds[5]
+                        : kind == iconItem ? kinds[6]
+                        : kind == picItem ? kinds[7]
+                                          : "?";
+        char text[96];
+        text[0] = 0;
+        gaddr h = item_handle(d, i);
+        if ((kind & ctrlItem) && h && rd32(h)) {
+            gaddr t = rd32(h) + ControlRecord_contrlTitle_off;
+            uint8_t s[256];
+            gget(s, t + 1, rd8(t));
+            append_text(text, 0, sizeof text, s, rd8(t));
+        } else if ((kind == statText || kind == editText) && h && rd32(h)) {
+            uint32_t len = (uint32_t)tb_GetHandleSize(h);
+            uint8_t s[256];
+            if (len > sizeof s)
+                len = sizeof s;
+            gget(s, rd32(h), len);
+            append_text(text, 0, sizeof text, s, len);
+        }
+        for (char *c = text; *c; c++)
+            if ((uint8_t)*c < ' ' || (uint8_t)*c >= 0x7F)
+                *c = (uint8_t)*c < ' ' ? ' ' : '?';
+        printf("walk:   %d %s%s at %d,%d %dx%d \"%s\"\n", i, k, type & itemDisable ? " (disabled)" : "",
+               r.left - px.bounds.left, r.top - px.bounds.top, r.right - r.left, r.bottom - r.top, text);
+    }
+    fflush(stdout);
+}
+
+/* For the menu walker: the label of edit text item n, the static text
+ * nearest it on its left (overlapping its row) or else just above it
+ * ("Name:", "Serial Number:"), into out; its length (0: none). */
+size_t dialog_field_label(gaddr d, int n, char *out, size_t cap)
+{
+    out[0] = 0;
+    if (n < 1 || n > item_count(d))
+        return 0;
+    qrect f = item_rect(d, n);
+    int best = 0;
+    long best_d = 0;
+    for (int i = 1; i <= item_count(d); i++) {
+        if ((item_type(d, i) & 0x7F) != statText)
+            continue;
+        qrect r = item_rect(d, i);
+        long dist;
+        if (r.right <= f.left + 4 && r.bottom > f.top && r.top < f.bottom)
+            dist = f.left - r.right; /* on its left */
+        else if (r.bottom <= f.top + 4 && r.left < f.right && r.right > f.left)
+            dist = 1000L + (f.top - r.bottom); /* above: only with none on the left */
+        else
+            continue;
+        if (dist > 1200 || (best && dist >= best_d))
+            continue;
+        best = i;
+        best_d = dist;
+    }
+    gaddr h = best ? item_handle(d, best) : 0;
+    if (!h || !rd32(h))
+        return 0;
+    uint32_t len = (uint32_t)tb_GetHandleSize(h);
+    uint8_t text[256];
+    if (len > sizeof text)
+        len = sizeof text;
+    gget(text, rd32(h), len);
+    return append_text(out, 0, cap, text, len);
 }

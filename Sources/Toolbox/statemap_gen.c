@@ -2338,6 +2338,8 @@ const hb_static hb_statics[] = {
     { "Toolbox/dialog.c", "have_answered", 1, 0, 0xa6aba2e36699f918 },
     { "Toolbox/dialog.c", "last_answered", 1024, 0, 0xaed46b2759dc8470 },
     { "Toolbox/dialog.c", "last_answered_id", 2, 0, 0x7579d81a04189ef3 },
+    { "Toolbox/dialog.c", "nrecent", 4, 0, 0xb34e18f570e7c710 },
+    { "Toolbox/dialog.c", "recent_alerts", 48, 0, 0x4bebf85a41ff85cf },
     { "Toolbox/dialog.c", "repeats", 4, 0, 0x4984645b460455b1 },
     { "Toolbox/dialog.c", "resume_proc", 4, 1, 0x4984645b460455b1 },
     { "Toolbox/dialog.c", "wanted_depth", 4, 0, 0xb34e18f570e7c710 },
@@ -3610,7 +3612,7 @@ const hb_static hb_statics[] = {
     { "Toolbox/xpp.c", "user_call.data", 4624, 0, 0x102c2b3c0e1ca209 },
     { "Toolbox/xpp.c", "xpp_asp_control.status", 4624, 0, 0x102c2b3c0e1ca209 },
 };
-const unsigned hb_nstatics = 1728;
+const unsigned hb_nstatics = 1730;
 
 /* By the file the tag is written in and the type as written. */
 const hb_typemap hb_types[] = {
@@ -4291,6 +4293,7 @@ const char *const hb_shape_lines[] = {
     "4b5c3b6243ef677a\tA\t16\t2f30739a97d4ec61",
     "4bc7ce01f84de434\tA\t256\t681738e418131074",
     "4be10f2827640c92\tP\t*mprect",
+    "4bebf85a41ff85cf\tA\t4\t83e3160322114e17",
     "4c42514ae5bd52a3\tP\t*machine_print_op",
     "4c4358169afa878e\tP\t*item_extra",
     "4c628b232974a89a\tS\t20\trate@0x00=4984645b460455b1;size@0x04=7579d81a04189ef3;channels@0x06=7579d81a04189ef3;quality@0x08=4984645b460455b1;volume@0x0c=4984645b460455b1;hardware_mute@0x10=a6aba2e36699f918;speaker_mute@0x11=a6aba2e36699f918",
@@ -4574,6 +4577,7 @@ const char *const hb_shape_lines[] = {
     "8361efd198f8c424\tA\t15\t4e6b49877cd40551",
     "8372f115a0f50d5c\tP\t*actx",
     "83cdaa1d6cff82d1\tP\t*machine_print_page",
+    "83e3160322114e17\tS\t12\tid@0x00=7579d81a04189ef3;hash@0x04=4984645b460455b1;times@0x08=4984645b460455b1",
     "83f4145d6105a983\tA\t32\t7c46826551b9f5a2",
     "84866f94715a7c27\tS\t24\tset@0x00=a6aba2e36699f918;creator@0x04=4984645b460455b1;id@0x08=b34e18f570e7c710;rate@0x0c=b34e18f570e7c710;pitch@0x10=b34e18f570e7c710;volume@0x14=b34e18f570e7c710",
     "8495b1980cbd01f9\tA\t32\t7482a785dd469a62",
@@ -5217,4 +5221,4 @@ const char *const hb_shape_lines[] = {
     "ff7dce9536b1fd7c\tA\t20\t63c023cfa9f822bf",
     "ff8e6c953e7f66d3\tA\t80\t24fa16e46ec9be9d",
 };
-const unsigned hb_nshape_lines = 1319;
+const unsigned hb_nshape_lines = 1321;

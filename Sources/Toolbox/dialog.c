@@ -25,6 +25,16 @@ static bool have_answered;
 static int16_t last_answered_id;
 static char last_answered[sizeof ((machine_alert *)0)->message];
 static unsigned repeats;
+/* The alerts answered lately with no other wait between, each with how
+ * often it came back: two alerts in turn (an installer's "disk error",
+ * then "Reinstall or Quit?") are a cycle the same answers keep going. */
+enum { NRECENT = 4 };
+static struct {
+    int16_t id;
+    uint32_t hash;
+    unsigned times;
+} recent_alerts[NRECENT];
+static int nrecent;
 
 void machine_set_depth_alerts(bool on) { depth_alerts = on; }
 int machine_wanted_depth(void) { return wanted_depth; }
@@ -123,6 +133,7 @@ static void standard_beeper(cpu68k *c, uint16_t tw)
 void dialog_reset(void)
 {
     have_answered = false;
+    nrecent = 0;
     wanted_depth = 0; /* a new boot: nothing asked yet */
     repeats = 0;
     wr32(LM_DABeeper, native_register(standard_beeper, "StandardBeeper", 0));
@@ -244,7 +255,8 @@ bool dialog_host_alert(machine_alert *a, int *result)
  * giving the same answer: MidiPhone's "No response from the modem" asks
  * to Try Again for ever.  So the same alert again, with no other wait for
  * input between, gets the next answer in turn: Cancel, then the other
- * buttons in order, then the default again. */
+ * buttons in order, then the default again; so does one that comes back
+ * after another alert or two. */
 static int16_t headless_answer(int16_t id, const machine_alert *a, int16_t default_item)
 {
     unsigned in_row = machine_idle_answered(); /* the user's answer is the wait for input */
@@ -266,10 +278,28 @@ static int16_t headless_answer(int16_t id, const machine_alert *a, int16_t defau
         if (i != first && i != cancel)
             order[n++] = i;
     }
-    if (in_row > 1 && have_answered && id == last_answered_id && strcmp(a->message, last_answered) == 0)
-        repeats++;
-    else
-        repeats = 0;
+    /* Straight back, or back after another alert or two (a cycle of
+     * them, IntelliBots' installer's "disk error" then "Reinstall?"),
+     * with no other wait for input between. */
+    uint32_t hash = 2166136261u;
+    for (const char *t = a->message; *t; t++)
+        hash = (hash ^ (uint8_t)*t) * 16777619u;
+    if (in_row <= 1)
+        nrecent = 0;
+    int k = 0;
+    while (k < nrecent && (recent_alerts[k].id != id || recent_alerts[k].hash != hash))
+        k++;
+    if (k == nrecent) {
+        if (nrecent == NRECENT)
+            memmove(&recent_alerts[0], &recent_alerts[1], (size_t)--nrecent * sizeof recent_alerts[0]);
+        k = nrecent++;
+        recent_alerts[k].id = id;
+        recent_alerts[k].hash = hash;
+        recent_alerts[k].times = 0;
+    } else {
+        recent_alerts[k].times++;
+    }
+    repeats = recent_alerts[k].times;
     have_answered = true;
     last_answered_id = id;
     memcpy(last_answered, a->message, sizeof last_answered);

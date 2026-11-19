@@ -552,5 +552,186 @@ extension BlueBox {
                 #expect(String(decoding: got, as: UTF8.self).hasPrefix("Blue Box"))
             }
         }
+
+        /// A program in ModalDialog until item 2 is hit, counting the hits
+        /// of any other item at flag(A5).
+        let untilItem2 = cat(
+            be16(0x42A7),                 // loop: CLR.L -(SP): no filter
+            be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+            be16(0xA991),                 // _ModalDialog
+            be16(0x0C6D), be16(2), be16(0xFFDE), // CMPI.W #2,itemHit(A5)
+            be16(0x6706),                 // BEQ quit
+            be16(0x526D), be16(0xFFD0),   // ADDQ.W #1,flag(A5)
+            be16(0x60EA),                 // BRA loop
+            be16(0xA9F4))                 // quit: _ExitToShell
+
+        /// A program in ModalDialog for ever.
+        let modalForEver = cat(
+            be16(0x42A7),                 // loop: CLR.L -(SP): no filter
+            be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+            be16(0xA991),                 // _ModalDialog
+            be16(0x60F6))                 // BRA loop
+
+        /// Edit text item n's text.
+        func itemText(_ d: UInt32, _ n: Int16) -> String {
+            let kind = tb_NewPtr(2, false, true), h = tb_NewPtr(4, false, true), box = tb_NewPtr(8, false, true)
+            tb_GetDialogItem(d, n, kind, h, box)
+            let text = rd32(rd32(h))
+            return String(decoding: (0..<Int(tb_GetHandleSize(rd32(h)))).map { rd8(text + UInt32($0)) }, as: UTF8.self)
+        }
+
+        /// A nag at the start whose Return is Register (Zap'T'Balls',
+        /// XTimer's) has its Not Yet clicked first, as a person would: the
+        /// program here ends at Not Yet, Register never hit.
+        @Test func aNagsNotYetIsClickedBeforeItsRegister() throws {
+            let dir = try launch(untilItem2)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            _ = tb_NewDialog(0, rect([100, 100, 200, 400]), title(""), 1, 1, 0xFFFF_FFFF, 0, 0,
+                             itemList([([70, 200, 90, 290], 4, "Register"), ([70, 100, 90, 190], 4, "Not Yet"),
+                                       ([10, 10, 50, 290], 0x88, "Please register this shareware.")]))
+            let flag = rd32(UInt32(LM_CurrentA5)) - 0x30
+            wr16(flag, 0)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(rd16(flag) == 0)
+        }
+
+        /// A question at the start whether to delete something (Remove Old
+        /// EMPs' "Delete all old copies?") is answered No, not with Return,
+        /// which would be its Yes.
+        @Test func aQuestionToDeleteIsAnsweredNo() throws {
+            let dir = try launch(untilItem2)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            _ = tb_NewDialog(0, rect([100, 100, 200, 400]), title(""), 1, 1, 0xFFFF_FFFF, 0, 0,
+                             itemList([([70, 200, 90, 290], 4, "Yes"), ([70, 100, 90, 190], 4, "No"),
+                                       ([10, 10, 50, 290], 0x88, "Delete all old copies?")]))
+            let flag = rd32(UInt32(LM_CurrentA5)) - 0x30
+            wr16(flag, 0)
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+            #expect(rd16(flag) == 0)
+        }
+
+        /// A sum asked before the program goes on (Multimedia Designer's
+        /// "What is 15 + 38?" until it is registered) is worked out and
+        /// typed in.
+        @Test func aSumAskedIsAnswered() throws {
+            let dir = try launch(modalForEver)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            let d = tb_NewDialog(0, rect([100, 100, 200, 400]), title(""), 1, 1, 0xFFFF_FFFF, 0, 0,
+                                 itemList([([10, 10, 30, 290], 0x88, "What is 15 + 38?"),
+                                           ([40, 100, 56, 200], 0x10, "")]))
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            _ = machine_run(150_000_000) // (not into the screen walk, whose keys go into the field too)
+            #expect(itemText(d, 2).hasPrefix("53"))
+        }
+
+        /// A field labelled for a serial number has a number typed in; a
+        /// dialog that still stays ends the walk saying what it asks for.
+        @Test func aSerialNumberIsAskedFor() throws {
+            let dir = try launch(modalForEver)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            let d = tb_NewDialog(0, rect([100, 100, 200, 400]), title(""), 1, 1, 0xFFFF_FFFF, 0, 0,
+                                 itemList([([70, 200, 90, 290], 4, "OK"), ([10, 10, 26, 95], 0x88, "Serial Number:"),
+                                           ([10, 100, 26, 280], 0x10, "")]))
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(1_000_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()).hasSuffix(": it asks for a serial number"))
+            #expect(itemText(d, 3).hasPrefix("12345678"))
+        }
+
+        /// A modal dialog with no buttons at all (Power Players' "Player 2
+        /// goes first...", gone at a click) is clicked in its middle.
+        @Test func aDialogWithNoButtonsIsClicked() throws {
+            let dir = try launch(cat(
+                be16(0x42A7),                 // CLR.L -(SP): no filter
+                be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+                be16(0xA991),                 // _ModalDialog
+                be16(0xA9F4)))                // _ExitToShell
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            _ = tb_NewDialog(0, rect([100, 100, 200, 400]), title(""), 1, 1, 0xFFFF_FFFF, 0, 0,
+                             itemList([([0, 0, 10, 10], 0x80, ""), ([20, 20, 80, 280], 8, "Player 2 goes first...")]))
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(400_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "ExitToShell")
+        }
+
+        /// A program that is a dialog with a Quit, whose other button puts
+        /// up an alert that leads back to it (Apple HD SC Setup with no
+        /// drive: Drive, "Drive selection failed", Continue): the alert's
+        /// Continue is clicked again each time it comes back, so the walk
+        /// ends at the program's dialog, walked, not stuck at the alert.
+        @Test func anAlertBackToTheProgramIsAnsweredAgain() throws {
+            let dir = try launch(cat(
+                be16(0x2F2D), be16(0xFFF4),   // showB: MOVE.L main(A5),-(SP)
+                be16(0xA915),                 // _ShowWindow
+                be16(0x2F2D), be16(0xFFF4),   // MOVE.L main(A5),-(SP)
+                be16(0xA91F),                 // _SelectWindow
+                be16(0x42A7),                 // loopB: CLR.L -(SP)
+                be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+                be16(0xA991),                 // _ModalDialog
+                be16(0x0C6D), be16(1), be16(0xFFDE), // CMPI.W #1,itemHit(A5): Drive
+                be16(0x66F0),                 // BNE loopB
+                be16(0x2F2D), be16(0xFFF4),   // MOVE.L main(A5),-(SP)
+                be16(0xA916),                 // _HideWindow
+                be16(0x2F2D), be16(0xFFF0),   // MOVE.L alert(A5),-(SP)
+                be16(0xA915),                 // _ShowWindow
+                be16(0x2F2D), be16(0xFFF0),   // MOVE.L alert(A5),-(SP)
+                be16(0xA91F),                 // _SelectWindow
+                be16(0x42A7),                 // CLR.L -(SP)
+                be16(0x486D), be16(0xFFDE),   // PEA itemHit(A5)
+                be16(0xA991),                 // _ModalDialog
+                be16(0x2F2D), be16(0xFFF0),   // MOVE.L alert(A5),-(SP)
+                be16(0xA916),                 // _HideWindow
+                be16(0x60C2)))                // BRA showB
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = initToolbox()
+            tb_InitDialogs(0)
+            let a5 = rd32(UInt32(LM_CurrentA5))
+            wr32(a5 - 12, tb_NewDialog(0, rect([100, 100, 250, 400]), title(""), 0, 1, 0xFFFF_FFFF, 0, 0,
+                                       itemList([([110, 200, 130, 290], 4, "Drive"),
+                                                 ([110, 100, 130, 190], 4, "Quit")])))
+            wr32(a5 - 16, tb_NewDialog(0, rect([150, 150, 230, 450]), title(""), 0, 1, 0xFFFF_FFFF, 0, 0,
+                                       itemList([([50, 200, 70, 290], 4, "Continue"),
+                                                 ([10, 10, 40, 290], 0x88, "Drive selection failed.")])))
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(2_000_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "menu walk finished")
+        }
+
+        /// A program with nothing on the screen that installed Apple event
+        /// handlers of its own waits for them (Cron's commands): its walk
+        /// ends finished, not "no menu bar or window".
+        @Test func anAppleEventServerIsWalked() throws {
+            let dir = try launch(waiting)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            func fourCC(_ s: String) -> Int32 { Int32(bitPattern: s.utf8.reduce(0) { $0 << 8 | UInt32($1) }) }
+            let handler = tb_NewPtr(2, false, true)
+            wr16(handler, 0x4E75) // RTS
+            #expect(tb_AEInstallEventHandler(fourCC("Cron"), fourCC("beep"), handler, 0, 0) == 0)
+            defer { _ = tb_AERemoveEventHandler(fourCC("Cron"), fourCC("beep"), handler, 0) }
+            machine_set_menu_walk(true)
+            defer { machine_set_menu_walk(false) }
+            #expect(machine_run(1_000_000_000) == RUN_HALTED)
+            #expect(String(cString: machine_halt_reason()) == "menu walk finished")
+        }
     }
 }
