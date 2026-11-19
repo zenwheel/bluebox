@@ -9,7 +9,9 @@
 // which it scales on the GPU (no CPU scaling either way).
 
 #if canImport(AppKit)
+import Accelerate
 import AppKit
+import IOSurface
 import QuartzCore
 import Toolbox
 
@@ -99,6 +101,55 @@ final class PresenterSurface: @unchecked Sendable {
     let t0 = present_now_ns()
     body()
     present_stats_main(present_now_ns() - t0)
+}
+
+/// The CPU path's pictures for one layer, as IOSurfaces: Core Animation
+/// matches their colours to the display's and scales them on the GPU when
+/// it composites.  A CGImage as the layer's contents was copied and
+/// colour-matched on the main thread at every commit (a few ms a frame at
+/// 1024 by 768).  A surface is written only when Core Animation is done
+/// with it, never the one shown.
+final class LayerPixels {
+    private var pool: [IOSurface] = []
+    private var shown = -1
+    private var size = (0, 0)
+    private let sRGB = CGColorSpace(name: CGColorSpace.sRGB)?.copyICCData() as Data?
+
+    private func make(_ w: Int, _ h: Int) -> IOSurface? {
+        let s = IOSurface(properties: [.width: w, .height: h, .bytesPerElement: 4, .bytesPerRow: w * 4,
+                                       .pixelFormat: 0x4247_5241 /* 'BGRA' */])
+        if let s, let icc = sRGB { s.setAttachment(icc, forKey: kIOSurfaceColorSpace as String) }
+        return s
+    }
+
+    /// rgba (premultiplied, w x h) shown as the layer's contents.
+    func show(_ rgba: [UInt32], width w: Int, height h: Int, on layer: CALayer?) {
+        guard let layer, w > 0, h > 0, rgba.count >= w * h else { return }
+        if size != (w, h) {
+            pool = []
+            shown = -1
+            size = (w, h)
+        }
+        var pick = pool.indices.first { $0 != shown && !pool[$0].isInUse }
+        if pick == nil, pool.count < 4, let s = make(w, h) {
+            pool.append(s)
+            pick = pool.count - 1
+        }
+        guard let i = pick ?? pool.indices.first(where: { $0 != shown }) else { return }
+        let s = pool[i]
+        s.lock(options: [], seed: nil)
+        rgba.withUnsafeBytes { src in
+            var from = vImage_Buffer(data: UnsafeMutableRawPointer(mutating: src.baseAddress!), height: vImagePixelCount(h),
+                                     width: vImagePixelCount(w), rowBytes: w * 4)
+            var to = vImage_Buffer(data: s.baseAddress, height: vImagePixelCount(h), width: vImagePixelCount(w),
+                                   rowBytes: s.bytesPerRow)
+            let order: [UInt8] = [2, 1, 0, 3] // RGBA to BGRA
+            _ = vImagePermuteChannels_ARGB8888(&from, &to, order, vImage_Flags(kvImageNoFlags))
+        }
+        s.unlock(options: [], seed: nil)
+        layer.contents = s
+        shown = i
+    }
 }
 
 /// The CPU path's frame: the rect's changed rows converted into rgba

@@ -276,9 +276,11 @@ void hostgl_read_frame(hostgl_ctx *h, int x, int y, int width, int height, gaddr
     glReadPixels(x, y, width, height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, frame);
     glPopClientAttrib();
     unuse();
-    for (int r = 0; r < height; r++)
+    for (int r = 0; r < height; r++) {
         memcpy(gptr(dst + (uint32_t)r * row_bytes), frame + (size_t)(height - 1 - r) * (size_t)width * 4,
                (size_t)width * 4);
+        mem_wrote(dst + (uint32_t)r * row_bytes, (uint32_t)width * 4); /* the screen's rows, often */
+    }
 }
 
 void hostgl_copy_state(hostgl_ctx *src, hostgl_ctx *dst, uint32_t mask)

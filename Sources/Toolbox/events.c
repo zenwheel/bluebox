@@ -934,6 +934,7 @@ void ev_wait_tick(void)
  * just asked and didn't take them (its mask leaves them). */
 void ev_idle_sleep(uint64_t ns)
 {
+    screen_dirty_publish(); /* what the program drew shown while it waits */
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += (long)ns;
@@ -1324,6 +1325,7 @@ int8_t tb_WaitNextEvent(int16_t mask, gaddr evp, int32_t sleep, gaddr mousergn)
              * plays (an open channel with nothing to play waits). */
             uint64_t ns = machine_work_due_in(total_ns - spent);
             bool busy = ns < total_ns - spent;
+            screen_dirty_publish();
             uint32_t c0, i0;
             bool hle = (mask & 0x0400) && aem_next_event(&c0, &i0, NULL, false);
             pthread_mutex_lock(&lock);

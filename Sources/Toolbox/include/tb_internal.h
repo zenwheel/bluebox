@@ -913,6 +913,16 @@ void drag_host_pump(void); /* drags from the host, at the program's event calls 
 uint32_t qd_screen_row_bytes(void);
 void qd_screen_set_brightness(int level); /* 0-255, the screen as shown */
 void qd_screen_set_display_base(gaddr base); /* the page the video shows (a compact Mac's alternate) */
+gaddr qd_screen_display_base(void);
+/* Screen writes told to the presenters (dirty.c): from the machine's
+ * thread only (the one machine_run last ran on); everything as changed;
+ * BLUEBOX_DIRTY_VERIFY's call names and summary. */
+void screen_dirty_publish(void);
+void screen_dirty_machine_thread(void);
+void screen_dirty_all(void);
+bool screen_dirty_verifying(void);
+void screen_dirty_note_call(const char *name);
+void screen_dirty_report(void);
 /* The video hardware's colour table, as the screen is shown (qd_screen.c). */
 void qd_screen_set_hw_entry(int index, const uint16_t rgb[3]);
 void qd_screen_get_hw_entry(int index, uint16_t rgb[3]);

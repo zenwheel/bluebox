@@ -1662,6 +1662,7 @@ void afterdark_idle(void)
     restore_screen_colors(colors);
     if (saved) {
         memcpy(gptr(base), saved, len);
+        mem_wrote(base, len);
         bb_free(saved);
     }
     if (crsr)

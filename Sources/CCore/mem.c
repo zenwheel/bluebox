@@ -23,8 +23,8 @@ uint32_t (*g_hw_read)(gaddr a, int size);
 void (*g_hw_write)(gaddr a, int size, uint32_t v);
 
 BB_HOST uint8_t *g_code_map;
-BB_HOST void (*g_code_written[3])(gaddr lo, gaddr hi);
-BB_HOST void (*g_code_restored[3])(void);
+BB_HOST void (*g_code_written[CODE_OWNERS])(gaddr lo, gaddr hi);
+BB_HOST void (*g_code_restored[CODE_OWNERS])(void);
 
 /* 4 GB plus slack so a multi-byte access at the very top cannot run off. */
 #define ARENA_SIZE ((size_t)1 << 32)
@@ -67,7 +67,7 @@ void mem_code_written(gaddr a, uint32_t len)
         if (r == last)
             break;
     }
-    for (int t = 0; t < 3; t++)
+    for (int t = 0; t < CODE_OWNERS; t++)
         if ((m & (1 << t)) && g_code_written[t])
             g_code_written[t](a, a + len);
 }
@@ -76,7 +76,7 @@ void mem_code_after_restore(void)
 {
     if (g_code_map) {
         uint8_t drop = 0;
-        for (int t = 0; t < 3; t++)
+        for (int t = 0; t < CODE_OWNERS; t++)
             if (g_code_written[t] && !g_code_restored[t])
                 drop |= (uint8_t)(1 << t);
         for (size_t r = 0; drop && r < CODE_MAP_SIZE; r++) {
@@ -84,18 +84,20 @@ void mem_code_after_restore(void)
             if (!m)
                 continue;
             gaddr lo = (gaddr)(r << CODE_MAP_SHIFT), hi = r + 1 < CODE_MAP_SIZE ? lo + CODE_REGION : 0xFFFFFFFFu;
-            for (int t = 0; t < 3; t++)
+            for (int t = 0; t < CODE_OWNERS; t++)
                 if (m & (1 << t))
                     g_code_written[t](lo, hi);
         }
     }
-    for (int t = 0; t < 3; t++)
+    for (int t = 0; t < CODE_OWNERS; t++)
         if (g_code_restored[t])
             g_code_restored[t]();
 }
 
 void mem_code_range(gaddr a, uint32_t n)
 {
+    if (n < 0x01000000u)
+        a = mem_strip(a); /* as code_store */
     uint32_t first = a >> CODE_MAP_SHIFT, last = (gaddr)(a + n - 1) >> CODE_MAP_SHIFT;
     for (uint32_t r = first;; r++) {
         if (g_code_map[r]) {

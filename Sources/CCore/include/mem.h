@@ -132,16 +132,21 @@ static inline bool hw_mapped(gaddr a) { return __builtin_expect(g_hw_map[a >> 20
  * bulk copies below) checks it, so a translation never outlives the code
  * it came from: a store into a marked region calls mem_code_written, which
  * tells each translator owning it to drop the blocks it overlaps. */
-enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2, CODE_ICACHE = 4 };
+/* The map serves one more owner that is not code: the screen's regions
+ * not yet written since the presenters were last told (CODE_SCREEN,
+ * dirty.c), so the first store into each, by anything that stores
+ * through these helpers, says which rows changed. */
+enum { CODE_MAP_SHIFT = 8, CODE_PPC = 1, CODE_68K = 2, CODE_ICACHE = 4, CODE_SCREEN = 8, CODE_OWNERS = 4 };
 extern uint8_t *g_code_map;
 /* A translator's handler for a store of [lo, hi) touching its regions
  * (the third is the 68020's and 68030's instruction cache, which the
- * Toolbox's own stores flush as the routines that moved code did). */
-extern void (*g_code_written[3])(gaddr lo, gaddr hi);
+ * Toolbox's own stores flush as the routines that moved code did; the
+ * fourth the screen's). */
+extern void (*g_code_written[CODE_OWNERS])(gaddr lo, gaddr hi);
 /* An owner whose state is the machine's (the instruction cache): a
  * snapshot put back brings it as it was, and this marks its code again
  * (the map is the host's), where a translator's is dropped instead. */
-extern void (*g_code_restored[3])(void);
+extern void (*g_code_restored[CODE_OWNERS])(void);
 void mem_code_written(gaddr a, uint32_t len);
 /* A snapshot put back (hibernate.c): the translators' blocks, made from
  * the code that was there, go; the instruction cache's marks come back. */
@@ -153,11 +158,16 @@ bool mem_code_mark(gaddr lo, gaddr hi, int bit);
 /* Clear a translator's bit over [lo, hi), whole regions. */
 void mem_code_unmark(gaddr lo, gaddr hi, int bit);
 
+/* (In 24-bit mode by the address the store reaches, whatever its top
+ * byte: the Toolbox's own stores can come through a pointer with flags
+ * in it, as the processors' never do.) */
 static inline void code_store(gaddr a, uint32_t len)
 {
-    if (__builtin_expect(g_code_map != NULL, 0) &&
-        (g_code_map[a >> CODE_MAP_SHIFT] | g_code_map[(gaddr)(a + len - 1) >> CODE_MAP_SHIFT]))
-        mem_code_written(a, len);
+    if (__builtin_expect(g_code_map != NULL, 0)) {
+        a = mem_strip(a);
+        if (g_code_map[a >> CODE_MAP_SHIFT] | g_code_map[(gaddr)(a + len - 1) >> CODE_MAP_SHIFT])
+            mem_code_written(a, len);
+    }
 }
 
 static inline uint8_t rd8(gaddr a) { return g_mem[a]; }
@@ -203,6 +213,14 @@ static inline uint32_t mem_below_top(gaddr a, uint32_t n)
     return a && n > room ? room : n;
 }
 void mem_copy_wrapping(gaddr dst, gaddr src, uint32_t n);
+/* A range the host wrote through a pointer of its own (gptr), not the
+ * helpers below: what the helpers' check of the code map would have
+ * seen (translated code dropped, the screen's rows marked changed). */
+static inline void mem_wrote(gaddr a, uint32_t n)
+{
+    if (g_code_map && n)
+        mem_code_range(a, n);
+}
 static inline void gmemcpy(gaddr dst, gaddr src, uint32_t n)
 {
     if (mem_below_top(dst, n) < n || mem_below_top(src, n) < n) {

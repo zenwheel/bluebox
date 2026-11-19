@@ -59,6 +59,7 @@ extension BlueBox {
             var shadow = [UInt8](repeating: 0, count: machine_screen_shadow_size(0, 0, w, h))
             var bands = [Int32](repeating: 0, count: 16)
             func changed() -> [Int32] {
+                machine_screen_publish() // as the machine's slice ends
                 let n = shadow.withUnsafeMutableBufferPointer { s in
                     bands.withUnsafeMutableBufferPointer { machine_screen_changed_rows(0, 0, w, h, s.baseAddress!, s.count, $0.baseAddress!, 8) }
                 }
@@ -342,77 +343,109 @@ extension BlueBox {
 }
 
 extension BlueBox {
-    /// BLUEBOX_PRESENT_BENCH=1: the presenting paths timed per frame, at
-    /// the sizes of a few displays (printed; nothing checked).
+    /// BLUEBOX_PRESENT_BENCH=1: each way of presenting timed per frame, at
+    /// the sizes of a few displays, for a frame that changed nothing, one
+    /// that changed 16 rows and one that changed every row (printed;
+    /// nothing checked).  hold: from the refresh to its read of the screen
+    /// done (what a paced program waits); cpu: processor time a frame (the
+    /// presenter's thread, or the converting thread on the CPU path).
     @Suite struct PresentBench {
         @Test func timings() throws {
             guard ProcessInfo.processInfo.environment["BLUEBOX_PRESENT_BENCH"] == "1" else { return }
             defer { machine_set_screen(1024, 768) }
-            func ms(_ t0: UInt64) -> Double { Double(present_now_ns() - t0) / 1e6 }
-            func median(_ a: [Double]) -> Double { a.sorted()[a.count / 2] }
-            print("size        depth  scan-same  cpu-frame(all rows)  cpu-frame(16 rows)  gpu-read(all)  gpu-read(16 rows)")
-            for (w, h, d) in [(1024, 768, 8), (1024, 768, 32), (1920, 1080, 32), (2560, 1440, 32), (3008, 1692, 32)] {
+            func ms(_ ns: UInt64) -> Double { Double(ns) / 1e6 }
+            func median(_ a: [Double]) -> Double { a.isEmpty ? 0 : a.sorted()[a.count / 2] }
+            func pad(_ s: String, _ n: Int) -> String { s.padding(toLength: n, withPad: " ", startingAt: 0) }
+            func threadCPU() -> UInt64 { clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) }
+            print("size       depth  path       frame       hold ms   cpu ms")
+            for (w, h, d) in [(1024, 768, 8), (1024, 768, 16), (1024, 768, 32), (2560, 1440, 32)] {
                 machine_set_screen(Int32(w), Int32(h))
                 launchTestApp()
                 _ = initToolbox()
                 #expect(qd_screen_set_depth(Int32(d)))
                 let base = rd32(UInt32(LM_ScrnBase)), rb = qd_screen_row_bytes()
+                // A frame: the program ran (its count moved on) and wrote rows,
+                // each frame's bytes new.
+                var serial = 0
+                func frame(_ rows: Int, _ f0: Int) {
+                    serial += 1
+                    let f = serial
+                    g_cpu!.pointee.icount += 1
+                    for r in 0..<rows {
+                        let y = rows >= h ? r : (r * 37 + f * 5) % h
+                        wr8(base + UInt32(y) * rb + UInt32((f * 13 + r) % Int(rb)), UInt8(truncatingIfNeeded: f &+ r &+ 1))
+                    }
+                    benchPublish()
+                }
+                let kinds: [(String, Int)] = [("unchanged", 0), ("16 rows", 16), ("all rows", h)]
+                // The CPU path: the changed rows found and converted, and the
+                // image's own copy, on the thread that shows them.
                 var shadow = [UInt8](repeating: 0, count: machine_screen_shadow_size(0, 0, Int32(w), Int32(h)))
                 var bands = [Int32](repeating: 0, count: 64)
                 var rgba = [UInt8](repeating: 0, count: w * h * 4)
-                func scan() -> Int32 {
-                    shadow.withUnsafeMutableBufferPointer { s in
+                func cpuFrame() {
+                    let n = shadow.withUnsafeMutableBufferPointer { s in
                         bands.withUnsafeMutableBufferPointer {
                             machine_screen_changed_rows(0, 0, Int32(w), Int32(h), s.baseAddress!, s.count, $0.baseAddress!, 32)
                         }
                     }
-                }
-                func touch(_ rows: Int, _ f: Int) {
-                    g_cpu!.pointee.icount += 1 // as the processor's own drawing moves it on
-                    for r in 0..<rows { wr8(base + UInt32((r * h / rows + f) % h) * rb + UInt32(f % Int(rb)), UInt8(truncatingIfNeeded: f &+ r)) }
-                }
-                func cpuFrame() {
-                    let n = scan()
-                    rgba.withUnsafeMutableBytes { raw in
-                        machine_screen_rgba_bands(0, 0, Int32(w), Int32(h), bands, n, nil, false, raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
+                    if n > 0 {
+                        rgba.withUnsafeMutableBytes { raw in
+                            machine_screen_rgba_bands(0, 0, Int32(w), Int32(h), bands, n, nil, false,
+                                                      raw.baseAddress!.assumingMemoryBound(to: UInt8.self))
+                        }
+                        _ = rgba.withUnsafeBytes { Data($0) }
                     }
-                    _ = rgba.withUnsafeBytes { Data($0) } // the image's own copy
                 }
-                _ = scan()
-                var same = [Double](), cpuAll = [Double](), cpuFew = [Double]()
-                for f in 0..<30 {
-                    var t = present_now_ns(); _ = scan(); same.append(ms(t))
-                    touch(h, f); t = present_now_ns(); cpuFrame(); cpuAll.append(ms(t))
-                    touch(16, f); t = present_now_ns(); cpuFrame(); cpuFew.append(ms(t))
+                cpuFrame()
+                for (name, rows) in kinds {
+                    var cpu = [Double]()
+                    for f in 0..<30 {
+                        frame(rows, f)
+                        let t = threadCPU()
+                        cpuFrame()
+                        cpu.append(ms(threadCPU() - t))
+                    }
+                    print(String(format: "%4dx%-4d  %2d    %@  %@  %@   %7.3f", w, h, d, pad("cpu", 9), pad(name, 10), pad("-", 7), median(cpu)))
                 }
-                // The presenter's refresh with a layer: changed rows, then the
-                // GPU's read done (what a waiting program is held for).
-                var gpuAll = [Double](), gpuFew = [Double]()
-                if present_start() {
+                guard present_start() else { continue }
+                for p in ["zero-copy", "shared", "managed"] where present_force_path(p) {
                     let layer = CAMetalLayer()
                     let s = present_surface_new(Unmanaged.passUnretained(layer).toOpaque())
                     present_surface_set(s, 0, 0, Double(w), Double(h), Int32(w * 2), Int32(h * 2))
-                    func refresh() -> Double {
+                    func refresh() -> (Double, Double) {
                         let seq = present_vsync_seq() + 1
+                        let c = present_cpu_ns()
                         let t = present_now_ns()
                         present_vsync(60)
-                        while !present_read_done(seq) { usleep(50) }
-                        return ms(t)
+                        while !present_read_done(seq) { usleep(20) }
+                        let hold = present_now_ns() - t
+                        // The presenter's thread done with the refresh too.
+                        var spins = 0
+                        while present_cpu_ns() == c && spins < 2000 { usleep(20); spins += 1 }
+                        return (ms(hold), ms(present_cpu_ns() - c))
                     }
                     _ = refresh()
-                    for f in 0..<30 {
-                        touch(h, f); gpuAll.append(refresh())
-                        usleep(16000)
-                        touch(16, f); gpuFew.append(refresh())
-                        usleep(16000)
+                    usleep(16000)
+                    for (name, rows) in kinds {
+                        var hold = [Double](), cpu = [Double]()
+                        for f in 0..<30 {
+                            frame(rows, f)
+                            let (hh, cc) = refresh()
+                            hold.append(hh)
+                            cpu.append(cc)
+                            usleep(16000)
+                        }
+                        print(String(format: "%4dx%-4d  %2d    %@  %@  %7.3f   %7.3f", w, h, d, pad(p, 9), pad(name, 10), median(hold), median(cpu)))
                     }
                     present_surface_free(s)
                 }
-                print(String(format: "%4dx%-4d  %2d   %7.3f    %7.3f              %7.3f             %7.3f        %7.3f ms  (%@)",
-                             w, h, d, median(same), median(cpuAll), median(cpuFew),
-                             gpuAll.isEmpty ? 0 : median(gpuAll), gpuFew.isEmpty ? 0 : median(gpuFew),
-                             String(cString: present_path())))
+                _ = present_force_path("zero-copy")
             }
         }
     }
 }
+
+/// The bench's frame told to the presenters, as the end of the machine's
+/// slice tells them.
+func benchPublish() { machine_screen_publish() }

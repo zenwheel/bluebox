@@ -230,6 +230,10 @@ int machine_screen_changed_rows(int x, int y, int w, int h, uint8_t *shadow, siz
  * desktop, where the desktop shows (machine_desktop_mask). */
 void machine_screen_rgba_bands(int x, int y, int w, int h, const int32_t *bands, int n, const uint8_t *shape,
                                bool desktop, uint8_t *out);
+/* The screen's rows written since the last call told to the presenters
+ * (present_dirty_rows).  The machine's thread does it at the end of each
+ * slice and at every wait; a test writing the screen itself calls it. */
+void machine_screen_publish(void);
 /* Window, control and menu appearance; the colour ones use an 8-bit screen.
  * Call before boot. */
 enum { MACHINE_APPEARANCE_BW, MACHINE_APPEARANCE_THEME, MACHINE_APPEARANCE_NATIVE };

@@ -149,6 +149,7 @@ void machine_pause_point(void)
     /* Running on to a safe point first, unless none came in time. */
     if (drain_wanted() && !drain_expired())
         return;
+    screen_dirty_publish(); /* the screen as it stopped */
     pthread_mutex_lock(&pause_lock);
     if (!frozen) {
         pause_since = mono_ns();

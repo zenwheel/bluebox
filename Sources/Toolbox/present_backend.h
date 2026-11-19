@@ -20,6 +20,12 @@ void present_set_shown(bool any);
 void present_stats_gpu(bool scanned, bool skipped, int frames, int rows, uint64_t bytes, uint64_t render_ns);
 /* The GPU's read of the screen in place: from commit to done. */
 void present_stats_read(uint64_t ns);
+/* Rows the safety net found changed though not yet told written (most
+ * written since the machine's last slice ended; BLUEBOX_DIRTY_VERIFY
+ * finds the real misses). */
+void present_stats_missed(uint64_t rows);
+/* The presenter thread's processor time for a refresh. */
+void present_stats_cpu(uint64_t ns);
 
 /* The emulator's progress: what it ran, for skipping the comparison of
  * an unchanged screen. */

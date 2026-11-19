@@ -96,8 +96,15 @@ extension BlueBox {
             machine_screen_size(&w, &h)
             var all = [UInt8](repeating: 0, count: machine_screen_shadow_size(0, 0, w, h))
             var part = [UInt8](repeating: 0, count: machine_screen_shadow_size(0, 0, 10, 10))
-            func changed() -> Bool { all.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, w, h, $0.baseAddress!, $0.count) } }
-            func partChanged() -> Bool { part.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, 10, 10, $0.baseAddress!, $0.count) } }
+            // The writes told as the machine's slice ends tells them (dirty.c).
+            func changed() -> Bool {
+                machine_screen_publish()
+                return all.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, w, h, $0.baseAddress!, $0.count) }
+            }
+            func partChanged() -> Bool {
+                machine_screen_publish()
+                return part.withUnsafeMutableBufferPointer { machine_screen_changed(0, 0, 10, 10, $0.baseAddress!, $0.count) }
+            }
             #expect(changed())
             #expect(!changed())
             #expect(partChanged())

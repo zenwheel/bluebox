@@ -118,6 +118,11 @@ void present_stats_read(uint64_t ns)
     note_max(&st_read_max, ns);
 }
 
+BB_HOST static _Atomic uint64_t cpu_total, st_missed;
+void present_stats_missed(uint64_t rows) { atomic_fetch_add(&st_missed, rows); }
+void present_stats_cpu(uint64_t ns) { atomic_fetch_add(&cpu_total, ns); }
+uint64_t present_cpu_ns(void) { return atomic_load(&cpu_total); }
+
 void present_note_hold(uint64_t ns)
 {
     atomic_fetch_add(&st_hold_ns, ns);
@@ -149,11 +154,11 @@ void present_stats_tick(void)
     uint64_t read_max = atomic_exchange(&st_read_max, 0);
     fprintf(stderr,
             "present: %s; main thread %.3f ms a frame over %llu; %.1f frames/s drawn, %llu rows (%.1f MB) copied; "
-            "vsyncs %llu, scans %llu, skipped %llu; render %.3f ms avg %.3f max; "
+            "vsyncs %llu, full looks %llu, skipped %llu, unmarked rows found %llu; render %.3f ms avg %.3f max; "
             "held past the refresh %.3f ms avg %.3f max; paced waits %.3f ms avg %.3f max over %llu; pacing %s\n",
             present_path(), main_n ? (double)main_ns / (double)main_n / 1e6 : 0.0, (unsigned long long)main_n,
             (double)frames / s, (unsigned long long)rows, (double)bytes / 1e6, (unsigned long long)vsyncs,
-            (unsigned long long)scans, (unsigned long long)skips, vsyncs ? (double)render / (double)vsyncs / 1e6 : 0.0,
+            (unsigned long long)scans, (unsigned long long)skips, (unsigned long long)atomic_exchange(&st_missed, 0), vsyncs ? (double)render / (double)vsyncs / 1e6 : 0.0,
             (double)render_max / 1e6, read_n ? (double)read / (double)read_n / 1e6 : 0.0, (double)read_max / 1e6,
             hold_n ? (double)hold / (double)hold_n / 1e6 : 0.0, (double)hold_max / 1e6, (unsigned long long)hold_n,
             present_live() ? "on refreshes" : "wall clock");

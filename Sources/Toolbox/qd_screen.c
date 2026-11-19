@@ -310,6 +310,7 @@ bool qd_screen_set_size(int width, int height)
     if (old) {
         for (uint32_t y = 0; y < keep_rows; y++)
             memcpy(gptr(GA_SCREEN + y * screen_row_bytes), old + (size_t)y * old_rb, keep_bytes);
+        mem_wrote(GA_SCREEN, screen_row_bytes * keep_rows);
         bb_free(old);
     }
     gaddr gd = rd32(rd32(LM_MainDevice));
@@ -371,6 +372,7 @@ void qd_screen_extend(int old_w, int old_h, int top)
         for (int y = y0; y < g_screen_height; y++)
             memcpy(gptr(GA_SCREEN + (uint32_t)y * rb), gptr(GA_SCREEN + (uint32_t)(y0 - band + (y - y0) % band) * rb), rb);
     }
+    mem_wrote(GA_SCREEN + (uint32_t)top * rb, (uint32_t)(g_screen_height - top) * rb);
 }
 
 gaddr tb_GetMainDevice(void) { return rd32(LM_MainDevice); }
@@ -435,6 +437,8 @@ void machine_screen_size(int *width, int *height)
 /* The page the video circuitry shows (the compact Macs' alternate screen
  * is a second buffer below the main one): the host sees that, and all of
  * it is new. */
+gaddr qd_screen_display_base(void) { return display_base; }
+
 void qd_screen_set_display_base(gaddr base)
 {
     if (base == display_base)
@@ -527,6 +531,17 @@ typedef struct {
     uint32_t base, row_bytes;
     uint8_t clut[256][3], lut[3][256];
 } shadow_head;
+/* After it, not compared: the rows written this host has seen (dirty.c),
+ * and its looks since it last compared everything. */
+typedef struct {
+    uint64_t seen;
+    int32_t since_full, pad;
+} shadow_tail;
+/* Everything compared once in this many looks (a host's 60 a second):
+ * the safety net under the tracking of writes. */
+enum { SHADOW_FULL_EVERY = 60 };
+
+enum { MAX_SCAN_BANDS = 64 };
 
 static bool clip_rect(int *x0, int *y0, int *x1, int *y1, uint32_t *b0, uint32_t *b1)
 {
@@ -550,22 +565,9 @@ size_t machine_screen_shadow_size(int x, int y, int w, int h)
     int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
     uint32_t b0, b1;
     size_t rows = clip_rect(&x0, &y0, &x1, &y1, &b0, &b1) ? (size_t)(y1 - y0) * (b1 - b0) : 0;
-    return sizeof(shadow_head) + rows;
+    return sizeof(shadow_head) + sizeof(shadow_tail) + rows;
 }
 
-/* A band of rows [y0, y1) added to a list of them, at most max: one
- * touching the last grows it, and past max the last grows over the gap
- * (the rows between done again, unchanged). */
-static void add_band(int32_t *bands, int *n, int max, int y0, int y1)
-{
-    if (*n > 0 && (bands[*n * 2 - 1] == y0 || *n == max)) {
-        bands[*n * 2 - 1] = y1;
-        return;
-    }
-    bands[*n * 2] = y0;
-    bands[*n * 2 + 1] = y1;
-    (*n)++;
-}
 
 /* The rows [y0, y1) of the shown page whose bytes [b0, b1) differ from the
  * copy at o (n = b1 - b0 bytes a row, rows one after another), the copy
@@ -580,12 +582,30 @@ static int scan_rows(uint8_t *o, size_t stride, int y0, int y1, uint32_t b0, uin
             if (run < 0)
                 run = r;
         } else if (run >= 0) {
-            add_band(bands, &nb, max, run, r);
+            present_add_band(bands, &nb, max, run, r);
             run = -1;
         }
     }
     if (run >= 0)
-        add_band(bands, &nb, max, run, y1);
+        present_add_band(bands, &nb, max, run, y1);
+    return nb;
+}
+
+/* scan_rows over only the rows in the bands in (n of them) within
+ * [y0, y1); the copy at o holds row y0's bytes first. */
+static int scan_bands(uint8_t *o, size_t stride, int y0_copy, int y0, int y1, uint32_t b0, uint32_t n, const int32_t *in,
+                      int nin, int32_t *bands, int max)
+{
+    int nb = 0;
+    for (int i = 0; i < nin; i++) {
+        int a = in[i * 2] > y0 ? in[i * 2] : y0, b = in[i * 2 + 1] < y1 ? in[i * 2 + 1] : y1;
+        if (b <= a)
+            continue;
+        int32_t part[MAX_SCAN_BANDS * 2];
+        int k = scan_rows(o + (size_t)(a - y0_copy) * stride, stride, a, b, b0, n, part, MAX_SCAN_BANDS);
+        for (int j = 0; j < k; j++)
+            present_add_band(bands, &nb, max, part[j * 2], part[j * 2 + 1]);
+    }
     return nb;
 }
 
@@ -612,13 +632,26 @@ int machine_screen_changed_rows(int x, int y, int w, int h, uint8_t *shadow, siz
         memcpy(shadow, &head, sizeof head);
         all = true;
     }
+    /* Only the rows written since the last look are compared (dirty.c);
+     * everything now and then, and always when writes aren't tracked. */
+    shadow_tail *tail = (shadow_tail *)(void *)(shadow + sizeof head);
+    uint8_t *copy = shadow + sizeof head + sizeof *tail;
+    bool sized = len == machine_screen_shadow_size(x, y, w, h);
+    int32_t marked[MAX_SCAN_BANDS * 2];
+    int nm = sized ? present_dirty_rows(&tail->seen, y, y + h, marked, MAX_SCAN_BANDS) : PRESENT_DIRTY_ALL;
+    if (nm == PRESENT_DIRTY_ALL)
+        all = true;
+    bool full = nm == PRESENT_DIRTY_UNKNOWN || (sized && ++tail->since_full >= SHADOW_FULL_EVERY);
+    if (full && sized)
+        tail->since_full = 0;
     int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
     uint32_t b0, b1;
     int n = 0;
     if (!all && clip_rect(&x0, &y0, &x1, &y1, &b0, &b1))
-        n = scan_rows(shadow + sizeof head, b1 - b0, y0, y1, b0, b1 - b0, bands, max);
-    else if (all && len == machine_screen_shadow_size(x, y, w, h) && clip_rect(&x0, &y0, &x1, &y1, &b0, &b1))
-        scan_rows(shadow + sizeof head, b1 - b0, y0, y1, b0, b1 - b0, bands, max); /* the copy taken */
+        n = full ? scan_rows(copy, b1 - b0, y0, y1, b0, b1 - b0, bands, max)
+                 : scan_bands(copy, b1 - b0, y0, y0, y1, b0, b1 - b0, marked, nm, bands, max);
+    else if (all && sized && clip_rect(&x0, &y0, &x1, &y1, &b0, &b1))
+        scan_rows(copy, b1 - b0, y0, y1, b0, b1 - b0, bands, max); /* the copy taken */
     if (all) { /* everything, the parts off the screen too */
         bands[0] = y;
         bands[1] = y + h;
@@ -690,6 +723,14 @@ int present_scan_rows(const present_state *s, uint8_t *rows, int32_t *bands, int
     if (s->base != display_base || s->row_bytes != screen_row_bytes || s->height > g_screen_height || max < 1)
         return -1;
     return scan_rows(rows, s->row_bytes, 0, s->height, 0, s->row_bytes, bands, max);
+}
+
+/* ... only the rows in the bands in (n of them, as dirty.c marked them). */
+int present_scan_bands(const present_state *s, uint8_t *rows, const int32_t *in, int n, int32_t *bands, int max)
+{
+    if (s->base != display_base || s->row_bytes != screen_row_bytes || s->height > g_screen_height || max < 1)
+        return -1;
+    return scan_bands(rows, s->row_bytes, 0, 0, s->height, 0, s->row_bytes, in, n, bands, max);
 }
 
 bool machine_screenshot(const char *path)

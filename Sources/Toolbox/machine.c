@@ -1264,6 +1264,7 @@ void machine_pass_time(uint64_t ns);
 
 void machine_sleep_ns(uint64_t ns)
 {
+    screen_dirty_publish();
     struct timespec ts = { (time_t)(ns / 1000000000u), (long)(ns % 1000000000u) };
     nanosleep(&ts, NULL);
     if (!events_host_attached())
@@ -1320,6 +1321,7 @@ void machine_charge_drawing(uint64_t pixels, uint64_t cycles)
 /* Bring the 60 Hz tick counter up to the machine's time. */
 void machine_advance_ticks(void)
 {
+    screen_dirty_publish(); /* what the screen shows so far, to the presenters */
     drain_poll();
     machine_pause_point(); /* every wait in the Toolbox comes here */
     uint64_t ns = machine_time_ns();
@@ -1441,6 +1443,7 @@ run_status machine_run(uint64_t max)
      * program timing a loop by Ticks sees them change within a tick. */
     const uint64_t slice = timed_68000() ? 2000 : 20000;
     uint64_t done = 0;
+    screen_dirty_machine_thread();
     while (!cpu.halted && done < max) {
         machine_pause_point(); /* suspended: no instructions, no time */
         /* Slices end at whole multiples of the instruction count, not a
@@ -1490,6 +1493,7 @@ run_status machine_run(uint64_t max)
         if (cpu.stopped)
             break;
     }
+    machine_screen_publish();
     return cpu.halted ? RUN_HALTED : RUN_LIMIT;
 }
 

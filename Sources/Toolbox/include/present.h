@@ -39,6 +39,18 @@ void present_screen_state(present_state *s);
  * [y0, y1) in bands (pairs, at most max, the last widened past that).
  * The number of bands, or -1 if s is no longer the screen's form. */
 int present_scan_rows(const present_state *s, uint8_t *rows, int32_t *bands, int max);
+/* ... only the rows in the n bands in (the rows written). */
+int present_scan_bands(const present_state *s, uint8_t *rows, const int32_t *in, int n, int32_t *bands, int max);
+
+/* The rows [y0, y1) of the page shown written since *seen (dirty.c), as
+ * bands (pairs, at most max, the last widened past that); *seen brought
+ * up to date (0 at first).  The number of bands, PRESENT_DIRTY_ALL when
+ * everything is to be taken as changed, PRESENT_DIRTY_UNKNOWN when writes
+ * aren't tracked (BLUEBOX_DIRTY=0, or not yet): compare instead. */
+enum { PRESENT_DIRTY_ALL = -1, PRESENT_DIRTY_UNKNOWN = -2 };
+int present_dirty_rows(uint64_t *seen, int y0, int y1, int32_t *bands, int max);
+/* Rows [y0, y1) added to bands as above (n of them so far). */
+void present_add_band(int32_t *bands, int *n, int max, int y0, int y1);
 
 /* ---- The presenter (a host's GPU) ---- */
 
@@ -113,5 +125,7 @@ void present_stats_cpu_frame(int rows, int width);
 /* Logged when a second has passed (call from the host's tick). */
 void present_stats_tick(void);
 uint64_t present_now_ns(void);
+/* Benchmarks: the presenter thread's processor time so far. */
+uint64_t present_cpu_ns(void);
 
 #endif

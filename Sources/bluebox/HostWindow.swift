@@ -31,6 +31,7 @@ final class ScreenView: NSView, MacScreenView {
     /// nil: the CPU path, the converted image in imageLayer.
     private var surface: PresenterSurface?
     private let imageLayer = CALayer()
+    private let pixels = LayerPixels()
 
     override func makeBackingLayer() -> CALayer { presenterOn ? CAMetalLayer() : CALayer() }
     override var wantsUpdateLayer: Bool { true }
@@ -207,7 +208,7 @@ final class ScreenView: NSView, MacScreenView {
                                              shape: nil, desktop: clear, force: toggled)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            if changed { imageLayer.contents = rgbaImage(rgba, width: Int(w), height: Int(h)) }
+            if changed { pixels.show(rgba, width: Int(w), height: Int(h), on: imageLayer) }
             placeImage(w, h)
             CATransaction.commit()
         }

@@ -2,19 +2,28 @@
  * present.h on Metal (macOS): the classic screen decoded, scaled and shown
  * by the GPU.
  *
- * One copy of the screen serves every surface.  How it reaches the GPU
+ * One copy of the screen serves every surface, brought up to date at each
+ * refresh from the rows written since the last (dirty.c: no comparison of
+ * the screen; an unchanged frame costs nothing).  How it reaches the GPU
  * (present_path):
  *   zero-copy  Apple silicon: the screen's own pages of guest memory
  *              wrapped as a buffer (newBufferWithBytesNoCopy, rounded out
  *              to whole pages; a compact Mac's screen, not page-aligned,
- *              at an offset into its first page).  The GPU only reads it:
- *              no pass writes a buffer.  A copy of the rows on the host
- *              side finds what changed.
- *   shared     the changed rows copied into a buffer the GPU shares (the
- *              comparison's own copy is that buffer): when the pages can't
- *              be wrapped, or BLUEBOX_PRESENT_PATH=shared.
+ *              at an offset into its first page), and the rows written
+ *              copied by the GPU into a private buffer, in a command
+ *              buffer of their own committed first: the processor copies
+ *              nothing, and a program waiting for the refresh goes on
+ *              once that copy is done, not after the drawing.
+ *   shared     the rows written compared and copied by the processor into
+ *              a buffer the GPU shares: when the pages can't be wrapped,
+ *              or BLUEBOX_PRESENT_PATH=shared.
  *   managed    as shared, the changed rows then uploaded: a GPU with
  *              memory of its own (an Intel Mac's).
+ * Once a second while the emulator runs, everything is looked at (shared
+ * and managed compare it all and count the rows a writer changed unseen;
+ * zero-copy copies and draws it all): the safety net under the tracking.
+ * BLUEBOX_DIRTY=0 compares the screen with the copy instead (zero-copy
+ * then copies it whole).
  * The fragment shader decodes the pixels from the buffer itself, at every
  * depth (1, 2, 4 and 8 bits through the video hardware's colours, 16 and
  * 32 bits direct), then the gamma and fades and After Dark's brightness,
@@ -27,21 +36,18 @@
  * when they change.
  *
  * Refreshes come from the host's display link (present_vsync) and are
- * handled on a thread of the presenter's own: the screen compared with
- * the copy (skipped when the emulator ran nothing since, but at least
- * twice a second), and the surfaces whose rows changed drawn in one
- * command buffer.  Frame pacing goes by these refreshes (pace.c): a
- * program that finished a frame waits for the refresh, and is let go when
- * the refresh has read the screen: the copy taken (shared, managed) or
- * the GPU's read in place done (zero-copy, its command buffer complete).
- * So the GPU reads a whole frame while the program waits, without a
- * second copy; a program with no frames of its own is shown as it is at
- * each refresh, as a Mac's video showed it.
+ * handled on a thread of the presenter's own: the copy brought up to date,
+ * and the surfaces whose rows changed drawn in one command buffer.  Frame
+ * pacing goes by these refreshes (pace.c): a program that finished a
+ * frame waits for the refresh, and is let go when the refresh has its
+ * copy of the screen (the processor's taken, or the GPU's done).  A
+ * program with no frames of its own is shown as it is at each refresh,
+ * as a Mac's video showed it.
  *
- * The wrapped pages must stay mapped while the GPU reads them: mem.c and
- * hibernate.c call present_memory_changing before mapping any of the
- * arena again, and it waits for the GPU's last command buffer and lets go
- * of the buffer first.
+ * The wrapped pages must stay mapped while the GPU copies from them: mem.c
+ * and hibernate.c call present_memory_changing before mapping any of the
+ * arena again, and it waits for the GPU's last copy and lets go of the
+ * buffer first.
  */
 #ifdef __APPLE__
 #import <CoreVideo/CoreVideo.h>
@@ -140,7 +146,10 @@ typedef struct {
 
 enum { PATH_ZERO_COPY, PATH_SHARED, PATH_MANAGED };
 static const char *const path_names[] = { "zero-copy", "shared", "managed" };
-enum { MAX_BANDS = 64, SCAN_AT_LEAST = 30 /* refreshes */ };
+/* Everything looked at (compared, or drawn again on zero-copy) once in
+ * this many refreshes when anything ran: the safety net under the
+ * tracking of writes, or the comparison without it. */
+enum { MAX_BANDS = 64, FULL_EVERY = 60, SCAN_AT_LEAST = 30 };
 
 @interface PresentSurface : NSObject {
 @public
@@ -176,12 +185,11 @@ static id<MTLTexture> dummy;
 static NSMutableArray<PresentSurface *> *surfaces;
 static int path = PATH_SHARED, best_path = PATH_SHARED;
 
-/* The copy of the screen: its form, and its rows (the host's for
- * zero-copy, else the GPU buffer's contents). */
+/* The copy of the screen the surfaces are drawn from: its form, and its
+ * rows (a GPU buffer: shared or managed, written by the CPU; private for
+ * zero-copy, written by the GPU's own copy from the wrapped pages). */
 static present_state shown_state;
 static bool copy_valid;
-static uint8_t *host_rows;
-static size_t host_rows_len;
 static id<MTLBuffer> rows_buf;
 /* The screen's pages wrapped, [nc_lo, nc_lo + nc_len) of the host. */
 static id<MTLBuffer> nocopy;
@@ -189,9 +197,14 @@ static uintptr_t nc_lo;
 static size_t nc_len;
 static id<MTLTexture> desk_tex;
 static bool desk_valid;
-static id<MTLCommandBuffer> last_cmd;
-static uint64_t progress_seen;
-static int since_scan;
+/* The last command buffers: the drawing, and zero-copy's copy (the only
+ * one that reads guest memory). */
+static id<MTLCommandBuffer> last_cmd, last_copy;
+/* The rows written that this presenter has seen (dirty.c), the
+ * emulator's progress at the last look at everything, and the refreshes
+ * since. */
+static uint64_t dirty_seen, progress_seen;
+static int since_full;
 
 static bool vsync_wanted, thread_running;
 static uint64_t vsync_count;
@@ -260,10 +273,17 @@ bool present_start(void)
 const char *present_path(void) { return started == 1 ? path_names[path] : "cpu"; }
 
 /* With the lock held: the copy made again at the next refresh. */
-static void drop_copy(void)
+static void wait_gpu(void)
 {
+    if (last_copy)
+        [last_copy waitUntilCompleted];
     if (last_cmd)
         [last_cmd waitUntilCompleted];
+}
+
+static void drop_copy(void)
+{
+    wait_gpu();
     nocopy = nil;
     nc_lo = 0;
     nc_len = 0;
@@ -297,8 +317,8 @@ void present_memory_changing(void *lo, size_t len)
          * is simply made again for the new one. */
         copy_valid = false;
     } else if (nocopy && (uintptr_t)lo < nc_lo + nc_len && nc_lo < (uintptr_t)lo + len) {
-        if (last_cmd)
-            [last_cmd waitUntilCompleted]; /* no read of the old pages in flight */
+        if (last_copy)
+            [last_copy waitUntilCompleted]; /* no read of the old pages in flight */
         nocopy = nil;
         nc_lo = 0;
         nc_len = 0;
@@ -425,8 +445,8 @@ static bool wrap_pages(const present_state *st)
     uintptr_t at = (uintptr_t)gptr(st->base), end = at + (size_t)st->row_bytes * (size_t)st->height;
     if (nocopy && at >= nc_lo && end <= nc_lo + nc_len)
         return true;
-    if (last_cmd)
-        [last_cmd waitUntilCompleted];
+    if (last_copy)
+        [last_copy waitUntilCompleted];
     nocopy = nil;
     uintptr_t lo = at & ~(uintptr_t)(page - 1), hi = (end + page - 1) & ~(uintptr_t)(page - 1);
     nocopy = [device newBufferWithBytesNoCopy:(void *)lo
@@ -443,20 +463,60 @@ static bool wrap_pages(const present_state *st)
     return true;
 }
 
+/* Zero-copy's rows written, in bytes, from which the GPU copies them
+ * (BLUEBOX_GPU_COPY_KB; 0 for always). */
+static size_t gpu_copy_bytes(void)
+{
+    static long kb = -1;
+    if (kb < 0) {
+        const char *e = getenv("BLUEBOX_GPU_COPY_KB");
+        kb = e && *e ? atol(e) : 6144;
+        if (kb < 0)
+            kb = 0;
+    }
+    return (size_t)kb * 1024;
+}
+
+/* Whether row y is in bands. */
+static bool in_bands(const int32_t *bands, int n, int y)
+{
+    for (int i = 0; i < n; i++)
+        if (y >= bands[i * 2] && y < bands[i * 2 + 1])
+            return true;
+    return false;
+}
+
 /* With the lock held: the copy brought up to date with the screen.  The
- * changed rows as bands; *all when everything is to be drawn again. */
-static int update_copy(int32_t *bands, bool force, bool *all, bool *scanned)
+ * changed rows as bands; *all when everything is to be drawn again.
+ * Zero-copy's copy is the GPU's, made by the command buffer *copy (to be
+ * committed before the drawing). */
+static int update_copy(int32_t *bands, bool force, bool *all, bool *scanned, id<MTLCommandBuffer> *copy)
 {
     present_state st;
     present_screen_state(&st);
     *all = force || !copy_valid || memcmp(&st, &shown_state, sizeof st) != 0;
     *scanned = false;
+    *copy = nil;
+    /* The rows written since the last refresh (dirty.c): none, and nothing
+     * is to be done.  Everything is looked at once a second while the
+     * emulator runs, in case a writer wasn't seen. */
+    int32_t marked[MAX_BANDS * 2];
+    int nm = present_dirty_rows(&dirty_seen, 0, st.height, marked, MAX_BANDS);
+    bool tracked = nm != PRESENT_DIRTY_UNKNOWN;
+    if (nm == PRESENT_DIRTY_ALL)
+        *all = true;
+    if (nm < 0)
+        nm = 0;
     uint64_t progress = present_machine_progress();
-    if (!*all && progress == progress_seen && ++since_scan < SCAN_AT_LEAST)
-        return 0; /* nothing ran: nothing changed */
-    progress_seen = progress;
-    since_scan = 0;
-    *scanned = true;
+    bool full = ++since_full >= (tracked ? FULL_EVERY : SCAN_AT_LEAST) || (!tracked && progress != progress_seen);
+    if (full && tracked && progress == progress_seen)
+        full = false, since_full = 0; /* nothing ran: nothing to look for */
+    if (!*all && !nm && !full)
+        return 0;
+    if (full) {
+        since_full = 0;
+        progress_seen = progress;
+    }
     size_t len = (size_t)st.row_bytes * (size_t)st.height;
     if (len == 0)
         return 0;
@@ -464,35 +524,73 @@ static int update_copy(int32_t *bands, bool force, bool *all, bool *scanned)
         path = PATH_SHARED; /* this screen can't be wrapped: copied instead */
         *all = true;
     }
-    if (path == PATH_ZERO_COPY) {
-        rows_buf = nil;
-        if (host_rows_len < len) {
-            bb_host_free(host_rows);
-            host_rows = bb_host_malloc(len);
-            host_rows_len = host_rows ? len : 0;
-            *all = true;
-        }
-    } else if (!rows_buf || rows_buf.length < len) {
-        if (last_cmd)
-            [last_cmd waitUntilCompleted];
-        rows_buf = [device newBufferWithLength:len
-                                       options:path == PATH_MANAGED ? MTLResourceStorageModeManaged
-                                                                    : MTLResourceStorageModeShared];
+    MTLResourceOptions opts = path == PATH_MANAGED ? MTLResourceStorageModeManaged : MTLResourceStorageModeShared;
+    if (!rows_buf || rows_buf.length < len || (rows_buf.resourceOptions & MTLResourceStorageModeMask) !=
+                                                    (opts & MTLResourceStorageModeMask)) {
+        wait_gpu();
+        rows_buf = [device newBufferWithLength:len options:opts];
         *all = true;
     }
-    uint8_t *rows = path == PATH_ZERO_COPY ? host_rows : rows_buf.contents;
-    if (!rows)
+    if (!rows_buf)
         return 0;
-    if (path != PATH_ZERO_COPY && last_cmd)
-        [last_cmd waitUntilCompleted]; /* the GPU done with the copy before it changes */
     int n;
-    if (*all) {
-        memcpy(rows, gptr(st.base), len);
-        bands[0] = 0;
-        bands[1] = st.height;
-        n = 1;
+    /* Zero-copy: many rows written are copied by the GPU from the screen's
+     * own pages (the processor copies nothing); a few by the processor, as
+     * shared does, which lets a waiting program go sooner than the GPU's
+     * round trip would. */
+    size_t marked_bytes = 0;
+    for (int i = 0; i < nm; i++)
+        marked_bytes += (size_t)(marked[i * 2 + 1] - marked[i * 2]) * st.row_bytes;
+    bool by_gpu = path == PATH_ZERO_COPY && (*all ? len : !full && tracked ? marked_bytes : 0) >= gpu_copy_bytes();
+    if (by_gpu) {
+        if (*all || !tracked) {
+            bands[0] = 0;
+            bands[1] = st.height;
+            n = 1;
+            *all = true;
+        } else {
+            memcpy(bands, marked, sizeof(int32_t) * 2 * (size_t)nm);
+            n = nm;
+        }
+        id<MTLCommandBuffer> c = [queue commandBuffer];
+        id<MTLBlitCommandEncoder> b = [c blitCommandEncoder];
+        size_t off = (size_t)((uintptr_t)gptr(st.base) - nc_lo);
+        for (int i = 0; i < n; i++) {
+            size_t y0 = (size_t)bands[i * 2], y1 = (size_t)bands[i * 2 + 1];
+            if (y1 > (size_t)st.height)
+                y1 = (size_t)st.height;
+            if (y1 > y0)
+                [b copyFromBuffer:nocopy
+                         sourceOffset:off + y0 * st.row_bytes
+                             toBuffer:rows_buf
+                    destinationOffset:y0 * st.row_bytes
+                                 size:(y1 - y0) * st.row_bytes];
+        }
+        [b endEncoding];
+        *copy = c;
     } else {
-        n = present_scan_rows(&st, rows, bands, MAX_BANDS);
+        uint8_t *rows = rows_buf.contents;
+        wait_gpu(); /* the GPU done with the copy before it changes */
+        if (*all) {
+            memcpy(rows, gptr(st.base), len);
+            bands[0] = 0;
+            bands[1] = st.height;
+            n = 1;
+        } else if (full) {
+            /* Compared everywhere: a row changed outside the marked ones
+             * is a writer the tracking missed (counted, and shown). */
+            n = present_scan_rows(&st, rows, bands, MAX_BANDS);
+            *scanned = true;
+            uint64_t missed = 0;
+            for (int i = 0; tracked && n < MAX_BANDS && i < n; i++)
+                for (int y = bands[i * 2]; y < bands[i * 2 + 1]; y++)
+                    missed += !in_bands(marked, nm, y);
+            present_stats_missed(missed);
+        } else {
+            /* Only the rows written, compared and copied: those rewritten
+             * the same draw nothing. */
+            n = present_scan_bands(&st, rows, marked, nm, bands, MAX_BANDS);
+        }
         if (n < 0) { /* the screen changed form under us */
             memcpy(rows, gptr(st.base), len);
             bands[0] = 0;
@@ -500,11 +598,11 @@ static int update_copy(int32_t *bands, bool force, bool *all, bool *scanned)
             n = 1;
             *all = true;
         }
+        if (path == PATH_MANAGED)
+            for (int i = 0; i < n; i++)
+                [rows_buf didModifyRange:NSMakeRange((size_t)bands[i * 2] * st.row_bytes,
+                                                     (size_t)(bands[i * 2 + 1] - bands[i * 2]) * st.row_bytes)];
     }
-    if (path == PATH_MANAGED)
-        for (int i = 0; i < n; i++)
-            [rows_buf didModifyRange:NSMakeRange((size_t)bands[i * 2] * st.row_bytes,
-                                                 (size_t)(bands[i * 2 + 1] - bands[i * 2]) * st.row_bytes)];
     shown_state = st;
     copy_valid = true;
     return n;
@@ -579,13 +677,7 @@ static void encode(id<MTLCommandBuffer> cmd, PresentSurface *s, id<MTLTexture> t
     u.has_desk = s->desktop && desk_tex;
     u.cx0 = (int)floor(s->x), u.cy0 = (int)floor(s->y);
     u.cx1 = (int)ceil(s->x + s->w) - 1, u.cy1 = (int)ceil(s->y + s->h) - 1;
-    id<MTLBuffer> src;
-    if (path == PATH_ZERO_COPY) {
-        src = nocopy;
-        u.base_off = (uint32_t)((uintptr_t)gptr(st->base) - nc_lo);
-    } else {
-        src = rows_buf;
-    }
+    id<MTLBuffer> src = rows_buf;
     uint32_t clut[256];
     for (int i = 0; i < 256; i++)
         clut[i] = (uint32_t)st->clut[i][0] | (uint32_t)st->clut[i][1] << 8 | (uint32_t)st->clut[i][2] << 16;
@@ -640,8 +732,25 @@ static void refresh(PresentSurface *only)
     int32_t bands[MAX_BANDS * 2];
     bool all = false, scanned = false;
     int n = 0;
+    id<MTLCommandBuffer> copy = nil;
     if (!only)
-        n = update_copy(bands, false, &all, &scanned);
+        n = update_copy(bands, false, &all, &scanned, &copy);
+    if (copy) {
+        /* Zero-copy: the GPU's copy of the rows goes first, on its own, and
+         * a program waiting for the refresh goes on once it is done, not
+         * after the drawing. */
+        if (seq) {
+            uint64_t s0 = seq;
+            [copy addCompletedHandler:^(id<MTLCommandBuffer> b) {
+                (void)b;
+                present_stats_read(present_now_ns() - t0);
+                present_vsync_read(s0);
+            }];
+            seq = 0;
+        }
+        [copy commit];
+        last_copy = copy;
+    }
     if (!copy_valid) {
         if (seq)
             present_vsync_read(seq);
@@ -662,8 +771,7 @@ static void refresh(PresentSurface *only)
             [draw addObject:s];
     }
     pthread_mutex_unlock(&slock);
-    bool in_place = path == PATH_ZERO_COPY;
-    if (seq && (!in_place || !draw.count)) {
+    if (seq) {
         present_vsync_read(seq); /* the copy is taken (or nothing to read): the program may go on */
         present_stats_read(present_now_ns() - t0);
         seq = 0;
@@ -682,9 +790,7 @@ static void refresh(PresentSurface *only)
     }
     pthread_mutex_lock(&lock);
     pthread_mutex_lock(&slock);
-    if (!copy_valid || (path == PATH_ZERO_COPY && !nocopy)) { /* the memory moved meanwhile */
-        if (seq)
-            present_vsync_read(seq);
+    if (!copy_valid) { /* the memory moved meanwhile */
         for (PresentSurface *s in draw)
             s->needs = true;
         pthread_mutex_unlock(&slock);
@@ -704,16 +810,6 @@ static void refresh(PresentSurface *only)
         drawn++;
     }
     pthread_mutex_unlock(&slock);
-    if (seq) {
-        uint64_t committed = present_now_ns();
-        [cmd addCompletedHandler:^(id<MTLCommandBuffer> b) {
-            (void)b;
-            /* From the refresh's start: what the program waited beyond it. */
-            present_stats_read(present_now_ns() - t0);
-            (void)committed;
-            present_vsync_read(seq);
-        }];
-    }
     [cmd commit];
     last_cmd = cmd;
     present_stats_gpu(scanned, !scanned && !only, drawn, rows, bytes, present_now_ns() - t0);
@@ -742,11 +838,13 @@ static void *render_thread(void *arg)
             pthread_cond_wait(&wake, &vlock);
         vsync_wanted = false;
         pthread_mutex_unlock(&vlock);
+        uint64_t cpu0 = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID);
         pthread_mutex_lock(&lock);
         @autoreleasepool {
             refresh(nil);
         }
         pthread_mutex_unlock(&lock);
+        present_stats_cpu(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - cpu0);
     }
     return NULL;
 }
@@ -833,8 +931,13 @@ bool present_offscreen(double x, double y, double w, double h, int out_w, int ou
     @autoreleasepool {
         int32_t bands[MAX_BANDS * 2];
         bool all, scanned;
-        int n = update_copy(bands, true, &all, &scanned);
+        id<MTLCommandBuffer> copy = nil;
+        int n = update_copy(bands, true, &all, &scanned, &copy);
         (void)n;
+        if (copy) {
+            [copy commit];
+            last_copy = copy;
+        }
         if (copy_valid) {
             if (desktop)
                 update_desk(bands, 1, true);

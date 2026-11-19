@@ -195,6 +195,7 @@ final class MacWindowView: NSView, MacScreenView {
     /// out, so only its windows and its own drawing show over the host's.
     var clearDesktop = false
     private var shownCopy = [UInt8]() // the screen as last shown
+    private let pixels = LayerPixels()
     private var lastClear = false
     private var rgba = [UInt32]()
 
@@ -269,7 +270,7 @@ final class MacWindowView: NSView, MacScreenView {
                                              force: force || clearDesktop != lastClear || maskChanged)
             lastClear = clearDesktop
             maskChanged = false
-            if changed { layer?.contents = rgbaImage(rgba, width: w, height: h) }
+            if changed { pixels.show(rgba, width: w, height: h, on: layer) }
         }
     }
 
@@ -296,6 +297,7 @@ final class TransientView: NSView {
     private var surface: PresenterSurface?
     private var rgba = [UInt32]()
     private var shownCopy = [UInt8]()
+    private let pixels = LayerPixels()
     private var shown = [Int16]()
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -334,7 +336,7 @@ final class TransientView: NSView {
                 if moved { surface.drawNow() }
             } else if convertChangedRows(x: left, y: top, width: w, height: h, shadow: &shownCopy, rgba: &rgba, shape: nil,
                                          desktop: false, force: moved) {
-                menuLayer.contents = rgbaImage(rgba, width: w, height: h)
+                pixels.show(rgba, width: w, height: h, on: menuLayer)
             }
             CATransaction.commit()
         }

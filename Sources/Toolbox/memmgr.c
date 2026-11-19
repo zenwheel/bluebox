@@ -1683,6 +1683,8 @@ static bool zones_intact(void)
 bool mm_debug_after_call(const char *name)
 {
     static unsigned calls;
+    if (screen_dirty_verifying())
+        screen_dirty_note_call(name);
     if (!heap_check_every() || ++calls % (unsigned)every)
         return true;
     checked_after = name;
