@@ -463,6 +463,36 @@ extension BlueBox {
             #expect(tb_SPBCloseDevice(Int32(bitPattern: refnum)) == 0)
         }
 
+        /// A count and a time both given: the longer, as far as the buffer
+        /// goes (Audiocorder asks for a byte and a second of 16-bit sound
+        /// into 5000 bytes); a count of less than a frame is one frame, not
+        /// a recording without end that runs on past the buffer.
+        @Test func countAndTimeTheLongerWithinTheBuffer() {
+            launchTestApp()
+            let refnum = open()
+            let info = tb_NewPtr(2, false, true)
+            wr16(info, 16)
+            #expect(tb_SPBSetDeviceInfo(Int32(bitPattern: refnum), Int32(bitPattern: fourCC("ssiz")), info) == 0)
+            let (pb, buffer) = spb(refnum, count: 5000)
+            let after = tb_NewPtr(64, false, false)
+            wr32(pb + 4, 1)
+            wr32(pb + 8, 1000)
+            wr8(buffer + 4999, 0x12)
+            wr8(after, 0x34)
+            #expect(tb_SPBRecord(pb, 1) == 0)
+            machine_skip_time(2_000_000_000)
+            sound_pump()
+            #expect(rd16(pb + 32) == 0 && rd32(pb + 4) == 5000)
+            #expect(rd8(buffer + 4999) == 0 && rd8(after) == 0x34)
+            let (one, small) = spb(refnum, count: 1)
+            wr8(small, 0x12)
+            #expect(tb_SPBRecord(one, 0) == 0 && rd32(one + 4) == 0 && rd8(small) == 0x12)
+            let (frame, _) = spb(refnum, count: 2)
+            wr32(frame + 4, 1)
+            #expect(tb_SPBRecord(frame, 0) == 0 && rd32(frame + 4) == 2)
+            #expect(tb_SPBCloseDevice(Int32(bitPattern: refnum)) == 0)
+        }
+
         /// What the host captures, resampled to the device's rate, fills an
         /// asynchronous recording, which then completes.
         @Test func asynchronousRecordingTakesTheHostsSamples() {

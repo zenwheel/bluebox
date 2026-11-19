@@ -141,7 +141,12 @@ uint32_t ppc_trap_result(int size)
 
 void ppc_struct_result(ppc_cpu *c, gaddr result, uint32_t value, int size)
 {
-    if (!(result & 1) && result >= c->gpr[1] && result - c->gpr[1] < 0x100000) {
+    /* Within the stack: a program that takes the value from r3 has
+     * whatever it held there, which may lie past the stack's end, over the
+     * next block in the heap (ChunkJoiner's SndSoundManagerVersion wrote
+     * the version over a master pointer). */
+    gaddr end = mm_block_end(c->gpr[1]);
+    if (!(result & 1) && result >= c->gpr[1] && result - c->gpr[1] < 0x100000 && (!end || result + size <= end)) {
         if (size == 4)
             wr32(result, value);
         else

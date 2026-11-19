@@ -231,6 +231,7 @@ static void app_returned(cpu68k *c, uint16_t tw)
 
 void tb_GetAppParms(gaddr namep, gaddr rnp, gaddr aphandp)
 {
+    LOGF(LOG_TRAPS, "  GetAppParms(%08X, %08X, %08X)\n", namep, rnp, aphandp);
     if (namep)
         gmemcpy(namep, LM_CurApName, (uint32_t)rd8(LM_CurApName) + 1);
     if (rnp)

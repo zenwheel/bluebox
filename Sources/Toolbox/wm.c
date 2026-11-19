@@ -1543,7 +1543,7 @@ static gaddr new_window(gaddr storage, qrect bounds, gaddr title, bool vis, int1
     if (cfm_imports_carbonlib())
         color = true;
     if (color)
-        tb_OpenCPort(w);
+        qd_open_screen_cport(w);
     else
         tb_OpenPort(w);
     tb_SetPort(w);

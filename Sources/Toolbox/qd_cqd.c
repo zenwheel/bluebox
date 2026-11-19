@@ -373,7 +373,7 @@ int16_t tb_NewGWorld(gaddr offscreenGWorld, int16_t pixelDepth, gaddr boundsRect
     gaddr port = tb_NewPtr(CGrafPort_SIZEOF, false, true);
     if (!port)
         return memFullErr;
-    tb_OpenCPort(port);
+    qd_open_screen_cport(port);
     /* InitCPort lent the port the screen's colour table; set_pixels gives
      * the world one of its own. */
     PixMap_set_pmTable(rd32(rd32(port + CGrafPort_portPixMap_off)), 0);
@@ -952,7 +952,21 @@ int qd_palettes_in_use(gaddr *out, int max)
 }
 
 static gaddr entry(gaddr pal, int i) { return rd32(pal) + Palette_pmInfo_off + (uint32_t)i * ColorInfo_SIZEOF; }
-static int entries(gaddr pal) { return pal && rd32(pal) ? (int16_t)rd16(rd32(pal) + Palette_pmEntries_off) : 0; }
+/* The entries the handle holds, whatever its count says: a palette the
+ * program disposed of twice has its master pointer by then on another
+ * block (FracPPC's second DisposePalette got a region, and a region's size
+ * taken for a count of entries cleared their private fields far past it). */
+static int entries(gaddr pal)
+{
+    if (!pal || !rd32(pal))
+        return 0;
+    int n = (int16_t)rd16(rd32(pal) + Palette_pmEntries_off);
+    uint16_t err = rd16(LM_MemErr); /* the program's MemErr as it was */
+    int32_t size = tb_GetHandleSize(pal);
+    wr16(LM_MemErr, err);
+    int32_t room = size > (int32_t)Palette_pmInfo_off ? (size - (int32_t)Palette_pmInfo_off) / (int32_t)ColorInfo_SIZEOF : 0;
+    return n < 0 ? 0 : n < room ? n : room;
+}
 
 /* Slots of the screen's table that palette entries own: a reservation is
  * kept in the entry's ciPrivate as (generation << 16 | index + 1), so a new

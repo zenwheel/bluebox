@@ -679,6 +679,23 @@ extension BlueBox {
             #expect(tb_GetHandleSize(p) < 0 || memErr() != 0)
         }
 
+        /// The handle state calls change the three flags only, leaving the
+        /// rest of the byte: DesignerDraw's MDEF "handle" is a master
+        /// pointer to its jump table, where the header's flags byte is the
+        /// low byte of another entry's address.
+        @Test func handleStateLeavesTheOtherBits() {
+            let mp: UInt32 = 0x6000_0100, data: UInt32 = 0x6000_0200
+            wr32(mp, data)
+            wr8(data - 12, 0x80) // a relocatable block's use bits
+            wr8(data - 11, 0xA6)
+            tb_HLock(mp)
+            #expect(rd8(data - 11) == 0xA6)
+            tb_HUnlock(mp)
+            #expect(rd8(data - 11) == 0x26)
+            tb_HSetState(mp, Int8(bitPattern: 0xC0))
+            #expect(rd8(data - 11) == 0xC6)
+        }
+
         /// MemoryDispatch: holding and locking memory succeed with nothing
         /// to do (Prince of Persia 2 locks its buffers); others are refused.
         @Test func memoryDispatchHoldsAndLocks() {

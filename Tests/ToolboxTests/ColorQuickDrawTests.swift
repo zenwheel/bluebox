@@ -99,6 +99,62 @@ extension BlueBox {
             #expect(mm_check_zone(zone))
         }
 
+        /// A palette disposed of twice, its master pointer by then a
+        /// region's (FracPPC): the second DisposePalette stays within the
+        /// region's block, whose size word is no count of entries.
+        @Test func disposingAPaletteTwiceStaysInTheBlock() {
+            launchTestApp()
+            _ = initToolbox()
+            let pal = tb_NewPalette(4, 0, 2, 0)
+            tb_DisposePalette(pal)
+            let rgn = tb_NewRgn()
+            #expect(rgn == pal) // the master pointer used again
+            let after = tb_NewPtr(256, false, true)
+            for i in 0..<256 { wr8(after + UInt32(i), 0x5A) }
+            wr16(rd32(rgn), 10)
+            tb_DisposePalette(pal)
+            #expect((0..<256).allSatisfy { rd8(after + UInt32($0)) == 0x5A })
+            #expect(mm_check_zone(rd32(UInt32(LM_ApplZone))))
+        }
+
+        /// OpenCPort gives the port the current device's pixmap, as an
+        /// offscreen device made with NewGDevice and SetGDevice gave a port
+        /// its pixels (Tech Note 120; Medieval Empires), and covers it;
+        /// InitCPort leaves anything but a colour port alone (Harvest calls
+        /// it with &qd.thePort, 24 bytes from the end of its globals).
+        @Test func openCPortTakesTheCurrentDevicesPixMap() {
+            launchTestApp()
+            _ = initToolbox()
+            let saved = tb_NewPtr(4, false, true)
+            tb_GetPort(saved)
+            let gdh = tb_NewGDevice(0, -1)
+            let pm = rd32(rd32(rd32(gdh) + UInt32(GDevice_gdPMap_off)))
+            let pixels = tb_NewPtr(100 * 60, false, true)
+            wr32(pm, pixels)
+            wr16(pm + 4, 0x8000 | 100)
+            for (i, v) in [0, 0, 60, 100].enumerated() { wr16(pm + 6 + UInt32(i * 2), UInt16(v)) }
+            wr16(pm + 32, 8) // pixelSize
+            let main = rd32(UInt32(LM_TheGDevice))
+            tb_SetGDevice(gdh)
+            let port = tb_NewPtr(108, false, true)
+            tb_OpenCPort(port)
+            tb_SetGDevice(main)
+            let ppm = rd32(rd32(port + 2))
+            #expect(rd32(ppm) == pixels && rd16(ppm + 4) & 0x3FFF == 100 && rd16(ppm + 10) == 60)
+            #expect(rd16(port + 16 + 4) == 60 && rd16(port + 16 + 6) == 100) // portRect
+            let rect = self.rect(0, 0, 100, 200)
+            tb_PaintRect(rect) // clipped to the 100 by 60 pixmap
+            #expect(rd8(pixels) != 0 && mm_check_zone(rd32(UInt32(LM_ApplZone))))
+            tb_SetGDevice(gdh) // a window is on the screen whatever the current device
+            let window = tb_NewCWindow(0, self.rect(40, 40, 100, 100), tb_NewPtr(1, false, true), 0, 0, 0xFFFF_FFFF, 0, 0)
+            tb_SetGDevice(main)
+            #expect(window != 0 && rd32(rd32(rd32(window + 2))) == rd32(UInt32(LM_ScrnBase)))
+            tb_SetPort(rd32(saved))
+            let globals = tb_NewPtr(40, false, true)
+            tb_InitCPort(globals) // no colour port: untouched
+            #expect((0..<40).allSatisfy { rd8(globals + UInt32($0)) == 0 })
+        }
+
         /// A port's own pattern the program disposes of itself (read back
         /// from the port before its first BackPixPat, as Rune Cast does) is
         /// not disposed of again by CloseCPort, whose handle has by then

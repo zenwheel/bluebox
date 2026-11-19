@@ -211,6 +211,9 @@ let knownDepthRequirements: [UInt32: DepthRequirement] = [
     /* ScJs Space Joust: depth × screen width in 16-bit arithmetic wraps at 32 bits on a
      * 1024-wide screen, and its offscreen bitmap then points at low memory */
     0x5363_4A73: DepthRequirement(allowed: [1, 2, 4, 8, 16], preferred: 8),
+    /* Psod Oh No! More Lemmings: takes any depth above 1 for 8 bits, its
+     * sprites drawn a byte a pixel into 32-bit buffers, past their ends */
+    0x5073_6F64: DepthRequirement(allowed: [1, 2, 4, 8], preferred: 8),
 ]
 
 /// The depth a program with this creator needs when `depth` (nil: the
@@ -267,6 +270,12 @@ let knownMachineRequirements: [UInt32: String] = [
     0x5350_2020: "plus", /* SP   PaintScroll 1.0 (1986) */
     0x5348_4150: "plus", /* SHAP Down Hill Racer (1986): divides by the ticks a frame takes */
     0x7364_3039: "se",   /* sd09 Glypha 3.0 (1990): Fastest, its default speed, is as fast as it draws */
+    /* LUNR Lunar Rescue: its offscreen bitmap is NewPtr(21888), the Plus's
+     * screen, drawn into with the screen's row bytes and rows */
+    0x4C55_4E52: "plus",
+    /* RARM RobotArm: its offscreen bitmap's size is the screen's row bytes
+     * times its rows in 16 bits, NewPtr(0) on a 1024 by 768 screen */
+    0x5241_524D: "plus",
 ]
 
 /// Programs that need accurate timing, by creator: they time themselves by

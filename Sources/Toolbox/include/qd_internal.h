@@ -101,6 +101,7 @@ static inline void pixdst_clamp(pixdst *d)
 
 gaddr qd_port(void);
 bool qd_port_is_color(gaddr port);
+void qd_open_screen_cport(gaddr p);
 pixdst qd_port_pixels(gaddr port);
 /* visRgn ∩ clipRgn ∩ bitmap bounds, in local coordinates. */
 void qd_port_clip(gaddr port, hrgn *out);

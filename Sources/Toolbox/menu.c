@@ -1942,6 +1942,7 @@ static void set_enabled(gaddr mh, int16_t item, bool on)
     if (!mh || !rd32(mh)) /* no menu (a failed GetMenuHandle) */
         return;
     gaddr p = menu_ptr(mh);
+    LOGF(LOG_TRAPS, "  %s(%08X -> %08X, %d)\n", on ? "EnableItem" : "DisableItem", mh, p, item);
     if (item > 31) /* beyond the flags: enabled */
         return;
     uint32_t was = (uint32_t)MenuInfo_enableFlags(p), bit = 1u << item;

@@ -88,6 +88,7 @@ typedef struct {
 } mm_block;
 bool mm_zone_block(gaddr z, gaddr *b, mm_block *out);
 gaddr mm_zone_limit(gaddr z);
+gaddr mm_block_end(gaddr addr);
 /* A resource's type, ID, name (C, MacRoman) and file's reference number
  * from its handle, without touching ResErr; false if h is none. */
 bool rsrc_info_of(gaddr h, uint32_t *type, int16_t *id, char *name, size_t n, int16_t *refnum);

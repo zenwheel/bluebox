@@ -564,6 +564,8 @@ static int16_t exec_io(gaddr pb)
     gget(cdb, flags & scsiCDBIsPointer ? rd32(pb + io_cdb) : pb + io_cdb, cdblen);
     uint8_t status = disk_command(cdb, cdblen, rd8(pb + sh_device + 3));
     bool in = (flags & scsiDirectionMask) == scsiDirectionIn;
+    LOGF(LOG_TRAPS, "  SCSIExecIO %02X %02X %02X %02X %02X %02X: status %u, %u bytes for %08X of %u (type %u)\n", cdb[0],
+         cdb[1], cdb[2], cdb[3], cdb[4], cdb[5], status, xfer.len, rd32(pb + io_data), len, rd8(pb + io_data_type));
     uint32_t moved = 0;
     int16_t r = noErr;
     if (status == GOOD && in && xfer.len) {
@@ -618,6 +620,8 @@ static int16_t action(gaddr pb)
 {
     uint8_t fn = rd8(pb + 8);
     int16_t r;
+    LOGF(LOG_TRAPS, "  SCSIAction function %02X, pb %08X of %u bytes, device %08X\n", fn, pb, rd16(pb + 6),
+         rd32(pb + sh_device));
     switch (fn) {
     case 0x00: r = noErr; break; /* SCSINop */
     case 0x01: /* SCSIExecIO */

@@ -1158,7 +1158,7 @@ static bool ad_begin(int16_t rn, bool over_program)
     /* The port: the whole screen, every monitor in it. */
     ad.port = tb_NewPtr(CGrafPort_SIZEOF, false, true);
     if (ad.color)
-        tb_OpenCPort(ad.port);
+        qd_open_screen_cport(ad.port);
     else
         tb_OpenPort(ad.port);
     gaddr bounds = tb_NewPtr(8, false, true);

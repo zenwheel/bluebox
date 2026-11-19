@@ -147,7 +147,9 @@ gaddr qd_pixpat_for(const uint8_t pat[8])
 void tb_InitPort(gaddr p)
 {
     bool color = qd_port_is_color(p);
-    gaddr sb = qd_screen_bits();
+    /* A colour port covers its pixmap (the current device's, InitCPort). */
+    gaddr pmh = color ? rd32(p + CGrafPort_portPixMap_off) : 0;
+    gaddr sb = pmh && rd32(pmh) ? rd32(pmh) : qd_screen_bits();
     if (!color) {
         gmemcpy(p + GrafPort_portBits_off, sb, BitMap_SIZEOF);
     }
@@ -248,10 +250,23 @@ static void rgb_put(gaddr dst, uint16_t r, uint16_t g, uint16_t b)
 
 void tb_InitCPort(gaddr p)
 {
-    /* The pixmap mirrors the main device's. */
+    /* Only a colour port, as OpenCPort marks it before it calls this: an
+     * old port, or a pointer that is no port, is left alone, as Color
+     * QuickDraw's InitCPort returned at once for one whose portBits.rowBytes
+     * had no high bit (Harvest calls InitCPort(&qd.thePort) after InitGraf,
+     * and the port's 108 bytes ran past its data section over the next
+     * block in the heap). */
+    if (!qd_port_is_color(p))
+        return;
+    /* The pixmap is the current device's, as an offscreen device made by
+     * NewGDevice and set with SetGDevice before OpenCPort gave the port its
+     * own pixels (Tech Note 120's way; Medieval Empires draws its 1250 by
+     * 962 map so, and with the screen's pixmap drew it four bytes a pixel
+     * over 1024 rows past the end of the map's handle). */
     gaddr pmh = rd32(p + CGrafPort_portPixMap_off);
-    gaddr screen_pm = rd32(GDevice_gdPMap(rd32(rd32(LM_MainDevice))));
-    gmemcpy(rd32(pmh), screen_pm, PixMap_SIZEOF);
+    gaddr gd = rd32(LM_TheGDevice) ? rd32(LM_TheGDevice) : rd32(LM_MainDevice);
+    gaddr dev_pm = rd32(GDevice_gdPMap(rd32(gd)));
+    gmemcpy(rd32(pmh), dev_pm, PixMap_SIZEOF);
     wr16(p + CGrafPort_portVersion_off, 0xC000);
     wr16(p + CGrafPort_chExtra_off, 0);
     wr16(p + CGrafPort_pnLocHFrac_off, 0x8000);
@@ -339,6 +354,16 @@ void tb_OpenCPort(gaddr p)
     GrafPort_set_visRgn(p, tb_NewRgn());
     GrafPort_set_clipRgn(p, tb_NewRgn());
     tb_InitCPort(p);
+}
+
+/* A colour port of the Toolbox's own (a window's, a GWorld's), on the
+ * main screen's pixmap whatever device a program has made current. */
+void qd_open_screen_cport(gaddr p)
+{
+    gaddr saved = rd32(LM_TheGDevice);
+    wr32(LM_TheGDevice, rd32(LM_MainDevice));
+    tb_OpenCPort(p);
+    wr32(LM_TheGDevice, saved);
 }
 
 void tb_CloseCPort(gaddr p)

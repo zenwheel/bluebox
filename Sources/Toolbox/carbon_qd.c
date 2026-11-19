@@ -41,7 +41,7 @@ static void qd_CreateNewPort(ppc_cpu *c)
     gaddr p = tb_NewPtr(CGrafPort_SIZEOF, false, true);
     if (p) {
         gaddr saved = qd_port();
-        tb_OpenCPort(p);
+        qd_open_screen_cport(p);
         tb_SetPort(saved ? saved : p);
     }
     RETURN(p);

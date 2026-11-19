@@ -163,6 +163,25 @@ extension BlueBox {
             #expect(rd32(0) == low && gpr(3) == 0x0321_8000)
         }
 
+        /// A stack in a heap block: r3 pointing past the block's end (at the
+        /// next block's data, ChunkJoiner's) is not written through.
+        @Test func structResultsStayInTheStacksBlock() {
+            launchTestApp()
+            var c = ppc_cpu()
+            ppc_init(&c)
+            func setGPR(_ n: Int, _ v: UInt32) {
+                withUnsafeMutableBytes(of: &c.gpr) { $0.storeBytes(of: v, toByteOffset: n * 4, as: UInt32.self) }
+            }
+            let stack = tb_NewPtr(0x400, false, true), next = tb_NewPtr(16, false, true)
+            setGPR(1, stack + 0x300)
+            wr32(next, 0x1234_5678)
+            ppc_struct_result(&c, next, 0x0321_8000, 4)
+            #expect(rd32(next) == 0x1234_5678)
+            ppc_struct_result(&c, stack + 0x3F0, 0x0321_8000, 4)
+            #expect(rd32(stack + 0x3F0) == 0x0321_8000)
+            #expect(mm_check_zone(rd32(UInt32(LM_ApplZone))))
+        }
+
         @Test func ppcHelloRunsAndComputes() throws {
             let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
                 .deletingLastPathComponent()

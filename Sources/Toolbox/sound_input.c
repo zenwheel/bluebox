@@ -424,16 +424,27 @@ static void start_recording(gaddr pb, int16_t file, bool async)
     uint32_t count = rd32(pb + SPB_count), ms = rd32(pb + SPB_milliseconds);
     gaddr buffer = file ? 0 : rd32(pb + SPB_bufferPtr);
     uint32_t length = rd32(pb + SPB_bufferLength);
+    LOGF(LOG_TRAPS, "  record: count %u ms %u buffer %08X length %u file %d%s\n", count, ms, buffer, length, file,
+         async ? " async" : "");
     memset(&rec, 0, sizeof rec);
     rec.pb = pb;
     rec.refnum = (int32_t)rd32(pb + SPB_inRefNum);
     rec.file = file;
     rec.buffer = buffer;
     rec.async = async;
-    rec.total = count ? count : ms ? ms_to_bytes(ms) : buffer ? length : 0;
+    /* Both a count and a time: the longer of the two (Audiocorder asks for
+     * a byte and a second, into a buffer of 5000 bytes, which it fills). */
+    uint32_t for_ms = ms ? ms_to_bytes(ms) : 0;
+    rec.total = count > for_ms ? count : for_ms ? for_ms : buffer ? length : 0;
     if (buffer && length && (!rec.total || rec.total > length))
         rec.total = length;
-    rec.total -= rec.total % frame_bytes();
+    /* Whole frames; a count less than one (Audiocorder asks for 1 byte
+     * of 16-bit sound) one frame, not a total of 0, which is a recording
+     * with no end and ran on past the end of its buffer. */
+    uint32_t fb = frame_bytes(), asked = rec.total;
+    rec.total -= rec.total % fb;
+    if (asked && !rec.total)
+        rec.total = fb;
     rec.active = true;
     rec.start_ns = machine_time_ns();
     ring_reset(rate_hz(dev.rate));
@@ -478,6 +489,10 @@ static int16_t record(gaddr pb, int16_t file, bool async)
         if (rec.active)
             return siDeviceBusyErr;
         start_recording(pb, file, async);
+        if (rec.buffer && rec.total > rd32(pb + SPB_bufferLength) && rd32(pb + SPB_bufferLength)) {
+            stop_recording(noErr); /* not a frame's room: done at once */
+            return noErr;
+        }
         record_pump();
         if (async)
             return noErr;

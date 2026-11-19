@@ -31,6 +31,7 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "tb_internal.h"
 #include "ppc.h"
@@ -97,12 +98,20 @@ static inline uint8_t blk_state(gaddr z, gaddr b)
 /* The same for handle h's block b. */
 static inline uint8_t h_state(gaddr h, gaddr b) { return g_mem_24bit ? rd8(mem_strip(h)) : b_state(b); }
 
+/* In 32-bit mode only the three flags change: the rest of the byte is
+ * left as it was, as the Memory Manager set and cleared the bits one by
+ * one.  A "handle" outside the heaps may have its block header anywhere:
+ * DesignerDraw makes its MDEF's handle a master pointer to its jump table
+ * entry, the header's flags byte the low byte of the entry before's
+ * address, and clearing the other bits there sent that routine's calls six
+ * bytes short. */
 static inline void h_set_state(gaddr h, gaddr b, uint8_t state)
 {
+    enum { FLAGS = ST_LOCK | ST_PURGE | ST_RSRC };
     if (g_mem_24bit)
         wr8(mem_strip(h), state);
     else
-        wr8(b + 1, state & (ST_LOCK | ST_PURGE | ST_RSRC));
+        wr8(b + 1, (uint8_t)((rd8(b + 1) & ~FLAGS) | (state & FLAGS)));
 }
 
 static void b_set(gaddr b, unsigned use, uint8_t state, uint8_t sizec, uint32_t psize, uint32_t loc)
@@ -558,6 +567,7 @@ static uint32_t compact(gaddr z)
             continue;
         }
         if (dst && use == USE_REL && !(blk_state(z, b) & ST_LOCK)) {
+            LOGF(LOG_MEM, "mm: compacting moved handle %08X from %08X to %08X\n", z + b_loc(b), b + HDR, dst + HDR);
             gmemcpy(dst, b, ps);
             mp_point(z + b_loc(dst), dst + HDR); /* update the master pointer */
             dst += ps;
@@ -977,7 +987,7 @@ gaddr tb_NewHandle(int32_t size, bool sys_p, bool clear_p)
         return 0;
     }
     gaddr h = mm_new_handle_in(pick_zone(sys_p), (uint32_t)size, clear_p);
-    LOGF(LOG_MEM, "NewHandle(%d) -> %08X\n", size, h);
+    LOGF(LOG_MEM, "NewHandle(%d) -> %08X (at %08X)\n", size, h, h ? mp_ptr(h) : 0);
     return h;
 }
 
@@ -1061,6 +1071,7 @@ void tb_SetHandleSize(gaddr h, int32_t newsize)
         set_mem_err(memFullErr);
         return;
     }
+    LOGF(LOG_MEM, "SetHandleSize(%08X, %d) moved it from %08X to %08X\n", h, newsize, b + HDR, nb + HDR);
     carve(z, nb, ps, USE_REL, state & (ST_LOCK | ST_PURGE | ST_RSRC), (uint32_t)newsize, h - z);
     gmemcpy(b_data(nb), b_data(b), old < (uint32_t)newsize ? old : (uint32_t)newsize);
     b_free(z, b);
@@ -1701,6 +1712,26 @@ static void note_stack_overrun(void)
         log_printf("mm: the 68k stack has run below ApplLimit %08X (a7 %08X) into the heap\n", limit, a7);
 }
 
+/* Where the current port draws: a drawing call that damaged a heap drew
+ * there, through a bit map bigger than the block holding it. */
+static void note_port_bits(void)
+{
+    gaddr port = g_cpu ? qd_port() : 0;
+    if (!port)
+        return;
+    gaddr bm = port + GrafPort_portBits_off;
+    if (qd_port_is_color(port)) {
+        gaddr h = rd32(port + CGrafPort_portPixMap_off);
+        bm = h ? rd32(h) : 0;
+        if (!bm)
+            return;
+    }
+    uint16_t rb = rd16(bm + 4) & 0x3FFF;
+    int16_t top = (int16_t)rd16(bm + 6), bottom = (int16_t)rd16(bm + 10);
+    log_printf("mm: the current port %08X draws into %08X, %u bytes a row, rows %d to %d (to %08X)\n", port,
+               rd32(bm), rb, top, bottom, rd32(bm) + rb * (uint32_t)(bottom > top ? bottom - top : 0));
+}
+
 static bool zones_intact(void)
 {
     gaddr zones[2] = { rd32(LM_SysZone), rd32(LM_ApplZone) };
@@ -1712,9 +1743,45 @@ static bool zones_intact(void)
     return true;
 }
 
+/* BLUEBOX_WATCH_CALLS=addr[,len]: the Toolbox calls that change a range
+ * (the Toolbox's own writes, which BLUEBOX_WATCH's store watch does not
+ * see), logged with what the range holds after them; and changes made
+ * between two calls, by the program or anything else that ran. */
+static void watch_calls(const char *name, bool before)
+{
+    BB_HOST static int on = -1;
+    BB_HOST static gaddr lo, len;
+    BB_HOST static uint8_t was[64];
+    if (on < 0) {
+        const char *e = getenv("BLUEBOX_WATCH_CALLS");
+        on = e && *e;
+        if (on) {
+            char *end;
+            lo = (gaddr)strtoul(e, &end, 16);
+            len = *end == ',' ? (gaddr)strtoul(end + 1, NULL, 0) : 4;
+            if (len > sizeof was)
+                len = sizeof was;
+            gget(was, lo, len);
+        }
+    }
+    if (!on)
+        return;
+    uint8_t now[64];
+    gget(now, lo, len);
+    if (!memcmp(now, was, len))
+        return;
+    memcpy(was, now, len);
+    log_printf(before ? "watch: changed before %s (by code run since the call before) %08X:" : "watch: %s changed %08X:",
+               name, lo);
+    for (gaddr i = 0; i < len; i++)
+        log_printf(" %02X", now[i]);
+    log_printf("\n");
+}
+
 bool mm_debug_after_call(const char *name)
 {
     in_call = NULL;
+    watch_calls(name, false);
     static unsigned calls;
     if (screen_dirty_verifying())
         screen_dirty_note_call(name);
@@ -1723,6 +1790,7 @@ bool mm_debug_after_call(const char *name)
     checked_after = name;
     if (!zones_intact()) {
         log_printf("mm: the zone was damaged by %s (or within the %d calls before it)\n", name, every - 1);
+        note_port_bits();
         return false;
     }
     return true;
@@ -1733,6 +1801,7 @@ bool mm_debug_after_call(const char *name)
  * damage the call does. */
 bool mm_debug_before_call(const char *name)
 {
+    watch_calls(name, true);
     in_call = name;
     if (heap_check_every() != 1 || !checked_after)
         return true;
@@ -1766,6 +1835,24 @@ void raw_InitZone(cpu68k *c, uint16_t tw)
     c->d[0] = 0;
 }
 
+
+/* The end of the block in a heap zone that holds addr, or 0 when no zone
+ * holds it (or the walk to it finds damage). */
+gaddr mm_block_end(gaddr addr)
+{
+    addr = mem_strip(addr);
+    gaddr z = zone_of(addr);
+    if (!z)
+        return 0;
+    gaddr lim = z_lim(z);
+    for (gaddr b = z_first(z); b < lim; b += b_psize(b)) {
+        if (b_psize(b) < HDR)
+            return 0;
+        if (addr < b + b_psize(b))
+            return addr >= b ? b + b_psize(b) : 0;
+    }
+    return 0;
+}
 
 /* ---------------------------------------------------------------------- */
 /* The debugger's view of a zone (macsbug.c) */
