@@ -6,7 +6,9 @@
 // plus the classic menu bar's 20 pixels, which are never shown.  It is
 // centred: Mac global (x, y) maps to host screen
 // (left + x * scale, visibleFrame.maxY - (y - 20) * scale), left being
-// rootlessMacLeft().
+// rootlessMacLeft().  A program's period screen (the screen setting) is
+// smaller, placed the same way; with the whole display it is scaled to fit
+// it (ScreenMapping in BlueBoxHost).
 
 #if canImport(AppKit)
 import AppKit
@@ -35,6 +37,12 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
     return f
 }
 
+/// The display the Mac screen maps onto.
+@MainActor func rootlessDisplay() -> NSScreen? {
+    _ = rootlessScreenFrame()
+    return NSScreen.screens.first { $0.frame == mappedDisplay?.frame } ?? NSScreen.main ?? NSScreen.screens.first
+}
+
 /// The display changed (another resolution, another main display): the
 /// area mapped again, true if it moved or changed size.  The visible area
 /// is the new display's less what the menu bar and Dock took of the old
@@ -60,6 +68,12 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
 /// jumped back every few frames; Space Junkie, on a display whose visible
 /// area left an odd height, drew its screen with the halves swapped.
 @MainActor func rootlessMacScreenSize() -> (Int32, Int32) {
+    periodScreenSize ?? displayMacScreenSize()
+}
+
+/// The Mac screen the display itself calls for (rootlessMacScreenSize
+/// without a period screen).
+@MainActor func displayMacScreenSize() -> (Int32, Int32) {
     let vf = rootlessScreenFrame()
     var w = Int32((vf.width / displayScale).rounded(.down))
     var h = Int32((vf.height / displayScale).rounded(.down) + classicMenuBarHeight)
@@ -75,23 +89,38 @@ var classicMenuBarHeight: CGFloat { CGFloat(machine_menu_bar_height()) }
 /// sides; a program with the whole screen has black there (the backdrop).
 /// The Mac screen as it is: a resumed program that could not take this
 /// display's size keeps a narrower or wider one, centred the same way.
-@MainActor func rootlessMacLeft() -> CGFloat {
+/// A period screen (the screen setting, or --screen with --rootless) is
+/// placed the same way: centred across, its top under the menu bar, at the
+/// display scale, so its windows are the size they are on any Mac and the
+/// pointer going up from them reaches the menu bar as before.
+@MainActor func rootlessMacLeft() -> CGFloat { CGFloat(rootlessMapping().left) }
+
+@MainActor func rootlessMapping() -> ScreenMapping {
     let vf = rootlessScreenFrame()
     var w: Int32 = 0, h: Int32 = 0
     machine_screen_size(&w, &h)
-    return vf.minX + ((vf.width - CGFloat(w) * displayScale) / 2).rounded(.down)
+    return .rootless(visibleMinX: vf.minX, visibleWidth: vf.width, visibleMaxY: vf.maxY,
+                     menuBar: classicMenuBarHeight, scale: displayScale, mac: (w, h))
 }
+
+/// Where a period screen with the whole display is (scaled to fit it,
+/// centred, black around it): set while it has it, else nil, and the
+/// whole screen is where the rootless windows were.
+@MainActor var wholeScreenMapping: ScreenMapping?
+
+/// The Mac screen's place on the host now.
+@MainActor func screenMapping() -> ScreenMapping { wholeScreenMapping ?? rootlessMapping() }
+
+/// Host points per Mac pixel now: the display scale, or a period screen's
+/// with the whole display.
+@MainActor func macPointsPerPixel() -> CGFloat { CGFloat(screenMapping().scale) }
 
 @MainActor func macToHost(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
-    let vf = rootlessScreenFrame()
-    return NSPoint(x: rootlessMacLeft() + x * displayScale, y: vf.maxY - (y - classicMenuBarHeight) * displayScale)
+    let p = screenMapping().host(Double(x), Double(y))
+    return NSPoint(x: p.x, y: p.y)
 }
 
-@MainActor func hostToMac(_ p: NSPoint) -> (Int32, Int32) {
-    let vf = rootlessScreenFrame()
-    return (Int32(((p.x - rootlessMacLeft()) / displayScale).rounded(.down)),
-            Int32(((vf.maxY - p.y) / displayScale + classicMenuBarHeight).rounded(.down)))
-}
+@MainActor func hostToMac(_ p: NSPoint) -> (Int32, Int32) { screenMapping().mac(Double(p.x), Double(p.y)) }
 
 /// Whether the mouse is captured (a program reading its motion): the
 /// host's pointer is frozen then, so clicks carry the program's own mouse
@@ -319,10 +348,10 @@ final class TransientView: NSView {
         guard w > 0, h > 0 else { return }
         let moved = r != shown
         shown = r
-        let s = displayScale
-        let inset = rootlessMacLeft() - rootlessScreenFrame().minX /* the Mac screen is centred */
-        let frame = CGRect(x: inset + CGFloat(left) * s, y: (CGFloat(top) - classicMenuBarHeight) * s,
-                           width: CGFloat(w) * s, height: CGFloat(h) * s)
+        // At its place on the host, in this (flipped) view over the window.
+        let s = macPointsPerPixel()
+        let at = macToHost(CGFloat(left), CGFloat(top)), area = window?.frame ?? rootlessScreenFrame()
+        let frame = CGRect(x: at.x - area.minX, y: area.maxY - at.y, width: CGFloat(w) * s, height: CGFloat(h) * s)
         timedPresent {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -490,7 +519,8 @@ final class TransientView: NSView {
             ) { [weak self] event in
                 MainActor.assumeIsolated {
                     if self?.captured == true {
-                        machine_post_mouse_delta(Double(event.deltaX / displayScale), Double(event.deltaY / displayScale))
+                        let s = macPointsPerPixel()
+                        machine_post_mouse_delta(Double(event.deltaX / s), Double(event.deltaY / s))
                     }
                 }
                 return event
@@ -541,7 +571,7 @@ final class TransientView: NSView {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
-        Vsync.shared.follow(nil) // the GPU presenter's refreshes, from the main display
+        followVsync() // the GPU presenter's refreshes, from a program window's display
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
                                                object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { (NSApp.delegate as? RootlessHost)?.displayChanged() }
@@ -557,7 +587,8 @@ final class TransientView: NSView {
     /// resumed program's (machine_request_screen_size; the program gets it
     /// at its next event call), and the windows are placed again.
     func displayChanged() {
-        Vsync.shared.follow(nil)
+        Vsync.shared.forget()
+        followVsync()
         guard remapRootlessScreen() else { return }
         if hidingChrome, let backdrop, let screen = NSScreen.main ?? NSScreen.screens.first {
             backdrop.setFrame(screen.frame, display: false)
@@ -583,8 +614,7 @@ final class TransientView: NSView {
         guard let window = screenWindow, let view = window.contentView as? MacWindowView else { return }
         var sw: Int32 = 0, sh: Int32 = 0
         machine_screen_size(&sw, &sh)
-        let origin = macToHost(0, CGFloat(sh))
-        let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(sw) * displayScale, height: CGFloat(sh) * displayScale)
+        let frame = placeWholeScreen(Int(sw), Int(sh))
         window.setFrame(frame, display: false)
         view.frame = NSRect(origin: .zero, size: frame.size)
         view.macBounds = (0, 0, Int16(sh), Int16(sw))
@@ -600,16 +630,22 @@ final class TransientView: NSView {
             NSApp.terminate(nil)
             return
         }
-        if Suspender.shared.suspended { return } // the machine still: nothing to show or send
+        if Suspender.shared.suspended { // the machine still: nothing to show or send
+            Vsync.shared.standIn(surfaceSeen: false)
+            return
+        }
         updateCapture()
+        var sw: Int32 = 0, sh: Int32 = 0
+        machine_screen_size(&sw, &sh)
         let mouse = NSEvent.mouseLocation
         if !captured && mouse != lastMouse {
             lastMouse = mouse
-            let (x, y) = hostToMac(mouse)
+            var (x, y) = hostToMac(mouse)
+            // A period screen is smaller than the display: the pointer off
+            // it is at its edge, as a Mac's stopped there.
+            if periodScreenSize != nil { (x, y) = ScreenMapping.clamp((x, y), to: (sw, sh)) }
             machine_post_mouse(x, y, -1)
         }
-        var sw: Int32 = 0, sh: Int32 = 0
-        machine_screen_size(&sw, &sh)
         if (sw, sh) != screenSizeShown {
             // The screen changed size (the display did): every window placed again.
             let first = screenSizeShown == (0, 0) && windowsVersion == .max
@@ -633,6 +669,7 @@ final class TransientView: NSView {
             view.setSeen(w.occlusionState.contains(.visible))
             view.refresh(force: false)
         }
+        followVsync()
         syncTransient()
         syncOverlay()
         syncMenus()
@@ -658,7 +695,9 @@ final class TransientView: NSView {
             return
         }
         if transientWindow == nil {
-            let frame = rootlessScreenFrame()
+            // Over the whole display while a period screen has it (the
+            // menu can be anywhere on it), else over the visible area.
+            let frame = wholeScreenMapping != nil ? rootlessDisplay()?.frame ?? rootlessScreenFrame() : rootlessScreenFrame()
             let w = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
             w.isOpaque = false
             // Nearly clear: a fully transparent window would let clicks through.
@@ -778,6 +817,27 @@ final class TransientView: NSView {
         if let front = current.first, let w = windows[front.id], NSApp.isActive { w.makeKey() }
     }
 
+    /// The GPU presenter's refreshes follow the display link of the whole
+    /// screen's window, else a program window's (the key one, else the
+    /// frontmost), else the main display's.  The main display's link alone
+    /// brought no refreshes (PixelToy's whole screen showed nothing new on
+    /// the GPU paths), and the render thread starts at the first.  Should
+    /// the followed link go quiet while a window is seen anyway, the
+    /// host's tick drives the presenter until it comes back.
+    func followVsync() {
+        func candidate(_ w: NSWindow) -> VsyncCandidate<NSWindow> {
+            VsyncCandidate(w, ordered: w.isVisible, seen: w.occlusionState.contains(.visible), key: w.isKeyWindow)
+        }
+        let ours = Set(windows.values.map(ObjectIdentifier.init))
+        let ordered = NSApp.orderedWindows.filter { ours.contains(ObjectIdentifier($0)) }
+        let rest: [NSWindow] = windows.values.filter { w in !ordered.contains { $0 === w } }
+        let target = VsyncTarget.choose(wholeScreen: screenWindow.map(candidate),
+                                        frontToBack: (ordered + rest).map(candidate))
+        Vsync.shared.keepFollowing(target?.contentView)
+        let seen: [NSWindow] = (screenWindow.map { [$0] } ?? []) + Array(windows.values)
+        Vsync.shared.standIn(surfaceSeen: seen.contains { $0.isVisible && $0.occlusionState.contains(.visible) })
+    }
+
     func switchToScreen(because why: String) {
         machine_set_live_window_drag(false) // the whole screen shows the outline
         var sw: Int32 = 0, sh: Int32 = 0
@@ -789,10 +849,26 @@ final class TransientView: NSView {
         Self.screenModeChosen?(why)
     }
 
+    /// Where the whole screen's window goes.  A program with the display's
+    /// own size keeps the place its rootless windows had; a period screen
+    /// is scaled to fit the whole display (ScreenMapping.wholeDisplay),
+    /// centred, the backdrop's black around it, and the pointer is mapped
+    /// back through the same placement.
+    func placeWholeScreen(_ width: Int, _ height: Int) -> NSRect {
+        wholeScreenMapping = nil
+        if periodScreenSize != nil, let screen = rootlessDisplay() {
+            let d = screen.frame
+            wholeScreenMapping = .wholeDisplay(mac: (Int32(width), Int32(height)), displayX: d.minX, displayY: d.minY,
+                                               displayWidth: d.width, displayHeight: d.height,
+                                               backing: screen.backingScaleFactor)
+        }
+        cursorPointsPerPixel = wholeScreenMapping.map { CGFloat($0.scale) }
+        let f = screenMapping().frame((Int32(width), Int32(height)))
+        return NSRect(x: f.x, y: f.y, width: f.width, height: f.height)
+    }
+
     func showWholeScreen(_ width: Int, _ height: Int) {
-        let origin = macToHost(0, CGFloat(height))
-        let frame = NSRect(x: origin.x, y: origin.y, width: CGFloat(width) * displayScale,
-                           height: CGFloat(height) * displayScale)
+        let frame = placeWholeScreen(width, height)
         let window = MacWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.hasShadow = false
         window.isReleasedWhenClosed = false

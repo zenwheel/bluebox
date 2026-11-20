@@ -11,6 +11,7 @@
 #if canImport(AppKit)
 import Accelerate
 import AppKit
+import BlueBoxHost
 import IOSurface
 import QuartzCore
 import Toolbox
@@ -57,12 +58,26 @@ final class PresenterSurface: @unchecked Sendable {
     static let shared = Vsync()
     private var link: AnyObject?
     private var display: CGDirectDisplayID = 0
+    /// What the link follows: a view (weak, gone with its window) or the
+    /// main display, and the display it was on.
+    private weak var followedView: NSView?
+    private var followsView = false
+    private var followed = false
+    private var followedDisplay: CGDirectDisplayID = 0
+    /// The display link's refreshes so far (macOS 14's; the presenter's
+    /// own link counts its own), and the host tick's stand-in for them.
+    private var realVsyncs: UInt64 = 0
+    private var fallback = VsyncFallback()
 
     private static let pacing: Bool = ProcessInfo.processInfo.environment["BLUEBOX_PACE"].map { !$0.hasPrefix("0") } ?? true
 
     /// Refreshes for this view's display (nil: the main display's).
     func follow(_ view: NSView?) {
         guard presenterOn else { return }
+        followedView = view
+        followsView = view != nil
+        followed = true
+        followedDisplay = Self.displayID(of: view)
         if #available(macOS 14.0, *) {
             (link as? CADisplayLink)?.invalidate()
             let l: CADisplayLink
@@ -90,8 +105,42 @@ final class PresenterSurface: @unchecked Sendable {
 
     @available(macOS 14.0, *)
     @objc private func refreshed(_ l: CADisplayLink) {
+        realVsyncs &+= 1
         let d = l.targetTimestamp - l.timestamp
         present_vsync(d > 0 ? 1 / d : 60)
+    }
+
+    private static func displayID(of view: NSView?) -> CGDirectDisplayID {
+        let screen = view?.window?.screen ?? NSScreen.main
+        return (screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+            ?? CGMainDisplayID()
+    }
+
+    /// Follows this view (nil: the main display) unless it already does,
+    /// on the same display: called at every host tick.
+    func keepFollowing(_ view: NSView?) {
+        guard presenterOn else { return }
+        let same = view == nil ? !followsView : followedView === view
+        if followed && same && Self.displayID(of: view) == followedDisplay { return }
+        follow(view)
+    }
+
+    /// Follows the view again at the next keepFollowing (the displays changed).
+    func forget() { followed = false }
+
+    /// The host's 60 Hz tick: drives the presenter itself while the display
+    /// link has been quiet for a while and a surface is seen, and stops at
+    /// the link's first refresh, so the two never both drive it.
+    func standIn(surfaceSeen: Bool) {
+        guard presenterOn else { return }
+        let was = fallback.driving
+        let drive = fallback.tick(now: present_now_ns(), real: realVsyncs &+ present_own_link_vsyncs(),
+                                  surfaceSeen: surfaceSeen)
+        if drive != was && present_stats_on() {
+            eprint(drive ? "bluebox: no refreshes from the display link: the host's tick drives the presenter\n"
+                : "bluebox: the host's tick stops driving the presenter\n")
+        }
+        if drive { present_vsync(60) }
     }
 }
 

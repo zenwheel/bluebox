@@ -57,6 +57,7 @@
 
 #include <math.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -210,6 +211,7 @@ static bool vsync_wanted, thread_running;
 static uint64_t vsync_count;
 static int vsync_every = 1;
 static CVDisplayLinkRef link_ref;
+static _Atomic uint64_t link_vsyncs;
 
 /* ---- Setting up ---- */
 
@@ -894,9 +896,12 @@ static CVReturn link_callback(CVDisplayLinkRef l, const CVTimeStamp *now, const 
     (void)now, (void)in, (void)flags, (void)ctx;
     double hz = out->videoRefreshPeriod ? (double)out->videoTimeScale / (double)out->videoRefreshPeriod : 60;
     (void)l;
+    atomic_fetch_add(&link_vsyncs, 1);
     present_vsync(hz);
     return kCVReturnSuccess;
 }
+
+uint64_t present_own_link_vsyncs(void) { return atomic_load(&link_vsyncs); }
 
 bool present_own_display_link(uint32_t display_id)
 {

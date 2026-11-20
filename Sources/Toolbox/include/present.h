@@ -92,6 +92,9 @@ void present_wake(void);
  * CVDisplayLink on that display); false if there is none. */
 bool present_own_display_link(uint32_t display_id);
 void present_stop_display_link(void);
+/* The refreshes that link has told so far (the host's stand-in for a
+ * quiet link goes by them). */
+uint64_t present_own_link_vsyncs(void);
 
 /* Tests and benchmarks: the rectangle drawn into an offscreen target of
  * out_w x out_h, read back as RGBA (premultiplied, as the layer has it). */

@@ -241,6 +241,7 @@ void present_vsync(double hz) {}
 void present_wake(void) {}
 bool present_own_display_link(uint32_t display_id) { return false; }
 void present_stop_display_link(void) {}
+uint64_t present_own_link_vsyncs(void) { return 0; }
 bool present_offscreen(double x, double y, double w, double h, int out_w, int out_h, const uint8_t *shape, bool desktop,
                        uint8_t *rgba)
 {

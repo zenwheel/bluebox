@@ -12,6 +12,10 @@ import Toolbox
 /// Host points per Mac pixel: 1, 1.5, 2 or 3 (--scale, or the app's setting).
 nonisolated(unsafe) var displayScale: CGFloat = 1
 
+/// Host points per Mac pixel for the classic cursor's image when it is not
+/// the display scale: a period screen scaled up to fill the display.
+nonisolated(unsafe) var cursorPointsPerPixel: CGFloat?
+
 /// An image of RGBA pixels that owns a copy of them.  A bitmap context's
 /// makeImage shares the buffer until the context draws again, and ours
 /// never does: the next refresh wrote over pixels a layer was still showing,
@@ -588,11 +592,13 @@ func nameProcess(_ name: String) {
     private var obscures: UInt32 = 0
     private var hiddenOnHost = false
     private var imageKey: [Int] = []
+    private var imageScale = CGFloat(0)
     private var state = machine_cursor()
 
     func tick() {
         let v = machine_cursor_state(&state)
-        if v != version {
+        if v != version || imageScale != (cursorPointsPerPixel ?? displayScale) {
+            imageScale = cursorPointsPerPixel ?? displayScale
             version = v
             if state.obscures != obscures {
                 obscures = state.obscures
@@ -601,6 +607,7 @@ func nameProcess(_ name: String) {
             var key = [Int(state.kind), Int(state.hot_h), Int(state.hot_v)]
                 + withUnsafeBytes(of: state.data) { $0.map(Int.init) } + withUnsafeBytes(of: state.mask) { $0.map(Int.init) }
             if state.color { key += withUnsafeBytes(of: state.rgba) { $0.map(Int.init) } }
+            key.append(Int(((cursorPointsPerPixel ?? displayScale) * 1000).rounded())) // drawn again at a new scale
             if key != imageKey {
                 imageKey = key
                 setImage()
@@ -635,7 +642,8 @@ func nameProcess(_ name: String) {
     /// At the display scale, in whole device pixels (nearest neighbour), so it
     /// matches the windows it points at.
     private func classicImage() -> NSCursor {
-        let points = 16 * displayScale
+        let scale = cursorPointsPerPixel ?? displayScale
+        let points = (16 * scale).rounded()
         let n = Int((points * 2).rounded()) // device pixels on a Retina display
         let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: n, pixelsHigh: n, bitsPerSample: 8,
                                    samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -663,8 +671,7 @@ func nameProcess(_ name: String) {
         rep.size = NSSize(width: points, height: points)
         let image = NSImage(size: rep.size)
         image.addRepresentation(rep)
-        return NSCursor(image: image, hotSpot: NSPoint(x: CGFloat(state.hot_h) * displayScale,
-                                                       y: CGFloat(state.hot_v) * displayScale))
+        return NSCursor(image: image, hotSpot: NSPoint(x: CGFloat(state.hot_h) * scale, y: CGFloat(state.hot_v) * scale))
     }
 }
 
@@ -875,6 +882,7 @@ final class HostDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSM
 /// The Mac screen a window of the whole screen has on the main display at
 /// the display scale: its visible area less a title bar, a Mac's size.
 @MainActor func screenWindowMacSize() -> (Int32, Int32) {
+    if let p = periodScreenSize { return p } // the program's screen setting
     let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1024, height: 768)
     let style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
     let bar = NSWindow.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: style).height - 100
@@ -1170,6 +1178,7 @@ func installLaunchHandler() {
             }
         }
         if CommandLine.arguments.contains("--screen-window") { args.append("--screen-window") }
+        if CommandLine.arguments.contains("--rootless") { args.append("--rootless") }
         // The screen keeps a depth other than the default, as a Mac's did from
         // one program to the next (Dark Castle's loader, at 1 bit, launches
         // its game); at the default, the next program may still ask for its own.

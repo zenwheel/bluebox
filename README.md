@@ -194,6 +194,15 @@ Some useful options for `run`:
 `bluebox set <app> depth 8` (or `cpu`, `fpu`, `addressing`, `timing`, `scale`)
 remembers a setting for one application. `bluebox --help` lists everything.
 
+Rootless, the Mac screen is the size of the display. A game that redraws the
+whole screen on a large display redraws millions of pixels a frame; `bluebox
+set <app> screen 1024x768` gives it a period screen instead: its windows are
+placed under the menu bar as usual, and when it takes the whole screen the
+screen is scaled up to fill the display, with black around it (`--screen
+1024x768 --rootless` does the same for one run). A program that takes the
+whole screen for the first time gets `screen 1024x768` from its next run;
+`screen display` keeps the display's size, `screen default` forgets it.
+
 Command keys go to the program, as on a Mac, Command-Q too. The host keeps
 a few, in a window, in the whole screen and rootless:
 

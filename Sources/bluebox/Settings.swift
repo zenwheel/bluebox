@@ -45,6 +45,7 @@ struct AppSettings: Codable {
     var userName: String? /* the Chooser's user name (the owner's, 'STR ' -16096); unset: the host account's full name */
     var appleShare: String? /* an AppleShare volume to mount (machine_mount_appleshare's spec; "": none) */
     var display: String? /* rootless, or screen (the whole Mac screen in one window); chosen by itself when unset */
+    var screen: String? /* the Mac screen's size, WxH (a period screen, scaled to fit the display when the program takes it whole), or display (the display's); unset: the display's, and 1024x768 is remembered when the program first takes the whole screen */
     var jit: Bool? /* translate the program's code to host code (--jit, --no-jit); unset: jitByDefault */
     var debugger: String? /* menu (the Debug menu), stop (and the program's Debugger calls open it), off; unset: the menu with the developer tools */
     var internet: InternetSettings? /* Internet Config's preferences */
@@ -53,7 +54,7 @@ struct AppSettings: Codable {
     var isEmpty: Bool {
         depth == nil && cpu == nil && powerpc == nil && fpu == nil && addressing == nil && timing == nil && scale == nil && appearance == nil && highlight == nil && appletalk == nil
             && appletalkZone == nil && modemPort == nil && printerPort == nil && printFolder == nil && printer == nil && userName == nil
-            && appleShare == nil && display == nil
+            && appleShare == nil && display == nil && screen == nil
             && jit == nil && debugger == nil
             && (internet?.isEmpty ?? true)
             && keepSnapshots == nil && keepSavePoints == nil
@@ -75,6 +76,7 @@ struct AppSettings: Codable {
             + "user-name \(userName.map { "\"\($0)\"" } ?? "default (this account's full name)"), "
             + "appleshare \(appleShare.map { $0.isEmpty ? "none" : $0 } ?? "default (none)"), "
             + "display \(display ?? "default (rootless, the whole screen when the program wants it)"), "
+            + "screen \(screen ?? "default (the display's)"), "
             + "jit \(jit.map { $0 ? "on" : "off" } ?? "default (\(jitByDefault ? "on" : "off"))"), "
             + "debugger \(debugger ?? "default (the Debug menu when the developer tools are installed)"), "
             + "keep-snapshots \(keepSnapshots.map(String.init) ?? "default (\(HibernatedSnapshots.defaultKeep))"), "
@@ -92,13 +94,20 @@ struct AppSettings: Codable {
                            modemPort: modemPort ?? f.modemPort,
                            printerPort: printerPort ?? f.printerPort, printFolder: printFolder ?? f.printFolder,
                            printer: printer ?? f.printer, userName: userName ?? f.userName,
-                           appleShare: appleShare ?? f.appleShare, display: display ?? f.display, jit: jit ?? f.jit,
+                           appleShare: appleShare ?? f.appleShare, display: display ?? f.display, screen: screen ?? f.screen,
+                           jit: jit ?? f.jit,
                            debugger: debugger ?? f.debugger,
                            internet: internet.map { $0.over(f.internet) } ?? f.internet,
                            keepSnapshots: keepSnapshots ?? f.keepSnapshots,
                            keepSavePoints: keepSavePoints ?? f.keepSavePoints)
     }
 }
+
+/// The run's period screen, when it has one: a Mac screen of the size the
+/// screen setting (or --screen with --rootless) gives, rather than the
+/// display's.  Rootless, it is placed under the menu bar as a screen the
+/// display's size is; with the whole display, scaled to fit it.
+nonisolated(unsafe) var periodScreenSize: (Int32, Int32)?
 
 /// The PowerPC processor when neither the run (--powerpc) nor the settings
 /// say: a G4, whose AltiVec unit the interpreter runs (ppc_vec.c).
@@ -399,7 +408,7 @@ func settings(for app: String) -> AppSettings? {
 ///     [timing fast|accurate|default] [scale 1|1.5|2|3|default] [appearance bw|native|<theme>|default] [highlight host|#RRGGBB|default]
 ///     [appletalk local|lan|lan:IF|bridge:IF|router:HOST[:PORT]|off|default] [appletalk-zone <zone>|default] [modem-port <spec>|default] [printer-port <spec>|default]
 ///     [print-folder <folder>|panel|default] [printer <spec>|default] [user-name <name>|default]
-///     [appleshare <spec>|none|default] [display rootless|screen|default]
+///     [appleshare <spec>|none|default] [display rootless|screen|default] [screen WxH|display|default]
 ///     [jit on|off|default] [keep-snapshots N|default] [keep-save-points N|default]
 ///     [real-name|email|organization|mail-account|smtp-host|news-host|home-page|search-page <text>|default]
 ///     [http-proxy|ftp-proxy|gopher-proxy|socks <host:port>|none|default] [no-proxy <domains>|default]
@@ -547,6 +556,17 @@ func setCommand(_ args: [String]) {
         case "display":
             guard ["rootless", "screen", "default"].contains(value) else { fail("display expects rootless, screen or default") }
             s.display = value == "default" ? nil : value
+        case "screen":
+            if value == "default" {
+                s.screen = nil
+            } else if let v = ScreenSetting(value) {
+                s.screen = v.text
+                if v.text != value.lowercased() {
+                    print("screen \(value) made \(v.text), a Mac screen's shape (a whole number of 64 wide, 2 high)")
+                }
+            } else {
+                fail("screen expects WxH (512x342 to 4096x4096, e.g. 1024x768), display or default")
+            }
         case "jit":
             guard ["on", "off", "default"].contains(value) else { fail("jit expects on, off or default") }
             s.jit = value == "default" ? nil : value == "on"
@@ -584,7 +604,7 @@ func setCommand(_ args: [String]) {
             s.internet = i.isEmpty ? nil : i
         default:
             fail("unknown setting \(name) (settings: depth, cpu, scale, appearance, highlight, appletalk, appletalk-zone, "
-                 + "modem-port, printer-port, print-folder, printer, user-name, appleshare, display, jit, keep-snapshots, "
+                 + "modem-port, printer-port, print-folder, printer, user-name, appleshare, display, screen, jit, keep-snapshots, "
                  + "keep-save-points, "
                  + InternetSettings.fields.map(\.name).joined(separator: ", ") + ", passive-ftp)")
         }

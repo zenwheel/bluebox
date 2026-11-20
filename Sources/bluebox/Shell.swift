@@ -1158,6 +1158,15 @@ struct SettingsForm: View {
                   + "one window, for programs that draw on the screen outside their windows (games, mostly). By "
                   + "default a program is rootless until it shows it wants the whole screen, which then becomes "
                   + "its setting.")
+            Picker("Screen size", selection: $settings.screen) {
+                Text("\(inherit) (\(screenName(fallback.screen)))").tag(String?.none)
+                Text(screenName("display")).tag(String?.some("display"))
+                ForEach(screenSizes(including: settings.screen), id: \.self) { v in Text(screenName(v)).tag(String?.some(v)) }
+            }
+            .help("The Mac screen's size. A period size (what classic games were written for) is drawn far faster "
+                  + "on a large display: rootless, the windows are placed under the menu bar as usual; when the "
+                  + "program takes the whole screen it is scaled up to fit the display. By default the display's "
+                  + "size, and 1024×768 once a program first takes the whole screen.")
             HighlightPicker(highlight: $settings.highlight, inherit: inherit,
                             inheritedName: highlightName(fallback.highlight ?? "host"))
         }
@@ -1351,6 +1360,21 @@ struct SettingsForm: View {
         case "screen": return "The whole screen in a window"
         default: return "Rootless, or the whole screen when wanted"
         }
+    }
+
+    private func screenName(_ s: String?) -> String {
+        switch s {
+        case nil: return "the display's"
+        case "display": return "The display's"
+        case let v?: return v.replacingOccurrences(of: "x", with: "×")
+        }
+    }
+
+    /// Mac screens' own sizes, and one set otherwise.
+    private func screenSizes(including set: String?) -> [String] {
+        let sizes = ["512x342", "640x480", "832x624", "1024x768", "1152x870", "1280x1024", "1600x1200"]
+        guard let set, set != "display", !sizes.contains(set) else { return sizes }
+        return sizes + [set]
     }
 
     private func scaleName(_ v: Double) -> String { v == 1.5 ? "1.5×" : "\(Int(v))×" }

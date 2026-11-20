@@ -95,6 +95,10 @@ func usage() -> Never {
                      draws on the desktop float over the host's (the Talking Moose)
           --screen-window  show the whole classic screen in one window instead of
                      rootless windows (implied by --screen)
+          --rootless  rootless windows even with --screen or a display setting of screen:
+                     --screen 1024x768 --rootless gives the program a period screen, its
+                     windows placed under the menu bar at their size, the whole screen,
+                     when it takes it, scaled to fit the display (as the screen setting)
                      The host keeps a few keys from the program: Command-Option-Q
                      (Force Quit), Command-H and Command-Option-H (Hide, Hide Others,
                      unless the program has a Command-H item) and Control-Option-
@@ -135,8 +139,9 @@ func usage() -> Never {
                      ApFontID, ScrDmpEnb or the SP parameter RAM copies, e.g.
                      DoubleTime=20 (windowed runs take the first four from macOS)
           --fonts F  also open resource file F (AppleDouble) for fonts; repeatable
-          --screen WxH  screen size (default 1024x768, or the display's; a game known to need
-                 a 13-inch monitor's 640x480 gets that, the whole screen in a window)
+          --screen WxH  screen size (default 1024x768, or the display's, or the program's screen
+                 setting; a game known to need a 13-inch monitor's 640x480 gets that, the
+                 whole screen in a window)
           --ppc      run a fat application's PowerPC code (the default; PowerPC-only ones
                      always run it)
           --68k      run a fat application's 68k code (as a cpu setting of 68020 or 68040 does)
@@ -323,7 +328,8 @@ func usage() -> Never {
                 [appletalk-zone Z|default]
                 [modem-port S|default] [printer-port S|default] [print-folder F|panel|default]
                 [printer panel|pdf|host:NAME|laserwriter:NAME@ZONE|driver:FILE|default] [user-name NAME|default]
-                [appleshare S|none|default] [display rootless|screen|default] [jit on|off|default]
+                [appleshare S|none|default] [display rootless|screen|default]
+                [screen WxH|display|default] [jit on|off|default]
                 [debugger menu|stop|off|default]
                 [real-name|email|organization|mail-account|smtp-host|news-host|
                  home-page|search-page TEXT|default]
@@ -337,6 +343,14 @@ func usage() -> Never {
           if it times itself by the Plus's speed), or cpu 68040 for
           a fat application to run its 68k code.  powerpc g3 runs PowerPC code on a
           G3 (no AltiVec) rather than the default G4.
+          screen 1024x768 gives a program a period screen of that size rather than
+          the display's: rootless, its windows are placed under the menu bar as
+          usual; when it takes the whole screen, the screen is scaled up to fit the
+          display, with black around it (on a large display a game redrawing the
+          whole screen draws far faster).  A program that takes the whole screen
+          for the first time gets screen 1024x768 with its display setting (from
+          its next run), on a display larger than that, unless a screen is set;
+          screen display keeps the display's size, default forgets it.
           debugger menu shows the Debug menu (MacsBug: Control-Option-Command-D
           breaks in) in the program's application menu even without the developer
           tools (with them it is there unless off); stop also opens it at the
@@ -708,6 +722,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
     var screenWindow = false
     var screenGiven = false
     var screenSize: (Int32, Int32)? // --screen's
+    var rootlessGiven = false // --rootless
     var appearanceSet = false // by --appearance or the settings
     var appletalkGiven = false
     var appletalkZoneGiven = false
@@ -776,6 +791,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
             guard i < args.count else { usage() }
             machine_walk_avoid(args[i])
         case "--screen-window": screenWindow = true
+        case "--rootless": rootlessGiven = true
         case "--fonts":
             i += 1
             guard i < args.count else { usage() }
@@ -1070,10 +1086,19 @@ func runCommand(_ args: [String], resume: String? = nil) {
                            extra: extra, resumes: interactive || resumeHibernated || named != nil, named: named,
                            fresh: fresh, newCopy: newCopy, interactive: interactive && named == nil)
     }
+    // The program's period screen: --screen's size with --rootless, else its
+    // screen setting's (none for "display", or with --screen alone, which
+    // gives the screen in a window that size).
+    let screenSetting = saved.screen.flatMap(ScreenSetting.init)
+    if let v = saved.screen, screenSetting == nil {
+        eprint("bluebox: screen \"\(v)\" (from the settings) is not WxH or display; the display's size\n")
+    }
+    if rootlessGiven { screenWindow = false }
+    periodScreenSize = rootlessGiven ? screenSize : screenGiven ? nil : screenSetting?.size
     // A game known to need a 13-inch monitor's screen gets it, unless a size is
-    // given, it resumes on the one it hibernated with, or it is to stay rootless.
+    // given or set, it resumes on the one it hibernated with, or it is to stay rootless.
     let requiredSize = screenGiven || resumeRecord != nil || background || saved.display == "rootless"
-        ? nil : requiredScreen(application: app)
+        || screenSetting != nil || rootlessGiven ? nil : requiredScreen(application: app)
     #if canImport(AppKit)
     if interactive {
         let scale = scaleOption ?? saved.scale ?? 1
@@ -1102,7 +1127,7 @@ func runCommand(_ args: [String], resume: String? = nil) {
         // memory is laid out for it), then, once put back, made the size
         // this display and scale call for (resizeResumedScreen).  Shown as
         // the display setting says, or, with none, as it was.
-        if interactive && !background && r.display == "screen" && saved.display == nil { screenWindow = true }
+        if interactive && !background && !rootlessGiven && r.display == "screen" && saved.display == nil { screenWindow = true }
         machine_set_screen(sc[0], sc[1])
     } else if let sz = requiredSize {
         machine_set_screen(sz.0, sz.1)
@@ -1111,15 +1136,19 @@ func runCommand(_ args: [String], resume: String? = nil) {
         // Rootless: the Mac screen covers the host display's visible area;
         // the whole screen in a window: the window's on that display.
         MainActor.assumeIsolated {
-            let (w, h) = saved.display == "screen" && !background ? screenWindowMacSize() : rootlessMacScreenSize()
+            let (w, h) = saved.display == "screen" && !background && !rootlessGiven ? screenWindowMacSize() : rootlessMacScreenSize()
             machine_set_screen(w, h)
         }
+    } else if let p = periodScreenSize, !screenGiven {
+        machine_set_screen(p.0, p.1) // headless, or --screen-window: the setting's size
     }
     #else
     if let sc = resumeRecord?.screen, sc.count == 2 {
         machine_set_screen(sc[0], sc[1])
     } else if let sz = requiredSize {
         machine_set_screen(sz.0, sz.1)
+    } else if let p = periodScreenSize, !screenGiven {
+        machine_set_screen(p.0, p.1)
     }
     #endif
     machine_set_appearance(appearance)
@@ -1279,7 +1308,8 @@ func runCommand(_ args: [String], resume: String? = nil) {
             #if canImport(AppKit)
             // Shown whole (in a window) or rootless, the Mac screen this
             // display and scale call for.
-            let whole = screenWindow || saved.display == "screen" || (machine_is_finder() && saved.display != "rootless")
+            let whole = screenWindow || (!rootlessGiven && (saved.display == "screen"
+                || (machine_is_finder() && saved.display != "rootless")))
             let display = interactive
                 ? MainActor.assumeIsolated { whole && !background ? screenWindowMacSize() : rootlessMacScreenSize() } : nil
             #else
@@ -1370,9 +1400,9 @@ func runCommand(_ args: [String], resume: String? = nil) {
     // program turns out to want it: then that becomes its setting.
     // In the background the program stays rootless: its windows float over the host's.
     if background { screenWindow = false }
-    if interactive && !background && !screenWindow && saved.display == "screen" { screenWindow = true }
+    if interactive && !background && !screenWindow && !rootlessGiven && saved.display == "screen" { screenWindow = true }
     // The Finder draws the desktop: the whole screen, unless its setting says otherwise.
-    if interactive && !screenWindow && machine_is_finder() && saved.display != "rootless" { screenWindow = true }
+    if interactive && !screenWindow && !rootlessGiven && machine_is_finder() && saved.display != "rootless" { screenWindow = true }
     // Rootless, a program's windows have macOS's frames unless an appearance
     // is chosen: they look like the host's own.  On the whole screen the
     // Window Manager draws them.
@@ -1383,16 +1413,27 @@ func runCommand(_ args: [String], resume: String? = nil) {
     }
     if screenWindow { machine_drop_native_frames() }
     let chosenFor = app
+    let screenSet = saved.screen /* its own, the defaults' or an exported program's */
     MainActor.assumeIsolated {
         RootlessHost.switchesToScreen = saved.display != "rootless" && !background
         RootlessHost.screenModeChosen = { why in
             var all = loadSettings(defaultLibrary())
-            var s = all[settingsKey(chosenFor)] ?? AppSettings()
+            let key = settingsKey(chosenFor)
+            var s = all[key] ?? AppSettings()
             guard s.display == nil else { return }
             s.display = "screen"
-            all[settingsKey(chosenFor)] = s
+            // And a period screen from its next run, so it is not redrawing
+            // a screen the display's size (ScreenSetting.toRemember).
+            var also = ""
+            let display = MainActor.assumeIsolated { displayMacScreenSize() }
+            if let r = ScreenSetting.toRemember(set: s.screen ?? screenSet, runHasPeriodScreen: periodScreenSize != nil,
+                                                display: display) {
+                s.screen = r.text
+                also = " and screen \(r.text) from its next run; bluebox set \"\(key)\" screen display keeps the display's"
+            }
+            all[key] = s
             saveSettings(all, library: defaultLibrary())
-            eprint("bluebox: the whole screen for \(settingsKey(chosenFor)): \(why) (now its display setting)\n")
+            eprint("bluebox: the whole screen for \(key): \(why) (now its display setting\(also))\n")
         }
     }
     if interactive {
